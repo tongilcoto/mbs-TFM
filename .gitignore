@@ -1,0 +1,93 @@
+# .gitignore — monorepo del TFM
+# Estructura prevista (una carpeta por artefacto):
+#   db/         · esquema y migraciones
+#   backend/    · API — Swift (Vapor + Fluent)
+#   backoffice/ · web backoffice — TypeScript/React
+#   ios/        · app iOS nativa — Swift/SwiftUI (Xcode)
+#   android/    · app Android nativa — Kotlin/Jetpack Compose (Gradle)
+#
+# Nota: Package.resolved (SwiftPM) NO se ignora a propósito — conviene versionarlo
+# en apps/servicios para fijar las versiones de las dependencias.
+
+# ───────────────────────── OS / editores ─────────────────────────
+.DS_Store
+*.swp
+*~
+Thumbs.db
+.vscode/
+.idea/
+# Configuración personal del vault de Obsidian (elimina esta línea si quieres versionarla)
+.obsidian/
+
+# ───────────────────────── Secretos / entorno ─────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ═════════════════════════ Swift · SwiftPM (backend/ e ios/) ═════════════════════════
+# Artefactos de compilación y trabajo local de SwiftPM/Xcode
+.build/
+DerivedData/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+.netrc
+*.pid
+
+# ───────────────────────── backend/ (Swift · Vapor) ─────────────────────────
+backend/.build/
+backend/.swiftpm/
+backend/DerivedData/
+# Base de datos local / docker-compose de desarrollo
+backend/*.sqlite
+backend/db.sqlite
+
+# ───────────────────────── ios/ (Swift · Xcode) ─────────────────────────
+ios/**/DerivedData/
+ios/**/*.xcuserstate
+ios/**/xcuserdata/
+ios/**/.swiftpm/
+# Gestores de dependencias alternativos (si se usaran)
+ios/**/Pods/
+ios/**/Carthage/Build/
+# Config firmada / secretos de build
+ios/**/*.mobileprovision
+ios/**/GoogleService-Info.plist
+
+# ═════════════════════════ backoffice/ (TypeScript · React) ═════════════════════════
+backoffice/node_modules/
+backoffice/dist/
+backoffice/build/
+backoffice/.next/
+backoffice/out/
+backoffice/coverage/
+backoffice/.turbo/
+backoffice/.vite/
+backoffice/*.tsbuildinfo
+backoffice/npm-debug.log*
+backoffice/yarn-error.log*
+backoffice/pnpm-debug.log*
+
+# ═════════════════════════ android/ (Kotlin · Gradle) ═════════════════════════
+android/**/build/
+android/.gradle/
+android/**/*.iml
+android/local.properties
+android/.idea/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+android/**/*.apk
+android/**/*.aab
+# Keystores (nunca versionar claves de firma)
+android/**/*.jks
+android/**/*.keystore
+
+# ═════════════════════════ db/ (esquema · migraciones) ═════════════════════════
+db/*.dump
+db/*.sql.bak
+db/backups/
