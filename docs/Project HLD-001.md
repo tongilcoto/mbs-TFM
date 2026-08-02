@@ -37,6 +37,7 @@ Ofrecer al club una herramienta sencilla para **registrar y consultar** la infor
 - Modelar de forma consistente la jerarquía categoría → equipo → jugador y la relación con partidos y estadísticas.
 - Garantizar la integridad de los datos que se introducen manualmente.
 - Servir de base para las consultas que realizan el resto de artefactos (siempre a través de la API, nunca de forma directa).
+- Contemplar el **ciclo de vida del dato**: conservación activa, **archivado reversible** de temporadas concluidas (se ocultan sin perderse) y **borrado definitivo** cuando proceda — relevante por **RGPD** y por tratarse de **datos de menores**. El mecanismo concreto se define en el LLD.
 
 **Opciones tecnológicas a valorar (ejemplos, no decididas).**
 

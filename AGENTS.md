@@ -10,9 +10,19 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 ## Documentación clave
 
+**Transversal (todo el proyecto):**
+
 - [docs/Project Seed.md](./docs/Project%20Seed.md) — origen y reglas del proyecto.
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
-- [docs/ADR-API_y_BBDD-001.md](./docs/ADR-API_y_BBDD-001.md) — decisiones tecnológicas de BD/API y despliegue (ver resumen abajo).
+
+**Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
+
+| Módulo | ADR | LLD | Docs |
+|--------|-----|-----|------|
+| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBD LLD-001](./docs/API_y_BBD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API | [mockups móvil](./docs/design-assets/mobile/) |
+| **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
+| **App iOS** | *(pendiente)* | *(pendiente)* | — |
+| **App Android** | *(pendiente)* | *(pendiente)* | — |
 
 ## Decisiones técnicas (resumen — detalle y razones en el ADR-API_y_BBDD-001)
 
