@@ -19,7 +19,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
-| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBD LLD-001](./docs/API_y_BBD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API | [mockups móvil](./docs/design-assets/mobile/) |
+| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBD LLD-001](./docs/API_y_BBD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/openapi/openapi.yaml) |
 | **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
@@ -50,7 +50,15 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 ## Estado actual
 
-El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos. No hay comandos de build, lint o test que ejecutar por el momento. Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
+El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
+
+Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club` y `Season`). Validación:
+
+```sh
+npx @redocly/cli lint backend/openapi/openapi.yaml
+```
+
+Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
 
 Próximos pasos de diseño pendientes (futuros ADRs/propuestas): modelo de datos detallado, contrato de la API, detalle fino de tenancy/auth (roles, provisión y automatización de migraciones por tenant) y estimación de costes cloud por *tier*.
 

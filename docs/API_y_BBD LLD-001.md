@@ -222,6 +222,7 @@ erDiagram
   SEASON ||--o{ COMPETITION : tiene
   COMPETITION ||--o{ ROUND : tiene
   COMPETITION ||--o{ PARTICIPATION : agrupa
+  OPPONENT_CLUB ||--o{ TEAM : "equipos rivales"
   TEAM ||--o{ PARTICIPATION : participa
   COMPETITION ||--o{ MATCH : contiene
   ROUND ||--o{ MATCH : contiene
@@ -251,23 +252,24 @@ Todo vive dentro del *schema* del club (ver §6).
 Convenciones: `id` UUID PK, `created_at`/`updated_at` en todas; FKs con integridad referencial; *soft delete*
 opcional (§3.5).
 
-| Entidad                                           | Campos clave                                                                                                                                       | Notas                                                                                                                                                                                                                               |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Club** (raíz del tenant)                        | `name`, `short_name`, `crest_url`, `settings`                                                                                                      | Un registro por club/schema                                                                                                                                                                                                         |
-| **Season** (Temporada)                            | `label` ("2024/25"), `start_date`, `end_date`, **`federation_season_id`**, `archived_at?`                                                          | `federation_season_id` = identificador de la temporada en la **API de la federación/liga**, distinto del `id` UUID interno; parámetro de entrada para llamar a la API externa. **Obligatorio** (toda temporada tiene contrapartida en la federación). `start_date`/`end_date` **fijas y derivadas de `label`** (01/07/AAAA → 30/06/AABB), **no overridables**. **`is_current` derivado en lectura, no se almacena**: es la temporada con el `end_date` **más próximo que aún es ≥ hoy** (el tiempo no retrocede → una sola current, sin invariante que gestionar). **`archived_at`** = archivado reversible (soft): oculta la temporada y, de facto, su subárbol (§5) |
-| **Team** (Equipo)                                 | `letter?`, `short_name`, `crest_url`, `is_own`, `category`, `gender`                                                                               | Propios (`is_own=true`, con plantilla) y rivales (`is_own=false`, mínimos). Nombre mostrado = `category` + `letter` (p. ej. "Infantil" + "A" → "Infantil A"). "Primer Equipo" = `category=senior` + `letter="A"` (o sin letra); equipo filial = `category=senior` + `letter="B"`                                                                        |
-| **Competition** (Competición)                     | `season_id`, **`federation_group_id`**, `name`, `category_label`, `group_label`                                                                    | Instancia de liga por temporada ("Honor · G7"). `season_id` = FK al **UUID interno** de `Season` (no es el `federation_season_id`). `federation_group_id` = identificador de esta competición/grupo en la **API de la federación/liga** (distinto de `id`). **Obligatorio** (necesario para acceder a la API de la Federación) |
-| **Participation**                                 | `competition_id`, `team_id`                                                                                                                        | Únique(competición, equipo). Equipos que forman la liga                                                                                                                                                                             |
-| **Round** (Jornada)                               | `competition_id`, `number`, `start_date`, `end_date`                                                                                               | Único(competición, número)                                                                                                                                                                                                          |
-| **Match** (Partido)                               | `competition_id`, `round_id`, `kickoff_at`, `home_team_id`, `away_team_id`, `home_score`, `away_score`, `status`, `venue?`                          | *scores* nullables hasta jugado; `venue?` opcional (no siempre conocido)                                                                                                                                                                                                     |
-| **StandingRow** (Clasif./jornada)                 | `competition_id`, `round_id`, `team_id`, `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points`, `previous_position` | Único(jornada, equipo). **Snapshot por jornada** → clasificación de cada ronda + `PREV`                                                                                                                                             |
-| **Player** (Jugador)                              | `team_id`, `season_id`, `full_name`, `photo_url`, `shirt_number`, `position`                                                                       | Solo equipos propios. **Registro por temporada**: una fila = un jugador en un equipo en una temporada concreta (ver §3.6). Stats derivadas por temporada desde eventos ligados a este `Player`                                    |
-| **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), `expected_return_date` (ALTA EST.), `actual_return_date`, `active`                                       | Disponibilidad actual = ausencia activa                                                                                                                                                                                             |
-| **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`                                                                                                      | Único(jugador, partido). Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO                                                                                                                                                            |
-| **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`                                                                                     | "Amarillas pendientes de sanción" se calcula (§3.6)                                                                                                                                                                                 |
-| **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?` | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial) |
-| **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                        | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura                                                                                                                                                        |
-| **CompetitionSanctionBracket** (Tramo de sanción) | `competition_id`, `seq`, `yellow_from`, `yellow_to`                                                                                                | Config por competición (§3.6). Sanción al alcanzar `yellow_to`; "pendientes" = `yellow_to − acumuladas`                                                                                                                             |
+| Entidad                                           | Campos clave                                                                                                                                                       | Notas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Club** (raíz del tenant)                        | `name`, `short_name`, `slug`, `crest_key?`, `settings` | Un registro por club/schema. **`name`** = nombre oficial largo; **`short_name`** = nombre corto para mostrar (cabeceras); **`slug`** = identificador **interno** para rutas y nombres de fichero — **inmutable, se fija al aprovisionar** y no se edita por API (§5.1). `crest_key` = clave del objeto en Storage, no una URL (§3.7) |
+| **Season** (Temporada)                            | `label` ("2024/25"), `start_date`, `end_date`, **`federation_season_id`**, `archived_at?`                                                                          | `federation_season_id` = identificador de la temporada en la **API de la federación/liga**, distinto del `id` UUID interno; parámetro de entrada para llamar a la API externa. **Obligatorio** (toda temporada tiene contrapartida en la federación). `start_date`/`end_date` **fijas y derivadas de `label`** (01/07/AAAA → 30/06/AABB), **no overridables**. **`is_current` derivado en lectura, no se almacena**: es la temporada con el `end_date` **más próximo que aún es ≥ hoy** (el tiempo no retrocede → una sola current, sin invariante que gestionar). **`archived_at`** = archivado reversible (soft): oculta la temporada y, de facto, su subárbol (§5) |
+| **OpponentClub** (Club rival)                     | `name`, `short_name`, `slug`, **`federation_club_id`**, `crest_key?` | **Identidad del club rival**, separada de sus equipos (§3.6). La crea la **ingesta** y la corrige el administrador. Un club rival suele tener equipo en **varias categorías** → varias filas `Team` apuntan a esta misma. **`federation_club_id`** = segmento numérico de la ruta del escudo en la API de la federación (§3.7); es la clave de emparejamiento de la ingesta |
+| **Team** (Equipo)                                 | `opponent_club_id?`, `category`, `letter?`, `gender`, **`federation_team_id?`** | **`opponent_club_id` nulo ⇒ equipo propio** (del `Club` del tenant); no nulo ⇒ equipo rival → **`is_own` no se almacena: es derivado** (§3.6). **No lleva nombre ni escudo**: son del club. Nombre mostrado (derivado en lectura, §5) = nombre del club + `category` + `letter` → "CD Ejemplo Infantil A". **`federation_team_id`** = `codigo_equipo` de la API de la federación (§3.7): identifica al **equipo**, no al club — el mismo club tiene código distinto en cada categoría. **Anulable**: los equipos creados a mano que no están en competición federada no lo tienen. "Primer Equipo" = `category=senior` + `letter="A"` (o sin letra); filial = `category=senior` + `letter="B"` |
+| **Competition** (Competición)                     | `season_id`, **`federation_group_id`**, `name`, **`age_category`**, **`division_label`**, `group_label` | Instancia de liga por temporada ("Infantil · Primera · G7"). `season_id` = FK al **UUID interno** de `Season` (no es el `federation_season_id`). `federation_group_id` = identificador de esta competición/grupo en la **API de la federación/liga** (distinto de `id`). **Obligatorio** (necesario para acceder a la API de la Federación). **`age_category`** = mismo enumerado que `Team.category` (§3.3) → permite **validar** que un equipo solo participe en una competición de su edad. **`division_label`** = nivel competitivo ("Primera", "Preferente", "Honor"…), **texto libre**: varía por federación y por categoría (§3.6). **`group_label`** = grupo ("G7") |
+| **Participation**                                 | `competition_id`, `team_id`                                                                                                                                        | Únique(competición, equipo). Equipos que forman la liga                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Round** (Jornada)                               | `competition_id`, `number`, `start_date`, `end_date`                                                                                                               | Único(competición, número)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Match** (Partido)                               | `competition_id`, `round_id`, `kickoff_at`, `home_team_id`, `away_team_id`, `home_score`, `away_score`, `status`, `venue?`                                         | *scores* nullables hasta jugado; `venue?` opcional (no siempre conocido)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **StandingRow** (Clasif./jornada)                 | `competition_id`, `round_id`, `team_id`, `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points`, `previous_position`                 | Único(jornada, equipo). **Snapshot por jornada** → clasificación de cada ronda + `PREV`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Player** (Jugador)                              | `team_id`, `season_id`, `full_name`, `photo_url`, `shirt_number`, `position`                                                                                       | Solo equipos propios. **Registro por temporada**: una fila = un jugador en un equipo en una temporada concreta (ver §3.6). Stats derivadas por temporada desde eventos ligados a este `Player`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), `expected_return_date` (ALTA EST.), `actual_return_date`, `active`                                                       | Disponibilidad actual = ausencia activa                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`                                                                                                                      | Único(jugador, partido). Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`                                                                                                     | "Amarillas pendientes de sanción" se calcula (§3.6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?` | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial)                                                                                                                                                                                                                                                                                              |
+| **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                                        | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **CompetitionSanctionBracket** (Tramo de sanción) | `competition_id`, `seq`, `yellow_from`, `yellow_to`                                                                                                                | Config por competición (§3.6). Sanción al alcanzar `yellow_to`; "pendientes" = `yellow_to − acumuladas`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ### 3.3 Enumerados (propuesta)
 
@@ -298,7 +300,10 @@ Calculadas por consulta o vistas materializadas:
 - Tablas en `snake_case` plural; enums como tipos Postgres o `text` + `CHECK`.
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
-- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Participation`(competición, equipo), `Round`(competición, número), `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), `Player`(equipo, temporada, dorsal) — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`), `Competition`(`season_id`, **`federation_group_id`**), `Participation`(competición, equipo), `Round`(competición, número), `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), `Player`(equipo, temporada, dorsal) — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- **Cuidado con los `NULL` en la unicidad de `Team`.** En Postgres los `NULL` **no comparan iguales**, así que un `UNIQUE` normal sobre (`opponent_club_id`, `category`, `letter`, `gender`) **no protegería a los equipos propios** (todos con `opponent_club_id` nulo) — se podrían crear dos "Infantil A" propios. Dos formas de resolverlo: `UNIQUE NULLS NOT DISTINCT` (Postgres **15+**, disponible en Supabase) o un **índice único parcial** `WHERE opponent_club_id IS NULL` que complemente al normal. Lo mismo aplica a `letter`, que también es opcional.
+- **`Competition` se identifica por (`season_id`, `federation_group_id`), no por el grupo a secas.** El identificador de grupo envuelve categoría + división + grupo (§3.7), pero **no la temporada**: la llamada a la API externa se construye con `federation_season_id` **y** `federation_group_id`. Restringir solo por el grupo impediría tener la misma competición en dos temporadas — que es el caso normal.
+- **En cambio, en `federation_team_id` y `federation_club_id` el comportamiento por defecto es el que se quiere:** son anulables (equipos y clubes dados de alta a mano no tienen contrapartida federada) y, al no comparar iguales los `NULL`, un `UNIQUE` normal permite **muchas filas sin código** mientras garantiza que **no se repita un código concreto**. Aquí **no** se usa `NULLS NOT DISTINCT`. Conviene tenerlo presente porque es justo el criterio opuesto al del punto anterior, en la misma tabla.
 
 ### 3.6 Supuestos y cuestiones abiertas (dominio)
 
@@ -318,6 +323,40 @@ Calculadas por consulta o vistas materializadas:
 - ✅ **Copas/otras competiciones:** se modelan **con las mismas entidades** que la liga regular — una copa es, sencillamente, otra `Competition` (dentro de la misma `Season`) con sus propias `Round`/`Match`. **No hace falta ninguna entidad nueva.** `StandingRow`, `LeagueScorer` y `CompetitionSanctionBracket` son tablas normales ligadas a `competition_id`: si una copa de eliminatorias no tiene clasificación, simplemente no tendrá filas en `StandingRow` para esa competición (nada que forzar en el esquema). Los formatos de ronda (ida/vuelta, eliminación directa) son variaciones de **cómo se generan/leen** `Round`/`Match`, no del modelo.
 - ✅ **`Goal`: "a favor"/"en contra" sin join, y campos de clasificación opcionales.** Con solo `team_id` (el equipo que marca), saber si un gol es "recibido" por un equipo dado exige un **join** a `Match` (para saber quién era el rival) y comparar. Se **denormaliza a propósito**: `Goal` guarda **dos** FKs a `Team` — `scoring_team_id` (quién marca) y `conceding_team_id` (quién encaja) — copiadas del `Match` al crear el gol. Así, para un equipo cualquiera (ej. "Juvenil A", `id = a1b2c3…`): goles **a favor** = `WHERE scoring_team_id = 'a1b2c3…'`; goles **en contra** = `WHERE conceding_team_id = 'a1b2c3…'` — ambas **consultas directas e indexadas**, sin join. Se descarta un booleano único tipo `a_favor/en_contra` porque solo funcionaría con una perspectiva fija (p. ej. "el equipo propio"), y se rompería si dos equipos propios del mismo club se enfrentan entre sí. **Contrapartida asumida:** hay que mantener ambos campos consistentes con el `Match` al escribir (los rellena la capa de aplicación, no el usuario). Además, se marcan como **opcionales** todos los campos de clasificación del gol (`zone`, `side`, `body_part`, `play_type`, `assisted`) — reflejan entrada manual parcial; no todos los goles llevan el desglose completo.
 
+- ✅ **`Team` no lleva identidad de club: se extrae a `OpponentClub`.** El diseño previo daba a `Team` los campos `short_name`, `crest_url` e `is_own`, pero **ninguno de los tres es un atributo del equipo**: son del **club** al que pertenece. `Team` estaba mezclando dos conceptos — *de qué club es* y *qué equipo de ese club es* (`category`, `letter`, `gender`, los únicos realmente suyos). Las consecuencias eran dos: (a) en equipos **propios**, `short_name`/`crest_url` **duplican** los de `Club` en N filas → cambias el escudo del club y tus equipos siguen mostrando el viejo; (b) en **rivales** es peor, porque **el mismo club rival aparece muchas veces**: tu Infantil juega la liga infantil, tu Cadete la cadete —**competiciones distintas**— y el club rival del barrio tiene equipo en casi todas, así que su nombre y su escudo se repiten **una vez por categoría**. Eso agravaba justamente el problema del emparejamiento por nombre (§3.7): corregir a mano una errata del proveedor obligaría a repetir el `PATCH` en una fila por categoría. **Solución:** entidad `OpponentClub` (`name`, `crest_url?`) y `Team.opponent_club_id` **anulable**; `Team` pierde nombre y escudo. **`is_own` desaparece como columna** — es `opponent_club_id IS NULL`, con lo que se elimina de raíz la posibilidad de que la bandera y los datos se contradigan. El nombre mostrado se **compone en lectura**. **Contrapartida asumida:** una entidad más, un *join* para componer el nombre, y la ingesta debe **separar** el texto libre del proveedor ("C.D. RIVAL «B»") en club + letra. A cambio, la corrección manual de la ingesta se hace **en un solo sitio** (`OpponentClub`), que es donde de verdad hacía falta.
+
+- ✅ **Arranque en frío ("el principio de los tiempos") y reclamación de equipo propio.** En t=0 el club no
+  tiene **nada**: ni equipos, ni escudos, ni rivales. Todo eso lo trae la **ingesta** de la Federación — y
+  eso incluye **el equipo propio**, que aparece en la competición igual que los demás. Pero la ingesta **no
+  puede saber cuál de los equipos eres tú**: los crea todos como rivales (con su `OpponentClub`). Hace falta,
+  por tanto, un acto explícito de **reclamación**. Choca con la regla de que el `PATCH` de `Team` **no** puede
+  cambiar `opponent_club_id` (§5.1) — regla que se mantiene, porque evita que un equipo cambie de bando por
+  un `PATCH` descuidado. La salida es un **sub-recurso de estado dedicado**, `PUT/DELETE /v1/teams/{id}/ownership`
+  (§5.1), en la línea de `/archive`. No es un cambio de campo sino una **orquestación**: al reclamar un
+  equipo, el `OpponentClub` que la ingesta le había asignado resulta ser **el club propio**, así que de ahí
+  salen el nombre y el escudo con los que rellenar `Club`. Es la pieza central del **onboarding**.
+
+- ✅ **División: ya estaba, pero escondida bajo un nombre equívoco.** Al ver que un mismo equipo juega en
+  divisiones distintas en temporadas distintas surge la duda de si falta modelar la **división**. La
+  respuesta es que **`Team` no la necesita** —y no debe tenerla—: la división es un atributo de **dónde
+  compite**, no de **quién es** el equipo. Un equipo que asciende o desciende sigue siendo el mismo (lo
+  confirma la muestra 4 de §3.7: mismo `codigo_equipo` en dos divisiones), y el cambio ya queda registrado en
+  que su `Participation` apunta a una `Competition` distinta. **El modelo lo soportaba sin tocar nada.** El
+  problema real era otro: `Competition` tenía un campo **`category_label`** que en el ejemplo valía "Honor"
+  —o sea, **una división**— mientras que `Team.category` significa **categoría de edad** (`infantil`,
+  `cadete`…). Dos cosas distintas con el mismo nombre en el mismo modelo: una trampa garantizada. Se separan
+  en tres campos explícitos: **`age_category`** (enumerado, el mismo que `Team.category`), **`division_label`**
+  y **`group_label`**. Beneficio adicional: al ser `age_category` un enumerado y no texto, se puede
+  **validar que un equipo solo participe en competiciones de su edad**, cosa que con una etiqueta libre era
+  imposible. `division_label` se deja **como texto libre** a propósito: los nombres de división varían por
+  federación y por categoría ("Primera", "Preferente", "Honor", "Autonómica"…) y no forman un enumerado
+  cerrado que podamos fijar hoy.
+
+  > **Ojo con el origen del dato:** la división **no viene en el objeto de partido** de la API de la
+  > federación (ninguna de las cuatro muestras de §3.7 la incluye). Tiene que llegar del endpoint de
+  > competición/grupo, el que se consulta con `federation_group_id`. Pendiente de confirmar cuando haya
+  > ejemplo de esa llamada (§5.6).
+
 **Pendientes:** ninguna por ahora.
 
 ### 3.7 Fuentes de datos y *provenance*
@@ -331,7 +370,8 @@ calendario) llegan de la Federación para **todos** los partidos de la competici
 | Origen | Datos | Entidades | Notas |
 |--------|-------|-----------|-------|
 | **Externo** (API de la Federación/liga) | **Resultados de cada jornada** (marcador y calendario de **todos** los partidos de la competición, propios y rivales); **clasificación por jornada** (si el propietario la provee); **goleadores de la liga** (siempre) | `Match` (resultado/calendario), `StandingRow`, `LeagueScorer` | Ingesta/sincronización periódica. La clasificación **no** todos los propietarios la ofrecen → *fallback* manual (no afecta al modelo, es tarea de API) |
-| **Interno** (entrada manual del club) | **Todas las estadísticas de equipo/jugador excepto el resultado**: desglose de cada gol (zona/lado/parte del cuerpo/tipo de jugada/asistencia), tarjetas, convocatorias/disponibilidad, plantilla | `Team(is_own)`, `Player`, `Goal`, `Card`, `Appearance`, `Absence` | Solo aplica al **equipo propio**; es la capa de detalle ("cómo pasó") sobre el `Match` cuyo resultado ya viene de fuera |
+| **Externo** (API de la Federación/liga) | **Estructura de la competición** (categoría/división/grupo y jornadas) y **clubes y equipos rivales** que la forman — necesarios para poder insertar los `Match` | `Competition`, `Round`, `OpponentClub`, `Team` (rivales) | La estructura sale de la **cadena de selección** (ver más abajo), que recorre el módulo de Federación (§2.1) y **no** el BFF. Los equipos llegan con `codigo_equipo` y nombre con la letra embebida → la ingesta separa club + letra y empareja por código |
+| **Interno** (entrada manual del club) | **Todas las estadísticas de equipo/jugador excepto el resultado**: desglose de cada gol (zona/lado/parte del cuerpo/tipo de jugada/asistencia), tarjetas, convocatorias/disponibilidad, plantilla | `Team` (propios), `Player`, `Goal`, `Card`, `Appearance`, `Absence` | Solo aplica al **equipo propio** (`opponent_club_id IS NULL`); es la capa de detalle ("cómo pasó") sobre el `Match` cuyo resultado ya viene de fuera |
 
 > Implicación para la API (§5): definir el **contrato de ingesta** de la API de la federación/liga
 > (resultados/calendario de cada jornada, clasificación opcional, goleadores), la cadencia de
@@ -349,6 +389,219 @@ externa, `Season` y `Competition` guardan el identificador que esa API usa para 
 
 Nunca se usa el identificador externo como PK/FK dentro del *schema*; es un dato más, propio de la
 integración, que la capa de ingesta usa para construir las llamadas a la API externa.
+
+**`federation_group_id` es opaco: envuelve categoría de edad + división + grupo en un solo valor** (al menos
+en esta federación). Es decir, un `federation_group_id` identifica exactamente una `Competition` dentro de
+una temporada. Esto **no** hace redundantes los tres campos `age_category` / `division_label` /
+`group_label` de §3.2 — al contrario, son su **descomposición**, y son necesarios por tres razones que el
+identificador opaco no cubre:
+
+1. **Mostrar.** De `federation_group_id` no se puede pintar "Infantil · Primera · G7".
+2. **Validar.** `age_category` como enumerado permite comprobar que un equipo solo participe en
+   competiciones de su edad (§3.6); de un valor opaco no se deduce nada.
+3. **Portar.** El desglose es **agnóstico de la federación**; el identificador opaco no. Si aparece otra
+   federación con otra numeración, los tres campos siguen significando lo mismo y solo cambia la clave de
+   integración. Es la parte del modelo que sobrevive al proveedor.
+
+**De dónde salen esos tres valores: la API es una cadena de selección.** No hay que parsear el identificador
+opaco ni teclear los datos a mano — la propia navegación de la federación los va entregando por niveles:
+
+```
+temporada
+   └─→ lista de (categoría de edad + división)
+          └─→ lista de grupos
+                 └─→ calendario del grupo (con resultados si los hay)
+```
+
+Cada paso se alimenta de la selección del anterior. La descomposición de §3.2 **se rellena por el camino**:
+`age_category` y `division_label` en el segundo nivel, `group_label` en el tercero, y el
+`federation_group_id` resultante es lo que queda guardado para las sincronizaciones posteriores — a partir
+de ahí ya no hace falta recorrer la cadena, se va directo al calendario.
+
+> **Lo que queda por confirmar:** el segundo nivel entrega categoría de edad y división **juntas**. Si vienen
+> como **un único rótulo** ("INFANTIL PRIMERA"), habrá que separarlas para poblar `age_category`
+> (enumerado) y `division_label` (texto). Es un parseo mucho más acotado que el del nombre de un equipo —
+> las categorías de edad son un **enumerado cerrado de siete valores** (§3.3), así que basta reconocer el
+> prefijo y lo que sobra es la división. Si el nivel devuelve los dos campos por separado, no hay ni eso.
+> Pendiente del ejemplo de esa llamada.
+
+**Sí hay identificador externo de equipo (`codigo_equipo`) — *abierto*.** Los equipos **no son parámetro**
+de ninguna llamada (no van en *path* ni en *query*), pero **sí vienen identificados en las respuestas**. Una
+respuesta real de partido de la RFFM:
+
+```json
+{
+  "codacta": "5594142",
+  "codigo_equipo_local": "2032",
+  "equipo_local": "C.D. FUTBOL TRES CANTOS 'A'",
+  "escudo_equipo_local": "/pnfg/pimg/Clubes/00100_0012158828_Escudo_Tres_Cantos_CDF.png",
+  "goles_casa": "",
+  "codigo_equipo_visitante": "821",
+  "equipo_visitante": "CELTIC CASTILLA C.F. 'A'",
+  "escudo_equipo_visitante": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png",
+  "goles_visitante": "",
+  "codigo_campo": "1114",
+  "campo": "TRES CANTOS - JAIME MATA - FORESTA 1 (HA)(HA)",
+  "fecha": "26-09-2026",
+  "hora": ""
+}
+```
+
+Y esta otra, del **mismo club** (Celtic Castilla) en **otra categoría**, que es la que resuelve la
+granularidad del identificador:
+
+```json
+{
+  "codacta": "5589418",
+  "codigo_equipo_local": "3349086",
+  "equipo_local": "CELTIC CASTILLA C.F. 'A'",
+  "escudo_equipo_local": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png",
+  "codigo_equipo_visitante": "291",
+  "equipo_visitante": "C.D. EL ESCORIAL",
+  "escudo_equipo_visitante": "/pnfg/pimg/Clubes/00100_0011702833_escudo_CD_Escorial.png",
+  "codigo_campo": "103",
+  "campo": "CANAL ISABEL II (HA)(HA)",
+  "fecha": "06-06-2027"
+}
+```
+
+**Comparando las dos muestras para el mismo club** se deduce todo lo que necesitábamos:
+
+| Campo | Celtic Castilla (muestra 1) | Celtic Castilla (muestra 2) | Conclusión |
+|-------|------------------------------|------------------------------|------------|
+| `equipo_*` | `CELTIC CASTILLA C.F. 'A'` | `CELTIC CASTILLA C.F. 'A'` | **Idéntico** — el nombre **no lleva la categoría** |
+| `escudo_*` | `…00100_`**`0010940034`**`_ESC_CELTIC_CASTILLA.png` | `…00100_`**`0010940034`**`_ESC_CELTIC_CASTILLA.png` | **Idéntico** — identifica al **club** |
+| `codigo_equipo_*` | **`821`** | **`3349086`** | **Distinto** — identifica al **equipo** |
+
+- ✅ **`codigo_equipo` identifica al EQUIPO, no al club** (§3.6): el mismo club tiene código distinto en cada
+  categoría. Es la clave externa de `Team`.
+- ✅ **Casar por nombre no era solo frágil: era incorrecto.** Como el nombre es idéntico en ambas categorías,
+  un emparejamiento por nombre habría **fusionado dos equipos distintos en uno**. Queda descartado como
+  estrategia de ingesta, no solo desaconsejado.
+- ✅ **La clave de club está en la ruta del escudo.** El segmento numérico (`0010940034`) es **el mismo para
+  el mismo club en distintas categorías** y distinto entre clubes (Tres Cantos `0012158828`, El Escorial
+  `0011702833`). Formato observado: `{00100}_{id_club}_{etiqueta}.png`, donde `00100` es constante
+  (presumiblemente el código de la RFFM). Es la clave externa de `OpponentClub`.
+
+> **Salvedad sobre la clave de club.** Se obtiene **parseando el nombre de un fichero**, no de un campo
+> propio de la API: es una **inferencia a partir de los datos observados**, no un contrato publicado. Si un
+> club cambia de escudo y el fichero se renombra, la clave podría cambiar y generaría un `OpponentClub`
+> duplicado. Por eso la ingesta debe **tolerar el fallo** (si el patrón no casa, caer a la revisión manual de
+> §5.1) y por eso sigue teniendo sentido la operación de **fusión** pendiente.
+
+Lo que esto aporta al modelo de `Team`/`OpponentClub`:
+
+- **La ingesta casa por identificador, nunca por nombre** → `Team.federation_team_id` = `codigo_equipo`;
+  `OpponentClub.federation_club_id` = segmento numérico de la ruta del escudo.
+- **El nombre trae la letra embebida**: `"C.D. FUTBOL TRES CANTOS 'A'"` → club + `letter`, entre comillas
+  simples. La ingesta debe separarlos (§3.6). Nótese que `"C.D. EL ESCORIAL"` **no lleva letra** → `letter`
+  ha de seguir siendo opcional.
+- **El escudo es del *club*, no del equipo** — la ruta lo dice: `/pnfg/pimg/Clubes/…`. Confirma
+  independientemente la separación `OpponentClub` / `Team` de §3.6.
+- **`goles_casa`/`goles_visitante` vienen como cadena vacía**, no como `null`, cuando el partido no se ha
+  jugado → el mapeo a `Match.home_score`/`away_score` (nullables) debe traducir `""` a `NULL`.
+- **`codigo_campo` + `campo`**: hay identificador de campo. Hoy `Match.venue?` es texto libre (§3.2); si el
+  campo llegara a merecer entidad propia, aquí está la clave. Fuera de alcance por ahora.
+
+✅ **`codigo_equipo` es estable ENTRE TEMPORADAS.** Tercera muestra, el mismo equipo en la misma categoría
+la **temporada anterior** (`"fecha":"14-09-2025"`, frente al `06-06-2027` de la muestra 2):
+
+```json
+{
+  "codacta": "5348330",
+  "codigo_equipo_local": "334286",
+  "equipo_local": "C.F. POZUELO DE ALARCON 'B'",
+  "escudo_equipo_local": "/pnfg/pimg/Clubes/00100_0010960678_escudo_Rffm_-_CFPOZUELO.jpg",
+  "goles_casa": "3",
+  "codigo_equipo_visitante": "3349086",
+  "escudo_equipo_visitante": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png",
+  "equipo_visitante": "CELTIC CASTILLA C.F. 'A'",
+  "goles_visitante": "0",
+  "fecha": "14-09-2025",
+  "hora": "12:00"
+}
+```
+
+Y una cuarta, del **otro** equipo del mismo club (el de código `821`), también de la temporada anterior y
+**en otra división** — el equipo cambió de división entre campañas:
+
+```json
+{
+  "codacta": "5375152",
+  "codigo_equipo_local": "821",
+  "escudo_equipo_local": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png",
+  "equipo_local": "CELTIC CASTILLA C.F. 'A'",
+  "goles_casa": "3",
+  "codigo_equipo_visitante": "2032",
+  "equipo_visitante": "C.D. FUTBOL TRES CANTOS 'A'",
+  "goles_visitante": "2",
+  "fecha": "28-03-2026",
+  "hora": "12:00"
+}
+```
+
+**Las cuatro muestras cruzadas para Celtic Castilla C.F. 'A'** (mismo nombre y mismo escudo `0010940034` en
+todas):
+
+| Muestra | Fecha | Temporada | `codigo_equipo` | Contexto |
+|---------|-------|-----------|-----------------|----------|
+| 1 | 26-09-2026 | 26/27 | **821** | categoría A |
+| 4 | 28-03-2026 | 25/26 | **821** | categoría A, **otra división** |
+| 2 | 06-06-2027 | 26/27 | **3349086** | categoría B |
+| 3 | 14-09-2025 | 25/26 | **3349086** | categoría B |
+
+**Consecuencias:**
+
+- **Dos códigos distintos = dos equipos distintos del mismo club** (categorías de edad distintas), pese a
+  compartir nombre y escudo. Reconfirma que `codigo_equipo` es del equipo y que el nombre no distingue nada.
+- **Cada código se repite en ambas temporadas** → estable entre campañas.
+- **`821` se repite aunque el equipo cambió de división** → el código **no depende de la competición**. Es
+  identidad de equipo pura.
+
+Por tanto `federation_team_id` se queda en **`Team`** (§3.2) y **no** hay que moverlo a `Participation` —
+`Team` es independiente de la temporada (§3.6) y el código lo acompaña toda su vida. El equivalente vale
+para `federation_club_id` en `OpponentClub`.
+
+Esta muestra aporta además el caso de **partido ya jugado**: `goles_casa`/`goles_visitante` traen `"3"`/`"0"`
+(frente a `""` en los no jugados) y `hora` trae `"12:00"` (frente a `""`). Al mapear a `Match`: `fecha`+`hora`
+componen `kickoff_at`, pero **la hora puede faltar** aun conociéndose la fecha → el mapeo debe contemplarlo.
+
+> **Estos códigos NO son claves de unión.** Son **datos de integración**, propiedad de un tercero, y se
+> tratan como el resto de identificadores externos (§3.7, arriba): **nunca** PK, **nunca** FK, **nunca** un
+> `JOIN` interno. Dentro del *schema* se une siempre por el `id` UUID. Sirven exclusivamente para que la
+> ingesta **reconozca** a qué fila corresponde lo que llega de fuera. Si la Federación cambiara su
+> numeración, o si un endpoint concreto no los trajera, el modelo **sigue en pie**: se degradaría la calidad
+> del emparejamiento, no la integridad de los datos.
+>
+> Por eso los tres son **anulables** y la ingesta usa una **cadena de emparejamiento con degradación**:
+> 1. `federation_team_id` / `federation_club_id` si vienen;
+> 2. si no, nombre normalizado (sin la letra, sin puntuación, sin acentos) **más** categoría — nunca el
+>    nombre a secas, que no distingue categorías;
+> 3. si tampoco, alta nueva marcada para **revisión manual** (§5.1).
+>
+> Y si aparecen duplicados, hará falta la operación de **fusión**: un `PATCH` de nombre **no** fusiona nada.
+
+**Ingesta de escudos: se descargan y se guardan, no se enlazan.** Las rutas de `escudo_*` son relativas al
+*host* de la federación (`https://appweb.rffm.es` + ruta). La ingesta **descarga el fichero y lo almacena en
+Supabase Storage**; el modelo guarda la **clave del objeto** (`crest_key`), no una URL. Dos razones: no
+depender de que un tercero siga sirviendo ese fichero, y **no atarse a un dominio/bucket/CDN** — si cambia,
+se cambia la composición de la URL en la respuesta y no hay migración de datos. La API compone la URL
+pública en el DTO.
+
+**Cómo se nombra el fichero — y por qué NO se deriva del código de federación.** La tentación es usar
+`crests/opponents/{federation_club_id}.png`, pero eso ataría un identificador **interno y permanente** al
+valor de un sistema de terceros que puede no estar disponible (es una inferencia sobre un nombre de fichero)
+ni ser estable indefinidamente. La clave se deriva del **`slug`**, y el `slug` se genera **al crear la fila,
+a partir del nombre, y queda inmutable** (con sufijo de desempate si colisiona). Así:
+
+- es **legible** (`crests/opponents/celtic-castilla.png`), que era el objetivo de tener `slug`;
+- **no depende de la Federación** en absoluto;
+- **sobrevive a las correcciones de nombre** — no porque se recalcule, sino porque **no se recalcula
+  nunca**. Si el administrador arregla la grafía, el fichero conserva su nombre original: un poco desfasado,
+  pero estable y sin huérfanos. Un `slug` interno no se muestra, así que que envejezca no molesta.
+
+Queda **pendiente** la política de **refresco** del escudo (la ruta de origen es detectablemente distinta si
+el club lo cambia).
 
 **Un único proveedor de API para todas las competiciones (supuesto).** Según la información disponible,
 la Federación expone **la misma API** (mismo *host*/contrato) para todas las competiciones, distinguiendo
@@ -430,6 +683,7 @@ través de su **raíz**; las referencias **entre** agregados son **por identidad
 |----------------|---------|------------------------|-------|
 | **Club** | Raíz (singleton del tenant) | `ClubRecord` | `clubs` |
 | **Season** | Raíz | `SeasonRecord` | `seasons` |
+| **OpponentClub** | Raíz | `OpponentClubRecord` | `opponent_clubs` |
 | **Team** | Raíz | `TeamRecord` | `teams` |
 | **Player** | Raíz | `PlayerRecord` | `players` |
 | Absence | Interna de **Player** | `AbsenceRecord` | `absences` |
@@ -449,6 +703,10 @@ través de su **raíz**; las referencias **entre** agregados son **por identidad
   **otros** agregados **por id**, no los contiene.
 - **`Player` como raíz** (no interno de `Team`): tiene ciclo de vida propio (alta por temporada, §3.6) y lo
   referencian eventos de `Match` por id. `Absence` sí es interna (disponibilidad del jugador).
+- **`OpponentClub` como raíz, y `Team` **no** interno suyo** (§3.6): aunque un equipo rival "pertenece" a su
+  club, `Team` es referenciado **por id** desde `Match`, `Participation` y `StandingRow` —agregados
+  distintos—, y los equipos **propios** ni siquiera tienen `OpponentClub`. Meterlo dentro obligaría a cargar
+  el club para tocar un equipo y dejaría a los propios sin raíz. Se referencian **por identidad**.
 - **Tensión con la estadística (lectura) y su resolución.** Un diseño de agregados puro optimiza la
   **escritura/consistencia**, pero esta app es intensiva en **lectura** con `Goal` **denormalizado** para
   filtrar "sin *join*" (§3.6). No se fuerzan esas consultas a pasar por la raíz `Match`: las agregaciones de
@@ -474,8 +732,8 @@ protocol MatchRepository {
 }
 ```
 
-- **Repositorios previstos:** `ClubRepository`, `SeasonRepository`, `TeamRepository`, `PlayerRepository`,
-  `CompetitionRepository`, `MatchRepository` (uno por raíz, §4.2).
+- **Repositorios previstos:** `ClubRepository`, `SeasonRepository`, `OpponentClubRepository`,
+  `TeamRepository`, `PlayerRepository`, `CompetitionRepository`, `MatchRepository` (uno por raíz, §4.2).
 - **Otros puertos de salida** (no son repositorios, también invertidos por DIP):
   - **`FederationClient`** — el módulo de Federación (§2.1) llama a la API externa por este puerto; lo
     implementa un adaptador HTTP (sección de Federación, §5-bis).
@@ -600,7 +858,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   (`schema(...).id().field(...).unique(on:).create()`) y `revert(on:)` simétrico.
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
   (`app.migrations.add(...)`), no el nombre de fichero:
-  `Club → Season → Team → Competition → Participation → Round → Match → StandingRow → Player → Absence →
+  `Club → Season → OpponentClub → Team → Competition → Participation → Round → Match → StandingRow → Player → Absence →
   Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket`.
 - `CHECK` de enumerados junto a la columna: `.field("status", .string, .required)` +
   `.sql(raw: "ALTER TABLE matches ADD CONSTRAINT chk_matches_status CHECK (status IN ('programado', ...))")`
@@ -649,6 +907,34 @@ patrón.*
 **Convenciones:** prefijo de versión **`/v1`**; nombres de recurso en **plural**; `id` = UUID; **sub-recursos
 de estado** para acciones (p. ej. `/archive`); mutaciones parciales con **PATCH** (no PUT — §4/§2 decisión).
 
+> **Lo que crea la ingesta no se crea por el BFF.** Si el ciclo de vida de una entidad pertenece al módulo de
+> Federación (§2.1), **el BFF no expone `POST`** para ella. Aplica a **`Competition`** (decidido: sin `POST`,
+> se crea al sincronizar — recorrer la cadena de selección es trabajo de la ingesta, §5.6), a `Round`, a los
+> `Team` **rivales** (§5.1) y a `LeagueScorer`/`StandingRow`. No es una limitación temporal: es la frontera
+> entre lo que el club **gestiona** y lo que solo **recibe**. Ofrecer un alta manual paralela crearía filas
+> que la ingesta no sabría reconciliar con las suyas.
+
+**`Club` (recurso *singleton* — excepción a la convención de plural):**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/club` | `GetClub` | **200** + `ClubResponse` | — |
+| **PATCH** | `/v1/club` | `UpdateClub` | **200** + `ClubResponse` | 400, **403** (rol) |
+
+- **Singular a propósito, y sin `{id}` en la ruta:** `Club` es el **singleton del tenant** (§3.2, §4.2) — hay
+  exactamente **un** registro por *schema* y el tenant ya lo determina el JWT (§6.1), así que un `id` en la
+  ruta sería redundante y una colección `/v1/clubs` sería engañosa (siempre devolvería un elemento). Es la
+  **única excepción** a la convención de plural de este contrato.
+- **No hay `POST` ni `DELETE`:** el **alta** de un club es **provisión** (crear el *schema* + ejecutar el
+  migrador, §6.3/§4.7) y la **baja** es *deprovisioning*; ambas viven en el **plano de control**
+  (`public.tenants`, §6), **no** en el BFF. Crear/borrar clubes nunca es una operación de esta API.
+- **Pero su *contenido* sí es dato de negocio editable**, no configuración de despliegue: `name`,
+  `crest_url` los consumen las apps móviles (cabeceras, escudo) y `settings` son preferencias
+  del club → deben poder cambiarse desde el backoffice **sin redespliegue ni tocar la BD a mano**. De ahí el
+  `PATCH`. La distinción a retener: **el alta del club es configuración de despliegue; su contenido no**.
+- **`PATCH` exige rol elevado** (§7.3) → **403** si no lo tiene. El `GET` es accesible a cualquier rol
+  autenticado del tenant (las apps de consulta lo necesitan).
+
 **`Season`:**
 
 | Método | Ruta | Caso de uso | Éxito | Errores |
@@ -658,7 +944,8 @@ de estado** para acciones (p. ej. `/archive`); mutaciones parciales con **PATCH*
 | **GET** | `/v1/seasons/{id}` | `GetSeason` | **200** + `SeasonResponse` | 404 |
 | **PATCH** | `/v1/seasons/{id}` | `UpdateSeason` | **200** + `SeasonResponse` | 400, 404, 409 |
 | **DELETE** | `/v1/seasons/{id}` | `DeleteSeason` | **204** (sin dependientes) | 404, **409** (tiene dependientes) |
-| **DELETE** | `/v1/seasons/{id}?cascade=true` | `PurgeSeason` | **204** | 404 — **operación guardada** (ver 5.4) |
+| **GET** | `/v1/seasons/{id}/purge-preview` | `PreviewPurge` | **200** + `PurgePreviewResponse` (incluye `confirmationToken`) | 404, **403** (rol) |
+| **DELETE** | `/v1/seasons/{id}?cascade=true` | `PurgeSeason` | **204** | 404, **403** (rol), **428** (falta confirmación), **412** (confirmación caducada/inválida) — **operación protegida** (§5.4) |
 | **PUT** | `/v1/seasons/{id}/archive` | `ArchiveSeason` | **204** (idempotente) | 404 |
 | **DELETE** | `/v1/seasons/{id}/archive` | `RestoreSeason` | **204** (idempotente) | 404 |
 
@@ -671,7 +958,63 @@ de estado** para acciones (p. ej. `/archive`); mutaciones parciales con **PATCH*
   §3.6); **`DELETE /archive`** la restaura. Reversible, conserva datos.
 - **`?cascade=true`** = borrado **físico e irreversible** de la temporada y todo su subárbol; caso de uso
   **orquestado** que respeta fronteras de agregado (§4.2) y aplica el borrado por entidad. Reservado a
-  erasure RGPD ("derecho al olvido"); guardado (5.4).
+  erasure RGPD ("derecho al olvido"); es **operación protegida en dos pasos** (preview → purge, §5.4).
+
+**`OpponentClub`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/opponent-clubs` | `CreateOpponentClub` | **201** + `OpponentClubResponse` | 400, 409 (`name` duplicado) |
+| **GET** | `/v1/opponent-clubs` | `ListOpponentClubs` | **200** + página de `OpponentClubResponse` | — |
+| **GET** | `/v1/opponent-clubs/{id}` | `GetOpponentClub` | **200** + `OpponentClubResponse` | 404 |
+| **PATCH** | `/v1/opponent-clubs/{id}` | `UpdateOpponentClub` | **200** + `OpponentClubResponse` | 400, 404, 409 |
+| **DELETE** | `/v1/opponent-clubs/{id}` | `DeleteOpponentClub` | **204** | 404, **409** (tiene equipos) |
+
+- **La vía normal de alta es la ingesta**, no el `POST` (§3.7): los clubes rivales aparecen al sincronizar la
+  competición. El `POST` existe para los casos en que hace falta darlos de alta a mano (p. ej. un amistoso).
+- **El `PATCH` es la herramienta de corrección** del emparejamiento por nombre (§3.7). Como la identidad del
+  club rival está en **una sola fila**, corregir una errata del proveedor es **un `PATCH`**, y se propaga a
+  todos sus equipos y a todas las categorías. Es la razón de ser de esta entidad.
+- **Colección potencialmente grande** (todos los rivales de todas las categorías) → **paginada** (§5.3), con
+  filtro de búsqueda por nombre `?q=` para la pantalla de revisión.
+- **`DELETE` → 409 si tiene equipos.** Borrar un club rival con equipos referenciados por partidos rompería
+  el histórico. No se ofrece cascada aquí: si lo que hay es un **duplicado**, lo que hace falta es una
+  **fusión** (pendiente, §3.7), no un borrado.
+
+**`Team`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/teams` | `CreateOwnTeam` | **201** + `TeamResponse` | 400, 409 (equipo duplicado) |
+| **GET** | `/v1/teams` | `ListTeams` | **200** + `[TeamResponse]` | — |
+| **GET** | `/v1/teams/{id}` | `GetTeam` | **200** + `TeamResponse` | 404 |
+| **PATCH** | `/v1/teams/{id}` | `UpdateTeam` | **200** + `TeamResponse` | 400, 404, 409 |
+| **DELETE** | `/v1/teams/{id}` | `DeleteTeam` | **204** (sin dependientes) | 404, **409** (tiene dependientes) |
+| **PUT** | `/v1/teams/{id}/ownership` | `ClaimTeam` | **204** (idempotente) | 404, **403** (rol), **409** (ya reclamado por otro) |
+| **DELETE** | `/v1/teams/{id}/ownership` | `ReleaseTeam` | **204** (idempotente) | 404, **403** (rol) |
+
+- **`/ownership` es la pieza de *onboarding*** (§3.6). En el arranque en frío la ingesta crea **todos** los
+  equipos como rivales, incluido el tuyo, porque no puede saber cuál eres. `PUT /ownership` lo **reclama**:
+  pone `opponent_club_id` a nulo y, del `OpponentClub` que la ingesta le había asignado, **toma el nombre y
+  el escudo para rellenar `Club`**. No es un cambio de campo, es una orquestación — por eso es un
+  sub-recurso de estado (como `/archive`) y **no** una relajación del `PATCH`.
+- **`POST` crea únicamente equipos *propios*.** El cuerpo **no lleva `opponentClubId`** (ni el desaparecido
+  `isOwn`): el servidor lo fija a nulo. Los equipos **rivales** los crea la **ingesta** (§3.7), no el BFF —
+  mismo criterio que con `LeagueScorer`. Tras el descubrimiento del arranque en frío, el `POST` deja de ser
+  la vía principal de alta (lo normal es ingerir y reclamar) y queda para equipos que **no están** en
+  competición federada — de ahí que `federationTeamId` sea anulable (§3.2). Es la **excepción** a la regla de
+  arriba, y se sostiene solo porque los equipos propios sí los gestiona el club; `Competition` no la tiene.
+- **`displayName` se compone en el servidor** y solo aparece en las **respuestas**: no se envía en el `POST`,
+  no se almacena en BD. Se forma con el nombre del club (`Club.name` si es propio, `OpponentClub.name` si es
+  rival) + `category` + `letter`. Mismo patrón que `isCurrent` en `Season`: **derivado en lectura**.
+- **`isOwn` sigue existiendo en la respuesta, pero como campo derivado** (`opponentClubId == null`), no como
+  columna (§3.6). Los clientes lo siguen leyendo igual; la BD ya no puede contradecirse.
+- **`crestUrl` también es derivado** en la respuesta (escudo del club propio o del rival) → las apps pintan
+  la fila del equipo **sin una segunda llamada** ni *join* propio.
+- **Filtros de `GET /v1/teams`:** `?isOwn=true|false`, `?category=`, `?gender=`, `?opponentClubId=` y
+  **`?seasonId=`**. Este último merece explicación: **`Team` no tiene temporada** (§3.2) — "Infantil A" es la
+  misma entidad año tras año. `?seasonId=` filtra **por participación**: equipos con `Participation` en
+  alguna `Competition` de esa temporada. Sin paginación, como `Season` (colección pequeña por club).
 
 ### 5.2 DTOs
 
@@ -680,6 +1023,26 @@ del `…Record` de Fluent (§4.4); el Controller mapea entre ellos.
 
 ```swift
 // Adaptador primario — DTOs (Content)
+
+// --- Club (singleton del tenant) ---
+struct ClubResponse: Content {
+    let id: UUID
+    let name: String                  // oficial, largo
+    let shortName: String             // corto, para mostrar
+    let slug: String                  // interno (rutas, ficheros) — solo lectura
+    let crestUrl: String?             // compuesta desde crest_key (§3.7), no almacenada
+    let settings: ClubSettings
+    let createdAt, updatedAt: Date
+}
+struct UpdateClubRequest: Content {   // PATCH: todo opcional (parcial)
+    let name: String?
+    let shortName: String?
+    let settings: ClubSettings?
+    // sin `slug`  → inmutable, se fija al aprovisionar
+    // sin `crest` → los binarios no viajan en un PATCH JSON (endpoint aparte, pendiente)
+}
+
+// --- Season ---
 struct CreateSeasonRequest: Content {
     let label: String                 // pattern ^\d{4}/\d{2}$ (OpenAPI) + VO SeasonLabel (dominio)
     let federationSeasonId: String
@@ -698,8 +1061,72 @@ struct SeasonResponse: Content {
     let archivedAt: Date?
     let createdAt, updatedAt: Date
 }
+struct PurgePreviewResponse: Content {   // paso 1 del purge en dos pasos (§5.4)
+    let seasonId: UUID
+    let label: String
+    let impact: [String: Int]         // recuento a borrar por entidad dependiente (matches, goals…)
+    let confirmationToken: String     // opaco, un solo uso, corta vida
+    let expiresAt: Date
+}
+
+// --- OpponentClub (identidad del club rival) ---
+struct CreateOpponentClubRequest: Content {
+    let name: String
+    let shortName: String?            // si falta, el servidor lo inicializa desde `name`
+    // sin `slug`: lo genera el servidor (desde federationClubId si lo hay, si no desde `name`)
+}
+struct UpdateOpponentClubRequest: Content {   // PATCH: la vía de corrección de la ingesta (§3.7)
+    let name: String?
+    let shortName: String?
+}
+struct OpponentClubResponse: Content {
+    let id: UUID
+    let name: String
+    let shortName: String
+    let slug: String                  // solo lectura, inmutable
+    let federationClubId: String?     // nulo si se creó a mano (§3.7)
+    let crestUrl: String?             // compuesta desde crest_key
+    let createdAt, updatedAt: Date
+}
+
+// --- Team ---
+struct CreateTeamRequest: Content {    // solo equipos PROPIOS: sin opponentClubId, sin isOwn
+    let category: TeamCategory
+    let letter: String?
+    let gender: TeamGender
+}
+struct UpdateTeamRequest: Content {    // PATCH: todo opcional (parcial)
+    let category: TeamCategory?
+    let letter: String?
+    let gender: TeamGender?
+}
+struct TeamResponse: Content {
+    let id: UUID
+    let category: TeamCategory
+    let letter: String?
+    let gender: TeamGender
+    let opponentClubId: UUID?         // nulo ⇒ equipo propio
+    let federationTeamId: String?     // `codigo_equipo` (§3.7); nulo si se creó a mano
+    let isOwn: Bool                   // derivado: opponentClubId == nil
+    let clubName: String              // Club.name (propio) u OpponentClub.name (rival)
+    let displayName: String           // derivado: clubName + category + letter
+    let crestUrl: String?             // derivado: escudo del club propio o del rival
+    let createdAt, updatedAt: Date
+}
 ```
 
+- **No existe `CreateClubRequest`** — es deliberado: no hay `POST /v1/club` (§5.1, el alta es provisión). El
+  único DTO de escritura de `Club` es el de actualización parcial.
+- **`ClubSettings` es un tipo *tipado*, no un `[String: Any]`.** El campo `settings` de §3.2 se persiste como
+  `jsonb`, pero **cruza el contrato como estructura con campos declarados** (así aparece en el spec OpenAPI y
+  las apps lo consumen con seguridad de tipos). Su contenido concreto está **pendiente**: se irá poblando
+  cuando aparezcan preferencias reales (§9). Un `jsonb` opaco en el contrato sería una puerta trasera para
+  meter dominio sin modelarlo.
+- **`TeamResponse` es deliberadamente "gordo" en campos derivados** (`isOwn`, `clubName`, `displayName`,
+  `crestUrl`): ninguno se almacena ni se acepta en escritura, todos se componen en el servidor. El criterio es
+  que **la app móvil pinte una fila de equipo con una sola llamada**, sin resolver el club por su cuenta. Es
+  el mismo compromiso que ya se aceptó al denormalizar `Goal` (§3.6): favorecer la lectura, que es el perfil
+  de esta aplicación.
 - **Validación en dos capas:** el `pattern` de `label` en el spec OpenAPI rechaza el *body* mal formado en el
   borde (400); el **VO `SeasonLabel`** (§4.1) garantiza la invariante también en la ruta de ingesta (que no
   pasa por OpenAPI). `federationSeasonId` no vacío.
@@ -721,22 +1148,49 @@ struct SeasonResponse: Content {
   códigos HTTP.
 - **Códigos:** `400` validación (formato), `401`/`403` auth (§7), `404` no encontrado, `409` **conflicto**
   (duplicado en POST; o DELETE de temporada **con dependientes** sin `cascade`), `422` regla de negocio.
-- **Operación guardada (`?cascade=true`):** por su irreversibilidad, exige **rol elevado** (§7.3) y
-  **confirmación explícita** (p. ej. cabecera/`token` de confirmación); se audita. Es la contrapartida al
-  409 de un DELETE normal.
+- **Operación protegida (`?cascade=true`) — purge en dos pasos:** por su irreversibilidad, el borrado físico
+  se ejecuta en dos llamadas:
+  1. **`GET …/purge-preview`** → devuelve el *impacto* (recuento a borrar por entidad) y un
+     **`confirmationToken`** opaco, de un solo uso y corta vida (p. ej. 5 min); sirve además de **ancla de
+     auditoría** (deja constancia de qué se mostró antes de confirmar).
+  2. **`DELETE …?cascade=true`** con el token como **precondición** en `If-Match: "<confirmationToken>"`.
+  - **Autorización:** exige **rol elevado** (§7.3) → **403** si no lo tiene.
+  - **Precondición:** **428** *Precondition Required* si falta el token; **412** *Precondition Failed* si está
+    caducado, alterado o no corresponde a esta temporada. (`If-Match` se usa aquí como portador del token de
+    confirmación —una cabecera dedicada sería equivalente, pero perdería la semántica de precondición.)
+  - Se **audita** (quién, cuándo, impacto confirmado). Es la contrapartida al **409** de un DELETE normal.
 
 ### 5.5 OpenAPI
 
+- **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
+  (OpenAPI **3.1**). Cubre las entidades ya definidas en §5 — hoy `Club` y `Season` — y **se amplía entidad a
+  entidad** a medida que avanza esta sección. Se valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
+- **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
+  queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
+  *harness* del diseño mientras aún no hay código.
 - Enfoque a elegir (§9.1): **design-first** con `swift-openapi-generator` + `vapor/swift-openapi-vapor`
   (genera *stubs* tipados desde el *spec*) vs **code-first** con `VaporToOpenAPI`; publicación de Swagger UI.
+  El fichero vale en ambos casos (contrato documentado); si se confirma **design-first**, pasa a ser la
+  **fuente de verdad** y el Swift se genera de él — y entonces convendrá moverlo/enlazarlo dentro del
+  *target* SwiftPM que lo consuma, según espera el generador.
 - El **`pattern` de `SeasonLabel`** y los enums (§3.3) viven en el *spec* como validación de contrato, además
   de en el dominio (5.2).
+- **Convención de `PATCH` fijada al escribir el *spec*:** cuerpo con `minProperties: 1` y
+  `additionalProperties: false`; **campo ausente = no se modifica**, y en los campos anulables un `null`
+  explícito **borra** el valor. Distinción relevante hoy solo en `Club.crestUrl`.
 
 ### 5.6 Integración con la API de la federación/liga *(externa)*
 
 Contrato de **ingesta** de goleadores (siempre) y clasificación/resultados (opcional según propietario);
 cadencia de sincronización, mapeo a `LeagueScorer`/`StandingRow` y *fallback* manual. Se detalla en la sección
 propia de Federación (§2.1); **pendiente del ejemplo** de API que aportará el usuario.
+
+> **La cadena de selección de la federación NO es superficie del BFF.** Recorrer temporada → (categoría +
+> división) → grupo → calendario (§3.7) es trabajo del **módulo de Federación** (§2.1, módulo 2), no de este
+> contrato: aquí no hay endpoints de descubrimiento ni un proxy a la federación. El BFF solo ve el
+> **resultado** ya persistido — `Competition`, `Match`, `StandingRow`… — igual que ya ocurre con
+> `LeagueScorer` y con los equipos rivales. La cadena se documenta en §3.7 porque **explica de dónde salen
+> los campos del modelo** (`age_category`, `division_label`, `group_label`), no porque se exponga.
 
 ---
 
