@@ -6,9 +6,10 @@ openapi: 3.1.0
 # cualquier caso.
 #
 # Estado: cubre las entidades ya definidas en §5 del LLD — `Club`, `Season`,
-# `OpponentClub` y `Team`. Se irá ampliando entidad a entidad.
+# `Competition`, `OpponentClub` y `Team`. Se irá ampliando entidad a entidad.
 #
-# Referencias `§x` → docs/API_y_BBD LLD-001.md
+# Referencias `§x` → docs/API_y_BBDD LLD-001.md
+# Referencias `D-nn` → docs/API_y_BBDD LLD-Anexo-Decisiones-Disenho-001.md (bitácora de decisiones)
 # ─────────────────────────────────────────────────────────────────────────────
 
 info:
@@ -17,6 +18,19 @@ info:
   description: |
     API *tenant-aware* para la gestión de estadísticas de clubes de fútbol base.
     La consumen el **backoffice web** (escritura) y las **apps móviles** (lectura).
+
+    **Qué se puede escribir aquí y qué no (§5.1).** El backend tiene dos módulos que
+    comparten modelo de datos: este **BFF** y la **ingesta** de la API de la federación.
+    Cada entidad tiene **un solo dueño de escritura**, y de ahí la regla que gobierna
+    todo este contrato:
+
+    > El BFF **corrige** lo que la ingesta trae; nunca lo **crea** ni lo **borra**.
+
+    Por eso `Team` y `OpponentClub` **no tienen `POST` ni `DELETE`**: una fila creada a
+    mano nacería sin identificador de federación, la ingesta no la reconocería y la
+    duplicaría; y una fila borrada reaparecería en la siguiente sincronización.
+    `Season` y `Competition` sí los tienen, porque no son *salida* de la ingesta sino
+    su **entrada**: la coordenada que le dice qué sincronizar.
 
     **Multi-tenancy (§6).** Ningún recurso lleva `clubId` en la ruta ni en el cuerpo:
     el club se resuelve a partir del *claim* `club_id` del JWT (y/o del subdominio) y
@@ -44,15 +58,38 @@ security:
 
 tags:
   - name: Club
-    description: Datos del club. Recurso *singleton* del tenant (§3.2, §4.2).
+    description: |
+      Datos del club. Recurso *singleton* del tenant (§3.2, §4.2).
+
+      **Escribe:** el administrador (contenido). El **alta y la baja son provisión** (§6.3), no operaciones
+      de esta API.
   - name: Seasons
-    description: Temporadas del club.
+    description: |
+      Temporadas del club.
+
+      **Escribe:** el administrador. Es **entrada de la ingesta** (§5.1): `federationSeasonId` es el
+      parámetro con el que se llama a la federación, no un dato que ella nos devuelva.
+  - name: Competitions
+    description: |
+      Competiciones: la instancia de una liga en una temporada.
+
+      **Escribe:** el administrador. Es **entrada de la ingesta** (§5.1) — la coordenada que dice *qué*
+      sincronizar. Nadie descubre su grupo: lo elige un humano navegando la web de la federación y pega
+      aquí la URL resultante (§3.7).
   - name: OpponentClubs
     description: |
       Clubes rivales. Identidad del club contrario, **separada de sus equipos** (§3.6): un mismo club
       rival suele tener equipo en varias categorías, y así su nombre y escudo viven en una sola fila.
+
+      **Escribe:** la **ingesta**. Esta API solo permite **corregir** (`PATCH`), nunca crear ni borrar
+      (§5.1).
   - name: Teams
-    description: Equipos, propios y rivales.
+    description: |
+      Equipos, propios y rivales.
+
+      **Escribe:** la **ingesta** — también los propios, que aparecen en la competición como cualquier
+      otro. Esta API permite **corregir** (`PATCH`) y **reclamar la propiedad** (`/ownership`), nunca
+      crear ni borrar (§5.1).
 
 paths:
 
@@ -347,6 +384,226 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # ─────────────────────── Competitions (§5.1) ───────────────────────
+  /competitions/preview:
+    post:
+      tags: [Competitions]
+      operationId: previewCompetition
+      summary: Verifica una coordenada de la federación sin persistir nada
+      description: |
+        **Paso 1 del alta, y no escribe en base de datos.** Recibe la **URL del calendario** que el
+        administrador ha copiado de la web de la federación, la parsea, llama a la federación con esos
+        parámetros y devuelve lo que hay en esa coordenada: modalidad, categoría, división, grupo,
+        número de jornadas y **la lista de equipos**.
+
+        **Por qué existe.** De los cuatro parámetros de esa URL cuelga *todo* el árbol de datos de la
+        competición, y un dígito equivocado **no produce ningún error**: sincroniza el calendario de otro
+        grupo, en silencio y con aspecto normal. Este paso convierte una correlación frágil en una
+        **confirmada por un humano**, que ve el nombre de su propio club en la lista antes de guardar.
+
+        **No es un endpoint de descubrimiento.** No expone la navegación de la federación ni hace de
+        proxy (§5.6): solo comprueba la coordenada que el administrador **ya ha elegido**. La cadena
+        temporada → categoría+división → grupo no es una API, es una web que se navega con el ratón
+        (§3.7).
+
+        Es la **única** operación de este contrato que llama a un tercero de forma síncrona (§2.3-c) →
+        *timeout* corto y **502/504** explícitos en vez de un 500 genérico.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreviewCompetitionRequest'
+      responses:
+        '200':
+          description: Contenido de la coordenada. **No se ha creado nada.**
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitionPreviewResponse'
+        '400':
+          description: |
+            La URL no es reconocible como un calendario de la federación del club, o le faltan
+            parámetros.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '502':
+          description: La federación respondió con un error o con un cuerpo no interpretable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '504':
+          description: La federación no respondió dentro del *timeout*.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /competitions:
+    get:
+      tags: [Competitions]
+      operationId: listCompetitions
+      summary: Lista las competiciones
+      description: Colección pequeña por club → **sin paginación** (§5.3).
+      parameters:
+        - name: seasonId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: modality
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Modality'
+        - name: ageCategory
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TeamCategory'
+      responses:
+        '200':
+          description: Competiciones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompetitionResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+    post:
+      tags: [Competitions]
+      operationId: createCompetition
+      summary: Da de alta una competición (entrada de la ingesta)
+      description: |
+        **Paso 2 del alta**: confirma lo que devolvió el `preview` y lo persiste.
+
+        `Competition` **sí tiene `POST`** —a diferencia de `Team` u `OpponentClub`— porque no es *salida*
+        de la ingesta sino su **entrada** (§5.1): es la coordenada que le dice *qué* sincronizar. Sin
+        ella no hay nada que ingerir, y nadie puede descubrirla por nosotros.
+
+        **Marcar el equipo propio aquí ahorra la reclamación posterior.** Con
+        `ownTeamFederationId` —tomado de la lista que devolvió el `preview`— la ingesta crea ese equipo
+        **directamente como propio** en vez de como rival, y de su club salen el nombre y el escudo del
+        `Club` (§3.6). Es opcional; si se omite, queda el camino de `PUT /teams/{teamId}/ownership`.
+
+        Requiere **rol elevado** (§7.3): es configuración de integración, no dato del día a día.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompetitionRequest'
+      responses:
+        '201':
+          description: Competición dada de alta. La sincronizará el siguiente pase del job (§2.3-b).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Ese grupo ya está dado de alta en esa temporada (§3.5).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /competitions/{competitionId}:
+    parameters:
+      - $ref: '#/components/parameters/CompetitionId'
+
+    get:
+      tags: [Competitions]
+      operationId: getCompetition
+      summary: Obtiene una competición
+      responses:
+        '200':
+          description: Competición.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitionResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Competitions]
+      operationId: updateCompetition
+      summary: Actualiza parcialmente una competición
+      description: |
+        Dos clases de campo con reglas distintas:
+
+        - **Rótulos** (`ageCategory`, `divisionLabel`, `groupLabel`): siempre editables. Es la misma
+          corrección que en `OpponentClub` — texto que se muestra.
+        - **Coordenadas** (`federationCompetitionId`, `federationGroupId`): editables **solo mientras no
+          haya datos ingeridos** (`lastSyncedAt == null`). Cambiarlas después es **repuntar a otro
+          calendario**, y dejaría los partidos y jornadas del anterior colgando de una competición que ya
+          no los describe → **409**. Entonces la vía es borrar y volver a crear (§3.7).
+
+        No admite `seasonId`: una competición no se muda de temporada.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCompetitionRequest'
+      responses:
+        '200':
+          description: Competición actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompetitionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            Se intenta cambiar una coordenada externa de una competición que **ya tiene datos
+            ingeridos**.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Competitions]
+      operationId: deleteCompetition
+      summary: Borra una competición
+      description: |
+        Solo si **no tiene dependientes** (jornadas, partidos, clasificación, participaciones). Borrar la
+        configuración con datos colgando dejaría huérfano el subárbol → **409**.
+
+        Para deshacerse de una temporada entera **con** sus datos, la vía es el purgado de `Season`
+        (`DELETE /seasons/{seasonId}?cascade=true`, §5.4), que es una operación protegida en dos pasos.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Competición borrada.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: La competición tiene dependientes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   # ─────────────────────── OpponentClubs (§5.1) ───────────────────────
   /opponent-clubs:
     get:
@@ -382,35 +639,8 @@ paths:
                           $ref: '#/components/schemas/OpponentClubResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-    post:
-      tags: [OpponentClubs]
-      operationId: createOpponentClub
-      summary: Crea un club rival
-      description: |
-        **La vía normal de alta es la ingesta** (§3.7), no este endpoint: los clubes rivales aparecen al
-        sincronizar la competición con la API de la federación. El `POST` cubre los casos en que hace
-        falta darlos de alta a mano (p. ej. un amistoso).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateOpponentClubRequest'
-      responses:
-        '201':
-          description: Club rival creado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OpponentClubResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409':
-          description: Ya existe un club rival con ese nombre.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+    # Sin POST: los clubes rivales los crea la ingesta (§5.1). Un alta manual nacería sin
+    # `federationClubId`, la ingesta no la reconocería y la duplicaría en la siguiente pasada.
 
   /opponent-clubs/{opponentClubId}:
     parameters:
@@ -435,13 +665,17 @@ paths:
       operationId: updateOpponentClub
       summary: Corrige un club rival
       description: |
-        **Herramienta de corrección del emparejamiento por nombre** (§3.7). Como la API de la federación
-        no expone identificadores de equipo, la ingesta casa por nombre y puede equivocarse; el
-        administrador lo arregla aquí.
+        **Herramienta de corrección de la ingesta** (§3.7), y **única** escritura que esta API ofrece
+        sobre esta entidad. La ingesta empareja por `federationClubId` cuando puede y degrada a nombre
+        normalizado + categoría cuando no; el administrador arregla aquí lo que salga mal, además de las
+        erratas del propio proveedor.
 
-        Al vivir la identidad del club en **una sola fila**, corregir una errata del proveedor es **un
-        único `PATCH`** que se propaga a todos sus equipos y categorías — esa es la razón de ser de esta
-        entidad.
+        Al vivir la identidad del club en **una sola fila**, corregir una errata es **un único `PATCH`**
+        que se propaga a todos sus equipos y categorías — esa es la razón de ser de esta entidad.
+
+        **La corrección sobrevive a la siguiente sincronización:** los campos descriptivos son de
+        *semilla* (la ingesta solo los escribe al insertar, §3.7). Si no fuera así, corregir sería tan
+        poco duradero como borrar.
 
         **Un `PATCH` de nombre no fusiona duplicados.** Si la ingesta creó dos filas para el mismo club,
         renombrar una no une sus equipos; hace falta una operación de fusión (pendiente, §3.7).
@@ -468,25 +702,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
-    delete:
-      tags: [OpponentClubs]
-      operationId: deleteOpponentClub
-      summary: Borra un club rival
-      description: |
-        Solo si **no tiene equipos**. Borrar un club rival cuyos equipos están referenciados por partidos
-        rompería el histórico → **409**. No se ofrece borrado en cascada: si el problema es un
-        **duplicado**, lo que hace falta es una **fusión** (pendiente, §3.7), no un borrado.
-      responses:
-        '204':
-          description: Club rival borrado.
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: El club rival tiene equipos asociados.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+    # Sin DELETE: la federación seguirá publicando este club, así que borrarlo solo lo haría
+    # desaparecer hasta la siguiente sincronización (§5.1). Para duplicados, la operación
+    # correcta es la fusión (pendiente, §3.7), que además preserva las referencias de los partidos.
 
   # ───────────────────────────── Teams (§5.1) ─────────────────────────────
   /teams:
@@ -524,6 +742,11 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/TeamGender'
+        - name: modality
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Modality'
         - name: opponentClubId
           in: query
           required: false
@@ -542,38 +765,10 @@ paths:
                   $ref: '#/components/schemas/TeamResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-    post:
-      tags: [Teams]
-      operationId: createOwnTeam
-      summary: Crea un equipo propio
-      description: |
-        **Crea únicamente equipos propios.** El cuerpo no lleva `opponentClubId`: el servidor lo fija a
-        `null`, que es precisamente lo que significa "es mío" (§3.6).
-
-        Los equipos **rivales** los crea la **ingesta** (§3.7), no esta API — mismo criterio que con
-        `LeagueScorer`. Así no existe la vía "crear un rival a mano por error desde el backoffice", y la
-        propiedad "es mío" no depende de que el cliente envíe bien una bandera.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTeamRequest'
-      responses:
-        '201':
-          description: Equipo creado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TeamResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409':
-          description: Ya existe un equipo propio con esa categoría, letra y género (§3.5).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+    # Sin POST, tampoco para equipos propios (§5.1). Un alta manual nace sin `federationTeamId`, la
+    # ingesta crea igualmente su propia fila al sincronizar, y al reclamar esa fila habría DOS equipos
+    # propios con la misma categoría/letra/género/modalidad -> 409 de la unicidad de §3.5, sin salida.
+    # El alta manual no duplicaba: bloqueaba el onboarding.
 
   /teams/{teamId}:
     parameters:
@@ -596,10 +791,17 @@ paths:
     patch:
       tags: [Teams]
       operationId: updateTeam
-      summary: Actualiza parcialmente un equipo
+      summary: Corrige un equipo
       description: |
-        Actualización parcial. **No permite cambiar de club**: `opponentClubId` no es modificable — un
-        equipo propio no se convierte en rival ni al revés.
+        Actualización parcial, y **única** escritura ordinaria que esta API ofrece sobre un equipo
+        (§5.1): sirve para corregir lo que la ingesta dedujo mal, típicamente la letra separada del
+        nombre con la letra embebida ("C.D. RIVAL 'B'", §3.7).
+
+        **No permite cambiar de club**: `opponentClubId` no es modificable — un equipo propio no se
+        convierte en rival ni al revés; para eso está `/ownership`.
+
+        **Tampoco permite cambiar `modality`**: forma parte de la identidad del equipo (§3.2) y de su
+        clave única (§3.5). Un equipo de fútbol-sala no *pasa a ser* uno de fútbol-11: es otro equipo.
       requestBody:
         required: true
         content:
@@ -617,29 +819,15 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Ya existe otro equipo con esa categoría, letra y género en el mismo club (§3.5).
+          description: |
+            Ya existe otro equipo con esa categoría, letra, género y modalidad en el mismo club (§3.5).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
 
-    delete:
-      tags: [Teams]
-      operationId: deleteTeam
-      summary: Borra un equipo
-      description: |
-        Solo si **no tiene dependientes** (jugadores, partidos, participaciones…). Si los tiene → **409**.
-      responses:
-        '204':
-          description: Equipo borrado.
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409':
-          description: El equipo tiene dependientes.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+    # Sin DELETE: un equipo de la federación reaparece en la siguiente sincronización, y "quitar" un
+    # equipo propio es liberarlo (DELETE /ownership), no borrarlo — su histórico sigue siendo válido.
 
   /teams/{teamId}/ownership:
     parameters:
@@ -650,10 +838,15 @@ paths:
       operationId: claimTeam
       summary: Reclama un equipo como propio
       description: |
-        **Pieza central del *onboarding*** (§3.6). En el arranque en frío el club no tiene nada: equipos,
-        escudos y rivales llegan **todos** por ingesta — incluido el equipo propio, que aparece en la
-        competición como cualquier otro. La ingesta **no puede saber cuál eres tú**, así que los crea
-        todos como rivales; este endpoint es el acto explícito de decir "este soy yo".
+        **Mecanismo de corrección del *onboarding*** (§3.6). En el arranque en frío el club no tiene nada:
+        equipos, escudos y rivales llegan **todos** por ingesta — incluido el equipo propio, que aparece
+        en la competición como cualquier otro. Si la ingesta no sabe cuál eres, los crea todos como
+        rivales; este endpoint es el acto explícito de decir "este soy yo".
+
+        **El camino feliz ya no pasa por aquí:** al dar de alta la competición, el `preview` muestra la
+        lista de equipos del grupo y el administrador marca el suyo (`ownTeamFederationId`), con lo que
+        la ingesta lo crea **directamente como propio**. Este endpoint cubre el caso de que no lo marcara
+        o se equivocara.
 
         **No es un cambio de campo, es una orquestación:** pone `opponentClubId` a `null` y, del
         `OpponentClub` que la ingesta le había asignado, **toma el nombre y el escudo para rellenar el
@@ -672,8 +865,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: |
-            Ya existe otro equipo propio con la misma categoría, letra y género (§3.5) — reclamar este
-            violaría la unicidad.
+            Ya existe otro equipo propio con la misma categoría, letra, género y modalidad (§3.5) —
+            reclamar este violaría la unicidad.
           content:
             application/problem+json:
               schema:
@@ -712,6 +905,16 @@ components:
       in: path
       required: true
       description: Identificador **interno** (UUID) de la temporada. No es el `federationSeasonId`.
+      schema:
+        type: string
+        format: uuid
+    CompetitionId:
+      name: competitionId
+      in: path
+      required: true
+      description: |
+        Identificador **interno** (UUID) de la competición. No es el `federationCompetitionId` ni el
+        `federationGroupId`: esos son datos de integración, nunca claves de unión (§3.7).
       schema:
         type: string
         format: uuid
@@ -819,7 +1022,7 @@ components:
 
     ClubResponse:
       type: object
-      required: [id, name, shortName, slug, settings, createdAt, updatedAt]
+      required: [id, name, shortName, slug, federation, settings, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -850,6 +1053,13 @@ components:
           description: |
             URL pública del escudo, **compuesta en la respuesta** a partir de la clave del objeto en
             Storage (§3.7). En BD se guarda la clave, no la URL, para no atarse a un dominio/bucket.
+        federation:
+          allOf:
+            - $ref: '#/components/schemas/FederationCode'
+          readOnly: true
+          description: |
+            Federación del club. **Se fija al aprovisionar** y ninguna operación de esta API la cambia:
+            determina a qué API se sincroniza todo el tenant.
         settings:
           $ref: '#/components/schemas/ClubSettings'
         createdAt:
@@ -1025,6 +1235,297 @@ components:
       type: string
       enum: [masculino, femenino, mixto]
 
+    Modality:
+      type: string
+      description: |
+        Modalidad de juego. **Enumerado de dominio, no de integración**: significa lo mismo en cualquier
+        federación, mientras que su código externo (el parámetro `tipojuego` de la RFFM) no. Ese código
+        **no se almacena**; vive en el catálogo de federaciones, en código (§3.6).
+
+        Forma parte de la **identidad** del equipo y de su clave única (§3.5): el "Infantil A masculino"
+        de fútbol-11 y el de fútbol-sala son equipos **distintos**, con distinta competición y distinto
+        `federationTeamId`. Sin este campo, un club con equipos en dos modalidades no se podía
+        representar.
+      enum: [futbol_11, futbol_7, futbol_5, futbol_sala, futbol_playa]
+
+    FederationCode:
+      type: string
+      description: |
+        Federación a la que pertenece el club. **Catálogo en código, no tabla** (§3.6): dar de alta una
+        federación no la hace funcionar, porque soportar una nueva exige escribir un adaptador
+        (ingeniería inversa de su API, §2.1). De ella salen la URL base, la numeración de temporada y el
+        mapa de códigos de modalidad.
+
+        Es propiedad **del tenant**, no de cada competición: un club de Madrid compite en la RFFM y uno
+        catalán en la FCF, y no son el mismo tenant.
+      enum: [rffm, fcf]
+
+    # ─────────────────────── Competition (§5.2) ───────────────────────
+    PreviewCompetitionRequest:
+      type: object
+      description: |
+        Verificación de una coordenada. **Se pega la URL entera del calendario**, no cuatro campos:
+        copiar una URL de la barra de direcciones es una operación sin error posible, teclear cuatro
+        números opacos no — y un dígito mal **no da error**, devuelve el calendario de otro grupo (§3.7).
+      required: [federationCalendarUrl]
+      additionalProperties: false
+      properties:
+        federationCalendarUrl:
+          type: string
+          format: uri
+          description: |
+            URL del calendario del grupo, copiada de la web de la federación. El servidor extrae de ella
+            los cuatro parámetros (`temporada`, `tipojuego`, `competicion`, `grupo`) y comprueba que el
+            *host* corresponde a la federación del club.
+          examples:
+            - 'https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549'
+
+    PreviewTeam:
+      type: object
+      description: Equipo tal y como lo publica la federación, **sin normalizar ni persistir**.
+      required: [federationTeamId, rawName]
+      properties:
+        federationTeamId:
+          type: string
+          description: '`codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al confirmar.'
+          examples: ['3349086']
+        rawName:
+          type: string
+          description: |
+            Nombre tal cual llega, **con la letra embebida** entre comillas simples. Se muestra sin tocar
+            para que el administrador reconozca su club exactamente como lo ve en la web de la
+            federación; la separación en club + letra la hace la ingesta después (§3.7).
+          examples: ["CELTIC CASTILLA C.F. 'A'"]
+        crestUrl:
+          type: [string, 'null']
+          format: uri
+          description: |
+            Escudo **en el origen** (aún no descargado a Storage). Solo para que la pantalla de
+            confirmación sea reconocible de un vistazo.
+
+    CompetitionPreviewResponse:
+      type: object
+      description: |
+        Lo que hay en la coordenada. **Nada de esto se ha persistido**: es un dato de pantalla para que
+        un humano confirme antes de guardar.
+      required:
+        [modality, ageCategory, divisionLabel, groupLabel, federationCompetitionId,
+         federationGroupId, roundCount, teams, alreadyRegistered]
+      properties:
+        modality:
+          $ref: '#/components/schemas/Modality'
+        ageCategory:
+          $ref: '#/components/schemas/TeamCategory'
+        divisionLabel:
+          type: string
+          examples: ['Primera']
+        groupLabel:
+          type: string
+          examples: ['Grupo 1']
+        federationCompetitionId:
+          type: string
+          examples: ['24037548']
+        federationGroupId:
+          type: string
+          examples: ['24037549']
+        roundCount:
+          type: integer
+          minimum: 0
+          description: Jornadas que trae el calendario.
+        teams:
+          type: array
+          description: |
+            **La razón de ser de este endpoint**: el administrador debe reconocer aquí su propio club
+            antes de confirmar. Es también de donde sale `ownTeamFederationId`.
+          items:
+            $ref: '#/components/schemas/PreviewTeam'
+        alreadyRegistered:
+          type: boolean
+          description: |
+            `true` si ya existe una competición con ese grupo en esa temporada. Evita el error más
+            probable —dar de alta dos veces el mismo grupo— antes de que llegue a ser un 409.
+
+    CreateCompetitionRequest:
+      description: |
+        Alta de la competición: la **coordenada** de la federación más los **rótulos** que se mostrarán.
+
+        La coordenada admite **dos formas y exige exactamente una**, por eso son dos esquemas
+        autocontenidos y no campos opcionales de uno solo:
+
+        - **Por URL** — la vía del humano, que es quien la tiene en el portapapeles tras el `preview`.
+        - **Por campos** — la vía estable para semillas, *scripts* y tests, que no deberían depender del
+          formato de URL de un tercero.
+
+        Se almacenan siempre los campos; **la URL no se guarda**, se reconstruye al llamar (§3.7).
+      oneOf:
+        - $ref: '#/components/schemas/CreateCompetitionFromUrlRequest'
+        - $ref: '#/components/schemas/CreateCompetitionFromIdsRequest'
+
+    CreateCompetitionFromUrlRequest:
+      type: object
+      description: Forma A — se pega la URL del calendario y el servidor la descompone.
+      required: [seasonId, federationCalendarUrl, ageCategory, divisionLabel, groupLabel]
+      additionalProperties: false
+      properties:
+        seasonId:
+          type: string
+          format: uuid
+          description: UUID **interno** de la temporada, no el `federationSeasonId`.
+        federationCalendarUrl:
+          type: string
+          format: uri
+          description: La misma URL que se envió al `preview`.
+          examples:
+            - 'https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549'
+        ageCategory:
+          $ref: '#/components/schemas/TeamCategory'
+        divisionLabel:
+          type: string
+          minLength: 1
+          description: |
+            Texto libre a propósito (§3.2): los nombres de división varían por federación y por categoría
+            ("Primera", "Preferente", "Honor", "Autonómica"…) y no forman un enumerado cerrado.
+          examples: ['Primera']
+        groupLabel:
+          type: string
+          minLength: 1
+          description: |
+            Rótulo del grupo. **No es deducible de `federationGroupId`** — uno se muestra, el otro se
+            llama (§3.7). Texto libre, porque hay grupos sin número ("Grupo Único").
+          examples: ['Grupo 1']
+        ownTeamFederationId:
+          type: [string, 'null']
+          description: |
+            `federationTeamId` del equipo **propio** dentro de este grupo, tomado de la lista del
+            `preview`. Si se envía, la ingesta lo crea directamente como propio en vez de como rival, y
+            de su club salen el nombre y el escudo del `Club` (§3.6) — el arranque en frío deja de
+            necesitar una reclamación posterior.
+
+            Opcional: si se omite, todos los equipos nacen como rivales y el propio se reclama después
+            con `PUT /teams/{teamId}/ownership`.
+
+    CreateCompetitionFromIdsRequest:
+      type: object
+      description: |
+        Forma B — coordenada ya descompuesta. `modality` sustituye aquí al parámetro `tipojuego`, que no
+        se almacena: se codifica al llamar con el mapa de la federación (§3.6).
+      required:
+        [seasonId, modality, federationCompetitionId, federationGroupId,
+         ageCategory, divisionLabel, groupLabel]
+      additionalProperties: false
+      properties:
+        seasonId:
+          type: string
+          format: uuid
+          description: UUID **interno** de la temporada, no el `federationSeasonId`.
+        modality:
+          $ref: '#/components/schemas/Modality'
+        federationCompetitionId:
+          type: string
+          minLength: 1
+          description: '`competicion=…`: designa **categoría de edad + división** (§3.7).'
+          examples: ['24037548']
+        federationGroupId:
+          type: string
+          minLength: 1
+          description: '`grupo=…`: designa **solo el grupo** (§3.7).'
+          examples: ['24037549']
+        ageCategory:
+          $ref: '#/components/schemas/TeamCategory'
+        divisionLabel:
+          type: string
+          minLength: 1
+        groupLabel:
+          type: string
+          minLength: 1
+        ownTeamFederationId:
+          type: [string, 'null']
+
+    UpdateCompetitionRequest:
+      type: object
+      description: |
+        Actualización parcial. **Campo ausente = no se modifica.**
+
+        Los **rótulos** son siempre editables; las **coordenadas externas**, solo mientras
+        `lastSyncedAt` sea `null` — después, cambiarlas es repuntar a otro calendario y devuelve **409**
+        (§3.7).
+
+        No admite `seasonId` (una competición no se muda de temporada) ni `modality` (con los datos ya
+        ingeridos, cambiarla invalidaría la identidad de los equipos, §3.5).
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        ageCategory:
+          $ref: '#/components/schemas/TeamCategory'
+        divisionLabel:
+          type: string
+          minLength: 1
+        groupLabel:
+          type: string
+          minLength: 1
+        federationCompetitionId:
+          type: string
+          minLength: 1
+        federationGroupId:
+          type: string
+          minLength: 1
+
+    CompetitionResponse:
+      type: object
+      required:
+        [id, seasonId, modality, ageCategory, divisionLabel, groupLabel,
+         federationCompetitionId, federationGroupId, displayName, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        seasonId:
+          type: string
+          format: uuid
+          readOnly: true
+        modality:
+          $ref: '#/components/schemas/Modality'
+        ageCategory:
+          $ref: '#/components/schemas/TeamCategory'
+        divisionLabel:
+          type: string
+          examples: ['Primera']
+        groupLabel:
+          type: string
+          examples: ['Grupo 1']
+        federationCompetitionId:
+          type: string
+          description: |
+            `competicion=…` de la URL del calendario: **categoría de edad + división** (§3.7). Junto con
+            `federationGroupId`, `modality` y el `federationSeasonId` de la temporada, es la coordenada
+            con la que se llama a la federación. **No es clave de unión**: nunca PK, nunca FK.
+          examples: ['24037548']
+        federationGroupId:
+          type: string
+          description: '`grupo=…` de la URL: **solo** el grupo (§3.7).'
+          examples: ['24037549']
+        displayName:
+          type: string
+          readOnly: true
+          description: '**Derivado en lectura**: `ageCategory` · `divisionLabel` · `groupLabel`.'
+          examples: ['Infantil · Primera · Grupo 1']
+        lastSyncedAt:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: |
+            Última sincronización con éxito. **`null` ⇒ nunca sincronizada**, que es exactamente la
+            condición bajo la cual las coordenadas externas siguen siendo editables por `PATCH` (§3.7).
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
     # ─────────────────────── OpponentClub (§5.2) ───────────────────────
     OpponentClubResponse:
       type: object
@@ -1089,21 +1590,9 @@ components:
           format: date-time
           readOnly: true
 
-    CreateOpponentClubRequest:
-      type: object
-      description: |
-        Alta manual de un club rival. **No admite `slug` ni `federationClubId`**: el primero lo genera
-        el servidor, el segundo solo lo aporta la ingesta.
-      required: [name]
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-        shortName:
-          type: string
-          minLength: 1
-          description: Si se omite, el servidor lo inicializa desde `name`.
+    # No existe CreateOpponentClubRequest: los clubes rivales los crea la ingesta (§5.1). Que el
+    # esquema de alta *no exista* —en vez de existir con validaciones que lo impidan— es la forma más
+    # barata de que la frontera no se salte por descuido: el generador no producirá el stub.
 
     UpdateOpponentClubRequest:
       type: object
@@ -1130,7 +1619,7 @@ components:
         Incluye varios campos **derivados** (`isOwn`, `clubName`, `displayName`, `crestUrl`): ninguno se
         almacena ni se acepta en escritura, todos se componen en el servidor. El criterio es que la app
         móvil pueda **pintar una fila de equipo con una sola llamada**, sin resolver el club por su cuenta.
-      required: [id, category, gender, isOwn, clubName, displayName, createdAt, updatedAt]
+      required: [id, category, gender, modality, isOwn, clubName, displayName, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1144,6 +1633,13 @@ components:
           examples: ['A']
         gender:
           $ref: '#/components/schemas/TeamGender'
+        modality:
+          allOf:
+            - $ref: '#/components/schemas/Modality'
+          readOnly: true
+          description: |
+            **La fija la ingesta**, tomándola de la competición en la que aparece el equipo; no es campo
+            de entrada de este contrato. Es identidad, no atributo: entra en la clave única de §3.5.
         opponentClubId:
           type: [string, 'null']
           format: uuid
@@ -1163,8 +1659,8 @@ components:
             las temporadas 25/26 y 26/27), por eso vive en `Team` —que es independiente de la temporada—
             y no en `Participation`.
 
-            **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno. Nulo en equipos
-            creados a mano fuera de competición federada.
+            **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno. Nulo solo si la
+            ingesta no pudo extraerlo y tuvo que degradar a emparejamiento por nombre + categoría (§3.7).
           examples: ['3349086']
         isOwn:
           type: boolean
@@ -1198,27 +1694,15 @@ components:
           format: date-time
           readOnly: true
 
-    CreateTeamRequest:
-      type: object
-      description: |
-        Crea un equipo **propio**. No admite `opponentClubId` ni `isOwn`: el servidor fija
-        `opponentClubId = null`, que es lo que define a un equipo como propio.
-      required: [category, gender]
-      additionalProperties: false
-      properties:
-        category:
-          $ref: '#/components/schemas/TeamCategory'
-        letter:
-          type: [string, 'null']
-          minLength: 1
-        gender:
-          $ref: '#/components/schemas/TeamGender'
+    # No existe CreateTeamRequest: TODOS los equipos los crea la ingesta, propios incluidos (§5.1).
 
     UpdateTeamRequest:
       type: object
       description: |
         Actualización parcial. **No incluye `opponentClubId`**: un equipo no cambia de club, y uno propio
-        no se convierte en rival ni al revés.
+        no se convierte en rival ni al revés — para eso está `/ownership`.
+
+        **Tampoco incluye `modality`**: es identidad del equipo y parte de su clave única (§3.5).
       additionalProperties: false
       minProperties: 1
       properties:
