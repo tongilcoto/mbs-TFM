@@ -208,14 +208,21 @@ Las rutas son **relativas** al *host* de la federación (`https://appweb.rffm.es
 
 Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
 
-- **Respuesta del endpoint de clasificación** — y si esta federación la ofrece siquiera; determina si
-  `StandingRow` se ingiere o se calcula.
+- **Respuesta del endpoint de clasificación** — *forma* de la respuesta, aún sin muestra. Lo que **ya está
+  confirmado** es que **existe**: la RFFM **sí** publica clasificación. La **FCF (Cataluña) no**, y ahí
+  `StandingRow` se calcula desde `Match` ([D-15]).
+
+  > Esta es la **primera diferencia de capacidad observada entre federaciones**, y por eso no es solo un
+  > dato de integración: fija que el catálogo en código ([D-17]) describa **qué sabe hacer** cada
+  > proveedor, no solo sus coordenadas. Consecuencia en el contrato: se descartó `Round.hasStandings` y
+  > la procedencia se expone una sola vez por tenant, en `ClubResponse` ([D-29]).
 - **Respuesta del endpoint de goleadores** — mapeo a `LeagueScorer`.
 - **Si el calendario devuelve `division_label` y `group_label` como texto.** Si no los devuelve, son los dos
   únicos rótulos que el administrador tendrá que **teclear** en el alta en vez de limitarse a confirmar lo
   que le muestra el *preview*. Es el único punto del diseño del alta que depende de un dato aún no observado.
 - **Correspondencia `tipojuego` ↔ modalidad** más allá de `1` = fútbol-11.
-- **Federación Cataluña**: host, contrato y numeración. Todo lo anterior es RFFM.
+- **Federación Cataluña**: host, contrato y numeración. Todo lo anterior es RFFM. Ya se sabe una cosa: **no
+  publica clasificación** (ver arriba).
 - **Política de refresco del escudo**: la ruta de origen es detectablemente distinta si el club lo cambia,
   pero no está decidido cada cuánto se comprueba.
 
@@ -226,5 +233,7 @@ Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
 <!-- Definiciones de enlace -->
 [D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-13]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

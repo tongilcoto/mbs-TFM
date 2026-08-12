@@ -52,6 +52,7 @@
 | **D-22** | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos | §5.1 |
 | **D-23** | `Club` es un *singleton* sin `POST` ni `DELETE` | §5.1 |
 | **D-24** | Borrado físico de temporada: operación protegida en dos pasos | §5.4 |
+| **D-29** | La clasificación no es un campo de `Round`: es una capacidad de la federación | §3.7, §5.1, §5.2 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -624,6 +625,39 @@ ya está.
 
 ---
 
+### D-29 · La clasificación no es un campo de `Round`: es una capacidad de la federación
+
+**Contexto.** Al redactar `RoundResponse` se le puso un `hasStandings` —"¿hay clasificación para esta
+jornada?"— pensando en que la app decidiera si pintaba la pestaña.
+
+**Por qué se descarta.** Por [D-15] la clasificación **existe siempre**: si la federación no la publica, se
+calcula desde `Match`, y ese *fallback* no es un modo degradado sino la vía normal. Un campo cuya respuesta
+es constantemente `true` **no informa**: induce al cliente a escribir una rama que no se ejecuta nunca — o,
+peor, que se dispara a principio de temporada, cuando aún no hay partidos jugados, y esconde una pestaña que
+debería estar ahí. La web **siempre** muestra clasificación.
+
+**La pregunta que sí era real** no era "¿hay?" sino "¿es **oficial** o la hemos calculado nosotros?". Es un
+dato de **procedencia** (§3.7), y la observación que la desbloquea llegó después: **la RFFM publica
+clasificación y la FCF no** ([Anexo de la Federación §F.6]). O sea que **la varianza es entre federaciones**,
+no entre competiciones ni entre jornadas.
+
+**Alternativa intermedia, también descartada: `Competition.standingsSource`.** Parecía el nivel natural
+—hermano de `last_synced_at`—, pero como hay **una federación por tenant** ([D-17]), dentro de un *schema*
+todas las competiciones tendrían **el mismo valor**: una columna constante repetida en cada fila. Es
+exactamente la redundancia que [D-28] acaba de rechazar, y por el mismo motivo.
+
+**Decisión.** La capacidad vive en el **catálogo de federaciones en código** ([D-17]), que pasa así a
+describir **qué sabe hacer** cada proveedor y no solo sus coordenadas. Al contrato sale **una sola vez por
+tenant**, derivada y `readOnly`: `ClubResponse.federationProvidesStandings`. Su consumidor es el
+**backoffice**, para rotular "clasificación calculada" y que el administrador no la confunda con la oficial;
+las apps de consulta pueden ignorarla.
+
+**Lo que se asume a cambio.** Si alguna federación llegara a publicar clasificación en unas competiciones sí
+y en otras no, el booleano por club se quedaría corto y habría que bajarlo a `Competition`. Se acepta: hoy no
+hay ni un solo caso observado, y bajarlo entonces es añadir una columna, no rehacer el contrato.
+
+---
+
 ## Documentación
 
 ### D-25 · El *spec* OpenAPI es la fuente de verdad campo a campo
@@ -685,9 +719,12 @@ limpio.
 [D-22]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-24]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo de la Federación §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

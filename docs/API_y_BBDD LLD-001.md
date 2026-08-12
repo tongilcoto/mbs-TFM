@@ -431,6 +431,13 @@ Pendiente: la política de **refresco**.
 **Una federación por tenant.** `Club.federation` (§3.2) determina host, numeración y mapa de códigos de
 modalidad para todo el *schema*. La federación en sí no es dato: es un **catálogo en código** ([D-17]).
 
+**Del catálogo salen también las *capacidades* del proveedor, no solo sus coordenadas.** La primera:
+**si publica clasificación**. La **RFFM sí**; la **FCF no** ([Anexo de la Federación §F.6]) → allí
+`StandingRow` se calcula desde `Match` ([D-15]). Es capacidad **de la federación**, no de la competición ni
+de la jornada, y como hay una por tenant el valor es constante dentro del *schema*: se expone derivado en
+`ClubResponse.federationProvidesStandings` para que el backoffice pueda rotular la clasificación calculada
+como no oficial ([D-29]). **No condiciona que haya clasificación** —la hay siempre—, solo de dónde viene.
+
 **Política de *upsert*: la sincronización no pisa lo que el administrador corrigió.** Si el BFF solo puede
 corregir datos ingeridos (§5.1), esa corrección **tiene que sobrevivir a la siguiente pasada**; si no, el
 `PATCH` sería tan poco duradero como un `DELETE`. Regla por tipo de campo, sin necesidad de banderas nuevas:
@@ -666,6 +673,9 @@ protocol TeamStatsQuery {
     func goalBreakdown(teamID: TeamID, seasonID: SeasonID) async throws -> GoalBreakdown
 }
 protocol StandingQuery { func byRound(_ roundID: RoundID) async throws -> [StandingRow] }
+
+// Jornadas de una competición, con `isCurrent` resuelto en la propia consulta (§5.1).
+protocol RoundQuery { func byCompetition(_ id: CompetitionID) async throws -> [RoundView] }
 ```
 
 - El *eager loading* (`.with(\.$homeTeam)…`, que el borrador anterior atribuía a "services") vive **aquí**, en
@@ -732,9 +742,10 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 
 *Superficie REST que consumen backoffice (escritura) y apps móviles (lectura). Cada endpoint es un
 **adaptador primario** (Controller) que mapea DTO ↔ dominio, invoca un **caso de uso** y usa el
-**repositorio** (§4.3). Redactados: `Club`, `Season`, `Competition`, `OpponentClub` y `Team`; el resto de
-recursos siguen los mismos patrones —`Season` como plantilla de recurso gestionado, `Team` como plantilla de
-recurso ingerido—.*
+**repositorio** (§4.3). Redactados: `Club`, `Season`, `Competition`, `OpponentClub`, `Team` y `Round`; el
+resto de recursos siguen los mismos patrones —`Season` como plantilla de recurso gestionado, `Team` como
+plantilla de recurso ingerido **corregible**, `Round` como plantilla de recurso ingerido **de solo
+lectura**—.*
 
 ### 5.1 Recursos y endpoints
 
@@ -900,6 +911,35 @@ Tres lecturas que no son evidentes en la tabla:
 - **Filtros de `GET /v1/competitions`:** `?seasonId=`, `?modality=`, `?ageCategory=`. Colección pequeña → sin
   paginación.
 
+**`Round`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/rounds?competitionId=` | `ListRounds` | **200** + `[RoundResponse]` | 400 (falta `competitionId`), 404 (competición inexistente) |
+| **GET** | `/v1/rounds/{id}` | `GetRound` | **200** + `RoundResponse` | 404 |
+
+- **Solo lectura, sin `PATCH`** ([D-21]): es la entidad donde la regla del BFF se aplica en su forma más
+  pura. A diferencia de `Team` y `OpponentClub` —donde el `PATCH` corrige lo que la ingesta **dedujo**
+  (separar la letra del nombre, una errata del proveedor)—, en `Round` no hay nada deducido: número y fechas
+  **son** el calendario de la federación. No hay qué corregir, así que no hay `PATCH`.
+- **`?competitionId=` es obligatorio**, no un filtro opcional. "La jornada 5" solo existe respecto de una
+  competición, y exigirlo acota la colección a las ~34 filas de una liga → **sin paginación** (§5.3). Sin él,
+  `GET /v1/rounds` devolvería las jornadas de todas las competiciones de todas las temporadas, que ni es una
+  colección pequeña ni la pide ninguna pantalla.
+- **Ruta plana pese a ser interna del agregado `Competition`** (§4.2). Anidarla (`/competitions/{id}/rounds`)
+  expresaría mejor la contención, pero rompería la convención del resto del contrato —recursos de primer
+  nivel con filtros de *query*, como `/teams?seasonId=`— y obligaría a una segunda ruta para el `GET` por id.
+  El `competitionId` obligatorio conserva el ámbito sin la anidación.
+- **Orden fijo por `number` ascendente**: es el orden del calendario y el único con sentido para un selector
+  de jornada. No se ofrece `?sort=`.
+- **`isCurrent` es derivado en lectura**, no columna: aplica el criterio de `Season.isCurrent` (§3.2)
+  **dentro de la competición** → como mucho una, y **ninguna** si la competición ya terminó (el cliente cae
+  en la última jornada).
+- **No lleva `hasStandings`** ([D-29]). Se descartó: por [D-15] la clasificación existe **siempre** —ingerida
+  o calculada—, así que el campo respondía constantemente `true` y el cliente escribiría una rama muerta. La
+  pregunta de verdad —si la clasificación es **oficial o calculada**— es de **procedencia** y **de la
+  federación**, no de la jornada: vive en `ClubResponse.federationProvidesStandings` (§3.7).
+
 ### 5.2 DTOs
 
 Los DTOs **conforman `Content`** (cruzan HTTP) y están **desacoplados** tanto de la entidad de dominio como
@@ -940,10 +980,15 @@ struct SeasonResponse: Content {
   [D-23]) ni `CreateTeamRequest`/`CreateOpponentClubRequest` (son entidades de **salida** de la ingesta,
   [D-21]). Que el DTO **no exista** —en vez de existir con validaciones que lo impidan— es la forma más
   barata de que la frontera no se salte por descuido: el generador ni siquiera produce el *stub*.
+- **`Round` lleva el caso al extremo: un solo DTO.** No hay `CreateRoundRequest` **ni
+  `UpdateRoundRequest`** — es el único recurso redactado con respuesta pero sin ningún DTO de escritura
+  (§5.1). Es la plantilla del **recurso ingerido de solo lectura**, que seguirán `Match`, `StandingRow` y
+  `LeagueScorer`.
 - **`PATCH` parcial:** `minProperties: 1` y `additionalProperties: false`; **campo ausente = no se
   modifica**, y en los anulables un `null` explícito **borra** el valor.
 - **Campos derivados: solo en respuesta, nunca en escritura.** `Season.isCurrent`; `Team.isOwn`
-  (`opponentClubId == null`), `clubName`, `displayName` y `crestUrl`; `Competition.displayName`. Ninguno se
+  (`opponentClubId == null`), `clubName`, `displayName` y `crestUrl`; `Competition.displayName`;
+  `Round.isCurrent`; `Club.federationProvidesStandings` (del catálogo en código, [D-17]). Ninguno se
   almacena. `TeamResponse` es deliberadamente "gordo" en derivados para que **la app móvil pinte una fila de
   equipo con una sola llamada**, sin resolver el club por su cuenta — el mismo compromiso pro-lectura que ya
   se aceptó al denormalizar `Goal` ([D-04]).
@@ -1169,5 +1214,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo de la Federación §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

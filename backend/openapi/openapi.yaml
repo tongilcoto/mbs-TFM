@@ -6,7 +6,7 @@ openapi: 3.1.0
 # cualquier caso.
 #
 # Estado: cubre las entidades ya definidas en §5 del LLD — `Club`, `Season`,
-# `Competition`, `OpponentClub` y `Team`. Se irá ampliando entidad a entidad.
+# `Competition`, `OpponentClub`, `Team` y `Round`. Se irá ampliando entidad a entidad.
 #
 # Referencias `§x` → docs/API_y_BBDD LLD-001.md
 # Referencias `D-nn` → docs/API_y_BBDD LLD-Anexo-Decisiones-Disenho-001.md (bitácora de decisiones)
@@ -90,6 +90,14 @@ tags:
       **Escribe:** la **ingesta** — también los propios, que aparecen en la competición como cualquier
       otro. Esta API permite **corregir** (`PATCH`) y **reclamar la propiedad** (`/ownership`), nunca
       crear ni borrar (§5.1).
+  - name: Rounds
+    description: |
+      Jornadas de una competición. Son el **eje de navegación** de la app: resultados por jornada y
+      clasificación por jornada (§3.4).
+
+      **Escribe:** la **ingesta**, y solo ella. Esta API es de **solo lectura** sobre `Round` (§5.1): una
+      jornada no tiene nada corregible a mano —su número y sus fechas los fija el calendario de la
+      federación—, así que ni siquiera hay `PATCH`.
 
 paths:
 
@@ -888,6 +896,72 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # ───────────────────────────── Rounds (§5.1) ─────────────────────────────
+  /rounds:
+    get:
+      tags: [Rounds]
+      operationId: listRounds
+      summary: Lista las jornadas de una competición
+      description: |
+        **`competitionId` es obligatorio.** Una jornada fuera de su competición no significa nada —"la
+        jornada 5" solo existe respecto de una liga— y exigirlo acota la colección a las ~34 filas de una
+        competición, que es lo que permite servirla **sin paginación** (§5.3). `Round` es interna del
+        agregado `Competition` (§4.2); la ruta es plana por coherencia con el resto del contrato, pero el
+        ámbito sigue siendo el mismo.
+
+        **Orden fijo por `number` ascendente**, que es el orden del calendario y el único con sentido para
+        un selector de jornada. Sin `?sort=`.
+      parameters:
+        - name: competitionId
+          in: query
+          required: true
+          description: Competición cuyas jornadas se listan. Identificador **interno** (UUID).
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Jornadas de la competición, ordenadas por número ascendente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoundResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: La competición no existe en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    # Sin POST: las jornadas las crea la ingesta desde el calendario de la federación (§3.7, §5.1).
+
+  /rounds/{roundId}:
+    parameters:
+      - $ref: '#/components/parameters/RoundId'
+
+    get:
+      tags: [Rounds]
+      operationId: getRound
+      summary: Obtiene una jornada
+      responses:
+        '200':
+          description: Jornada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    # Sin PATCH ni DELETE (§5.1): a diferencia de `Team` y `OpponentClub`, una jornada no tiene ningún
+    # campo que un humano pueda corregir mejor que la federación — número y fechas son el calendario.
+    # Es la entidad más pura de la regla "el BFF corrige lo que la ingesta trae" (D-21): aquí no hay
+    # ni siquiera qué corregir.
+
 components:
 
   securitySchemes:
@@ -929,6 +1003,14 @@ components:
       name: teamId
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    RoundId:
+      name: roundId
+      in: path
+      required: true
+      description: Identificador **interno** (UUID) de la jornada. No es su `number` dentro de la competición.
       schema:
         type: string
         format: uuid
@@ -1022,7 +1104,7 @@ components:
 
     ClubResponse:
       type: object
-      required: [id, name, shortName, slug, federation, settings, createdAt, updatedAt]
+      required: [id, name, shortName, slug, federation, federationProvidesStandings, settings, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -1060,6 +1142,20 @@ components:
           description: |
             Federación del club. **Se fija al aprovisionar** y ninguna operación de esta API la cambia:
             determina a qué API se sincroniza todo el tenant.
+        federationProvidesStandings:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado del catálogo de federaciones en código** (D-17), no almacenado: `true` si la
+            federación de este club publica clasificación propia (**RFFM sí**), `false` si hay que
+            calcularla desde los `Match` (**FCF no**) — el *fallback* de D-15.
+
+            **No condiciona si hay clasificación**: la hay siempre, por una vía o por la otra. Es un
+            dato de **procedencia** (§3.7) para que el backoffice pueda rotular "clasificación calculada"
+            y el administrador sepa que no es la oficial. Las apps de consulta pueden ignorarlo.
+
+            Vive aquí, y no en `Round` ni en `Competition`, porque la capacidad es **de la federación** y
+            hay **una por tenant** (§3.6): dentro de un club el valor es constante (D-29).
         settings:
           $ref: '#/components/schemas/ClubSettings'
         createdAt:
@@ -1712,3 +1808,62 @@ components:
           minLength: 1
         gender:
           $ref: '#/components/schemas/TeamGender'
+
+    # ─────────────────────────── Round (§5.2) ───────────────────────────
+    RoundResponse:
+      type: object
+      description: |
+        Jornada de una competición. **Solo lectura**: no hay `CreateRoundRequest` ni `UpdateRoundRequest`
+        porque `Round` es salida de la ingesta y no tiene campos corregibles a mano (§5.1, D-21).
+      required: [id, competitionId, number, startDate, endDate, isCurrent, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Competición a la que pertenece. **La temporada se alcanza por aquí**, no por un `seasonId`
+            propio: `Round` no lo lleva (D-28).
+        number:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: |
+            Número de jornada dentro de la competición, tal y como lo publica la federación. Único por
+            competición (§3.5). **No es el identificador**: para eso está `id`.
+          examples: [5]
+        startDate:
+          type: string
+          format: date
+          readOnly: true
+          examples: ['2024-10-05']
+        endDate:
+          type: string
+          format: date
+          readOnly: true
+          description: |
+            Una jornada abarca **varios días** (los partidos de una misma jornada se reparten entre sábado
+            y domingo, y a veces se aplazan), de ahí el rango en vez de una fecha única.
+          examples: ['2024-10-06']
+        isCurrent:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado en lectura, no almacenado**: es la jornada de **esta competición** con el `endDate`
+            más próximo que aún es ≥ hoy. Mismo criterio que `Season.isCurrent` (§3.2), aplicado dentro de
+            la competición → **como mucho una** por competición.
+
+            **Puede no haber ninguna**: si la competición ya terminó, todas las jornadas quedan con
+            `false`. El cliente debe contemplar ese caso y caer en la última jornada.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
