@@ -149,7 +149,9 @@ Tres conclusiones, y las tres tienen consecuencia directa en el modelo:
 1. **`codigo_equipo` identifica al EQUIPO, no al club.** Dos códigos distintos = dos equipos distintos del
    mismo club, pese a compartir nombre y escudo. → clave externa de `Team` ([D-06]).
 2. **Es estable entre temporadas.** Cada código se repite en las dos campañas observadas. → `Team` es
-   independiente de la temporada y el código lo acompaña toda su vida; **no** va en `Participation`.
+   independiente de la temporada y el código lo acompaña toda su vida. Esta observación dejó a la antigua
+   tabla pivote `Participation` sin la única columna que la habría justificado, y acabó motivando su
+   eliminación ([D-27]).
 3. **No depende de la competición.** `821` se repite aunque el equipo **cambió de división** entre campañas.
    Es identidad de equipo pura. → la división es atributo de *dónde compite*, no de *quién es* ([D-13]).
 
@@ -225,3 +227,4 @@ Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
 [D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-13]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

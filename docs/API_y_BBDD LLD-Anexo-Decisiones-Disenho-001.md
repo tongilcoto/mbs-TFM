@@ -39,6 +39,8 @@
 | **D-13** | "Primer Equipo" y filiales: `category=senior` + `letter` | §3.2 |
 | **D-14** | Minutos jugados: se registran, pero opcionales | §3.2 |
 | **D-15** | `StandingRow` agnóstica a la fuente; el *fallback* es cálculo, no formulario | §3.2, §5.1 |
+| **D-27** | `Participation` se elimina: la composición de la liga es derivada, no un hecho | §3.4, §3.5, §4.2, §4.6, §5.1 |
+| **D-28** | La temporada no se propaga: `season_id` solo donde es identidad, no atajo | §3.2, §3.5 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
 | **D-17** | La federación es un catálogo en código, y hay una por tenant | §3.2, §3.6 |
@@ -212,8 +214,8 @@ competiciones de **su edad y su modalidad**.
 duda de si faltaba modelar la **división**.
 
 **Respuesta:** `Team` **no la necesita** —y no debe tenerla—. La división es atributo de **dónde compite**,
-no de **quién es**: un equipo que asciende sigue siendo el mismo, y el cambio ya queda registrado en que su
-`Participation` apunta a otra `Competition`. Lo confirma la evidencia: el mismo `codigo_equipo` en dos
+no de **quién es**: un equipo que asciende sigue siendo el mismo, y el cambio ya queda registrado en que sus
+**partidos** son de otra `Competition`. Lo confirma la evidencia: el mismo `codigo_equipo` en dos
 divisiones ([Anexo de la Federación §F.3]).
 
 **El problema real era otro y más peligroso:** `Competition` tenía un campo **`category_label`** que en el
@@ -307,6 +309,109 @@ cambia el modelo**; es tarea de la capa de ingesta.
 **Decisión (contrato), posterior.** El *fallback* se resuelve como **cálculo propio desde `Match`**, no como
 formulario en el backoffice. Así la tabla conserva **un único escritor** y no aparece la única casilla con
 dos dueños en la matriz de propiedad ([D-21]).
+
+---
+
+### D-27 · `Participation` se elimina: la composición de la liga es derivada, no un hecho
+
+**Problema.** El modelo llevaba una tabla pivote `Participation` (`competition_id`, `team_id`) para la N:N
+`Competition`↔`Team`. Al revisar el modelo ya cerrado se constató que **ningún `participation_id` aparece en
+ninguna parte**: no hay endpoint, ni DTO, ni campo en el spec OpenAPI que la referencie. Su único consumidor
+era el filtro `?seasonId=` de `GET /v1/teams`.
+
+**Por qué no era solo "código muerto".** La tabla no aportaba **ninguna información**:
+
+1. **No tenía atributos propios.** Solo las dos FK. La única columna que la habría justificado —el
+   `codigo_equipo`— se le negó explícitamente al comprobar que es **estable entre temporadas** y por tanto
+   pertenece a `Team` ([Anexo de la Federación §F.3]).
+2. **La ingesta descubre los equipos *desde* el calendario** (§3.7). Un equipo entra en el sistema porque
+   aparece en un `Match`; no hay ninguna otra puerta. Así que `Participation` no podía contener una sola fila
+   que `Match` no implicara ya: era un **índice de `Match`** mantenido a mano, con el coste de consistencia
+   que eso conlleva y sin la garantía que da un índice de verdad.
+3. **Había una segunda derivación equivalente** en `StandingRow` (`competition_id`, `team_id`), lo que
+   confirma que el dato ya estaba dos veces antes de contar la tabla pivote.
+
+**Alternativa descartada:** conservarla como **caché materializada** de la consulta. Se rechaza porque el
+volumen no lo pide —una competición son ~20 equipos, y `GET /v1/teams` no está paginado por ser una colección
+pequeña por club (§5.3)— y porque introduciría un segundo escritor que mantener sincronizado con `Match` en
+cada sincronización, justo el tipo de deriva que [D-18] intenta evitar.
+
+**Decisión.** Se elimina la entidad, su tabla, su `ParticipationRecord`, su migración y el `@Siblings` de
+Fluent. La composición de la competición pasa a **vista derivada** (§3.4), como el rendimiento de equipo o los
+goleadores: `DISTINCT` de `home_team_id` ∪ `away_team_id` sobre los `Match` de la competición, servida por
+puerto de lectura (§4.5). Se añaden los índices compuestos `Match`(`competition_id`, `home_team_id`) y
+(`competition_id`, `away_team_id`) que la sostienen (§4.6).
+
+**Consecuencias que se reubican:**
+
+- **La validación de [D-07]** —"un equipo solo compite en competiciones de su edad y su modalidad"— se
+  aplicaba al insertar la `Participation`. Pasa a aplicarse **al insertar el `Match`**, que es donde equipo y
+  competición se encuentran de verdad. No se pierde: cambia de sitio a uno mejor.
+- **La redacción de [D-08]** ("su `Participation` apunta a otra `Competition`") se reformula sobre `Match`.
+  El argumento —la división es atributo de *dónde compite*, no de *quién es*— queda intacto.
+- **La decisión abierta de §4.2** sobre qué contiene `Competition` pierde una de sus tres patas.
+
+**Lo que se asume a cambio.** Un equipo **inscrito pero sin calendario publicado** no aparecería como
+participante. Pero hoy tampoco existiría como fila: la ingesta no tendría de dónde crearlo. No es una
+regresión, es la misma limitación sin una tabla que aparentara cubrirla. Si alguna federación llegara a
+exponer un endpoint de **inscripciones** independiente del calendario, eso sería una entidad **nueva y con
+datos propios** (fecha de inscripción, estado, plaza), no la resurrección de este pivote vacío.
+
+---
+
+### D-28 · La temporada no se propaga: `season_id` solo donde es identidad, no atajo
+
+**La pregunta era** si `season_id` debía bajar al resto de entidades del árbol —`Round`, `Match`,
+`StandingRow`, `Goal`, `Card`, `Appearance`, incluso `Team`—, dado que `Player` ya lo lleva ([D-05]) y que
+**todas** las pantallas navegan con selector de temporada (§3.6).
+
+**Por qué la premisa engaña.** En `Player`, la temporada **no es denormalización: es identidad**. Una fila
+*es* "un jugador en un equipo en una temporada", y como `Team` deliberadamente **no** tiene temporada (§3.2),
+no existe ningún otro camino desde `Player` hasta `Season`: la columna es la **única** fuente. En `Round` o
+`Match` sería lo contrario —un atajo derivable a **un salto** desde `Competition.season_id`—, así que [D-05]
+no sirve de precedente. Tratar los dos casos como uno es justo lo que lleva a esparcir la columna por todo el
+esquema.
+
+**Decisión: no se propaga.** El árbol se recorre por sus FK. Entidad a entidad:
+
+| Entidad | Veredicto | Razón |
+|---------|-----------|-------|
+| `Player` | **la lleva** (ya) | Identidad, no atajo — no hay otro camino ([D-05]) |
+| `Team`, `OpponentClub` | **sería un error** | Son **estables entre temporadas** a propósito (§3.2): "Infantil A" es la misma entidad año tras año. Una columna ahí obligaría a duplicar filas por temporada y rompería el filtro `?seasonId=`, que es una **derivación por participación** ([D-27]) |
+| `Goal`, `Card`, `Appearance` | **innecesaria** | Se consultan siempre vía `Player` o vía `Match`; y como `Player` ya es por temporada, **un `player_id` ya fija la temporada**. La estadística de jugador (§3.4) sale sin tocar `Season` |
+| `Round`, `Match`, `StandingRow` | **defendible, pero no** | Ahorraría **un** *join* indexado contra `Competition`, tabla diminuta (una decena de filas por temporada) |
+
+**Por qué el último caso no es [D-04].** Allí se denormalizaron los `team_id` de `Goal` porque el *join* era
+contra la tabla **grande** y estaba en el camino caliente de **todas** las consultas de desglose. Aquí el
+*join* es contra la tabla más pequeña del modelo. El criterio de [D-04] no se extiende por analogía de forma:
+se extiende por volumen y frecuencia, y aquí no se cumplen.
+
+**Alternativa descartada: columna plana en cada tabla para simplificar el purgado de temporada** ([D-24]).
+No hace falta: con las FK en cascada el subárbol se recorre solo. El `?cascade=true` no era un argumento a
+favor, sino una intuición sin coste real detrás.
+
+**Regla que queda, para cuando vuelva a plantearse.** Toda columna denormalizada tiene un **problema de
+escritor**: `Match` lo escribe la ingesta, que tendría que fijar `season_id` sin que nada garantice que jamás
+contradiga a `Competition.season_id` — la deriva que [D-18] evita en integración, reintroducida en el esquema.
+De ahí el criterio: **denormaliza solo si puedes hacer la deriva estructuralmente imposible.** En Postgres eso
+se consigue con FK compuesta, no con disciplina en el código:
+
+```sql
+ALTER TABLE competitions ADD UNIQUE (id, season_id);
+ALTER TABLE matches ADD FOREIGN KEY (competition_id, season_id)
+  REFERENCES competitions (id, season_id);
+```
+
+Si la respuesta a "¿cómo evitas la deriva?" es "lo copiamos con cuidado en la capa de aplicación", la
+denormalización no está justificada.
+
+**Y si el *join* llegara a molestar,** la salida no es la columna sino un **modelo de lectura** (§4.5,
+CQRS-lite), que el LLD ya prevé y que tiene una ventaja decisiva: **una vista no puede desviarse; una columna
+copiada sí**.
+
+**Lo que se asume a cambio.** Las consultas por temporada sobre `Round`, `Match` y `StandingRow` llevan un
+*join* a `Competition`. Se acepta a cambio de que la temporada tenga **un solo lugar donde vive** por cada
+camino del árbol.
 
 ---
 
@@ -570,12 +675,18 @@ limpio.
 
 <!-- Definiciones de enlace -->
 [D-04]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-05]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-07]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-08]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-16]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-18]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-21]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-22]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-24]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

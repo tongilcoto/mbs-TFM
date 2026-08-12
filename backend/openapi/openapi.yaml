@@ -584,7 +584,7 @@ paths:
       operationId: deleteCompetition
       summary: Borra una competición
       description: |
-        Solo si **no tiene dependientes** (jornadas, partidos, clasificación, participaciones). Borrar la
+        Solo si **no tiene dependientes** (jornadas, partidos, clasificación). Borrar la
         configuración con datos colgando dejaría huérfano el subárbol → **409**.
 
         Para deshacerse de una temporada entera **con** sus datos, la vía es el purgado de `Season`
@@ -716,8 +716,8 @@ paths:
         Colección pequeña por club → **sin paginación** (§5.3).
 
         Sobre `seasonId`: **`Team` no tiene temporada** (§3.2) — "Infantil A" es la misma entidad año tras
-        año. El filtro actúa **por participación**: equipos con `Participation` en alguna `Competition` de
-        esa temporada.
+        año. El filtro actúa **por participación**, que no es una tabla sino una **derivación** (§3.4):
+        equipos con algún partido —como local o como visitante— en alguna `Competition` de esa temporada.
       parameters:
         - name: isOwn
           in: query
@@ -1656,8 +1656,7 @@ components:
             en dos categorías, con idéntico nombre y escudo). Es la clave de emparejamiento de la ingesta
             — casar por nombre sería **incorrecto**, porque el nombre no incluye la categoría y colapsaría
             dos equipos distintos en uno. **Estable entre temporadas** (verificado: el mismo `3349086` en
-            las temporadas 25/26 y 26/27), por eso vive en `Team` —que es independiente de la temporada—
-            y no en `Participation`.
+            las temporadas 25/26 y 26/27), por eso vive en `Team`, que es independiente de la temporada.
 
             **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno. Nulo solo si la
             ingesta no pudo extraerlo y tuvo que degradar a emparejamiento por nombre + categoría (§3.7).
