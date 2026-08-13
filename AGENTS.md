@@ -80,7 +80,7 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
 
-Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team` y `Round`). Validación:
+Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match` y `StandingRow` — con esta última queda cerrada toda la superficie de **salida de la ingesta** salvo `LeagueScorer`). Validación:
 
 ```sh
 npx @redocly/cli lint backend/openapi/openapi.yaml

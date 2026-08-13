@@ -194,13 +194,34 @@ Las rutas son **relativas** al *host* de la federación (`https://appweb.rffm.es
 | Observación | Consecuencia para el mapeo |
 |-------------|----------------------------|
 | `goles_casa`/`goles_visitante` vienen como **cadena vacía**, no `null`, si el partido no se ha jugado (muestras 1 y 2) | Traducir `""` → `NULL` en `Match.home_score`/`away_score` |
-| `hora` puede venir **vacía** aun conociéndose la `fecha` (muestra 1), y con valor en las jugadas (`"12:00"`) | `fecha` + `hora` componen `kickoff_at`, pero **la hora puede faltar** |
+| `hora` puede venir **vacía** aun conociéndose la `fecha` (muestra 1), y con valor en las jugadas (`"12:00"`) | Mapean a **dos columnas separadas**, `match_date` y `kickoff_time`, no a un `timestamptz` único: la hora ausente **no es un dato que falte, es un horario sin confirmar** ([D-30], y ver abajo) |
 | La muestra 2 **no trae `hora` en absoluto** (campo ausente, no vacío) | El *decoder* debe tolerar campos ausentes, no solo vacíos |
 | El nombre trae **la letra embebida** entre comillas simples: `"C.D. FUTBOL TRES CANTOS 'A'"` | La ingesta separa club + `letter`. `"C.D. EL ESCORIAL"` **no lleva letra** → `letter` sigue siendo opcional |
 | Nombres en **mayúsculas** y con puntuación irregular (`C.D.`, `C.F.`, `CELTIC CASTILLA C.F.`) | Normalizar para el emparejamiento por nombre (paso 2 de la cadena de degradación), y dejar la grafía a corrección manual |
 | Las fechas vienen como `DD-MM-AAAA` | No es ISO: parseo explícito |
 | Hay **`codigo_campo` + `campo`** | Existe identificador de campo. Hoy `Match.venue?` es texto libre; si el campo llegara a merecer entidad propia, aquí está la clave. Fuera de alcance |
-| `codacta` identifica el **acta** del partido | Candidato natural a clave externa de `Match`. No modelado aún — anotado por si la ingesta lo necesita para el *upsert* |
+| `codacta` identifica el **acta** del partido | **Ya modelado** como `Match.federation_match_id` ([D-31]): anulable, porque es un campo **de la RFFM** y no del contrato genérico de federación. El *upsert* lo usa si viene y degrada a (jornada, local, visitante) si no |
+
+**El calendario se publica en dos tiempos, y eso no es una rareza: es el ritmo de la fuente.**
+
+Cuando arranca la temporada, la federación reparte **todos** los partidos por jornadas, pero con una fecha
+**por defecto** —el **sábado**— y **sin hora**. La franja definitiva de cada jornada se fija el **domingo
+anterior, al cierre**, y al fijarla la fecha puede además desplazarse **a domingo**. Es lo que explica que
+`hora` venga vacía o ausente en las muestras 1 y 2 (partidos lejanos) y con valor en las 3 y 4 (ya jugados),
+sin que ninguna esté mal formada.
+
+Dos consecuencias, ambas ya recogidas en el LLD:
+
+- **En el modelo:** `match_date` y `kickoff_time` separados, con la confirmación **derivada** de que haya
+  hora ([D-30]). Un `timestamptz` único no puede representar "sábado, hora por decidir".
+- **En la ingesta:** los dos campos son **volátiles** (se pisan en cada pasada) y el hito del domingo
+  **ancla la cadencia** — una pasada el lunes recoge a la vez los horarios de la semana entrante y el
+  resultado de la jornada recién jugada (§5.6). De martes a viernes no hay nada nuevo que traer.
+
+> **Cuidado con leer "confirmado" como "definitivo".** Un horario ya publicado puede moverse por causa mayor
+> —campo inutilizable, inundaciones, suspensión—, así que la confirmación describe **lo que la federación ha
+> publicado hasta ahora**, no un compromiso. Y como `Match` no tiene `PATCH` ([D-21]), el único camino de
+> vuelta es la siguiente sincronización.
 
 ---
 
@@ -212,6 +233,15 @@ Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
   confirmado** es que **existe**: la RFFM **sí** publica clasificación. La **FCF (Cataluña) no**, y ahí
   `StandingRow` se calcula desde `Match` ([D-15]).
 
+  **Qué hay que buscar en la muestra, ahora que el contrato está escrito** (§3.2, §5.1):
+
+  | Campo destino | Qué comprobar en la respuesta |
+  |---------------|-------------------------------|
+  | `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points` | Se dan por seguros; confirmar nombres y que `points` venga **calculado por la fuente** y no haya que deducirlo (sanciones con descuento de puntos) |
+  | **`previous_position`** | **El más incierto.** Si la RFFM no lo publica, hay que calcularlo al ingerir comparando con el *snapshot* anterior — y aceptar que sea nulo cuando no lo haya ([D-33]) |
+  | Identificación del equipo | Si viene `codigo_equipo` (como en el calendario, §F.3) el emparejamiento es directo; si solo viene el nombre, hay que degradar como en §3.7 |
+  | Granularidad | **Si la respuesta es por jornada o solo la clasificación actual.** Es la pregunta que más condiciona: el modelo es un *snapshot* **por jornada**, y si la fuente solo da la última, las jornadas pasadas habrá que calcularlas desde `Match` o construirlas incrementalmente pasada a pasada |
+
   > Esta es la **primera diferencia de capacidad observada entre federaciones**, y por eso no es solo un
   > dato de integración: fija que el catálogo en código ([D-17]) describa **qué sabe hacer** cada
   > proveedor, no solo sus coordenadas. Consecuencia en el contrato: se descartó `Round.hasStandings` y
@@ -221,6 +251,15 @@ Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
   únicos rótulos que el administrador tendrá que **teclear** en el alta en vez de limitarse a confirmar lo
   que le muestra el *preview*. Es el único punto del diseño del alta que depende de un dato aún no observado.
 - **Correspondencia `tipojuego` ↔ modalidad** más allá de `1` = fútbol-11.
+- **Cómo se señala un partido aplazado o suspendido.** El objeto de partido **no trae campo de estado**
+  (§F.2): solo goles vacíos o llenos, de donde la ingesta deriva `programado`/`finalizado`. Los otros dos
+  valores del enumerado `Match.status` (§3.3 del LLD) **no se han observado**, y como `Match` no tiene
+  `PATCH` ([D-21]) hoy son **inalcanzables**: nadie puede fijarlos. Falta ver qué hace la fuente cuando un
+  partido se aplaza de verdad — ¿mueve la fecha y ya está, o lo marca de algún modo? Si resultara que no
+  hay forma de distinguirlo, **lo que sobra son los dos valores, no el campo**.
+- **Si `codacta` viene siempre.** Se ha visto en las cuatro muestras, todas de calendario completo. Falta
+  confirmar que no falta en respuestas parciales — es lo que decide si el segundo paso de la cadena de
+  emparejamiento de partidos ([D-31]) es un recurso excepcional o el camino habitual.
 - **Federación Cataluña**: host, contrato y numeración. Todo lo anterior es RFFM. Ya se sabe una cosa: **no
   publica clasificación** (ver arriba).
 - **Política de refresco del escudo**: la ruta de origen es detectablemente distinta si el club lo cambia,
@@ -235,5 +274,9 @@ Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
 [D-13]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-21]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-30]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-31]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

@@ -41,6 +41,9 @@
 | **D-15** | `StandingRow` agnóstica a la fuente; el *fallback* es cálculo, no formulario | §3.2, §5.1 |
 | **D-27** | `Participation` se elimina: la composición de la liga es derivada, no un hecho | §3.4, §3.5, §4.2, §4.6, §5.1 |
 | **D-28** | La temporada no se propaga: `season_id` solo donde es identidad, no atajo | §3.2, §3.5 |
+| **D-30** | El calendario nace provisional: fecha y hora separadas, confirmación derivada | §3.2, §3.7, §4.1, §5.1 |
+| **D-31** | `federation_match_id` se modela, pero la ingesta no puede depender de él | §3.2, §3.5, §3.7 |
+| **D-33** | `previous_position` se almacena: la fila entera ya es un *snapshot* | §3.2, §5.1 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
 | **D-17** | La federación es un catálogo en código, y hay una por tenant | §3.2, §3.6 |
@@ -53,6 +56,8 @@
 | **D-23** | `Club` es un *singleton* sin `POST` ni `DELETE` | §5.1 |
 | **D-24** | Borrado físico de temporada: operación protegida en dos pasos | §5.4 |
 | **D-29** | La clasificación no es un campo de `Round`: es una capacidad de la federación | §3.7, §5.1, §5.2 |
+| **D-32** | `MatchResponse` embebe los equipos: proyección, no referencia ni expansión | §5.2, §5.3 |
+| **D-34** | La clasificación es un modelo de lectura: sin acceso por id, con la racha dentro | §3.4, §4.5, §5.1 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -416,6 +421,142 @@ camino del árbol.
 
 ---
 
+### D-30 · El calendario nace provisional: fecha y hora separadas, confirmación derivada
+
+**El hecho de dominio que lo motiva.** Un calendario federado **no se publica cerrado**. Al arrancar la
+temporada, la federación reparte los partidos por jornadas con una **fecha por defecto —el sábado— y sin
+hora**; el horario real de cada jornada se fija el **domingo anterior, al cierre**, y ahí la fecha puede
+además desplazarse a domingo. Es decir: durante la mayor parte de su vida, un partido tiene una fecha que es
+una **conjetura del propio proveedor** y ninguna hora.
+
+**Lo que había.** `Match.kickoff_at`, un `timestamptz` único, heredado de modelar el partido como si su
+fecha-hora fuese un dato cerrado desde el principio. Con la observación de arriba, ese campo solo puede
+guardar una de dos mentiras: un `00:00` de relleno indistinguible de la medianoche real, o un `NULL` que se
+lleva por delante también la fecha —que sí se conoce y sí hay que pintar—.
+
+**Alternativas consideradas:**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| `kickoff_at` + `kickoff_time_known` (bool almacenado) | Resuelve la ambigüedad, pero el `00:00` sigue ahí y la bandera **puede contradecirlo**: nada impide `known = true` sobre un timestamp de relleno. Una columna más, un `CHECK` más y dos campos que hay que leer juntos para entender uno |
+| `kickoff_at` anulable, a secas | Pierde la fecha, que es justamente lo que la app necesita para ordenar el calendario y pintar "18 MAY · VS" |
+| `schedule_status` como enumerado (`provisional`/`confirmado`) | El estado **no aporta información nueva**: es exactamente "¿hay hora?". Almacenarlo crea un segundo escritor que puede desviarse del dato que describe — la deriva que [D-18] evita en integración |
+
+**Decisión.** Dos columnas: **`match_date`** (obligatoria) y **`kickoff_time`** (anulable). La confirmación
+se **deriva en lectura** (`is_kickoff_confirmed` = hay hora), como `Season.isCurrent`, `Team.isOwn` o
+`Round.isCurrent`. En el dominio se encapsulan en el VO `Kickoff` (§4.1) para que la regla viva en un sitio y
+no la reimplemente cada consumidor.
+
+**El matiz que da nombre al campo: confirmado no es inmutable.** Que la federación haya publicado franja no
+significa que el partido no se mueva — una inundación, un campo inutilizable o cualquier causa mayor lo
+aplaza o lo reprograma, y el horario puede **volver a provisional**. Por eso:
+
+- `match_date` y `kickoff_time` son **campos volátiles** en la política de *upsert* (§3.7): la sincronización
+  los pisa **siempre**, también los ya confirmados. Tratarlos como "semilla" —escribir solo en el INSERT—
+  habría congelado el calendario en su versión provisional, que es el peor resultado posible.
+- El derivado se llama `isKickoffConfirmed` y **no** `isKickoffFinal`. La diferencia no es cosmética: un
+  cliente que leyera "final" cachearía el horario, y un cliente que lee "confirmado" sabe que su copia
+  caduca en la siguiente sincronización.
+- Como `Match` no tiene `PATCH` ([D-21]), **nadie puede corregirlo a mano**: el único camino de vuelta es la
+  ingesta. Es coherente con la regla del BFF, pero conviene tenerlo presente — si la federación se equivoca
+  en un horario, la app se equivoca con ella hasta la siguiente pasada.
+
+**Consecuencia fuera del modelo.** El hito semanal (domingo al cierre) **ancla la cadencia de
+sincronización** (§5.6): el mínimo es una pasada el lunes, y el intervalo no puede superar la semana o la app
+mostraría horarios provisionales de partidos ya jugados. Es la primera pieza concreta del contrato de ingesta
+que no dependía de observar una muestra nueva.
+
+**Lo que se asume a cambio.** Ordenar el calendario es ordenar por **dos columnas** con `NULLS LAST`, no por
+una (§5.1), y el cliente lee dos campos donde antes leía uno. A cambio, el modelo no guarda ni un solo valor
+inventado.
+
+---
+
+### D-31 · `federation_match_id` se modela, pero la ingesta no puede depender de él
+
+**El punto de partida.** Las cuatro muestras del objeto de partido traen `codacta`, el identificador del acta
+([Anexo de la Federación §F.2]), y el anexo lo tenía anotado como "candidato natural a clave externa de
+`Match`, no modelado aún". Al escribir el contrato de `Match` toca resolverlo.
+
+**Por qué modelarlo.** El *upsert* de la ingesta necesita reconocer un partido ya visto. Sin identificador
+externo, la única clave son las **coordenadas** (jornada, local, visitante) — y [D-30] acaba de establecer
+que **la fecha se mueve cada semana**, así que cualquier emparejamiento que la incluyera duplicaría partidos
+sistemáticamente. Un identificador estable del proveedor es exactamente lo que [D-06] previó para este caso.
+
+**Por qué no puede ser obligatorio.** `codacta` es un campo **de la RFFM**, no del contrato genérico de
+"federación". El catálogo en código ([D-17]) ya soporta dos proveedores y se sabe que **difieren en
+capacidades** —la FCF ni siquiera publica clasificación ([D-29])—; dar por hecho que todos publican un
+identificador de acta sería repetir el error que [D-29] corrigió: elevar una particularidad de un proveedor a
+invariante del modelo. Además, la clave puede faltar **dentro** de la propia RFFM en respuestas parciales.
+
+**Decisión.** `Match.federation_match_id`, **anulable**, único (con `NULL` que no comparan iguales, §3.5),
+propiedad de la ingesta, `readOnly` en el DTO — mismo trato que `federation_team_id` y `federation_club_id`.
+Y una **cadena de emparejamiento de dos pasos** (§3.7): el identificador si viene; si no, las coordenadas
+(`round_id`, `home_team_id`, `away_team_id`), que pasan a ser **índice único** para poder serlo de verdad.
+
+**En qué se diferencia de la cadena de equipos, y por qué importa.** La de equipos tiene un tercer escalón
+—"alta nueva marcada para revisión manual"— porque su segundo paso, el nombre normalizado, es **inexacto**.
+Aquí no hace falta: el segundo paso son FK internas ya resueltas —cuando se llega al partido, sus equipos ya
+están emparejados—, así que **siempre existe y siempre es exacto**. La degradación no pierde fiabilidad,
+solo robustez ante un cambio de jornada por parte de la federación.
+
+**Alternativa descartada: no modelarlo y emparejar solo por coordenadas.** Es más simple y funcionaría el
+99 % de las veces, pero deja el sistema sin defensa ante el caso que sí ocurre —la federación reubica un
+partido en otra jornada—, que crearía un duplicado sin forma de detectarlo. Modelar el campo cuesta una
+columna anulable; no modelarlo cuesta una operación de fusión que aún no existe (§9).
+
+**Alternativa descartada: exponerlo como capacidad del catálogo**, al estilo de
+`federationProvidesStandings` ([D-29]). Se rechaza porque **no tiene consecuencia visible para el cliente**:
+que el emparejamiento use una clave u otra no cambia nada de lo que la app pinta. La capacidad de
+clasificación sí se expone porque el usuario ve la diferencia (oficial vs calculada). Este queda como
+detalle del adaptador.
+
+**Lo que se asume a cambio.** Dos caminos de emparejamiento que mantener y probar en vez de uno, y un campo
+que en algunas federaciones estará siempre vacío.
+
+---
+
+### D-33 · `previous_position` se almacena: la fila entera ya es un *snapshot*
+
+**La objeción de partida es legítima.** `StandingRow.previous_position` —la columna PREV del mockup— es la
+posición de ese mismo equipo en la jornada anterior, y esa fila está en la misma tabla. Según la regla que
+fijó [D-28], **denormaliza solo si puedes hacer la deriva estructuralmente imposible**, y aquí no se puede:
+nada en el esquema impide que el PREV de la jornada 22 contradiga al `position` de la jornada 21.
+
+**Por qué la regla no aplica, aunque lo parezca.** [D-28] protege **tablas de hechos** de una copia que puede
+desviarse de su origen. `StandingRow` no es una tabla de hechos: es un ***snapshot* derivado de principio a
+fin**. `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against` y `points` **también** salen de `Match`
+—de hecho, cuando la federación no publica clasificación, la calculamos entera desde ahí ([D-15])—. Si se
+aceptan esas siete columnas derivadas, singularizar la octava por ser derivable **de la propia tabla** en vez
+de otra es una distinción sin diferencia. La pregunta correcta no es "¿es derivable?" —lo es todo—, sino
+"¿qué escritor la produce?", y la respuesta es **uno solo**: la ingesta.
+
+**El argumento que cierra la discusión: el alta a mitad de temporada.** Un club puede dar de alta una
+competición en **marzo**. La ingesta trae entonces el calendario y la clasificación desde ese punto, y la
+jornada 22 es **la primera fila que existe**. Derivar el PREV exigiría una fila de la jornada 21 que
+**nunca se va a ingerir**. Y el modo de fallo es el peor posible: si además faltara una jornada intermedia,
+la derivación cogería la 20 creyéndola la 21 y **mentiría sin avisar** — un dato incorrecto es peor que un
+dato ausente.
+
+**Alternativas descartadas:**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Derivar de la jornada N−1 | El caso del alta a mitad de temporada la deja sin datos, y un hueco en la cadena la hace mentir en silencio |
+| Derivarla y *cachearla* | Dos escritores para la misma columna, que es exactamente lo que se quería evitar |
+| No exponer PREV | El mockup la pinta: es información real de la pantalla de clasificación, no un adorno |
+
+**Decisión.** Columna `previous_position`, **anulable**. Nula en la primera jornada de una competición y en
+la primera jornada ingerida de un alta tardía; el cliente pinta "–", que es lo que ya hace el mockup. Cuando
+la federación la publica, se ingiere; cuando la clasificación se calcula ([D-15]), sale gratis de calcular
+las jornadas en orden.
+
+**Lo que se asume a cambio.** Una columna que en teoría podría contradecir a la fila de al lado. Se acepta
+porque el único escritor es la ingesta y porque la alternativa —una derivación que falla justo en el caso de
+negocio real (alta a mitad de temporada)— es peor.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -658,6 +799,108 @@ hay ni un solo caso observado, y bajarlo entonces es añadir una columna, no reh
 
 ---
 
+### D-32 · `MatchResponse` embebe los equipos: proyección, no referencia ni expansión
+
+**El problema es de aritmética de llamadas.** La pantalla de jornada (mockup 3) pinta **cinco partidos**, y
+cada fila necesita escudo y nombre corto de **dos** equipos. Con un DTO fiel a la tabla —`homeTeamId` y
+`awayTeamId` como UUID—, pintarla cuesta **1 + 10 llamadas**, o bien obliga a cada cliente (iOS, Android,
+backoffice) a mantener su propia caché de equipos y a invalidarla cuando la ingesta corrige un nombre. Es el
+*N+1* clásico, trasladado del ORM al cliente móvil.
+
+**Alternativas consideradas:**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| UUID planos | La aritmética de arriba. Traslada a **tres** clientes un trabajo que el servidor hace una vez, con un *eager loading* que §4.5 ya prevé para este caso exacto |
+| UUID + `?expand=teams` | Introduce en el contrato una **convención de expansión** que ningún otro recurso usa, y con ella dos formas de la misma respuesta que documentar, generar y testear. El coste no se paga: no hay ni un consumidor que quiera la forma plana |
+| Devolver `TeamResponse` completo anidado | Arrastra `category`, `gender`, `modality`, `federationTeamId`, `opponentClubId`, `createdAt`… que dentro de una competición son **constantes** (§3.2). Veinte repeticiones por página de datos que no distinguen una fila de otra |
+
+**Decisión.** `home` y `away` son objetos **`MatchTeam`**: `teamId`, `displayName`, `shortDisplayName`,
+`crestUrl`, `isOwn` y `score`. Es `Team` **recortado a lo que cabe en una fila de resultado**.
+
+**Por qué esto no rompe la disciplina de agregados** (§4.2). `MatchTeam` **no es un recurso**: no tiene
+endpoint, ni identidad propia, ni escritura. Es una **proyección de lectura**, exactamente la salida que
+§4.2 dejó prevista para la tensión entre agregados limpios y una app intensiva en lectura, y el mismo
+compromiso que ya se aceptó al denormalizar `Goal` ([D-04]) y al engordar `TeamResponse` de derivados. La
+diferencia con una FK expuesta es que `teamId` **sigue ahí**: quien necesite el equipo completo tiene la
+puerta abierta.
+
+**Dos detalles que se deciden con ello:**
+
+- **`shortDisplayName` no lleva categoría** ("CD Ejemplo A"), `displayName` sí ("CD Ejemplo Juvenil A"). En
+  una jornada todos los equipos son de la misma categoría —rotularla en cada fila es ruido—, pero el
+  calendario de un equipo puede mezclar liga y copa ([D-12]), donde el nombre largo sí distingue. Los dos
+  son derivados en lectura, como el `displayName` de `TeamResponse`.
+- **El marcador vive dentro de `home`/`away`**, no como `homeScore`/`awayScore` paralelos. Ata cada número a
+  su equipo en la estructura misma, en vez de en una convención de nombres que el cliente puede cruzar mal.
+
+**Lo que se asume a cambio.** Un nombre de equipo corregido por `PATCH` (§5.1) queda **duplicado en cada
+partido que lo menciona** dentro de las respuestas ya servidas — el precio habitual de una proyección. Como
+no se almacena, la siguiente lectura ya sale corregida: es caché de cliente, no deriva de datos.
+
+> **Adenda (al redactar `StandingRow`).** La proyección se extrajo a un esquema propio, **`TeamRef`**, con
+> los cinco campos comunes; `MatchTeam` pasa a ser `TeamRef` **+ `score`**, y `StandingResponse.team` lo usa
+> tal cual. Se hizo al aparecer el **segundo** consumidor, no antes: es el criterio general para las
+> proyecciones de este contrato, porque compartir por anticipado habría terminado con `TeamResponse` y
+> `TeamRef` fundidos en un esquema con la mitad de los campos opcionales — que es justo lo que ninguno de
+> los dos quiere ser.
+
+---
+
+### D-34 · La clasificación es un modelo de lectura: sin acceso por id, con la racha dentro
+
+**Tres preguntas que se responden juntas** porque tienen la misma raíz: `StandingRow` **no es un agregado**
+(§4.2), es un **modelo de lectura** cuya unidad de consumo es *la tabla de una jornada*, no la fila.
+
+**1 · No hay `GET /v1/standings/{id}`.** Es el único recurso del contrato sin acceso por identificador.
+"La fila 4 de la jornada 22" no la pide ninguna pantalla, no se puede enlazar desde ningún sitio y no se
+puede editar. Publicar la ruta sería **superficie sin consumidor**, exactamente lo que [D-27] eliminó al
+retirar `Participation`. La fila tiene `id` en la tabla porque toda tabla lo tiene (§3.5); eso no obliga a
+darle URL.
+
+**2 · El ámbito es `?roundId=` y solo `?roundId=`.** Una clasificación existe **respecto de una jornada** —es
+un *snapshot*—, así que el filtro no es opcional. Lo interesante es lo que **se descarta**: admitir
+`?competitionId=` a secas para devolver "la clasificación actual de la liga".
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| `?competitionId=` ⇒ última jornada **con datos** | Inventa un **tercer concepto** que no existe en el dominio: no es la jornada actual (que puede no tener aún clasificación, con los partidos sin jugar) ni la última (que puede estar vacía). Un concepto que el servidor define y el cliente no puede predecir |
+| `?competitionId=` ⇒ jornada **actual** | Devolvería vacío justo en el caso más pedido —lunes por la mañana, jornada en curso sin ingerir— sin que el nombre del parámetro lo insinúe |
+| Sub-recurso `/rounds/{id}/standings` | Expresa mejor la contención, pero rompe la convención de rutas planas con filtros que sigue **todo** el contrato, y que ya se justificó al diseñar `Round` (§5.1) |
+
+**Decisión:** `?roundId=` obligatorio, **400** si falta. La "clasificación actual" la resuelve el cliente,
+que ya tiene `Round.isCurrent` en el payload del selector de jornada: **no le cuesta una llamada extra**. Y
+si esa jornada devuelve lista vacía, retrocede una — comportamiento que **ya tiene que implementar** para el
+caso de competición terminada, donde ninguna jornada es `isCurrent` (§5.1). El contrato no gana un concepto;
+el cliente no gana una rama.
+
+**3 · La racha viaja dentro de la clasificación.** La columna RACHA del mockup vive en la tabla de
+clasificación, y `form` viaja en cada `StandingResponse`: los últimos **5** resultados con su número de
+jornada. Es la misma aritmética de llamadas de [D-32] pero peor —sin ella, pintar la racha exige traerse
+**varias jornadas completas de partidos** para cruzarlas contra veinte equipos en el cliente—.
+
+- **Se calcula desde `Match`, no diferenciando *snapshots* consecutivos.** La segunda vía es tentadora
+  (`won[N] − won[N−1]` da el resultado de la jornada N sin tocar `Match`), pero **depende de que la cadena de
+  clasificaciones esté completa**, y [D-33] acaba de establecer que no lo está: en un alta a mitad de
+  temporada faltan las jornadas anteriores. Desde `Match` la consulta está acotada por los índices de §4.6 y
+  no depende de ningún *snapshot*.
+- **N fijo (5), sin `?form=N`.** Se consideró parametrizarlo —incluso `form=0` para no pagar el cálculo—,
+  pero el contrato no tiene ni un solo parámetro de forma de respuesta hoy, y estrenarlo para ahorrar una
+  consulta acotada no compensa. El cliente que pinte tres distintivos recorta la lista.
+- **`MatchOutcome` (`victoria`/`empate`/`derrota`) es relativo al equipo de la fila**, y por eso es un
+  enumerado distinto de `MatchStatus`, que es absoluto: un partido es `finalizado` para los dos equipos,
+  pero `victoria` para uno y `derrota` para el otro.
+
+**Consecuencia de conjunto: sin paginación y sin `?sort=`.** El ámbito trae techo (~20 equipos), igual que
+en `Round`, así que se aplica el criterio de §5.3. Y el orden es **fijo por `position`**: una clasificación
+desordenada no es una clasificación.
+
+**Lo que se asume a cambio.** Un cliente que quisiera solo la fila de su equipo se trae las veinte. Es una
+respuesta pequeña, y tenerlas todas es precisamente lo que permite pintar la tabla — que es la única
+pantalla que consume esto.
+
+---
+
 ## Documentación
 
 ### D-25 · El *spec* OpenAPI es la fuente de verdad campo a campo
@@ -723,8 +966,14 @@ limpio.
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-30]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-31]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-32]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-34]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo de la Federación §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

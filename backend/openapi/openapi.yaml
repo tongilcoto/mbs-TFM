@@ -98,6 +98,26 @@ tags:
       **Escribe:** la **ingesta**, y solo ella. Esta API es de **solo lectura** sobre `Round` (§5.1): una
       jornada no tiene nada corregible a mano —su número y sus fechas los fija el calendario de la
       federación—, así que ni siquiera hay `PATCH`.
+  - name: Matches
+    description: |
+      Partidos: calendario y resultado. Es la entidad de la que cuelga todo el detalle manual —goles,
+      tarjetas, convocatorias— y de la que se derivan la composición de la competición y el rendimiento de
+      equipo (§3.4).
+
+      **Escribe:** la **ingesta**, y solo ella. Esta API es de **solo lectura** sobre `Match` (§5.1), pero
+      por un motivo distinto al de `Round`: aquí sí hay datos que el club aporta, solo que son sus **hijos**
+      (`Goal`, `Card`, `Appearance`), no sus campos. El marcador es de la federación; cómo se llegó a él es
+      del club.
+  - name: Standings
+    description: |
+      Clasificación por jornada. Es un ***snapshot***: cada jornada tiene la suya, y de ahí sale la columna
+      PREV y la navegación entre jornadas de la app.
+
+      **Escribe:** la **ingesta**, y solo ella — tanto si la clasificación llega de un endpoint propio de la
+      federación como si se **calcula** desde `Match` cuando el proveedor no la publica (D-15). Las dos vías
+      son del mismo módulo, así que la tabla conserva **un único escritor** y el cliente no distingue el
+      origen: la procedencia se expone una vez por tenant, en `ClubResponse.federationProvidesStandings`
+      (D-29).
 
 paths:
 
@@ -962,6 +982,186 @@ paths:
     # Es la entidad más pura de la regla "el BFF corrige lo que la ingesta trae" (D-21): aquí no hay
     # ni siquiera qué corregir.
 
+  # ───────────────────────────── Matches (§5.1) ─────────────────────────────
+  /matches:
+    get:
+      tags: [Matches]
+      operationId: listMatches
+      summary: Lista partidos, siempre dentro de un ámbito
+      description: |
+        **El ámbito es obligatorio: al menos uno de `roundId`, `competitionId` o `teamId`** → **400** si no
+        viene ninguno. Son tres puertas porque las pantallas entran por sitios distintos: la de **jornada**
+        pide `roundId` (los ~10 partidos de esa fecha); la de **equipo**, `teamId` + `seasonId` (su
+        calendario de la temporada, que puede abarcar liga **y** copa — dos competiciones, D-12). Sin
+        ámbito, esto sería el histórico completo del club, que no lo pide ninguna pantalla.
+
+        **`teamId` casa contra los dos lados**, local y visitante.
+
+        **Paginada**, a diferencia de `/rounds`, aunque las dos exijan ámbito: las jornadas de una
+        competición son ~34 **por definición**, mientras que aquí el ámbito más ancho admitido
+        (`competitionId` de una liga de 20 equipos ⇒ ~380 partidos; `teamId` sin temporada ⇒ sin techo) no
+        tiene techo. El ámbito acota *qué* se pide; la paginación, *cuánto* llega (§5.3).
+
+        **Orden por `(matchDate, kickoffTime)`** con las horas sin confirmar al final del día, y el `id`
+        como desempate para que la paginación sea estable. Se admite `order`; **no** `sort`: no hay un
+        segundo criterio con sentido.
+
+        El **404** es el del recurso del ámbito (jornada, competición o equipo inexistente en este club).
+        Un ámbito válido **sin partidos** devuelve **200** con `data` vacío.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - name: roundId
+          in: query
+          required: false
+          description: Jornada. Ámbito más estrecho y el de la pantalla de resultados por jornada.
+          schema:
+            type: string
+            format: uuid
+        - name: competitionId
+          in: query
+          required: false
+          description: Competición. Devuelve su calendario completo, todas las jornadas.
+          schema:
+            type: string
+            format: uuid
+        - name: teamId
+          in: query
+          required: false
+          description: |
+            Equipo, **como local o como visitante**. Combinado con `seasonId` da el calendario del equipo
+            en la temporada, que es la pantalla de resultados de equipo.
+          schema:
+            type: string
+            format: uuid
+        - name: seasonId
+          in: query
+          required: false
+          description: |
+            Temporada. **No es un ámbito válido por sí solo** — acota, pero no basta para satisfacer el
+            requisito de ámbito. Se alcanza por FK vía `Competition`: `Match` no lleva `seasonId` (D-28).
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MatchStatus'
+        - name: order
+          in: query
+          required: false
+          description: |
+            Sentido del orden de calendario. `asc` para leer una jornada; `desc` para "últimos
+            resultados".
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: Página de partidos, en orden de calendario.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MatchResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: El recurso del ámbito (jornada, competición o equipo) no existe en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    # Sin POST: los partidos los crea la ingesta desde el calendario de la federación (§3.7, §5.1).
+    # Consecuencia asumida: no hay amistosos — un partido fuera de competición federada no tiene por
+    # dónde entrar (D-21).
+
+  /matches/{matchId}:
+    parameters:
+      - $ref: '#/components/parameters/MatchId'
+
+    get:
+      tags: [Matches]
+      operationId: getMatch
+      summary: Obtiene un partido
+      responses:
+        '200':
+          description: Partido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    # Sin PATCH ni DELETE (§5.1). El detalle que aporta el club son los HIJOS del partido —`Goal`,
+    # `Card`, `Appearance`—, no sus campos: el marcador, el horario y el estado son de la federación.
+
+  # ──────────────────────────── Standings (§5.1) ────────────────────────────
+  /standings:
+    get:
+      tags: [Standings]
+      operationId: getStanding
+      summary: Obtiene la clasificación de una jornada
+      description: |
+        **`roundId` es obligatorio.** Una clasificación existe **respecto de una jornada** —es un
+        *snapshot*, no un estado global de la competición—, así que el filtro no es opcional (D-34).
+
+        **La "clasificación actual" la resuelve el cliente.** No se admite `competitionId` a secas: "la
+        última jornada con datos" sería un tercer concepto que no existe en el dominio —ni la jornada
+        actual, que puede no tener aún clasificación con los partidos sin jugar, ni la última—. La app ya
+        tiene `Round.isCurrent` en el payload del selector de jornada, así que sabe qué pedir sin llamada
+        extra; si recibe lista vacía, retrocede una jornada, que es lo que **ya** debe hacer cuando la
+        competición ha terminado y ninguna jornada es `isCurrent`.
+
+        **Sin paginación y con orden fijo por `position` ascendente** (§5.3): el ámbito ya acota a los ~20
+        equipos de la competición, y una clasificación desordenada no es una clasificación. Sin `sort` ni
+        `order`.
+      parameters:
+        - name: roundId
+          in: query
+          required: true
+          description: Jornada de la que se quiere la clasificación. Identificador **interno** (UUID).
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: |
+            Clasificación de la jornada, ordenada por posición ascendente. **Lista vacía** si esa jornada
+            aún no tiene clasificación (partidos sin jugar o sin ingerir) — no es un error.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StandingResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: La jornada no existe en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    # Sin POST, PATCH ni DELETE: la clasificación la escribe la ingesta, ya sea ingiriéndola de la
+    # federación o calculándola desde `Match` cuando el proveedor no la publica (D-15, §5.1).
+
+  # No hay GET /standings/{id}: es el único recurso del contrato sin acceso por identificador (D-34).
+  # `StandingRow` no es un agregado sino un modelo de lectura, y su unidad de consumo es la tabla de una
+  # jornada. "La fila 4 de la jornada 22" no la pide ninguna pantalla, no se enlaza y no se edita.
+
 components:
 
   securitySchemes:
@@ -1011,6 +1211,16 @@ components:
       in: path
       required: true
       description: Identificador **interno** (UUID) de la jornada. No es su `number` dentro de la competición.
+      schema:
+        type: string
+        format: uuid
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      description: |
+        Identificador **interno** (UUID) del partido. No es el `federationMatchId` (`codacta`), que además
+        puede no existir (D-31).
       schema:
         type: string
         format: uuid
@@ -1343,6 +1553,27 @@ components:
         `federationTeamId`. Sin este campo, un club con equipos en dos modalidades no se podía
         representar.
       enum: [futbol_11, futbol_7, futbol_5, futbol_sala, futbol_playa]
+
+    MatchStatus:
+      type: string
+      description: |
+        Estado del partido. **Lo deriva la ingesta; no llega de la federación**: el objeto de partido no
+        trae campo de estado (Anexo de la Federación §F.2), solo goles vacíos o llenos → `finalizado` si
+        hay marcador, `programado` si no.
+
+        **`aplazado` y `suspendido` son hoy inalcanzables**: no se ha observado cómo los señala la fuente
+        y, sin `PATCH` sobre `Match` (D-21), nadie más puede fijarlos. Se conservan porque son estados
+        reales del dominio; si resultara que la fuente nunca los distingue, lo que sobra son los dos
+        valores, no el campo (Anexo de la Federación §F.6).
+      enum: [programado, finalizado, aplazado, suspendido]
+
+    MatchOutcome:
+      type: string
+      description: |
+        Resultado de un partido **relativo a un equipo**. No confundir con `MatchStatus`, que es absoluto:
+        un mismo partido es `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el
+        otro. Solo aparece dentro de la racha (`StandingResponse.form`, D-34).
+      enum: [victoria, empate, derrota]
 
     FederationCode:
       type: string
@@ -1867,3 +2098,318 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    # ──────────────────── Proyección de equipo (§5.2, D-32) ────────────────────
+    TeamRef:
+      type: object
+      description: |
+        Equipo **recortado a lo que cabe en una fila** — de resultado o de clasificación. **No es un
+        recurso: es una proyección de lectura compartida** (D-32). No tiene endpoint ni escritura; `teamId`
+        es la puerta al recurso completo (`TeamResponse`) si el cliente necesita el resto.
+
+        **Deliberadamente no lleva `category`, `gender` ni `modality`**: dentro de una competición son
+        constantes (§3.2), así que repetirlas en cada fila no distingue una de otra.
+
+        Se extrajo al aparecer el **segundo** consumidor (`StandingResponse`), no por anticipado.
+      required: [teamId, displayName, shortDisplayName, isOwn]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+        displayName:
+          type: string
+          readOnly: true
+          description: |
+            **Derivado**, igual que en `TeamResponse`: nombre del club + `category` + `letter`. Es el
+            rótulo que distingue cuando el listado **mezcla competiciones** — el calendario de un equipo
+            puede abarcar liga y copa (D-12).
+          examples: ['CD Ejemplo Juvenil A']
+        shortDisplayName:
+          type: string
+          readOnly: true
+          description: |
+            **Derivado**: nombre **corto** del club + `letter`, **sin categoría**. Es el que pinta la fila
+            de una jornada o de una clasificación, donde todos los equipos son de la misma categoría y
+            rotularla sería ruido.
+          examples: ['CD Ejemplo A']
+        crestUrl:
+          type: [string, 'null']
+          format: uri
+          readOnly: true
+          description: '**Derivado**: escudo del club propio o del rival, según corresponda.'
+        isOwn:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado** (`opponentClubId == null`), como en `TeamResponse` (§3.6). Es lo que permite a la
+            app resaltar la fila del equipo propio dentro de una clasificación o de una jornada.
+
+    # ─────────────────────────── Match (§5.2) ───────────────────────────
+    MatchTeam:
+      type: object
+      description: |
+        Uno de los dos lados de un partido: `TeamRef` **más el marcador de ese lado**.
+      allOf:
+        - $ref: '#/components/schemas/TeamRef'
+        - type: object
+          properties:
+            score:
+              type: [integer, 'null']
+              minimum: 0
+              readOnly: true
+              description: |
+                Goles de **este** lado. **Nulo hasta que el partido se juega** — en la fuente llega como
+                cadena vacía, no como nulo (Anexo de la Federación §F.5).
+
+                Vive aquí, y no como `homeScore`/`awayScore` paralelos, para atar cada número a su equipo
+                en la propia estructura: el cliente pinta `score` junto a `crestUrl` sin poder cruzar de
+                lado (D-32).
+
+    MatchResponse:
+      type: object
+      description: |
+        Partido de una competición. **Solo lectura**: no hay DTO de escritura ninguno (§5.1). El detalle que
+        aporta el club son los **hijos** del partido —`Goal`, `Card`, `Appearance`—, no sus campos.
+      required:
+        [id, competitionId, roundId, roundNumber, matchDate, isKickoffConfirmed, status, home, away,
+         createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'La temporada se alcanza por aquí, no por un `seasonId` propio (D-28).'
+        roundId:
+          type: string
+          format: uuid
+          readOnly: true
+        roundNumber:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: |
+            Número de jornada, **repetido aquí** para que el calendario de un equipo —que atraviesa muchas
+            jornadas— se pinte sin resolver cada `roundId` por separado. Mismo criterio pro-lectura que
+            `MatchTeam` (D-32).
+          examples: [22]
+        matchDate:
+          type: string
+          format: date
+          readOnly: true
+          description: |
+            Fecha del partido. **Siempre presente, pero provisional hasta la semana anterior** (D-30): al
+            publicarse el calendario, la federación reparte los partidos con una fecha por defecto —el
+            **sábado**— y solo el domingo previo fija la definitiva, que puede pasar a domingo.
+          examples: ['2025-05-18']
+        kickoffTime:
+          type: [string, 'null']
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          readOnly: true
+          description: |
+            Hora de comienzo, **nula mientras la federación no la haya fijado** (D-30). Se separa de
+            `matchDate` justamente porque llega después: un `date-time` único obligaría a inventar un
+            `00:00` indistinguible de la medianoche real.
+          examples: ['12:00']
+        isKickoffConfirmed:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado en lectura, no almacenado**: equivale a `kickoffTime != null` (D-30). Permite pintar
+            `18 MAY · VS` para un partido lejano y `18 MAY · 12:00` para el de esta semana.
+
+            **Confirmado no es inmutable.** Significa "la federación ya publicó franja", no "esto no se
+            mueve": una suspensión por causa mayor lo desplaza o lo devuelve a provisional. Fecha y hora son
+            campos **volátiles** (§3.7) y la sincronización los pisa siempre — el cliente no debe cachearlos
+            como definitivos. Por eso el campo se llama `Confirmed` y no `Final`.
+        status:
+          allOf:
+            - $ref: '#/components/schemas/MatchStatus'
+          readOnly: true
+        venue:
+          type: [string, 'null']
+          readOnly: true
+          description: |
+            Campo donde se juega, **texto libre**. La fuente trae también un `codigo_campo` (Anexo de la
+            Federación §F.5); si el campo llegara a merecer entidad propia, ahí está la clave. Fuera de
+            alcance hoy.
+          examples: ['CANAL ISABEL II']
+        federationMatchId:
+          type: [string, 'null']
+          readOnly: true
+          description: |
+            Identificador del **acta** en la API de la federación (`codacta` en la RFFM, §3.7). Clave de
+            emparejamiento de la ingesta, **no de unión**: nunca PK, nunca FK, nunca un `JOIN` interno.
+
+            **Anulable y no exigible** (D-31): es un campo de la RFFM, no del contrato genérico de
+            federación. Cuando falta, la ingesta empareja por (jornada, local, visitante), que es índice
+            único (§3.5). Nunca por la fecha, que se mueve cada semana.
+          examples: ['5348330']
+        home:
+          allOf:
+            - $ref: '#/components/schemas/MatchTeam'
+          readOnly: true
+        away:
+          allOf:
+            - $ref: '#/components/schemas/MatchTeam'
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # No existe CreateMatchRequest ni UpdateMatchRequest: `Match` es salida de la ingesta (§5.1, D-21).
+    # Sigue la plantilla de recurso ingerido de solo lectura que estrenó `Round`, y le añade la de
+    # colección grande: ámbito obligatorio + paginación + proyecciones embebidas.
+
+    # ────────────────────────── StandingRow (§5.2) ──────────────────────────
+    FormEntry:
+      type: object
+      description: |
+        Un resultado dentro de la racha, **visto desde el equipo de la fila**. Lleva el número de jornada
+        para que la app pueda rotular cada distintivo, que es lo que hace el mockup.
+      required: [roundNumber, outcome]
+      properties:
+        roundNumber:
+          type: integer
+          minimum: 1
+          readOnly: true
+          examples: [22]
+        outcome:
+          allOf:
+            - $ref: '#/components/schemas/MatchOutcome'
+          readOnly: true
+
+    StandingResponse:
+      type: object
+      description: |
+        Una fila de la clasificación de una jornada. **Solo lectura** y sin acceso por identificador
+        (D-34): `StandingRow` no es un agregado sino un **modelo de lectura**, y su unidad de consumo es la
+        tabla entera de la jornada.
+
+        **Agnóstica a la fuente** (D-15): la misma fila vale ingerida de la federación o calculada desde
+        `Match`, y **no lleva marca de procedencia** — esa es capacidad de la federación y se expone una
+        sola vez por tenant, en `ClubResponse.federationProvidesStandings` (D-29).
+      required:
+        [id, competitionId, roundId, team, position, played, won, drawn, lost, goalsFor, goalsAgainst,
+         points, form, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Identificador de la fila. **No tiene URL propia** (D-34): existe porque toda tabla tiene PK
+            (§3.5), no porque haya un endpoint que la sirva. Útil como clave de lista en el cliente.
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+        roundId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Jornada de la que esto es *snapshot*. La temporada se alcanza por aquí vía `Competition`, no
+            por un `seasonId` propio (D-28).
+        team:
+          allOf:
+            - $ref: '#/components/schemas/TeamRef'
+          readOnly: true
+          description: |
+            Proyección del equipo, la misma que usa `MatchResponse` (D-32). Evita las ~20 llamadas que
+            costaría resolver la tabla equipo a equipo, y su `isOwn` es lo que permite resaltar la fila
+            propia.
+        position:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: Posición en esta jornada. Es el orden fijo en el que se devuelve la lista.
+          examples: [2]
+        previousPosition:
+          type: [integer, 'null']
+          minimum: 1
+          readOnly: true
+          description: |
+            Posición en la jornada anterior — la columna PREV del mockup. **Se almacena, no se deriva**
+            (D-33): la fila entera ya es un *snapshot* derivado, y derivar esta columna fallaría justo en
+            el caso real de un club que da de alta la competición **a mitad de temporada**, donde no existe
+            la jornada anterior de la que leerla.
+
+            **Nula** en la primera jornada de la competición y en la primera jornada ingerida de un alta
+            tardía. El cliente pinta "–"; no es un error.
+          examples: [1]
+        played:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Partidos jugados (J).
+        won:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Ganados (G).
+        drawn:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Empatados (E).
+        lost:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Perdidos (P).
+        goalsFor:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Goles a favor (GF).
+        goalsAgainst:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Goles en contra (GC).
+        points:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Puntos (PTS). **No se recalcula en el BFF a partir de G/E/P**: si la federación publica la
+            clasificación, el dato bueno es el suyo — los sistemas de puntuación y las sanciones con
+            descuento de puntos no siempre se deducen de la tabla.
+        form:
+          type: array
+          readOnly: true
+          maxItems: 5
+          description: |
+            **Racha**: los últimos **5** resultados del equipo hasta esta jornada, el más reciente primero.
+            La columna RACHA del mockup.
+
+            **Derivada desde `Match`**, no de diferenciar *snapshots* consecutivos (D-34): esa segunda vía
+            dependería de que la cadena de clasificaciones esté completa, y no lo está en un alta a mitad
+            de temporada (D-33). Se resuelve en el mismo puerto de lectura que la tabla (§4.5).
+
+            **Menos de 5 elementos** al principio de la competición o si el equipo ha jugado menos. El
+            cliente que pinte tres distintivos recorta la lista: no hay parámetro para elegir N.
+          items:
+            $ref: '#/components/schemas/FormEntry'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # No existe CreateStandingRequest ni UpdateStandingRequest (§5.1, D-21). El *fallback* cuando la
+    # federación no publica clasificación es CÁLCULO desde `Match`, no un formulario en el backoffice
+    # (D-15): así la tabla conserva un único escritor.

@@ -278,8 +278,8 @@ opcional (§3.5).
 | **Team** (Equipo)                                 | `opponent_club_id?`, `category`, `letter?`, `gender`, **`modality`**, **`federation_team_id?`** | **`modality`** (§3.3) forma parte de la **identidad** del equipo: el "Infantil A" de fútbol-11 y el de fútbol-sala son **equipos distintos**, con distinta competición y distinto `codigo_equipo` (§3.6) — por eso entra en la clave única (§3.5). **No es campo de entrada del contrato**: la fija la ingesta al crear el equipo, tomándola de la competición (§5.1). **`opponent_club_id` nulo ⇒ equipo propio** (del `Club` del tenant); no nulo ⇒ equipo rival → **`is_own` no se almacena: es derivado** (§3.6). **No lleva nombre ni escudo**: son del club. Nombre mostrado (derivado en lectura, §5) = nombre del club + `category` + `letter` → "CD Ejemplo Infantil A". **`federation_team_id`** = `codigo_equipo` de la API de la federación (§3.7): identifica al **equipo**, no al club — el mismo club tiene código distinto en cada categoría. **Anulable**: los equipos creados a mano que no están en competición federada no lo tienen. "Primer Equipo" = `category=senior` + `letter="A"` (o sin letra); filial = `category=senior` + `letter="B"` |
 | **Competition** (Competición)                     | `season_id`, **`modality`**, **`federation_competition_id`**, **`federation_group_id`**, `name`, **`age_category`**, **`division_label`**, `group_label`, `last_synced_at?` | Instancia de liga por temporada ("Infantil · Primera · Grupo 1"). **`last_synced_at`** = última sincronización con éxito; nulo ⇒ nunca sincronizada, que es la condición bajo la cual las coordenadas externas siguen siendo editables (§5.1). `season_id` = FK al **UUID interno** de `Season` (no es el `federation_season_id`). **Los dos identificadores externos son los parámetros de la llamada al calendario** (§3.7) y **no son intercambiables**: `federation_competition_id` (`competicion=24037548`) designa **categoría de edad + división**, y `federation_group_id` (`grupo=24037549`) **solo el grupo**. Ambos **obligatorios** y **tecleados por el administrador** (pegando la URL, §5.1). **`modality`** (§3.3) es la contrapartida de dominio del parámetro `tipojuego`, que **no se almacena**: se codifica al llamar con el mapa de la federación (§3.6). **`age_category`** = mismo enumerado que `Team.category` (§3.3) → permite **validar** que un equipo solo participe en una competición de su edad **y de su modalidad**. **`division_label`** = nivel competitivo ("Primera", "Preferente", "Honor"…), **texto libre**: varía por federación y por categoría (§3.6). **`group_label`** = rótulo del grupo ("Grupo 1", "Grupo Único"), **texto libre y no deducible de `federation_group_id`**: se muestra, mientras que el id se llama (§3.7) |
 | **Round** (Jornada)                               | `competition_id`, `number`, `start_date`, `end_date`                                                                                                               | Único(competición, número)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Match** (Partido)                               | `competition_id`, `round_id`, `kickoff_at`, `home_team_id`, `away_team_id`, `home_score`, `away_score`, `status`, `venue?`                                         | *scores* nullables hasta jugado; `venue?` opcional (no siempre conocido)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **StandingRow** (Clasif./jornada)                 | `competition_id`, `round_id`, `team_id`, `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points`, `previous_position`                 | Único(jornada, equipo). **Snapshot por jornada** → clasificación de cada ronda + `PREV`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **Match** (Partido)                               | `competition_id`, `round_id`, **`match_date`**, **`kickoff_time?`**, `home_team_id`, `away_team_id`, `home_score`, `away_score`, `status`, `venue?`, **`federation_match_id?`** | *scores* nullables hasta jugado; `venue?` opcional (no siempre conocido). **La fecha y la hora se separan porque el calendario nace provisional** ([D-30]): al publicarse la temporada, la federación reparte los partidos con una fecha por defecto (sábado) y **sin hora**, y solo el **domingo anterior a la semana del partido** fija la franja definitiva —que puede pasar a domingo—. `match_date` **siempre** tiene valor; `kickoff_time` es nulo mientras no se haya confirmado. Un `timestamptz` único obligaría a inventar un `00:00` indistinguible de la medianoche real. `is_kickoff_confirmed` **derivado en lectura, no se almacena** (= `kickoff_time` no nulo). Ambos campos son **volátiles** ([D-18]): confirmado **no** es inmutable —una suspensión por causa mayor los mueve— y la sincronización los pisa siempre. **`federation_match_id`** = `codacta` de la RFFM ([Anexo de la Federación §F.5]); **anulable y no exigible**: es clave de emparejamiento *si* el proveedor la da, con degradación a coordenadas ([D-31]) |
+| **StandingRow** (Clasif./jornada)                 | `competition_id`, `round_id`, `team_id`, `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points`, **`previous_position?`**                 | Único(jornada, equipo). **Snapshot por jornada** → clasificación de cada ronda + `PREV`. **Agnóstica a la fuente** ([D-15]): la misma fila vale ingerida de la federación o calculada desde `Match`, y el cliente no distingue —la procedencia se expone una vez por tenant, en `ClubResponse.federationProvidesStandings` ([D-29])—. **No es agregado sino modelo de lectura** (§4.2, §4.5): la escribe el módulo de ingesta por *upsert*, nunca un repositorio de dominio. **`previous_position` se almacena, no se deriva** ([D-33]), y es **anulable**: en la primera jornada no hay anterior, y en un alta a mitad de temporada tampoco hay *snapshot* previo del que derivarla |
 | **Player** (Jugador)                              | `team_id`, `season_id`, `full_name`, `photo_url`, `shirt_number`, `position`                                                                                       | Solo equipos propios. **Registro por temporada**: una fila = un jugador en un equipo en una temporada concreta (ver §3.6). Stats derivadas por temporada desde eventos ligados a este `Player`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), `expected_return_date` (ALTA EST.), `actual_return_date`, `active`                                                       | Disponibilidad actual = ausencia activa                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`                                                                                                                      | Único(jugador, partido). Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -311,7 +311,7 @@ Calculadas por consulta o vistas materializadas:
 - **Desglose de goles del equipo** (marcados/recibidos por dimensión) — desde `Goal`, filtrando directamente por `scoring_team_id = :id_del_equipo` (marcados) o `conceding_team_id = :id_del_equipo` (recibidos); **sin join** a `Match`.
 - **Estadísticas de jugador por temporada** — goles, asistencias, participaciones por estado, tarjetas — desde eventos.
 - **Amarillas pendientes de sanción** (por jugador) — según los *brackets* de la competición (`CompetitionSanctionBracket`): distancia al siguiente `yellow_to`. Reinicio de ciclo tras cumplir sanción.
-- **Racha (forma)** — últimos N resultados por equipo — desde `Match`/`StandingRow`.
+- **Racha (forma)** — últimos **5** resultados por equipo, **desde `Match`** (no desde los *snapshots*, [D-34]). No se sirve como recurso propio: **viaja embebida en la clasificación** (§5.1), que es donde la pide la pantalla.
 - **Goleadores de la liga (global)** — **directamente desde `LeagueScorer`** (ingerida de la API de la liga; **no** se calcula desde `Goal` — ver §3.7).
 
 ### 3.5 Convenciones y restricciones
@@ -319,7 +319,8 @@ Calculadas por consulta o vistas materializadas:
 - Tablas en `snake_case` plural; enums como tipos Postgres o `text` + `CHECK`.
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
-- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), `Player`(equipo, temporada, dorsal) — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), `Player`(equipo, temporada, dorsal) — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- **La unicidad de `Match` no es un adorno: es la clave del *fallback* de la ingesta.** Dos equipos se enfrentan **una vez por jornada**, así que (`round_id`, `home_team_id`, `away_team_id`) identifica el partido sin depender de la fecha —que se mueve cada semana (§3.2)— ni del `federation_match_id` —que puede no venir—. Es exactamente el segundo paso de la cadena de emparejamiento de §3.7, y sin el índice único no sería una clave, solo una consulta. No lleva `competition_id` porque `Round` ya lo fija. *Asunción:* no hay repeticiones de partido dentro de la misma jornada; una eliminatoria a doble vuelta son **dos jornadas** ([D-12]).
 - **`modality` es parte de la clave única de `Team`, no un adorno.** Sin ella, el "Infantil A masculino" de fútbol-11 y el de fútbol-sala del mismo club **colisionan**, y el modelo no podría representar un club con equipos en dos modalidades (§3.6). Es la razón por la que la modalidad no puede quedarse como simple parámetro de la URL de integración.
 - **Cuidado con los `NULL` en la unicidad de `Team`.** En Postgres los `NULL` **no comparan iguales**, así que un `UNIQUE` normal sobre (`opponent_club_id`, `category`, `letter`, `gender`, `modality`) **no protegería a los equipos propios** (todos con `opponent_club_id` nulo) — se podrían crear dos "Infantil A" propios. Dos formas de resolverlo: `UNIQUE NULLS NOT DISTINCT` (Postgres **15+**, disponible en Supabase) o un **índice único parcial** `WHERE opponent_club_id IS NULL` que complemente al normal. Lo mismo aplica a `letter`, que también es opcional.
 - **La unicidad de `Competition` se queda en (`season_id`, `federation_group_id`).** Añadir `federation_competition_id` no aportaría nada: el id de grupo ya es único dentro de la temporada (identifica **un** grupo de **una** categoría+división). El de competición se guarda porque **hace falta para llamar**, no para identificar.
@@ -330,7 +331,7 @@ Calculadas por consulta o vistas materializadas:
   `OpponentClub` **no existe**, y es deliberado (§3.2). Regla general para futuras denormalizaciones:
   se copia un campo **solo si la deriva se puede hacer estructuralmente imposible** (FK compuesta), no por
   disciplina en la capa de aplicación.
-- **En cambio, en `federation_team_id` y `federation_club_id` el comportamiento por defecto es el que se quiere:** son anulables (equipos y clubes dados de alta a mano no tienen contrapartida federada) y, al no comparar iguales los `NULL`, un `UNIQUE` normal permite **muchas filas sin código** mientras garantiza que **no se repita un código concreto**. Aquí **no** se usa `NULLS NOT DISTINCT`. Conviene tenerlo presente porque es justo el criterio opuesto al del punto anterior, en la misma tabla.
+- **En cambio, en `federation_team_id`, `federation_club_id` y `federation_match_id` el comportamiento por defecto es el que se quiere:** son anulables (equipos y clubes dados de alta a mano no tienen contrapartida federada; el identificador de partido depende de que el proveedor lo publique, [D-31]) y, al no comparar iguales los `NULL`, un `UNIQUE` normal permite **muchas filas sin código** mientras garantiza que **no se repita un código concreto**. Aquí **no** se usa `NULLS NOT DISTINCT`. Conviene tenerlo presente porque es justo el criterio opuesto al del punto anterior, en la misma tabla.
 
 ### 3.6 Supuestos y cuestiones de dominio
 
@@ -364,6 +365,8 @@ dónde se materializa:
 | Clasificación sin fuente externa | `StandingRow` es **agnóstica a la fuente**; el *fallback* es **cálculo** desde `Match`, no entrada manual | [D-15] |
 | Arranque en frío ("el principio de los tiempos") | La ingesta lo crea todo, incluido tu equipo; la propiedad se fija marcándolo en el alta de competición o reclamándolo con `/ownership` | [D-20] |
 | Qué equipos forman la competición | **Sin tabla pivote**: se deriva de `Match` (§3.4). `Participation` era un índice de `Match`, no un hecho | [D-27] |
+| Fecha y hora de un partido | El calendario **nace provisional**: `match_date` siempre, `kickoff_time` anulable, confirmación **derivada** de que haya hora. Confirmado ≠ inmutable | [D-30] |
+| Identificar un partido de la federación | `federation_match_id` (`codacta`) **anulable y no exigible**; el emparejamiento degrada a (jornada, local, visitante), que es único | [D-31] |
 
 **Pendientes:** ninguna por ahora.
 
@@ -397,6 +400,7 @@ UUID es la PK/FK dentro del *schema*; el externo es lo que se usa para **llamar*
 | `Competition` | `federation_group_id` | **solo** el grupo (`grupo=…`) | **lo teclea el administrador** |
 | `Team` | `federation_team_id` | el **equipo** (`codigo_equipo`) — no el club | lo pone la ingesta |
 | `OpponentClub` | `federation_club_id` | el **club** (segmento de la ruta del escudo) | lo pone la ingesta |
+| `Match` | `federation_match_id` | el **acta** del partido (`codacta` en la RFFM) | lo pone la ingesta **si el proveedor lo publica** ([D-31]) |
 
 **Regla dura:** el identificador externo **nunca** es PK, **nunca** FK y **nunca** participa en un `JOIN`
 interno. Dentro del *schema* se une siempre por UUID. Si la federación cambiara su numeración, el modelo
@@ -410,15 +414,25 @@ están en el [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madri
 |  | Anulables | Editables por API |
 |--|-----------|-------------------|
 | **Coordenadas de entrada** (`federation_season_id`, los de `Competition`) | **No** — sin ellas no hay llamada posible | **Sí**, las teclea un humano y las erratas hay que poder corregirlas — con la guarda de §5.1 (solo mientras no haya datos ingeridos) |
-| **Claves de salida** (`federation_team_id`, `federation_club_id`) | **Sí** — la ingesta puede no lograr extraerlas | **No** — inmutables |
+| **Claves de salida** (`federation_team_id`, `federation_club_id`, `federation_match_id`) | **Sí** — la ingesta puede no lograr extraerlas, o el proveedor no publicarlas | **No** — inmutables |
 
 **Cadena de emparejamiento con degradación.** Como las claves de salida pueden faltar, la ingesta empareja
-en tres pasos:
+en tres pasos. Para **equipos y clubes**:
 
 1. `federation_team_id` / `federation_club_id`, si vienen;
 2. si no, **nombre normalizado** (sin la letra, sin puntuación, sin acentos) **más categoría** — nunca el
    nombre a secas, que no distingue categorías y **fusionaría equipos distintos** ([Anexo de la Federación §F.3]);
 3. si tampoco, **alta nueva marcada para revisión manual** (§5.1).
+
+Para **partidos**, la cadena tiene solo dos pasos y **el segundo es fiable**, no un apaño ([D-31]):
+
+1. `federation_match_id`, si el proveedor lo publica;
+2. si no, las **coordenadas** (`round_id`, `home_team_id`, `away_team_id`), que son índice único (§3.5).
+
+La diferencia con los equipos es que aquí **no hay tercer paso**: el emparejamiento de partidos no degrada a
+"alta nueva para revisar", porque sus dos claves son exactas y la segunda **siempre** existe —los equipos ya
+están emparejados cuando se llega al partido—. **Ni la fecha ni la hora entran nunca en la cadena**: son el
+dato que cambia cada semana ([D-30]), así que casar por fecha duplicaría el partido en cuanto se moviese.
 
 Si aparecen duplicados, hace falta la operación de **fusión** (pendiente): un `PATCH` de nombre no fusiona
 nada.
@@ -445,7 +459,7 @@ corregir datos ingeridos (§5.1), esa corrección **tiene que sobrevivir a la si
 | Tipo de campo | Ejemplos | Comportamiento de la ingesta |
 |---------------|----------|------------------------------|
 | **Descriptivo** (semilla) | `OpponentClub.name`/`short_name`/`crest_key`, `Competition.division_label`/`group_label` | Se escribe **solo en el INSERT**. En el UPDATE **no se toca**: el valor bueno es el del administrador |
-| **Volátil** (propiedad de la federación) | marcador, `status`, `kickoff_at`, `venue`, posiciones de `StandingRow`, `LeagueScorer` | Se escribe **siempre**: es el dato que justifica la sincronización |
+| **Volátil** (propiedad de la federación) | marcador, `status`, **`match_date` y `kickoff_time`**, `venue`, posiciones de `StandingRow`, `LeagueScorer` | Se escribe **siempre**: es el dato que justifica la sincronización. El horario lo es **incluso ya confirmado** ([D-30]): una suspensión por causa mayor lo devuelve a provisional o lo desplaza, y el BFF no tiene `PATCH` con el que corregirlo |
 | **De propiedad** | `Team.opponent_club_id` | **Nunca** lo toca la ingesta en un UPDATE. Es del BFF (`/ownership`, §5.1) — si no, la primera sincronización tras reclamar un equipo lo devolvería a rival |
 | **De emparejamiento** | `federation_team_id`, `federation_club_id` | Solo la ingesta, y solo al insertar. El BFF no los expone en escritura |
 
@@ -500,18 +514,30 @@ struct MatchResult {                        // Value Object
     }
 }
 
+struct Kickoff {                            // Value Object — el calendario nace provisional (D-30)
+    let date: Date                          // siempre; por defecto sábado, puede pasar a domingo
+    let time: TimeOfDay?                    // nil mientras la federación no fije la franja
+    var isConfirmed: Bool { time != nil }   // derivado: no puede contradecir al dato
+}
+
 struct Match: Identifiable {                 // Entidad de dominio (raíz de agregado, §4.2)
     let id: MatchID
     let competitionID: CompetitionID         // referencia a OTRO agregado, por id
     let roundID: RoundID
     let homeTeamID, awayTeamID: TeamID
-    let kickoffAt: Date
+    let kickoff: Kickoff
     let status: MatchStatus
     let result: MatchResult?                 // nil hasta jugado
     let venue: String?
+    let federationMatchID: String?           // `codacta`; nil si el proveedor no lo publica (D-31)
     // init valida invariantes (home ≠ away; finalizado ⇒ result != nil)
 }
 ```
+
+- **`Kickoff` es un VO y no dos campos sueltos** porque la regla "sin hora ⇒ por confirmar" ([D-30]) es una
+  invariante de dominio, y encapsularla evita que cada consumidor —Controller, ingesta, modelo de lectura—
+  la reimplemente. `isConfirmed` significa *"la federación ya publicó franja"*, **no** *"esto ya no se
+  mueve"*: el horario sigue siendo volátil (§3.7) y una suspensión lo devuelve a `nil`.
 
 ### 4.2 Agregados y raíces (DDD)
 
@@ -631,11 +657,13 @@ final class MatchRecord: Model {
     @Parent(key: "round_id")       var round: RoundRecord
     @Parent(key: "home_team_id")   var homeTeam: TeamRecord
     @Parent(key: "away_team_id")   var awayTeam: TeamRecord
-    @Field(key: "kickoff_at")         var kickoffAt: Date
-    @OptionalField(key: "home_score") var homeScore: Int?
-    @OptionalField(key: "away_score") var awayScore: Int?
-    @Field(key: "status")             var status: String     // text + CHECK (§4.6)
-    @OptionalField(key: "venue")      var venue: String?
+    @Field(key: "match_date")            var matchDate: Date      // date; siempre (D-30)
+    @OptionalField(key: "kickoff_time")  var kickoffTime: String? // time; nil = sin confirmar
+    @OptionalField(key: "home_score")    var homeScore: Int?
+    @OptionalField(key: "away_score")    var awayScore: Int?
+    @Field(key: "status")                var status: String       // text + CHECK (§4.6)
+    @OptionalField(key: "venue")         var venue: String?
+    @OptionalField(key: "federation_match_id") var federationMatchID: String?  // `codacta` (D-31)
     @Timestamp(key: "created_at", on: .create) var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) var updatedAt: Date?
     init() {}
@@ -653,12 +681,18 @@ extension MatchRecord {
             roundID: .init(raw: $round.id),
             homeTeamID: .init(raw: $homeTeam.id),
             awayTeamID: .init(raw: $awayTeam.id),
-            kickoffAt: kickoffAt,
+            kickoff: Kickoff(date: matchDate, time: kickoffTime.map(TimeOfDay.init)),
             status: MatchStatus(rawValue: status)!,     // el CHECK garantiza el dominio
-            result: result, venue: venue)
+            result: result, venue: venue,
+            federationMatchID: federationMatchID)
     }
 }
 ```
+
+- **El `Kickoff` del dominio (§4.1) se arma en el mapeo, no en la tabla.** Persistencia guarda dos columnas
+  planas —`date` y `time` de Postgres— y el repositorio las compone en el VO; `isConfirmed` **no tiene
+  columna** porque se deriva de que haya hora ([D-30]). Es el mismo reparto que en el resto del modelo: la
+  invariante vive en el Dominio, la tabla solo guarda los datos de los que se deduce.
 
 ### 4.5 Modelos de lectura (estadística y vistas derivadas)
 
@@ -672,7 +706,8 @@ protocol TeamStatsQuery {
     func seasonPerformance(teamID: TeamID, seasonID: SeasonID) async throws -> TeamPerformance
     func goalBreakdown(teamID: TeamID, seasonID: SeasonID) async throws -> GoalBreakdown
 }
-protocol StandingQuery { func byRound(_ roundID: RoundID) async throws -> [StandingRow] }
+// Clasificación de una jornada, con la racha de cada equipo resuelta en la misma consulta (§5.1, D-34).
+protocol StandingQuery { func byRound(_ roundID: RoundID) async throws -> [StandingView] }
 
 // Jornadas de una competición, con `isCurrent` resuelto en la propia consulta (§5.1).
 protocol RoundQuery { func byCompetition(_ id: CompetitionID) async throws -> [RoundView] }
@@ -683,6 +718,14 @@ protocol RoundQuery { func byCompetition(_ id: CompetitionID) async throws -> [R
   (clasificación con nombre de equipo, partidos de una jornada con ambos equipos).
 - `StandingRow` y `LeagueScorer` (ingesta) se **leen** por estos puertos; su **escritura** la hace el módulo
   de Federación (§2.3-b) por *upsert*, no un repositorio de agregado.
+- **`StandingQuery` devuelve `StandingView`, no `StandingRow`**: la fila de la tabla más lo que la pantalla
+  necesita alrededor —la proyección del equipo (nombre corto, escudo, `isOwn`) y la **racha**—. Es el mismo
+  puerto el que las resuelve, en una consulta, porque el *N+1* que se evita no es de una fila sino de
+  **veinte** ([D-32], [D-34]). Ese "resolver alrededor" es exactamente el trabajo que §4.2 delegó en los
+  modelos de lectura al aceptar la tensión entre agregados limpios y una app intensiva en lectura.
+- **La racha se calcula desde `Match`, no diferenciando *snapshots* consecutivos** ([D-34]): con los
+  índices compuestos de §4.6 es una consulta acotada a las últimas jornadas, y no depende de que la cadena
+  de clasificaciones esté completa.
 
 ### 4.6 Migraciones (del modelo de persistencia)
 
@@ -709,6 +752,15 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   `Goal.conceding_team_id`). **Índice compuesto en `Match`(`competition_id`, `home_team_id`) y
   (`competition_id`, `away_team_id`)**: son los que sostienen la composición de la competición ahora que no
   hay tabla pivote (§3.4, [D-27]).
+- **En `Match`, además, los dos índices únicos de §3.5**: `.unique(on: "round_id", "home_team_id",
+  "away_team_id")` —clave del *fallback* de emparejamiento— y `.unique(on: "federation_match_id")`, que al
+  ser anulable admite muchas filas sin código (§3.5). El listado por jornada y el listado por equipo (§5.1)
+  se apoyan en `round_id` y en los compuestos ya citados; el orden del calendario, en
+  `(match_date, kickoff_time)`.
+- **En `StandingRow`, `.unique(on: "round_id", "team_id")`** (§3.5), que además es el índice que sirve la
+  única consulta del recurso —la tabla de una jornada, ordenada por `position` (§5.1)—. No hace falta índice
+  por `competition_id` para el contrato: no hay ningún endpoint que pida la clasificación de una competición
+  entera ([D-34]). El *upsert* de la ingesta entra por esa misma clave única.
 - PK con default `gen_random_uuid()` vía `.id(custom: .id, .uuid, .generated)` o `DEFAULT` en el `.sql(raw:)`
   de creación de tabla, según lo que exponga la versión de Fluent en uso (a confirmar al implementar).
 
@@ -742,10 +794,13 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 
 *Superficie REST que consumen backoffice (escritura) y apps móviles (lectura). Cada endpoint es un
 **adaptador primario** (Controller) que mapea DTO ↔ dominio, invoca un **caso de uso** y usa el
-**repositorio** (§4.3). Redactados: `Club`, `Season`, `Competition`, `OpponentClub`, `Team` y `Round`; el
-resto de recursos siguen los mismos patrones —`Season` como plantilla de recurso gestionado, `Team` como
-plantilla de recurso ingerido **corregible**, `Round` como plantilla de recurso ingerido **de solo
-lectura**—.*
+**repositorio** (§4.3). Redactados: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`,
+`Match` y `StandingRow` — con esta última **se cierra toda la superficie de salida de la ingesta** salvo
+`LeagueScorer`. El resto de recursos siguen los mismos patrones: `Season` como plantilla de recurso
+gestionado, `Team` como plantilla de recurso ingerido **corregible**, `Round` como plantilla de recurso
+ingerido **de solo lectura**, `Match` como la de **colección ingerida grande** (ámbito obligatorio +
+paginación + proyecciones embebidas) y `StandingRow` como la de **modelo de lectura puro** (sin acceso por
+id, sin paginación, orden fijo).*
 
 ### 5.1 Recursos y endpoints
 
@@ -940,6 +995,83 @@ Tres lecturas que no son evidentes en la tabla:
   pregunta de verdad —si la clasificación es **oficial o calculada**— es de **procedencia** y **de la
   federación**, no de la jornada: vive en `ClubResponse.federationProvidesStandings` (§3.7).
 
+**`Match`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/matches?…` | `ListMatches` | **200** + página de `MatchResponse` | 400 (sin ámbito), 404 (el recurso del ámbito no existe) |
+| **GET** | `/v1/matches/{id}` | `GetMatch` | **200** + `MatchResponse` | 404 |
+
+- **Solo lectura, como `Round`** ([D-21]), pero por una razón distinta que conviene no confundir: en `Round`
+  no hay `PATCH` porque **no hay nada que corregir**; en `Match` no lo hay porque **el detalle manual son sus
+  hijos** (`Goal`, `Card`, `Appearance`, §4.2), no sus campos. El marcador es de la federación; cómo se llegó
+  a él es del club. *Consecuencia asumida:* **no hay amistosos** — un partido fuera de competición federada
+  no tiene por dónde entrar ([D-21]).
+- **El ámbito es obligatorio: al menos uno de `?roundId=`, `?competitionId=` o `?teamId=`** → **400** si no
+  viene ninguno. Mismo criterio que el `competitionId` de `Round`, pero con tres puertas en vez de una porque
+  las pantallas entran por sitios distintos: la de **jornada** pide `?roundId=` (los ~10 partidos de esa
+  fecha), la de **equipo** pide `?teamId=` **+** `?seasonId=` (su calendario de la temporada, que puede
+  abarcar liga **y** copa — dos `Competition`, [D-12]). Sin ámbito, `GET /v1/matches` sería el histórico
+  completo del club, que no lo pide ninguna pantalla.
+- **`?teamId=` casa contra los dos lados**, local y visitante (`home_team_id = :id OR away_team_id = :id`).
+  Es la consulta que sostienen los índices compuestos de §4.6 — los mismos que quedaron al eliminar
+  `Participation` ([D-27]).
+- **Paginado**, a diferencia de `Round`, aunque los dos exijan ámbito. La razón es el **techo**: las jornadas
+  de una competición son ~34 **por definición**, mientras que aquí el ámbito más ancho admitido
+  (`?competitionId=` de una liga de 20 equipos ⇒ ~380 partidos, o `?teamId=` sin temporada ⇒ sin techo)
+  desborda lo que se puede servir de una vez. Sigue la convención general de §5.3.
+- **Resto de filtros:** `?seasonId=`, `?status=`. `?seasonId=` se alcanza por FK vía `Competition`, no por
+  columna propia ([D-28]).
+- **Orden por `(match_date, kickoff_time)`**, con las horas sin confirmar **al final del día** (`NULLS LAST`)
+  y el `id` como desempate para que la paginación sea estable. Se admite **`?order=asc|desc`** (por defecto
+  `asc`) porque las dos pantallas lo piden al revés —la jornada se lee en orden de calendario, "últimos
+  resultados" al revés—, pero **no `?sort=`**: no hay un segundo criterio con sentido.
+- **`matchDate` siempre; `kickoffTime` solo cuando está confirmado**, y `isKickoffConfirmed` **derivado en
+  lectura** ([D-30]). Es lo que permite a la app pintar `18 MAY · VS` para un partido lejano y
+  `18 MAY · 12:00` para el de esta semana, sin heurísticas sobre un `00:00`.
+- **`status` lo deriva la ingesta, no llega de la federación**: el objeto de partido no trae estado
+  ([Anexo de la Federación §F.2]), solo goles vacíos o llenos → `finalizado` si hay marcador, `programado`
+  si no. `aplazado` y `suspendido` siguen en el enumerado (§3.3) pero **hoy son inalcanzables**: no se
+  observan en la fuente y, sin `PATCH`, nadie más puede fijarlos. Anotado en [Anexo de la Federación §F.6];
+  si resultan no ser observables nunca, lo que sobra son los valores, no el campo.
+- **El `404` de la lista** es el del **recurso del ámbito** (jornada, competición o equipo inexistente en
+  este club), no el de la colección: una jornada válida sin partidos devuelve **200** con página vacía.
+
+**`StandingRow`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/standings?roundId=` | `GetStanding` | **200** + `[StandingResponse]` | 400 (falta `roundId`), 404 (jornada inexistente) |
+
+- **Un solo endpoint, y sin `GET /{id}`** ([D-34]). Es el único recurso del contrato sin acceso por
+  identificador, y es deliberado: `StandingRow` **no es un agregado sino un modelo de lectura** (§4.2), y su
+  **unidad de consumo es la tabla entera de una jornada**. "La fila 4 de la jornada 22" no la pide ninguna
+  pantalla, no se puede enlazar y no se puede editar. Publicar la ruta sería superficie sin consumidor —el
+  mismo criterio con el que se eliminó `Participation` ([D-27]).
+- **`?roundId=` obligatorio** → **400** si falta. Una clasificación **solo existe respecto de una jornada**:
+  es un *snapshot*, no un estado global de la competición. Mismo patrón que el `competitionId` de `Round`.
+- **La "clasificación actual" la resuelve el cliente, y el contrato no la nombra.** La app ya trae
+  `Round.isCurrent` en el payload del selector de jornada (§5.1), así que sabe qué jornada pedir sin llamada
+  extra. **No se ofrece `?competitionId=` a secas** porque "la última jornada con datos" es un **tercer
+  concepto** —ni la actual ni la última— que el servidor tendría que inventar: la jornada en curso puede no
+  tener aún clasificación (partidos sin jugar), y una competición terminada no tiene jornada actual. Se
+  devuelve **200 con lista vacía** y el cliente retrocede una jornada, comportamiento que **ya tiene que
+  implementar** para el caso de `isCurrent = false` en competición terminada (§5.1, `Round`).
+- **Sin paginación y sin `?sort=`/`?order=`.** El ámbito trae techo —una competición son ~20 equipos, igual
+  que `Round` son ~34 jornadas— así que se aplica el criterio de §5.3. El orden es **fijo por `position`
+  ascendente**: una clasificación desordenada no es una clasificación.
+- **`previousPosition` es anulable, y su ausencia no es un error** ([D-33]): no hay jornada anterior en la
+  primera, ni *snapshot* previo si el club dio de alta la competición a mitad de temporada. El cliente pinta
+  "–" en la columna PREV, que es justo lo que hace el mockup.
+- **`form` (la racha) viaja embebida en cada fila** ([D-34]): los últimos **5** resultados del equipo, cada
+  uno con su número de jornada. Se calcula desde `Match` en el mismo puerto de lectura (§4.5). Sin esto, la
+  pantalla de clasificación tendría que pedir varias jornadas de partidos para pintar tres distintivos por
+  fila.
+- **No lleva marca de procedencia** (ingerida vs calculada) ([D-29]): la clasificación existe **siempre**
+  ([D-15]) y de dónde viene es capacidad **de la federación**, expuesta una sola vez por tenant en
+  `ClubResponse.federationProvidesStandings`. Repetirla en veinte filas por jornada sería la columna
+  constante que [D-28] y [D-29] ya rechazaron.
+
 ### 5.2 DTOs
 
 Los DTOs **conforman `Content`** (cruzan HTTP) y están **desacoplados** tanto de la entidad de dominio como
@@ -982,18 +1114,49 @@ struct SeasonResponse: Content {
   barata de que la frontera no se salte por descuido: el generador ni siquiera produce el *stub*.
 - **`Round` lleva el caso al extremo: un solo DTO.** No hay `CreateRoundRequest` **ni
   `UpdateRoundRequest`** — es el único recurso redactado con respuesta pero sin ningún DTO de escritura
-  (§5.1). Es la plantilla del **recurso ingerido de solo lectura**, que seguirán `Match`, `StandingRow` y
-  `LeagueScorer`.
+  (§5.1). Es la plantilla del **recurso ingerido de solo lectura**, que ya sigue `Match` y seguirán
+  `StandingRow` y `LeagueScorer`.
+- **`MatchResponse` y `StandingResponse` embeben el equipo en vez de referenciarlo** ([D-32]): `home`/`away`
+  y `team` llevan un **`TeamRef`** (`teamId`, `displayName`, `shortDisplayName`, `crestUrl`, `isOwn`), no un
+  UUID suelto. Es el mismo compromiso pro-lectura de `TeamResponse` llevado un paso más allá, y el que evita
+  que la pantalla de jornada dispare **diez `GET /teams/{id}`** para pintar cinco filas, o **veinte** para
+  pintar una clasificación.
+- **`TeamRef` es una proyección compartida, no un recurso.** No tiene endpoint ni identidad propia: es `Team`
+  recortado a lo que cabe en una fila. `teamId` es la puerta al recurso completo si el cliente necesita el
+  resto. Deliberadamente **no** lleva `category`, `gender` ni `modality`: dentro de una competición son
+  constantes (§3.2), así que repetirlas veinte veces por página no informa de nada. `MatchTeam` es
+  `TeamRef` **más el marcador de ese lado**; la clasificación lo usa tal cual.
+- **Se extrajo al llegar el segundo consumidor, no antes.** Nació dentro de `MatchTeam` ([D-32]) y se separó
+  al escribir `StandingResponse`, que necesitaba exactamente los mismos cinco campos. Es el criterio general
+  para las proyecciones de este contrato: **se comparten cuando coinciden dos veces, no por anticipado** —de
+  lo contrario `TeamResponse` y `TeamRef` acabarían siendo el mismo esquema con campos opcionales, que es
+  justo lo que ninguno de los dos quiere ser.
+- **`shortDisplayName` es nombre corto del club + `letter`, sin categoría** ("CD Ejemplo A"), mientras que
+  `displayName` la incluye ("CD Ejemplo Juvenil A"). La razón es la pantalla: en una jornada **todos** los
+  equipos son de la misma categoría, así que rotularla en cada fila es ruido — pero en el calendario de un
+  equipo, que puede mezclar competiciones ([D-12]), el nombre largo sí distingue.
+- **El marcador vive dentro de `home`/`away`, no como `homeScore`/`awayScore` sueltos.** Ata cada número a su
+  equipo en la propia estructura: el cliente pinta `fila.score` junto a `fila.crestUrl` sin cruzar dos
+  campos paralelos y sin poder equivocarse de lado. Ambos son anulables hasta que el partido se juega.
+- **`StandingResponse` lleva `form`, que no sale de su propia tabla** ([D-34]): los últimos 5 resultados del
+  equipo, calculados desde `Match`. Es la excepción que confirma el patrón de los derivados —los demás
+  (`isCurrent`, `isOwn`, `displayName`) se deducen de la fila que los lleva; este se resuelve **con otra
+  consulta** en el mismo puerto de lectura (§4.5). Sigue siendo `readOnly` y sigue sin almacenarse.
+- **`MatchOutcome` (`victoria`/`empate`/`derrota`) es un enumerado *relativo al equipo de la fila***, no un
+  estado del partido. Convive con `MatchStatus`, que es absoluto, y no se confunden: un mismo partido es
+  `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el otro.
 - **`PATCH` parcial:** `minProperties: 1` y `additionalProperties: false`; **campo ausente = no se
   modifica**, y en los anulables un `null` explícito **borra** el valor.
 - **Campos derivados: solo en respuesta, nunca en escritura.** `Season.isCurrent`; `Team.isOwn`
   (`opponentClubId == null`), `clubName`, `displayName` y `crestUrl`; `Competition.displayName`;
-  `Round.isCurrent`; `Club.federationProvidesStandings` (del catálogo en código, [D-17]). Ninguno se
+  `Round.isCurrent`; `Match.isKickoffConfirmed` (`kickoffTime != null`, [D-30]) y todo `MatchTeam` salvo
+  `teamId` y `score`; `Club.federationProvidesStandings` (del catálogo en código, [D-17]). Ninguno se
   almacena. `TeamResponse` es deliberadamente "gordo" en derivados para que **la app móvil pinte una fila de
   equipo con una sola llamada**, sin resolver el club por su cuenta — el mismo compromiso pro-lectura que ya
   se aceptó al denormalizar `Goal` ([D-04]).
 - **Campos de propiedad de la ingesta, `readOnly`:** `federationTeamId`, `federationClubId`,
-  `Team.modality`, `slug`, `Competition.lastSyncedAt`. No aparecen en ningún DTO de escritura.
+  `federationMatchId`, `Team.modality`, `slug`, `Competition.lastSyncedAt`. No aparecen en ningún DTO de
+  escritura — en `Match` **ninguno** aparece, porque no hay DTO de escritura en absoluto.
 - **`ClubSettings` es un tipo *tipado*, no un `[String: Any]`.** Se persiste como `jsonb`, pero **cruza el
   contrato como estructura con campos declarados**. Su contenido está **pendiente** (§9); un `jsonb` opaco en
   el contrato sería una puerta trasera para meter dominio sin modelarlo.
@@ -1015,6 +1178,13 @@ struct SeasonResponse: Content {
   `{ data: [...], page, perPage, total }`.
 - **`Season` es una colección pequeña** (pocas por club) → **sin paginación**; solo filtro `includeArchived`
   y orden fijo por `end_date` desc.
+- **Exigir ámbito y paginar son cosas distintas, y `Round` y `Match` las combinan al revés.** Las dos
+  colecciones obligan a acotar (§5.1), pero `Round` **no** se pagina y `Match` **sí**: el ámbito de `Round`
+  trae consigo un techo (~34 jornadas por competición), el de `Match` no (`?competitionId=` de una liga son
+  ~380 partidos; `?teamId=` sin temporada, ilimitado). **El ámbito acota *qué* se pide; la paginación acota
+  *cuánto* llega** — cuando lo primero ya garantiza lo segundo, el sobre de paginación sobra.
+- **`StandingRow` cae del lado de `Round`**: `?roundId=` obligatorio acota a los ~20 equipos de la
+  competición → sin paginación, y con **orden fijo** por `position` (§5.1).
 
 ### 5.4 Manejo de errores
 
@@ -1045,7 +1215,8 @@ struct SeasonResponse: Content {
 
 - **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
   (OpenAPI **3.1**). Cubre las entidades ya definidas en §5 — hoy `Club`, `Season`, `Competition`,
-  `OpponentClub` y `Team` — y **se amplía entidad a entidad** a medida que avanza esta sección. Se valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
+  `OpponentClub`, `Team`, `Round`, `Match` y `StandingRow` — y **se amplía entidad a entidad** a medida que
+  avanza esta sección. Se valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
 - **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
   queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
   *harness* del diseño mientras aún no hay código.
@@ -1089,6 +1260,14 @@ puntos de contacto, y ninguno es un contrato REST nuevo:
 > la federación, que recorre un humano con un navegador (§3.7). Lo único que este módulo necesita es la
 > **coordenada resultante**, y llega como configuración. El BFF, por su parte, sigue viendo solo el
 > **resultado ya persistido** — `Match`, `StandingRow`, `LeagueScorer`, rivales…
+
+**La cadencia tiene un anclaje semanal, no es un intervalo libre.** La federación **confirma los horarios de
+la semana entrante el domingo, al cierre** ([Anexo de la Federación §F.5]), y publica los resultados al
+terminar cada jornada. Eso fija dos hitos por semana y, con ellos, el mínimo: **una pasada el lunes** —recoge
+a la vez los horarios confirmados y el resultado de la jornada recién jugada—. Sincronizar más a menudo es
+razonable durante el fin de semana (marcadores) y **no aporta nada** de martes a viernes, cuando no hay nada
+nuevo que traer. El intervalo exacto se cierra al escribir el job; lo que no puede es ser **mayor** que una
+semana, o la app mostraría horarios provisionales de partidos ya jugados.
 
 **Pendiente de muestra:** respuesta del endpoint de clasificación y del de goleadores; y confirmar que el
 calendario devuelve `group_label` y `division_label` como texto (§3.7) — si no, son los dos únicos rótulos
@@ -1215,6 +1394,13 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-30]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-31]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-32]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-34]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo de la Federación §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo de la Federación §F.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
