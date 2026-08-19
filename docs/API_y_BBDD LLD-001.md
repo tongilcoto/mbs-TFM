@@ -284,7 +284,7 @@ opcional (§3.5).
 | **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), **`expected_return_date?`** (ALTA EST.), **`actual_return_date?`**, `deleted_at?`                                                     | Periodo de indisponibilidad. **`active` deja de ser columna**: se deriva de que no haya alta real **y** haya llegado `start_date` ([D-38]) — el mismo tratamiento que `is_own` ([D-03]) o `is_kickoff_confirmed` ([D-30]). Las dos fechas de vuelta son **anulables**: la estimada no se conoce los primeros días, la real solo al alta. **Ninguna FK a `Season` ni a `Team`**: se alcanzan por el jugador, que ya es identidad de ambos ([D-05], [D-28]). Un jugador puede tener **varias ausencias activas de tipos distintos** (lesionado y sancionado a la vez), pero **no dos del mismo tipo** ([D-39])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`, `deleted_at?`                                                                                                                    | Único(jugador, partido) **entre las no borradas**. Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO. **`player_id` y `match_id` son identidad, no atributos**: no se editan ([D-37]). **La ausencia de fila no es un estado** ([D-41]): `no_convocado` es un hecho registrado —decisión técnica— y cuenta en la estadística; que no haya fila significa que nadie apuntó esa convocatoria. **`minutes` solo con `status = jugado`** ([D-42]) y **opcional incluso entonces** ([D-14]): nulo es "jugó, no sé cuánto", que no es cero. **Ninguna FK a `Season`, `Team` ni `Competition`**: el equipo y la temporada se alcanzan por el jugador, la jornada y la competición por el partido ([D-05], [D-28]). Invariante cruzada: **el equipo del jugador disputa el partido**. **`deleted_at`** = *soft delete*, sin guarda de dependientes ([D-36])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`, `deleted_at?`                                                                                                    | Único(jugador, partido, tipo) **entre las no borradas**: no se puede ser expulsado dos veces, y una segunda amarilla **no es otra fila amarilla** ([D-45]). Amarilla **y** roja en el mismo partido sí conviven (la que acumula más la roja directa posterior). **Una fila es una sanción, no una cartulina** ([D-45]): la doble amarilla es **una** fila `roja` con `is_second_yellow = true`, y las dos amarillas que la causaron **no acumulan** para el tramo ([D-10]). `is_second_yellow = true` exige `type = roja` — segunda invariante entre columnas, como la de [D-42]. **`minute`** opcional ([D-14]): nulo es "no se apuntó". **No se exige `Appearance`** del jugador en ese partido ([D-46]). "Amarillas pendientes de sanción" se calcula (§3.6). **`deleted_at`** = *soft delete* ([D-36]) |
-| **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?`              | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?`              | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial). **Cubre las dos direcciones** de los partidos del equipo propio (el mockup desglosa también los goles recibidos), pero no los partidos entre rivales (§3.7). **`conceding_team_id` no se escribe: se deriva del `Match`** ([D-54]) — la mitad de la denormalización que el cliente no puede contradecir. **`scorer_player_id` anulable** (los goles del rival no tienen goleador conocido, [D-09]) y **el equipo al que debe pertenecer depende de `play_type`** ([D-52]): el que marca en un gol normal, el que **encaja** en `en_propia_puerta` — donde además el gol **no suma** al goleador aunque quede registrado a su nombre. **`assisted` no es redundante con `assist_player_id`**: `true` con jugador nulo es el gol encajado con asistencia rival ([D-09]). **Sin unicidad alguna** —un jugador marca dos veces en un partido— y **sin cuadre con el marcador** ([D-53]). **`deleted_at`** = *soft delete* ([D-36])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                                                     | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura. **Se ingiere, no se calcula** ([D-09]): el ranking incluye rivales, de los que no hay plantilla — `full_name` y `team_label` son **texto del proveedor**, no claves, y no se emparejan con `Player` ni con `Team`. **Estado vigente único, no *snapshot* por jornada** (a diferencia de `StandingRow`): el *upsert* lo pisa en cada sincronización, sin histórico ni `PREV`. **`rank`** anulable —no todos los proveedores lo publican— y **se respeta el suyo** en vez de recalcularlo: los criterios de desempate son ajenos. **Sin *fallback*** ([D-48]): si la federación no lo publica, no hay nada que calcular y la tabla queda vacía. **`synced_at`** es marca del *upsert* (retirar filas que el proveedor dejó de publicar), **no viaja en el DTO** ([D-29])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **CompetitionSanctionBracket** (Tramo de sanción) | `competition_id`, `seq`, `yellow_from`, `yellow_to`                                                                                                                             | Config por competición (§3.6). Sanción al alcanzar `yellow_to`; "pendientes" = `yellow_to − acumuladas`. **Es una secuencia, no filas independientes** ([D-50]): tramos contiguos y ordenados por `seq`, sin huecos ni solapes — la unidad de escritura es el **conjunto entero**, no la fila. **`seq` y `yellow_from` son derivados** ([D-51]): el conjunto queda determinado por la lista ascendente de `yellow_to`, así que un conjunto inválido no se puede ni expresar. **Sin borrado lógico** (§4.4): es configuración, no un hecho — una competición sin tramos simplemente no tiene filas ([D-10]). **Retroactivo**: las pendientes se calculan en vivo sobre `Card`, así que cambiar los umbrales reinterpreta las tarjetas ya registradas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
@@ -369,6 +369,9 @@ dónde se materializa:
 | Goleadores de la liga | Se **ingieren** en `LeagueScorer` (solo lectura); no se modelan rosters ni goles de rivales | [D-09] |
 | Sanción por amarillas | **Tramos configurables por competición** (`CompetitionSanctionBracket`); rojas → sanción directa | [D-10] |
 | Zona de gol | Tres valores, **partición exclusiva**: `area_chica`, `area_penalti`, `fuera_area` | [D-11] |
+| Gol en propia puerta | Se guarda su **autor**, pero **no le suma**: el goleador es del equipo que encaja y el conteo excluye ese tipo de jugada | [D-52] |
+| Goles frente al marcador | **No se validan**: el resultado es de la federación, los goles son detalle manual y parcial. La discrepancia se avisa, no se bloquea | [D-53] |
+| Escritura de la denormalización de `Goal` | Se escribe el equipo que **marca**; el que **encaja** lo deriva el servidor del `Match` | [D-54] |
 | Copas y eliminatorias | **Sin entidades nuevas**: una copa es otra `Competition` con sus `Round`/`Match` | [D-12] |
 | "Primer Equipo" y filiales | `category=senior` + `letter`; sin campo de nombre especial | [D-13] |
 | Minutos jugados | Se registran, pero **opcionales** (`Appearance.minutes?`) | [D-14] |
@@ -806,6 +809,14 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 - **Y el segundo `CHECK` entre columnas**: `CHECK (NOT is_second_yellow OR type = 'roja')` ([D-45]), gemelo
   del de `Appearance`. Con dos ya es patrón: **la invariante entre columnas se refuerza en el esquema y se
   reporta desde el dominio**.
+- **En `Goal`, ninguna unicidad** —es el único caso del modelo— y en cambio **los índices más cargados**:
+  `scoring_team_id` y `conceding_team_id` por separado (§3.5, [D-04]), que son los que sirven los dos
+  bloques de la pantalla de estadísticas sin *join*; `match_id` para el relato del partido; y
+  `scorer_player_id` para el historial del goleador. Los tres `CHECK` de la fila: `scoring_team_id <>
+  conceding_team_id` (§4.1), `NOT assisted ⇒ assist_player_id IS NULL` —la tercera invariante entre
+  columnas ([D-52])— y `play_type = 'en_propia_puerta' ⇒ assist_player_id IS NULL`. **La pertenencia del
+  goleador a su equipo no se expresa en SQL** —depende de `Match` y de `play_type`— y se queda en el
+  dominio, que es donde [D-28] la deja cuando no se puede hacer estructuralmente imposible.
 - **En `CompetitionSanctionBracket`, `.unique(on: "competition_id", "seq")`** —normal, no parcial: no hay
   `deleted_at` (§4.4)— más `CHECK (yellow_from <= yellow_to)`, que es la invariante del *Value Object*
   `SanctionBracket` (§4.1) bajada al esquema. La contigüidad **entre** filas no se expresa en SQL y no hace
@@ -1357,6 +1368,55 @@ Tres lecturas que no son evidentes en la tabla:
   se conserva: es la marca con la que el *upsert* retira las filas que el proveedor dejó de publicar (§3.7).
 - **El `GET` es accesible a cualquier rol autenticado**; no hay escritura que proteger.
 
+**`Goal`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/goals` | `CreateGoal` | **201** + `GoalResponse` | 400, **403** (rol), **422** (partido inexistente, equipo ajeno al partido, ningún equipo propio, pertenencia del goleador/asistente, asistencia en gol en propia) |
+| **GET** | `/v1/goals?matchId=` \| `?scoringTeamId=` \| `?concedingTeamId=` \| `?scorerPlayerId=` | `ListGoals` | **200** + página de `GoalResponse` | 400 (sin ámbito), 404 (el recurso del ámbito no existe) |
+| **GET** | `/v1/goals/{id}` | `GetGoal` | **200** + `GoalResponse` | 404 |
+| **PATCH** | `/v1/goals/{id}` | `UpdateGoal` | **200** + `GoalResponse` | 400, **403** (rol), 404, **422** |
+| **DELETE** | `/v1/goals/{id}` | `DeleteGoal` | **204** (borrado lógico) | **403** (rol), 404 |
+
+- **Cierra el contrato** y es la tercera hija de `Match`, tras `Appearance` y `Card`. Confirma el patrón sin
+  novedades de forma —ruta plana, ámbito, CRUD, identidad inmutable, borrado lógico— y concentra toda su
+  dificultad en las **invariantes**, que son las más ricas del modelo.
+- **Cuatro puertas de ámbito, y se combinan** ([D-47]): la clave de `Goal` no incluye jugador —un jugador
+  marca dos veces en un partido, y hay goles sin goleador— así que ninguna intersección colapsa a una fila.
+  Es, de hecho, **el único recurso sin unicidad alguna**.
+- **Las dos puertas de equipo son la razón de ser de [D-04]:** `?scoringTeamId=` da los goles a favor y
+  `?concedingTeamId=` los goles en contra, cada una un filtro directo e indexado **sin *join***. Son
+  literalmente los dos bloques de la pantalla de estadísticas.
+- **Paginado** ([D-49]), a diferencia de `Appearance` y `Card`: `?matchId=` trae techo, pero un equipo o un
+  jugador sin `?seasonId=` no. Se aplica el criterio del techo, no el del ámbito — tal y como [D-49] predijo.
+- **Se escribe quién marca; el servidor deriva quién encaja** ([D-54]). `concedingTeamId` no está en ningún
+  DTO de escritura: sale del `Match`. Así la denormalización de [D-04] **no puede quedar incoherente**,
+  porque el cliente no tiene forma de contradecirla.
+- **El gol en propia puerta invierte la invariante del goleador** ([D-52]): en `play_type =
+  en_propia_puerta` el `scorer_player_id` pertenece al equipo que **encaja**. Se guarda —el autor de un gol
+  en propia es un dato que el club quiere— pero **no le suma**: el conteo de goleador excluye ese tipo de
+  jugada en la consulta, no con una bandera almacenada que pudiera contradecir a `play_type` (mismo
+  criterio que [D-03] y [D-38]). Y no admite asistencia.
+- **Tercera invariante entre campos del contrato:** `assist_player_id != null ⇒ assisted = true`. Misma
+  familia que [D-42] y [D-45], mismo tratamiento —dominio → **422**, `CHECK` de refuerzo— y mismo corolario
+  en el `PATCH`: el par viaja junto. A ella se suman la pertenencia del asistente al equipo que marca y el
+  que nadie se asiste a sí mismo.
+- **`assisted` no es redundante con `assist_player_id`**, aunque lo parezca: en un gol **encajado** sabemos
+  que hubo asistencia pero no de quién, porque el asistente es rival ([D-09]). `assisted = true` con
+  jugador nulo es esa fila, y es la que alimenta el CON ASISTENCIA del bloque de goles recibidos. Por eso
+  es campo declarado y no derivado.
+- **Al menos uno de los dos equipos tiene que ser propio** → **422**. El detalle manual no existe para
+  partidos entre rivales (§3.7). Es la versión de `Goal` de la comprobación que `Appearance` y `Card` hacen
+  sobre el equipo del jugador.
+- **No se valida contra el marcador** ([D-53]): el resultado es de la federación y estos goles son entrada
+  manual y parcial. Que no cuadren es lo normal. El `DELETE` tampoco descuadra nada, por lo mismo.
+- **El `PATCH` es la operación normal aquí**, no la excepcional: se apunta el gol en caliente con lo mínimo
+  y se completa el desglose después. Los seis campos de clasificación son editables; la identidad
+  (`matchId`, `scoringTeamId`) no.
+- **Lo que este recurso *no* devuelve:** los desgloses agregados por dimensión. Son agregación sobre esta
+  tabla (`GoalBreakdown`, §3.4, §4.5), como en `Appearance` y `Card`.
+- **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
+
 **`CompetitionSanctionBracket`:**
 
 | Método | Ruta | Caso de uso | Éxito | Errores |
@@ -1511,6 +1571,21 @@ struct SeasonResponse: Content {
   devuelve el hecho, no la agregación sobre el hecho**. Aquí es además evidente que no cabría —las
   pendientes dependen de los tramos de la competición ([D-10]) y del historial entero del jugador, no de
   la fila que se acaba de escribir—.
+- **`Goal` cierra la serie de invariantes entre campos y deja el patrón consolidado.** Es la tercera
+  —`assistPlayerId ⇒ assisted`, tras [D-42] y [D-45]— pero añade una variante que las otras dos no tenían:
+  con [D-52], un **enumerado decide contra qué se valida una FK** (`playType = en_propia_puerta` cambia a
+  qué equipo debe pertenecer el goleador). El tratamiento no cambia —dominio, 422, `CHECK` de refuerzo, el
+  par viaja junto en el `PATCH`—, lo que confirma que la convención aguanta casos más retorcidos que el que
+  la originó.
+- **`GoalResponse` devuelve una FK que ningún DTO de escritura acepta** (`concedingTeamId`, [D-54]), y es
+  el único caso. No es un derivado en lectura como `isOwn` o `displayName`: está **almacenado** (esa es
+  toda la gracia de [D-04], filtrar sin *join*), pero lo escribe el servidor copiándolo del `Match`. Deja
+  una tercera categoría junto a "derivado en lectura" y "propiedad de la ingesta": **denormalización de
+  servidor** — se guarda, se lee, y el cliente no la toca.
+- **`assisted` es el contraejemplo útil del criterio de derivar**: parece derivable de `assistPlayerId !=
+  null` y no lo es, porque `true` con jugador nulo es un estado real —gol encajado con asistencia rival,
+  [D-09]—. El criterio no es "si se puede derivar, se deriva", sino **si el campo derivado perdería
+  información**; aquí la perdería.
 - **`SanctionBracket` es el único recurso con un DTO de escritura que no se parece a su respuesta**
   ([D-51]). En todos los demás, `CreateXRequest` es `XResponse` menos los derivados; aquí se escriben
   **umbrales** (`[5, 10, 13, 16]`) y se leen **tramos** (`0-5`, `6-10`…). No es inconsistencia sino el
@@ -1581,6 +1656,11 @@ struct SeasonResponse: Content {
   distinto según la puerta**: por dorsal ascendente con `?matchId=` (se lee como una plantilla), por fecha
   de partido descendente con `?playerId=` (se lee como un historial). Es el único recurso del contrato cuyo
   orden depende del ámbito, y es que son literalmente dos pantallas distintas.
+- **`Goal` es el caso que valida la regla de [D-49] por adelantado**: sus cuatro puertas se reparten entre
+  las que traen techo (`?matchId=`) y las que no (`?scoringTeamId=`, `?scorerPlayerId=` sin temporada), así
+  que **se pagina**. Es también el recurso con más filtros del contrato —`?seasonId=`, `?assistPlayerId=`,
+  `?playType=`— y aun así **no se ofrece `?sort=`**: el orden útil es el del relato (minuto) o el del
+  historial (fecha), y los dos ya están fijados por el ámbito, como en `Card`.
 - **`CompetitionSanctionBracket` es el techo más pequeño del contrato** —tres o cuatro filas por
   competición— así que sin paginación, sin filtros y con orden fijo por `seq`. Aquí el orden no es una
   comodidad de pantalla como en el resto: **es el significado del dato** ([D-51]).

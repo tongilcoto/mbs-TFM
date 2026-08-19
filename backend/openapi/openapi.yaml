@@ -207,6 +207,27 @@ tags:
 
       **De aquí no nace ninguna sanción automática** (D-10): los tramos dicen **cuándo toca**, pero la
       `Absence` la registra el administrador. Mismo escritor único que en todo el dominio manual (§2.1).
+  - name: Goals
+    description: |
+      Goles, **con su desglose**: zona, lado, parte del cuerpo, tipo de jugada y asistencia. Es la entidad
+      más ancha del modelo y la que sostiene los dos bloques de la pantalla de estadísticas de equipo —
+      GOLES MARCADOS y GOLES RECIBIDOS (§3.4).
+
+      **Escribe:** el administrador. Tercera y última entidad hija de `Match` (§4.2), tras `Appearance` y
+      `Card`, y la que cierra el contrato.
+
+      **Cubre las dos direcciones**, no solo los goles propios: el club registra también el desglose de lo
+      que encaja, que es lo que pide el mockup. Lo que **no** cubre son los partidos entre rivales — el
+      detalle manual solo existe donde juega un equipo propio (§3.7).
+
+      **Denormaliza el equipo que marca y el que encaja** (D-04) para que "goles a favor" y "goles en
+      contra" sean un filtro directo e indexado, **sin *join*** a `Match`. Se descartó un booleano
+      `aFavor`: se rompe en cuanto se enfrentan dos equipos propios del mismo club. Pero esa
+      denormalización **no llega al DTO** (D-54): se escribe quién marca, el servidor deriva quién encaja.
+
+      **Todo el desglose es opcional** (D-04): refleja entrada manual parcial. Un gol con solo el minuto es
+      una fila válida, y los desgloses de la pantalla **no suman el total** — es lo esperado, no un error
+      (D-11).
 
 paths:
 
@@ -2302,6 +2323,264 @@ paths:
   # son texto del proveedor sobre jugadores ajenos (D-09)—, y una corrección la pisaría el siguiente
   # *upsert* (D-18).
 
+  # ─────────────────────────────── Goals (§5.1) ───────────────────────────────
+  /goals:
+    get:
+      tags: [Goals]
+      operationId: listGoals
+      summary: Lista goles de un partido, de un equipo o de un jugador
+      description: |
+        **El ámbito es obligatorio: al menos uno de `matchId`, `scoringTeamId`, `concedingTeamId` o
+        `scorerPlayerId`** → **400** si no viene ninguno. **Se combinan** (D-47): la clave de `Goal` no
+        incluye jugador —un jugador marca dos veces en un partido, y hay goles sin goleador conocido—, así
+        que ninguna intersección colapsa a una fila.
+
+        **Las dos puertas de equipo son la razón de ser de D-04.** `scoringTeamId` da los goles **a favor**
+        y `concedingTeamId` los goles **en contra**, cada una un filtro directo e indexado sobre su propia
+        columna, **sin *join*** a `Match`. Son literalmente los dos bloques de la pantalla de estadísticas.
+
+        **Paginado** (D-49), a diferencia de `Appearance` y `Card`: `?matchId=` trae techo, pero
+        `?scoringTeamId=` o `?scorerPlayerId=` sin temporada no lo traen. Se aplica el criterio del techo,
+        no el del ámbito.
+
+        **Orden por `minute` ascendente** (`NULLS LAST`, como el calendario de `Match`) cuando el ámbito es
+        el partido; por fecha de partido descendente en los demás, que se leen como historial. Mismo
+        criterio que `Card`.
+      parameters:
+        - name: matchId
+          in: query
+          required: false
+          description: Partido. Devuelve los goles de las dos direcciones.
+          schema:
+            type: string
+            format: uuid
+        - name: scoringTeamId
+          in: query
+          required: false
+          description: |
+            Equipo que **marca** → goles **a favor**. Filtro directo sobre `scoring_team_id` (D-04).
+          schema:
+            type: string
+            format: uuid
+        - name: concedingTeamId
+          in: query
+          required: false
+          description: |
+            Equipo que **encaja** → goles **en contra**. Filtro directo sobre `conceding_team_id` (D-04).
+            Combinado con `scoringTeamId` da los goles de un enfrentamiento concreto entre dos equipos.
+          schema:
+            type: string
+            format: uuid
+        - name: scorerPlayerId
+          in: query
+          required: false
+          description: |
+            Jugador que marca. **Incluye sus goles en propia puerta**, que están registrados a su nombre
+            aunque no le sumen (D-52): el filtro devuelve las filas, y quien cuenta goles excluye
+            `playType = en_propia_puerta`.
+          schema:
+            type: string
+            format: uuid
+        - name: assistPlayerId
+          in: query
+          required: false
+          description: Jugador que asiste. Filtro, no puerta de ámbito.
+          schema:
+            type: string
+            format: uuid
+        - name: seasonId
+          in: query
+          required: false
+          description: |
+            Temporada, alcanzada por FK vía `Match` → `Competition` (D-28). Es el filtro que acota los
+            ámbitos de equipo y de jugador, que sin él no tienen techo.
+          schema:
+            type: string
+            format: uuid
+        - name: playType
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/GoalPlayType'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: Página de goles.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/GoalResponse'
+        '400':
+          description: Falta el ámbito — ninguna de las cuatro puertas.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El partido, el equipo, el jugador o la temporada del ámbito no existen en este club. Es el 404
+            **del ámbito**: un partido sin goles registrados devuelve **200** con página vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Goals]
+      operationId: createGoal
+      summary: Registra un gol
+      description: |
+        **Se envía quién marca; el servidor deriva quién encaja** (D-54). `concedingTeamId` no está en el
+        cuerpo: se saca del `Match`, que es donde vive la verdad sobre quiénes juegan. Así la
+        denormalización de D-04 no puede quedar incoherente, porque el cliente no tiene forma de
+        contradecirla.
+
+        **El gol en propia puerta guarda a su autor** (D-52), y con él la invariante del goleador se
+        invierte: en un `playType = en_propia_puerta` el `scorerPlayerId` pertenece al equipo que
+        **encaja**, no al que marca. No le suma goles — eso lo resuelve el modelo de lectura excluyendo ese
+        tipo de jugada— pero queda registrado, que es lo que se quería.
+
+        **Todo el desglose es opcional** (D-04). Un gol con `matchId`, `scoringTeamId` y nada más es una
+        fila válida: es el caso de quien apunta el resultado y deja el detalle para luego.
+
+        **No se valida contra el marcador** (D-53): el resultado es de la federación y estos goles son
+        entrada manual y parcial. Que no cuadren es lo normal, no un error.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoalRequest'
+      responses:
+        '201':
+          description: Gol registrado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: |
+            Regla de negocio (§5.4):
+
+            - el **partido no existe**, o su temporada está **archivada**;
+            - `scoringTeamId` **no es uno de los dos equipos** del partido;
+            - **ninguno de los dos equipos es propio** — el detalle manual solo existe donde juega el club
+              (§3.7);
+            - el **goleador no pertenece al equipo que le corresponde** según D-52: el que marca en un gol
+              normal, el que **encaja** en un `en_propia_puerta`;
+            - el **asistente no pertenece al equipo que marca**, o coincide con el goleador — nadie se
+              asiste a sí mismo;
+            - hay asistencia en un **gol en propia puerta**, que no la admite (D-52);
+            - `assistPlayerId` con `assisted = false` — tercera invariante entre campos del contrato,
+              hermana de D-42 y D-45.
+
+            **No es 404** aunque incluya "no existe": partido, equipos y jugadores llegan en el **cuerpo**,
+            no en la ruta (D-37).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /goals/{goalId}:
+    parameters:
+      - $ref: '#/components/parameters/GoalId'
+
+    get:
+      tags: [Goals]
+      operationId: getGoal
+      summary: Obtiene un gol
+      responses:
+        '200':
+          description: Gol.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Goals]
+      operationId: updateGoal
+      summary: Corrige un gol o completa su desglose
+      description: |
+        Actualización **parcial**. Es, más que en ningún otro recurso, **la operación normal**: el caso de
+        uso real es apuntar el gol en caliente con lo mínimo y volver luego a rellenar zona, lado y parte
+        del cuerpo viendo el vídeo. Los seis campos de desglose son editables.
+
+        **No incluye `matchId` ni `scoringTeamId`**, y por tanto tampoco el `concedingTeamId` derivado de
+        él: son la identidad del gol (D-37). Un gol apuntado en el partido equivocado, o atribuido al
+        equipo que no era, se borra y se vuelve a crear — cambiar el equipo que marca invertiría el
+        resultado de dos estadísticas a la vez.
+
+        **`playType` y `scorerPlayerId` viajan juntos cuando el cambio cruza `en_propia_puerta`** (D-52):
+        pasar un gol normal a propia puerta, o al revés, cambia a qué equipo debe pertenecer el goleador,
+        así que o llegan los dos campos coherentes o la operación devuelve **422**. Igual que `status` y
+        `minutes` en D-42, o `type` e `isSecondYellow` en D-45.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGoalRequest'
+      responses:
+        '200':
+          description: Gol actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            Las mismas reglas del alta que siguen aplicando tras el cambio: pertenencia del goleador según
+            `playType` (D-52), pertenencia del asistente, asistencia en gol en propia, y `assistPlayerId`
+            con `assisted = false`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Goals]
+      operationId: deleteGoal
+      summary: Borra un gol
+      description: |
+        **Borrado lógico** (`deleted_at`, §3.5), como el resto del dominio manual (D-36). Nada cuelga de un
+        gol.
+
+        **No toca el marcador del partido**, que es de la federación (D-21): borrar el gol solo retira el
+        detalle de cómo se llegó a él. Es la contrapartida natural de D-53 — si los goles no tienen que
+        cuadrar con el resultado, borrar uno tampoco lo descuadra.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Gol borrado.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   # ────────────────────────── SanctionBrackets (§5.1) ──────────────────────────
   /sanction-brackets:
     get:
@@ -2518,6 +2797,13 @@ components:
         format: uuid
     CardId:
       name: cardId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GoalId:
+      name: goalId
       in: path
       required: true
       schema:
@@ -2940,6 +3226,41 @@ components:
         "¿está expulsado?" filtra por `roja` sin tener que acordarse de un tercer valor, y la cuenta de
         acumulación (D-10) es `type = 'amarilla'` a secas.
       enum: [amarilla, roja]
+
+    GoalZone:
+      type: string
+      description: |
+        Zona desde la que se marca. **Partición exclusiva de tres valores** (D-11): cada gol tiene
+        exactamente una zona, o ninguna si no se apuntó.
+
+        Tres y no más porque las teclea un entrenador de fútbol base viendo el partido: distinguir más
+        finamente añadiría decisiones donde solo hacía falta un rótulo, y el mockup imprime exactamente
+        estos tres.
+      enum: [area_chica, area_penalti, fuera_area]
+
+    GoalSide:
+      type: string
+      description: Lado del campo desde el que llega el gol.
+      enum: [derecha, izquierda, centro]
+
+    GoalBodyPart:
+      type: string
+      description: |
+        Parte del cuerpo con la que se marca. **`otro` es el cajón declarado** — mismo criterio que
+        `AbsenceType.otro`: si un caso se repite lo bastante como para querer contarlo aparte, la salida es
+        **un valor nuevo** en el enumerado, no un texto libre que nadie podría agregar.
+      enum: [pie, cabeza, otro]
+
+    GoalPlayType:
+      type: string
+      description: |
+        Tipo de jugada. **`en_propia_puerta` es el valor que altera las invariantes del gol** (D-52): en él
+        el `scorerPlayerId` pertenece al equipo que **encaja**, no al que marca, no se admite asistencia, y
+        el gol **no suma** en el conteo del goleador aunque quede registrado a su nombre.
+
+        Es también el motivo de que este campo no sea un simple rótulo estadístico como `zone` o `side`:
+        cambiarlo cambia qué es válido en el resto de la fila.
+      enum: [juego_abierto, penalti, falta, en_propia_puerta]
 
     FederationCode:
       type: string
@@ -4334,6 +4655,193 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    # ─────────────────────────────── Goal (§5.2) ───────────────────────────────
+    CreateGoalRequest:
+      type: object
+      description: |
+        Alta de un gol. **Solo tres campos obligatorios** —partido, equipo que marca y si hubo asistencia—
+        y todo el desglose opcional (D-04): un gol apuntado en caliente, sin detalle, es una fila válida.
+
+        **`concedingTeamId` no está aquí** (D-54): lo deriva el servidor del `Match`. Es la mitad de la
+        denormalización de D-04 que el cliente no puede escribir y, por tanto, no puede contradecir.
+
+        `matchId` y `scoringTeamId` son la **identidad** del gol y no reaparecen en el `PATCH` (D-37).
+      additionalProperties: false
+      required: [matchId, scoringTeamId]
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          description: |
+            Partido. **Al menos uno de sus dos equipos tiene que ser propio** o la operación devuelve 422:
+            el detalle manual no existe para partidos entre rivales (§3.7). La temporada y la competición
+            se alcanzan por aquí (D-28).
+        scoringTeamId:
+          type: string
+          format: uuid
+          description: |
+            Equipo que **marca**, y tiene que ser uno de los dos del partido → 422 si no. En un gol en
+            propia puerta es el equipo **beneficiado**, no el del autor (D-52).
+        scorerPlayerId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Jugador que marca. **Anulable, y lo será siempre en los goles del rival**: no hay plantilla de
+            rivales y no la va a haber (D-09).
+
+            **A qué equipo debe pertenecer depende de `playType`** (D-52): al que marca en un gol normal,
+            al que **encaja** en un `en_propia_puerta`. Es la única invariante del contrato en la que un
+            enumerado decide contra qué se valida una FK.
+        assistPlayerId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Jugador que asiste. Debe pertenecer al **equipo que marca** y no puede coincidir con el
+            goleador. **Exige `assisted = true`** (tercera invariante entre campos del contrato, hermana de
+            D-42 y D-45) y **no se admite en un gol en propia puerta** (D-52).
+        assisted:
+          type: boolean
+          default: false
+          description: |
+            Si el gol vino de una asistencia. **No es redundante con `assistPlayerId`**, y esa es la parte
+            que no se ve a primera vista: en un gol **encajado** sabemos que hubo asistencia pero no de
+            quién, porque el asistente es un jugador rival (D-09). `assisted = true` con
+            `assistPlayerId = null` es esa fila, y es la que alimenta el CON ASISTENCIA del bloque de goles
+            recibidos del mockup.
+
+            Por eso es un campo declarado y no un derivado de `assistPlayerId != null`.
+        minute:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+          description: |
+            Minuto del gol. **Opcional**, como el de la tarjeta y por el mismo motivo (D-14). El tope de
+            120 cubre la prórroga.
+          examples: [67]
+        zone:
+          $ref: '#/components/schemas/GoalZone'
+        side:
+          $ref: '#/components/schemas/GoalSide'
+        bodyPart:
+          $ref: '#/components/schemas/GoalBodyPart'
+        playType:
+          $ref: '#/components/schemas/GoalPlayType'
+
+    UpdateGoalRequest:
+      type: object
+      description: |
+        Corrección parcial, y **el caso de uso normal de este recurso**: se apunta el gol en caliente con
+        lo mínimo y se completa el desglose después.
+
+        **No incluye `matchId` ni `scoringTeamId`** —identidad (D-37)— ni `concedingTeamId`, que además es
+        derivado (D-54).
+
+        **`playType` y `scorerPlayerId` viajan juntos cuando el cambio cruza `en_propia_puerta`** (D-52):
+        el enumerado decide a qué equipo debe pertenecer el goleador, así que cambiarlo solo dejaría la
+        fila inválida → 422.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        scorerPlayerId:
+          type: [string, 'null']
+          format: uuid
+        assistPlayerId:
+          type: [string, 'null']
+          format: uuid
+        assisted:
+          type: boolean
+        minute:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+        zone:
+          $ref: '#/components/schemas/GoalZone'
+        side:
+          $ref: '#/components/schemas/GoalSide'
+        bodyPart:
+          $ref: '#/components/schemas/GoalBodyPart'
+        playType:
+          $ref: '#/components/schemas/GoalPlayType'
+
+    GoalResponse:
+      type: object
+      description: |
+        Un gol con su desglose. **Lleva las dos FKs de equipo** (D-04) aunque solo una se escriba (D-54):
+        el cliente que pinta "goles en contra" filtra por `concedingTeamId` sin resolver el partido.
+
+        **No embebe ni el partido ni los jugadores**, por lo mismo que `AppearanceResponse` y
+        `CardResponse` (D-32): se lee por varios lados y en cada uno alguno de los padres es constante.
+
+        **La suma de goles de un partido no tiene por qué ser su marcador** (D-53). El resultado es de la
+        federación; esto es el detalle manual y parcial de cómo se llegó a él.
+      required: [id, matchId, scoringTeamId, concedingTeamId, assisted, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        matchId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Jornada, competición y temporada se alcanzan por aquí (D-28).'
+        scoringTeamId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Equipo que marca → goles **a favor** (D-04).'
+        concedingTeamId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Equipo que encaja → goles **en contra** (D-04). **Derivado del partido en la escritura**
+            (D-54), pero almacenado y devuelto: es una copia deliberada, no un cálculo en lectura, y existe
+            para que el filtro sea directo e indexado.
+        scorerPlayerId:
+          type: [string, 'null']
+          format: uuid
+          readOnly: true
+          description: |
+            **Nulo en los goles del rival** (D-09). En un `playType = en_propia_puerta` apunta al autor,
+            que es del equipo que **encaja** — y ese gol **no le suma** en el conteo de goleador (D-52).
+        assistPlayerId:
+          type: [string, 'null']
+          format: uuid
+          readOnly: true
+        assisted:
+          type: boolean
+          description: |
+            `true` con `assistPlayerId` nulo significa **"hubo asistencia, de alguien que no está en
+            nuestras plantillas"** — el caso de los goles encajados. No es una incoherencia (D-09).
+        minute:
+          type: [integer, 'null']
+          readOnly: true
+          description: 'Nulo significa "no se apuntó", no "minuto cero" (D-14).'
+          examples: [67]
+        zone:
+          $ref: '#/components/schemas/GoalZone'
+        side:
+          $ref: '#/components/schemas/GoalSide'
+        bodyPart:
+          $ref: '#/components/schemas/GoalBodyPart'
+        playType:
+          $ref: '#/components/schemas/GoalPlayType'
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # `GoalResponse` no lleva los desgloses agregados (GOLES MARCADOS / GOLES RECIBIDOS por dimensión): son
+    # agregación sobre esta tabla y van a modelo de lectura (§3.4, §4.5, `GoalBreakdown`), igual que en
+    # `Appearance` y `Card`. Y no hay marca de "cuenta como gol del jugador": el conteo excluye
+    # `en_propia_puerta` en la consulta (D-52), no con una bandera almacenada que pudiera contradecir a
+    # `playType` — mismo criterio que `isOwn` (D-03) o `isActive` (D-38).
 
     # ─────────────────────── SanctionBracket (§5.2) ───────────────────────
     ReplaceSanctionBracketsRequest:

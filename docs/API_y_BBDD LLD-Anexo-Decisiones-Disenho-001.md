@@ -51,6 +51,7 @@
 | **D-42** | `minutes` solo tiene sentido jugando, y nulo no es cero | §3.2, §4.6, §5.1, §5.2 |
 | **D-45** | Una fila es una sanción, no una cartulina: la doble amarilla es *una* roja | §3.2, §3.3, §3.5, §4.6, §5.1, §5.2 |
 | **D-46** | La tarjeta no exige convocatoria: dos registros manuales independientes | §3.2, §5.1 |
+| **D-52** | El gol en propia puerta: se guarda su autor, pero no le suma | §3.2, §3.3, §3.6, §4.6, §5.1, §5.2 |
 | **D-48** | El ranking de goleadores no tiene *fallback*, y su capacidad sí condiciona el dato | §3.2, §5.1, §5.2 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
@@ -75,6 +76,8 @@
 | **D-49** | Lo que decide la paginación es el techo, no el ámbito | §5.1, §5.3 |
 | **D-50** | Los tramos de sanción se escriben como conjunto: cuándo el lote sí es la respuesta | §3.2, §5.1 |
 | **D-51** | El cuerpo son umbrales, no tramos: lo derivable es la relación entre filas | §3.2, §5.1, §5.2, §5.3 |
+| **D-53** | El marcador manda y los goles no lo contradicen: sin validación de cuadre | §3.6, §5.1 |
+| **D-54** | La denormalización de `Goal` no llega al DTO: se escribe quién marca | §3.2, §5.1, §5.2 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -889,6 +892,49 @@ anticipado. Con dos, dos campos.
 
 ---
 
+### D-52 · El gol en propia puerta: se guarda su autor, pero no le suma
+
+**La pregunta.** Un defensa nuestro marca en propia. `scoring_team_id` es el **rival** —es quien se lleva el
+gol— y `conceding_team_id` somos nosotros. ¿Y `scorer_player_id`?
+
+**Las dos opciones tienen un coste real:**
+
+| | Dejarlo nulo | Guardar al autor |
+|---|---|---|
+| Invariante "el goleador es del equipo que marca" | **Se conserva**, limpia | **Se rompe**: pasa a depender de `play_type` |
+| El dato "quién marcó en propia" | **Se pierde** | Se conserva |
+| Riesgo | Ninguno | Que alguien cuente ese gol como gol del jugador |
+
+**Decisión.** Se **guarda el autor**, y el gol **no le suma**. Es un dato que el club quiere —un gol en
+propia es algo que pasó y que alguien hizo—, y perderlo para preservar la elegancia de una invariante sería
+cambiar información por comodidad de esquema.
+
+**Lo que eso obliga a aceptar, dicho sin suavizar: la pertenencia del goleador deja de ser una regla fija y
+pasa a depender de un enumerado.**
+
+- `play_type != en_propia_puerta` → `scorer_player_id` es del equipo de `scoring_team_id`
+- `play_type == en_propia_puerta` → `scorer_player_id` es del equipo de `conceding_team_id`
+
+Es la única invariante del contrato en la que **un enumerado decide contra qué se valida una FK**, y tiene
+el corolario habitual en el `PATCH` (§5.2): `playType` y `scorerPlayerId` **viajan juntos** cuando el cambio
+cruza `en_propia_puerta`, o la operación devuelve 422. Igual que `status`/`minutes` en [D-42] y
+`type`/`isSecondYellow` en [D-45].
+
+**El "no le suma" es de la consulta, no de una columna.** El conteo de goleador excluye
+`play_type = 'en_propia_puerta'` en el modelo de lectura (§3.4, §4.5). **No** hay una bandera
+`counts_for_scorer` almacenada, por lo mismo que no hay `is_own` ni `active`: una bandera puede contradecir
+al campo del que depende, y la consulta no ([D-03], [D-38]).
+
+**Y el gol en propia no admite asistencia.** `assist_player_id` y `assisted` quedan fuera → 422. Atribuir
+una asistencia a un gol en propia es ambiguo en cualquier sistema de estadística —¿al que centró, al que
+desvió?— y no hay respuesta que no sea una convención inventada. Se prefiere el hueco al dato dudoso.
+
+**Lo que se asume a cambio.** Que un `GET /v1/goals?scorerPlayerId=` devuelve también sus goles en propia, y
+que quien cuente goles a partir de esa lista sin filtrar `playType` contará de más. Está anotado en el spec,
+en el propio parámetro, porque es el error que se va a cometer.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -1574,6 +1620,68 @@ las tarjetas ya registradas, y **alguien puede pasar a estar sancionado sin que 
 campo**. Es el comportamiento correcto —el contador vive en las tarjetas, que son el hecho— y no se
 versionan los tramos: para un club pequeño, un histórico de configuraciones de sanción es maquinaria muy por
 encima del problema.
+
+---
+
+### D-53 · El marcador manda y los goles no lo contradicen: sin validación de cuadre
+
+**La pregunta que hará cualquiera que lea el contrato.** Si un `Match` dice 3-1 y solo hay dos `Goal`
+registrados, ¿es un error?
+
+**No, y no puede serlo**, porque las dos cifras tienen dueños distintos y naturalezas distintas:
+
+- **El marcador es de la federación** ([D-21]) y es **completo y autoritativo**.
+- **Los goles son entrada manual y parcial por diseño** ([D-04]). Un club que apunta el resultado el domingo
+  y el desglose el miércoles pasa varios días con la tabla incompleta. Un club que nunca apunta los goles
+  del rival tiene el bloque de "goles recibidos" vacío para siempre, y su clasificación sigue bien.
+
+Validar el cuadre convertiría el estado **normal** del sistema en un error, y peor: obligaría a apuntar los
+goles en un orden concreto —no podrías registrar el tercero antes que el segundo— o a permitir estados
+inválidos temporalmente, que es lo mismo que no validar pero con más código.
+
+**Decisión.** **No se valida.** Ni en el `POST`, ni en el `PATCH`, ni en el `DELETE`. Se pueden registrar
+más goles que el marcador, menos, o ninguno.
+
+**Dónde sí vive la comprobación: en el backoffice, como aviso.** Es exactamente el criterio de [D-46] para
+la tarjeta sin convocatoria —**señalar, no bloquear**— y esta es su segunda aplicación, así que ya es
+convención: **las incoherencias entre dos registros manuales, o entre uno manual y uno ingerido, se avisan
+en la interfaz; no se imponen en el contrato.** El backoffice tiene la información para pintar "3-1, 2 goles
+registrados" junto al partido, que es lo útil.
+
+**Corolario en el borrado.** Borrar un gol **no descuadra el marcador**, porque nunca estuvo cuadrado por
+contrato. Es lo que permite que el `DELETE` sea el borrado lógico simple del resto del dominio manual
+([D-36]) en vez de una operación con guarda.
+
+---
+
+### D-54 · La denormalización de [D-04] no llega al DTO: se escribe quién marca, se deriva quién encaja
+
+**El problema que [D-04] dejó abierto.** `Goal` guarda **dos** FKs a `Team` —el que marca y el que encaja—
+copiadas del `Match`, para que "goles a favor" y "goles en contra" sean filtros directos sin *join*. [D-04]
+dijo que mantenerlas consistentes es tarea de la capa de aplicación, "nunca del usuario". Faltaba
+materializarlo en el contrato.
+
+**Si las dos estuvieran en el DTO de alta**, el cliente podría enviar un par que no son los dos equipos del
+partido, o los mismos dos invertidos, o uno correcto y otro no. Serían tres validaciones para reconstruir
+algo que **el servidor ya sabe**: los dos equipos están en el `Match`, y con saber cuál de ellos marcó, el
+otro queda determinado.
+
+**Decisión.** El cuerpo lleva **`scoringTeamId`** y no `concedingTeamId`. El servidor lo deriva del `Match`.
+Queda **una** validación —que `scoringTeamId` sea uno de los dos equipos del partido— en vez de tres, y la
+incoherencia entre las dos columnas **deja de ser expresable**. Es el criterio de [D-28] aplicado al DTO,
+como en [D-51].
+
+**Una categoría nueva que conviene nombrar, porque no encaja en las dos que ya había.** El contrato venía
+distinguiendo *derivado en lectura* (`isOwn`, `displayName`, `isCurrent`: se calcula al responder, no se
+almacena) y *propiedad de la ingesta* (`federationTeamId`, `slug`: se almacena, lo escribe otro módulo).
+`concedingTeamId` no es ninguna de las dos: **se almacena** —esa es toda la gracia de [D-04]— y **lo escribe
+el servidor** en la misma operación en que el cliente escribe lo demás. Llamémoslo **denormalización de
+servidor**: se guarda, se lee, y el cliente no la toca.
+
+**Lo que se asume a cambio.** Que el DTO de escritura y el de lectura difieren en un campo, cosa que solo
+volvía a pasar en `SanctionBracket` ([D-51]) y por un motivo distinto. La alternativa —aceptar el campo y
+rechazarlo si no cuadra— sería pedirle al cliente un dato que no le corresponde para después decirle que se
+equivocó.
 
 ---
 
