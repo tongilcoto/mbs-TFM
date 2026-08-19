@@ -80,7 +80,7 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
 
-Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow` — con la que quedó cerrada toda la superficie de **salida de la ingesta** salvo `LeagueScorer`— y, del **dominio manual**, `Player`, `Absence` y `Appearance`, con CRUD completo; esta última es además la primera de las tres entidades hijas de `Match` y fija el patrón de las que faltan, `Goal` y `Card`). Validación:
+Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance` y `Card` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). Solo falta **`Goal`** para cerrar el contrato). Validación:
 
 ```sh
 npx @redocly/cli lint backend/openapi/openapi.yaml

@@ -158,6 +158,55 @@ tags:
       periodo*; la convocatoria, qué pasó *ese domingo*. Ninguna se deriva de la otra — un lesionado de
       baja larga genera una `Absence` y tantas `Appearance` con `status = baja_medica` como partidos se
       pierda, y es el administrador quien registra ambas cosas.
+  - name: Cards
+    description: |
+      Tarjetas: amarillas y rojas por jugador y partido. De ellas salen el recuento de tarjetas de la ficha
+      y, sobre todo, las **amarillas pendientes de sanción** — la distancia al siguiente tramo de
+      `CompetitionSanctionBracket` (D-10).
+
+      **Escribe:** el administrador. Es la segunda entidad hija de `Match` (§4.2), tras `Appearance`, y
+      sigue su mismo patrón: **CRUD completo** en **ruta plana con ámbito obligatorio** (§5.1).
+
+      **Una fila es una sanción, no una cartulina** (D-45). La expulsión por doble amarilla es **una sola
+      fila** `roja` con `isSecondYellow = true`, no dos amarillas más una roja: el modelo no sabría atar
+      esas dos amarillas a esa roja, y sin ese vínculo la cuenta de acumulación las sumaría dos veces.
+
+      **De aquí no sale ninguna `Absence` automática** (D-10): los tramos dicen **cuándo toca** la sanción,
+      pero registrarla sigue siendo un acto del administrador. Derivarla metería un segundo escritor en una
+      tabla de dominio manual, que es lo que el contrato evita en todas partes (§2.1).
+  - name: LeagueScorers
+    description: |
+      Ranking de goleadores de la competición, **incluidos los rivales**. Es la pantalla "LIGA" de la app.
+
+      **Escribe:** la **ingesta**, y solo ella. Esta API es de **solo lectura** (§5.1), como `Round`,
+      `Match` y `StandingRow`.
+
+      **Se ingiere, no se calcula** (D-09), y esa es su razón de ser: el ranking incluye jugadores de los
+      que **no tenemos plantilla** —modelar los *rosters* rivales para poder sumar sus goles sería un coste
+      desproporcionado y datos que nadie va a teclear—. Por eso **no está ligada a `Player`**: `fullName` y
+      `teamLabel` son texto del proveedor, no claves. La vista de goleadores lee de aquí, **no de `Goal`**.
+
+      **A diferencia de la clasificación, no tiene *fallback*** (D-48). `StandingRow` existe siempre, venga
+      de la federación o calculada desde `Match` (D-15); esto solo existe si el proveedor lo publica. La
+      capacidad se declara en `ClubResponse.federationProvidesScorers`, y una lista vacía es un estado
+      legítimo, no un error.
+  - name: SanctionBrackets
+    description: |
+      Tramos de sanción por acumulación de amarillas, **configurables por competición** (D-10): p. ej.
+      `0-5, 6-10, 11-13, 14-16` — la sanción llega al alcanzar el `yellowTo` de cada tramo, y los tramos se
+      estrechan según avanza la temporada. De aquí sale el cálculo de **amarillas pendientes** de la ficha
+      de jugador (§3.4).
+
+      **Escribe:** el administrador. Es **configuración, no un hecho** — la primera entidad de este contrato
+      de la que se puede decir eso, y de ahí sus dos rarezas: **no tiene borrado lógico** (§4.4) y **no se
+      escribe fila a fila**.
+
+      **Los tramos son una secuencia, no filas independientes** (D-50). Un tramo suelto no significa nada y
+      un hueco entre dos los invalida a todos, así que la unidad de escritura es **el conjunto entero**:
+      un `PUT` que sustituye la lista completa, no un CRUD por fila.
+
+      **De aquí no nace ninguna sanción automática** (D-10): los tramos dicen **cuándo toca**, pero la
+      `Absence` la registra el administrador. Mismo escritor único que en todo el dominio manual (§2.1).
 
 paths:
 
@@ -1950,6 +1999,433 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # ─────────────────────────────── Cards (§5.1) ───────────────────────────────
+  /cards:
+    get:
+      tags: [Cards]
+      operationId: listCards
+      summary: Lista las tarjetas de un partido o el historial de un jugador
+      description: |
+        **El ámbito es obligatorio: `matchId`, `playerId`, o los dos** → **400** si no viene ninguno.
+
+        **Aquí las dos puertas sí se combinan**, a diferencia de `Appearance` (D-47). El motivo es la
+        unicidad: el par *(jugador, partido)* **no** identifica una tarjeta —un jugador puede ver una
+        amarilla y luego una roja directa en el mismo partido—, así que `?matchId=` + `?playerId=` devuelve
+        un conjunto pequeño pero real, que es justo lo que pide la ficha del jugador dentro de un partido.
+        La regla general que queda: **dos puertas se combinan salvo que su intersección sea la clave única
+        de la tabla**.
+
+        **Sin paginación** (§5.3): las tarjetas de un partido son unas pocas y las de un jugador en una
+        temporada, unas decenas. **Orden**: por `minute` ascendente con `matchId` (es el relato del
+        partido, con los nulos al final), por fecha de partido descendente con `playerId` (un historial se
+        lee del último al primero).
+
+        **Lo que esta lista no da son las amarillas pendientes de sanción**: eso es una agregación contra
+        los tramos de la competición (D-10) y llegará como modelo de lectura propio (§3.4).
+      parameters:
+        - name: matchId
+          in: query
+          required: false
+          description: |
+            Partido. Devuelve las tarjetas de **los dos equipos si los dos son propios** —el derbi entre el
+            A y el B del club—; para quedarse con uno, se combina con `teamId`.
+          schema:
+            type: string
+            format: uuid
+        - name: playerId
+          in: query
+          required: false
+          description: |
+            Jugador. Al ser `Player` identidad de *(equipo, temporada)* (D-05), el ámbito ya queda acotado
+            a una temporada sin pedirla aparte.
+          schema:
+            type: string
+            format: uuid
+        - name: teamId
+          in: query
+          required: false
+          description: |
+            Acota a un equipo **propio**. Solo tiene sentido junto a `matchId`, y solo hace falta en el
+            derbi entre dos equipos del club.
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CardType'
+      responses:
+        '200':
+          description: Tarjetas del ámbito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CardResponse'
+        '400':
+          description: 'Falta el ámbito, o se pasó `teamId` sin `matchId`.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El partido, el jugador o el equipo del ámbito no existen en este club. Es el 404 **del
+            ámbito**: un partido sin tarjetas devuelve **200** con lista vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Cards]
+      operationId: createCard
+      summary: Registra una tarjeta
+      description: |
+        Da de alta **una sanción**: un jugador, un partido, un tipo. La expulsión por doble amarilla es
+        **una sola llamada** con `type = roja` e `isSecondYellow = true` (D-45), no tres.
+
+        **No exige que exista la convocatoria** del jugador en ese partido (D-46). Son dos registros
+        manuales independientes, y atarlos haría que apuntar una tarjeta fallase según si el entrenador
+        rellenó antes la convocatoria — un orden de entrada que el contrato no tiene por qué imponer.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCardRequest'
+      responses:
+        '201':
+          description: Tarjeta registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Ese jugador **ya tiene una tarjeta de ese tipo en ese partido** (§3.5). No se puede ser
+            expulsado dos veces, y una segunda amarilla **no es otra fila amarilla**: es la expulsión, y se
+            registra como `roja` con `isSecondYellow = true` (D-45).
+
+            Amarilla **y** roja en el mismo partido sí conviven: es la amarilla que acumula más la roja
+            directa posterior.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Regla de negocio (§5.4): el jugador **no existe** o está borrado; el partido no existe; la
+            temporada está **archivada**; **el equipo del jugador no disputa ese partido**; `isSecondYellow`
+            con `type = amarilla`; o `isSecondYellow = true` cuando ese jugador ya tiene una **amarilla
+            suelta** registrada en ese partido — esa amarilla queda **absorbida** por la expulsión (D-45),
+            así que la vía es borrarla y registrar la roja.
+
+            **No es 404** aunque incluya "no existe": jugador y partido llegan en el **cuerpo**, no en la
+            ruta (mismo criterio que D-37).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /cards/{cardId}:
+    parameters:
+      - $ref: '#/components/parameters/CardId'
+
+    get:
+      tags: [Cards]
+      operationId: getCard
+      summary: Obtiene una tarjeta
+      responses:
+        '200':
+          description: Tarjeta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Cards]
+      operationId: updateCard
+      summary: Corrige una tarjeta
+      description: |
+        Actualización **parcial**: los campos ausentes no se modifican. Sirve para corregir el minuto o
+        para reclasificar la sanción —lo que se apuntó como roja directa resultó ser doble amarilla—.
+
+        **No incluye `playerId` ni `matchId`**: son identidad (§3.5). Una tarjeta apuntada en el jugador
+        equivocado se borra y se vuelve a crear, como en `Appearance` (D-37, D-40).
+
+        **`type` e `isSecondYellow` viajan juntos cuando cambian**: subir de `amarilla` a `roja` por doble
+        amarilla es una sola llamada con los dos campos, y bajar a `amarilla` exige mandar
+        `isSecondYellow: false` en la misma — o devuelve **422**. Mismo criterio que `minutes` y `status`
+        en `Appearance` (D-42): el servidor no limpia campos en cascada dentro de un `PATCH` parcial.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCardRequest'
+      responses:
+        '200':
+          description: Tarjeta actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 'El cambio de `type` chocaría con la tarjeta que ese jugador ya tiene en ese partido (§3.5).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: 'El cambio dejaría `isSecondYellow = true` con `type = amarilla` (D-45).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Cards]
+      operationId: deleteCard
+      summary: Borra una tarjeta
+      description: |
+        **Borrado lógico** (`deleted_at`, §3.5), como el de la convocatoria y por el mismo motivo: sirve a
+        la auditoría, no al cliente. Nada cuelga de una tarjeta.
+
+        **Sí tiene un efecto que conviene anticipar**: borrar una amarilla **recalcula las pendientes de
+        sanción** de ese jugador, porque el recuento es una agregación en vivo sobre esta tabla (D-10), no
+        un contador almacenado. Es el comportamiento que se quiere —una tarjeta apuntada por error no debe
+        acercar a nadie a una sanción—, pero no es reversible desde el cliente.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Tarjeta borrada.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ─────────────────────────── LeagueScorers (§5.1) ───────────────────────────
+  /league-scorers:
+    get:
+      tags: [LeagueScorers]
+      operationId: listLeagueScorers
+      summary: Ranking de goleadores de una competición
+      description: |
+        **`competitionId` es obligatorio.** Un ranking de goleadores existe respecto de **una
+        competición**, igual que la clasificación existe respecto de una jornada (D-34).
+
+        **Pero, a diferencia de la clasificación, no es un *snapshot* por jornada.** `LeagueScorer` guarda
+        **un solo estado vigente** por competición, que la ingesta pisa por *upsert* en cada sincronización
+        (§3.7). No hay histórico ni columna PREV: el proveedor publica el ranking a día de hoy y eso es lo
+        que se almacena. De ahí que el ámbito sea la competición y no la jornada.
+
+        **Paginado, al contrario que la clasificación** (D-49). Las dos exigen ámbito, pero el de
+        `StandingRow` trae techo —~20 equipos— y este no: en una liga de 20 equipos pueden marcar
+        **doscientos** jugadores distintos. Y como el orden **es** el ranking, la paginación resuelve
+        gratis el top-N que pide la pantalla: `?perPage=20` **es** la tabla de los veinte máximos
+        goleadores.
+
+        **Orden fijo por `rank` ascendente**, con los nulos al final y `goals` descendente como criterio
+        real (§5.3). No se ofrece `sort` ni `order`: un ranking desordenado no es un ranking, igual que
+        una clasificación.
+
+        **Lista vacía si la federación no publica goleadores** (D-48), y **no es un error**: no hay
+        *fallback* que calcular, porque haría falta la plantilla de los rivales (D-09). El cliente sabe de
+        antemano si esperarla por `ClubResponse.federationProvidesScorers` y puede ocultar la pantalla en
+        vez de pintar un vacío inexplicable.
+      parameters:
+        - name: competitionId
+          in: query
+          required: true
+          description: Competición cuyo ranking se pide. Identificador **interno** (UUID).
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+      responses:
+        '200':
+          description: |
+            Página del ranking, en orden de clasificación. **Lista vacía** si la federación no publica
+            goleadores o si la competición aún no se ha sincronizado — no es un error (D-48).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/LeagueScorerResponse'
+        '400':
+          description: Falta `competitionId`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            La competición no existe en este club. Es el 404 **del ámbito**: una competición válida sin
+            goleadores ingeridos devuelve **200** con página vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  # Sin `GET /league-scorers/{id}`, sin `POST`, sin `PATCH` y sin `DELETE`. Lo primero, por lo mismo que
+  # `StandingRow` (D-34): es un modelo de lectura cuya unidad de consumo es la tabla entera — "el goleador
+  # número 7 de la liga" no lo pide ninguna pantalla, no se puede enlazar y no se puede editar. Lo demás,
+  # por la regla del BFF (D-21): es salida pura de la ingesta. No hay ni siquiera `PATCH` de corrección,
+  # como en `Round`, y por el mismo motivo: aquí no hay nada deducido que corregir —el nombre y el equipo
+  # son texto del proveedor sobre jugadores ajenos (D-09)—, y una corrección la pisaría el siguiente
+  # *upsert* (D-18).
+
+  # ────────────────────────── SanctionBrackets (§5.1) ──────────────────────────
+  /sanction-brackets:
+    get:
+      tags: [SanctionBrackets]
+      operationId: getSanctionBrackets
+      summary: Tramos de sanción de una competición
+      description: |
+        **`competitionId` es obligatorio.** Un tramo solo existe respecto de una competición, igual que una
+        jornada (§5.1).
+
+        **Sin paginación y con orden fijo por `seq` ascendente** (§5.3): son tres o cuatro filas y su orden
+        **es** su significado — una lista de tramos desordenada no es una lista de tramos.
+
+        **Lista vacía si la competición no tiene tramos configurados**, y no es un error (D-10): una
+        competición sin tramos simplemente no sanciona por acumulación. El cliente que pinte "amarillas
+        pendientes" debe tratar ese caso, no asumir que siempre hay un umbral.
+      parameters:
+        - name: competitionId
+          in: query
+          required: true
+          description: Competición cuyos tramos se piden. Identificador **interno** (UUID).
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tramos de la competición, en orden.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SanctionBracketResponse'
+        '400':
+          description: Falta `competitionId`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            La competición no existe en este club. Es el 404 **del ámbito**: una competición sin tramos
+            devuelve **200** con lista vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    put:
+      tags: [SanctionBrackets]
+      operationId: replaceSanctionBrackets
+      summary: Sustituye los tramos de sanción de una competición
+      description: |
+        **Sustituye el conjunto entero**, no una fila (D-50). Los tramos son una **secuencia**: un tramo
+        suelto no significa nada, y un hueco o un solape entre dos los invalida a todos. Escribir fila a
+        fila obligaría a inventar reglas para el borrado del tramo intermedio, para el `PATCH` que empuja
+        al siguiente y para el orden — y todas serían reglas que el cliente tiene que aprender para editar
+        una tabla de cuatro filas que se toca una vez por temporada.
+
+        **El cuerpo son los umbrales, no los tramos** (D-51): `{"thresholds": [5, 10, 13, 16]}` produce
+        `0-5, 6-10, 11-13, 14-16`. El servidor deriva `seq` y `yellowFrom`, así que **un conjunto inválido
+        no se puede ni expresar**: no hay huecos, ni solapes, ni `seq` que no case con el orden. Es el
+        criterio de D-28 —una invariante se lleva a la estructura cuando se puede hacer imposible— aplicado
+        al DTO en vez de al esquema.
+
+        **`{"thresholds": []}` borra los tramos** y deja la competición sin sanción por acumulación. Es la
+        vía para eso; no hay `DELETE` propio.
+
+        **Idempotente**, como corresponde a un `PUT`: repetir la misma llamada deja el mismo estado.
+
+        **Es retroactivo, y conviene saberlo** (D-51): las amarillas pendientes se calculan **en vivo**
+        sobre `Card` (D-10), no hay contador almacenado. Cambiar los umbrales a mitad de temporada
+        reinterpreta las tarjetas ya registradas — que es lo que se quiere cuando se corrige una
+        configuración mal metida, pero significa que alguien puede pasar a estar sancionado sin que haya
+        ocurrido nada en el campo.
+
+        Requiere **rol elevado** (§7.3), como toda la configuración de competición (D-22).
+      parameters:
+        - name: competitionId
+          in: query
+          required: true
+          description: Competición cuyos tramos se sustituyen.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceSanctionBracketsRequest'
+      responses:
+        '200':
+          description: Tramos resultantes, ya derivados y en orden.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SanctionBracketResponse'
+        '400':
+          description: |
+            Falta `competitionId`, o los umbrales no son **estrictamente ascendentes** — el único error de
+            forma que queda una vez el cuerpo son umbrales (D-51). Se juzga mirando solo el cuerpo, así que
+            es 400 y no 422 (§5.4).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: La competición no existe en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  # Sin `POST`, sin `PATCH`, sin `DELETE` y sin ruta por `{id}` en `SanctionBracket`. No es una restricción
+  # de propiedad —esto lo escribe el administrador, no la ingesta— sino de **unidad de consistencia**: el
+  # conjunto es lo que tiene sentido, la fila no (D-50). El `id` de cada tramo viaja en la respuesta como
+  # clave de lista, igual que en `StandingRow` (D-34), pero no direcciona nada.
+
 components:
 
   securitySchemes:
@@ -2037,6 +2513,13 @@ components:
         Identificador **interno** (UUID) de la convocatoria. La fila también es direccionable por su par
         *(jugador, partido)*, que es único (§3.5), pero el contrato no ofrece esa ruta: se llega a ella por
         la lista de ámbito.
+      schema:
+        type: string
+        format: uuid
+    CardId:
+      name: cardId
+      in: path
+      required: true
       schema:
         type: string
         format: uuid
@@ -2130,7 +2613,9 @@ components:
 
     ClubResponse:
       type: object
-      required: [id, name, shortName, slug, federation, federationProvidesStandings, settings, createdAt, updatedAt]
+      required:
+        [id, name, shortName, slug, federation, federationProvidesStandings, federationProvidesScorers,
+         settings, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2182,6 +2667,21 @@ components:
 
             Vive aquí, y no en `Round` ni en `Competition`, porque la capacidad es **de la federación** y
             hay **una por tenant** (§3.6): dentro de un club el valor es constante (D-29).
+        federationProvidesScorers:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado del catálogo de federaciones en código** (D-17), como su hermano de arriba: `true`
+            si la federación publica ranking de goleadores.
+
+            **Pero, al contrario que aquél, este sí condiciona que haya dato** (D-48). La clasificación
+            existe siempre —ingerida o calculada (D-15)—, así que `federationProvidesStandings` solo habla
+            de *procedencia*. Aquí no hay *fallback* posible: calcular el ranking exigiría la plantilla de
+            los rivales, que no tenemos ni vamos a tener (D-09). Si esto es `false`,
+            `GET /v1/league-scorers` devuelve **siempre** página vacía.
+
+            **Por eso las apps no pueden ignorarlo**: es la diferencia entre ocultar la pantalla de
+            goleadores y pintar un vacío que parece un fallo.
         settings:
           $ref: '#/components/schemas/ClubSettings'
         createdAt:
@@ -2428,6 +2928,18 @@ components:
         **hecho por partido**: el periodo dice por qué no estaba, la fila dice qué pasó ese domingo. Ni
         una alimenta a la otra — las dos las escribe el administrador (D-41).
       enum: [jugado, baja_medica, sancionado, no_convocado]
+
+    CardType:
+      type: string
+      description: |
+        Tipo de tarjeta. **Dos valores, no tres**: la expulsión por doble amarilla **no es un tipo propio**
+        sino una `roja` con `isSecondYellow = true` (D-45).
+
+        La razón es que las dos cosas que distinguen a una doble amarilla —que es una expulsión, y que las
+        amarillas que la causaron **no acumulan**— se expresan mejor así: cualquier consulta que pregunte
+        "¿está expulsado?" filtra por `roja` sin tener que acordarse de un tercer valor, y la cuenta de
+        acumulación (D-10) es `type = 'amarilla'` a secas.
+      enum: [amarilla, roja]
 
     FederationCode:
       type: string
@@ -3630,3 +4142,283 @@ components:
     # independientes del mismo hecho visto de dos maneras (D-41). Los recuentos por jugador tampoco viven
     # aquí — son agregación, y llegarán como modelo de lectura propio (§3.4, §4.5), igual que se dejó la
     # clasificación fuera de `TeamResponse` (D-34).
+
+    # ─────────────────────────────── Card (§5.2) ───────────────────────────────
+    CreateCardRequest:
+      type: object
+      description: |
+        Alta de **una sanción**. La expulsión por doble amarilla es **esta misma llamada** con
+        `type = roja` e `isSecondYellow = true` (D-45), no dos amarillas y una roja.
+
+        `playerId` y `matchId` son la **identidad** de la fila y no reaparecen en el `PATCH` (D-37).
+      additionalProperties: false
+      required: [playerId, matchId, type]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          description: |
+            Jugador sancionado. **Su equipo tiene que disputar el partido** o la operación devuelve 422 —
+            misma validación cruzada que en `Appearance`, y por el mismo motivo: sin ella se contamina la
+            estadística de dos equipos a la vez.
+
+            **No se comprueba que tenga convocatoria** en ese partido (D-46).
+        matchId:
+          type: string
+          format: uuid
+          description: |
+            Partido. **La competición se alcanza por aquí**, y con ella los tramos de sanción que aplican
+            (D-10, D-28).
+        type:
+          $ref: '#/components/schemas/CardType'
+        isSecondYellow:
+          type: boolean
+          default: false
+          description: |
+            `true` marca la expulsión **por doble amarilla**, y **exige `type = roja`** (D-45) → 422 en otro
+            caso. Distingue las dos expulsiones posibles, que no son la misma cosa ni para el reglamento ni
+            para la ficha: una roja directa suele costar más partidos.
+
+            **Las dos amarillas que la causaron no se registran aparte y no acumulan** para el tramo
+            (D-10). Si ya había una amarilla suelta apuntada en ese partido, el alta devuelve 422: hay que
+            borrarla, porque queda absorbida por la expulsión.
+        minute:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+          description: |
+            Minuto de la tarjeta. **Opcional**, por el mismo motivo que los minutos jugados (D-14): un club
+            pequeño no sostiene la disciplina de anotarlo, y exigirlo lo dejaría inventado. Nulo es "no se
+            apuntó" — la tarjeta cuenta igual.
+          examples: [67]
+
+    UpdateCardRequest:
+      type: object
+      description: |
+        Corrección parcial. **No incluye `playerId` ni `matchId`**: son identidad (§3.5).
+
+        **`type` e `isSecondYellow` se mandan juntos cuando cambian**: bajar a `amarilla` exige
+        `isSecondYellow: false` en la misma llamada, o devuelve 422. Mismo criterio que `status` y
+        `minutes` en `Appearance` (D-42).
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        type:
+          $ref: '#/components/schemas/CardType'
+        isSecondYellow:
+          type: boolean
+        minute:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+
+    CardResponse:
+      type: object
+      description: |
+        Una tarjeta. **Una fila es una sanción, no una cartulina** (D-45): la expulsión por doble amarilla
+        es una sola fila `roja` con `isSecondYellow = true`.
+
+        **No embebe ni el jugador ni el partido**, por lo mismo que `AppearanceResponse` (D-32): se lee por
+        sus dos lados y en cada uno de ellos uno de los dos padres es constante.
+      required: [id, playerId, matchId, type, isSecondYellow, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Equipo y temporada se alcanzan por aquí (D-05, D-28).'
+        matchId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Jornada y competición —y con ella los tramos de sanción— se alcanzan por aquí (D-28).'
+        type:
+          $ref: '#/components/schemas/CardType'
+        isSecondYellow:
+          type: boolean
+          description: |
+            Solo puede ser `true` con `type = roja` (D-45). Con `type = amarilla` es siempre `false`, y ese
+            `false` no significa "primera amarilla": significa que el campo no aplica.
+        minute:
+          type: [integer, 'null']
+          description: 'Nulo significa "no se apuntó", no "minuto cero" — igual que en `Appearance` (D-14).'
+          examples: [67]
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # `CardResponse` no lleva las amarillas pendientes de sanción ni el ciclo de acumulación: dependen de
+    # los tramos de la competición (D-10) y del historial entero del jugador, no de esta fila. Son
+    # agregación y van a modelo de lectura (§3.4, §4.5) — mismo reparto que dejó la clasificación fuera de
+    # `TeamResponse` (D-34). Tampoco existe una `Absence` derivada: la sanción la registra el administrador.
+
+    # ────────────────────────── LeagueScorer (§5.2) ──────────────────────────
+    LeagueScorerResponse:
+      type: object
+      description: |
+        Una fila del ranking de goleadores de la competición. **Solo lectura** y **sin acceso por
+        identificador** (D-34), como `StandingResponse`: es un modelo de lectura y su unidad de consumo es
+        la tabla.
+
+        **No está ligada a `Player`** (D-09): el ranking incluye jugadores rivales, de los que no hay
+        plantilla. `fullName` y `teamLabel` son **texto del proveedor**, no claves — no se pueden cruzar
+        con `Player` ni con `Team`, y no se intenta.
+
+        **Es el único DTO del contrato con un solo DTO y sin ningún hermano de escritura**, ni siquiera de
+        corrección: `Round` llegó a tener uno solo teniendo `PATCH` descartado por no haber nada que
+        corregir; aquí, además, el dato ni siquiera es del club.
+      required: [id, competitionId, fullName, teamLabel, goals, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Identificador de la fila. **No tiene URL propia** (D-34): existe porque toda tabla tiene PK
+            (§3.5). Útil como clave de lista en el cliente — y aquí más que en ningún sitio, porque
+            `fullName` no es identificador: dos jugadores pueden llamarse igual.
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Competición del ranking. La temporada se alcanza por aquí, no por un `seasonId` propio (D-28).
+        fullName:
+          type: string
+          readOnly: true
+          description: |
+            Nombre del goleador **tal y como lo publica el proveedor**. Texto libre, sin normalizar y sin
+            garantía de unicidad ni de estabilidad entre sincronizaciones.
+          examples: ['Juan Pérez García']
+        teamLabel:
+          type: string
+          readOnly: true
+          description: |
+            Equipo del goleador, **como etiqueta de texto del proveedor**, no como `TeamRef` (D-32). Es la
+            diferencia visible con `StandingResponse`, que sí embebe el equipo: allí las filas son equipos
+            **nuestros y rivales ya ingeridos**, con `id` y escudo; aquí puede aparecer un equipo de otra
+            categoría o con el nombre escrito de otra forma, y forzar el emparejamiento produciría filas
+            mal atribuidas. Sin escudo, por tanto.
+          examples: ['CD Ejemplo B']
+        goals:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Goles acumulados en la competición, según el proveedor.
+          examples: [14]
+        rank:
+          type: [integer, 'null']
+          minimum: 1
+          readOnly: true
+          description: |
+            Posición en el ranking **según el proveedor**, y **anulable** porque no todos la publican: hay
+            fuentes que devuelven la lista ya ordenada y sin numerar. Cuando falta, el orden lo fija
+            `goals` descendente (§5.3) y el cliente numera si quiere.
+
+            Se respeta el valor del proveedor en vez de recalcularlo porque los **criterios de desempate**
+            son suyos y no los conocemos.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # ─────────────────────── SanctionBracket (§5.2) ───────────────────────
+    ReplaceSanctionBracketsRequest:
+      type: object
+      description: |
+        Sustitución del **conjunto entero** de tramos (D-50). No hay DTO de alta ni de actualización por
+        fila: la unidad de consistencia es la lista.
+
+        **El cuerpo son los umbrales, no los tramos** (D-51). `[5, 10, 13, 16]` produce
+        `0-5, 6-10, 11-13, 14-16`: el servidor deriva `seq` (el orden del array) y `yellowFrom` (el
+        `yellowTo` anterior más uno, o 0 en el primero). Un conjunto con huecos, solapes o `seq`
+        desordenado **no se puede expresar**, así que tampoco hace falta rechazarlo.
+      additionalProperties: false
+      required: [thresholds]
+      properties:
+        thresholds:
+          type: array
+          description: |
+            Umbrales de amarillas, **estrictamente ascendentes**. Cada valor es el número de amarillas al
+            que llega una sanción — el `yellowTo` del tramo correspondiente.
+
+            **Lista vacía = sin sanción por acumulación** en esta competición, que es un estado legítimo
+            (D-10) y la vía para borrar los tramos.
+          items:
+            type: integer
+            minimum: 1
+          examples:
+            - [5, 10, 13, 16]
+
+    SanctionBracketResponse:
+      type: object
+      description: |
+        Un tramo de sanción, **ya derivado**. La respuesta devuelve los tramos completos aunque la
+        escritura solo reciba umbrales (D-51): así el cliente pinta `0-5, 6-10` sin rehacer la derivación,
+        y la asimetría es deliberada — **se escribe lo mínimo que determina el conjunto, se lee lo que la
+        pantalla necesita**.
+
+        **No embebe la competición** ni tiene ruta propia por `{id}`: la unidad de consumo es la lista
+        entera, igual que en `StandingRow` (D-34).
+      required: [id, competitionId, seq, yellowFrom, yellowTo]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            Identificador de la fila. **No direcciona nada** (D-50): existe porque toda tabla tiene PK
+            (§3.5) y sirve de clave de lista en el cliente. **No es estable entre escrituras**: un `PUT`
+            sustituye el conjunto, así que los tramos resultantes pueden tener ids nuevos aunque los
+            umbrales no hayan cambiado.
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+        seq:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: |
+            Orden del tramo dentro de la competición, **derivado de la posición en `thresholds`** (D-51).
+            Es el orden fijo en el que se devuelve la lista.
+        yellowFrom:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Primera amarilla del tramo, **derivada**: `0` en el primero, `yellowTo` del anterior más uno en
+            el resto. Nunca llega en la escritura, precisamente para que no pueda contradecir al anterior.
+          examples: [6]
+        yellowTo:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: |
+            Amarilla que **dispara la sanción**. Es el umbral que llegó en `thresholds`, y el número contra
+            el que se calculan las pendientes: `yellowTo − acumuladas` (§3.4, D-10).
+          examples: [10]
+
+    # `SanctionBracketResponse` no lleva `createdAt`/`updatedAt`, y es el único DTO del contrato del que se
+    # puede decir. No es olvido: la fila no se actualiza nunca —el `PUT` sustituye el conjunto (D-50)—, así
+    # que un `updatedAt` sería siempre igual al `createdAt` y ninguno de los dos respondería la pregunta
+    # que se querría hacer, que es cuándo se cambió la *configuración*. Esa vive en `Competition`.
+
+    # `LeagueScorerResponse` no lleva `syncedAt` pese a que la columna existe en §3.2. Sería la **columna
+    # constante** que D-28 y D-29 ya rechazaron —el mismo instante repetido en doscientas filas—, y la
+    # pregunta que respondería ya la responde `CompetitionResponse.lastSyncedAt`, que es la granularidad
+    # correcta. En BD sí se conserva: es la marca con la que el *upsert* detecta y retira las filas que el
+    # proveedor dejó de publicar (§3.7).
