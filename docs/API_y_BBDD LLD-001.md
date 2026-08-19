@@ -282,7 +282,7 @@ opcional (§3.5).
 | **StandingRow** (Clasif./jornada)                 | `competition_id`, `round_id`, `team_id`, `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points`, **`previous_position?`**                 | Único(jornada, equipo). **Snapshot por jornada** → clasificación de cada ronda + `PREV`. **Agnóstica a la fuente** ([D-15]): la misma fila vale ingerida de la federación o calculada desde `Match`, y el cliente no distingue —la procedencia se expone una vez por tenant, en `ClubResponse.federationProvidesStandings` ([D-29])—. **No es agregado sino modelo de lectura** (§4.2, §4.5): la escribe el módulo de ingesta por *upsert*, nunca un repositorio de dominio. **`previous_position` se almacena, no se deriva** ([D-33]), y es **anulable**: en la primera jornada no hay anterior, y en un alta a mitad de temporada tampoco hay *snapshot* previo del que derivarla |
 | **Player** (Jugador)                              | `team_id`, `season_id`, `full_name`, **`photo_key?`**, `shirt_number`, `position`, `deleted_at?`                                                                    | Solo equipos propios (`Team.opponent_club_id IS NULL`) — la federación no publica plantillas de fútbol base. **Registro por temporada**: una fila = un jugador en un equipo en una temporada concreta ([D-05]). `team_id` y `season_id` son **identidad, no atributos**: no se editan, un cambio de equipo o de año es **otra fila** ([D-37]). **`photo_key`** = clave del objeto en Storage, **no una URL** ([D-35]): mismo criterio que `Club.crest_key` ([D-19]) y aquí además obligado, porque es la foto de un menor; la URL firmada se deriva en lectura. **`deleted_at`** = *soft delete*, **sin guarda de dependientes**: los eventos del jugador borrado siguen contando para el equipo ([D-36]). Stats derivadas por temporada desde eventos ligados a este `Player`                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), **`expected_return_date?`** (ALTA EST.), **`actual_return_date?`**, `deleted_at?`                                        | Periodo de indisponibilidad. **`active` deja de ser columna**: se deriva de que no haya alta real **y** haya llegado `start_date` ([D-38]) — el mismo tratamiento que `is_own` ([D-03]) o `is_kickoff_confirmed` ([D-30]). Las dos fechas de vuelta son **anulables**: la estimada no se conoce los primeros días, la real solo al alta. **Ninguna FK a `Season` ni a `Team`**: se alcanzan por el jugador, que ya es identidad de ambos ([D-05], [D-28]). Un jugador puede tener **varias ausencias activas de tipos distintos** (lesionado y sancionado a la vez), pero **no dos del mismo tipo** ([D-39])                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`                                                                                                                      | Único(jugador, partido). Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`, `deleted_at?`                                                                                                       | Único(jugador, partido) **entre las no borradas**. Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO. **`player_id` y `match_id` son identidad, no atributos**: no se editan ([D-37]). **La ausencia de fila no es un estado** ([D-41]): `no_convocado` es un hecho registrado —decisión técnica— y cuenta en la estadística; que no haya fila significa que nadie apuntó esa convocatoria. **`minutes` solo con `status = jugado`** ([D-42]) y **opcional incluso entonces** ([D-14]): nulo es "jugó, no sé cuánto", que no es cero. **Ninguna FK a `Season`, `Team` ni `Competition`**: el equipo y la temporada se alcanzan por el jugador, la jornada y la competición por el partido ([D-05], [D-28]). Invariante cruzada: **el equipo del jugador disputa el partido**. **`deleted_at`** = *soft delete*, sin guarda de dependientes ([D-36]) |
 | **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`                                                                                                     | "Amarillas pendientes de sanción" se calcula (§3.6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?` | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial)                                                                                                                                                                                                                                                                                              |
 | **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                                        | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -319,7 +319,7 @@ Calculadas por consulta o vistas materializadas:
 - Tablas en `snake_case` plural; enums como tipos Postgres o `text` + `CHECK`.
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
-- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido) y `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
 - **La unicidad de `Match` no es un adorno: es la clave del *fallback* de la ingesta.** Dos equipos se enfrentan **una vez por jornada**, así que (`round_id`, `home_team_id`, `away_team_id`) identifica el partido sin depender de la fecha —que se mueve cada semana (§3.2)— ni del `federation_match_id` —que puede no venir—. Es exactamente el segundo paso de la cadena de emparejamiento de §3.7, y sin el índice único no sería una clave, solo una consulta. No lleva `competition_id` porque `Round` ya lo fija. *Asunción:* no hay repeticiones de partido dentro de la misma jornada; una eliminatoria a doble vuelta son **dos jornadas** ([D-12]).
 - **`modality` es parte de la clave única de `Team`, no un adorno.** Sin ella, el "Infantil A masculino" de fútbol-11 y el de fútbol-sala del mismo club **colisionan**, y el modelo no podría representar un club con equipos en dos modalidades (§3.6). Es la razón por la que la modalidad no puede quedarse como simple parámetro de la URL de integración.
 - **`Absence` lleva la otra unicidad parcial del modelo: `(player_id, type)` `WHERE actual_return_date IS
@@ -790,6 +790,14 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   season_id, shirt_number) WHERE deleted_at IS NULL")` ([D-36]). Un `.unique(on:)` normal dejaría el dorsal
   de un jugador borrado ocupado para siempre. El listado de plantilla (§5.1) se apoya en un índice por
   (`team_id`, `season_id`), y el orden por dorsal cabe en el mismo.
+- **En `Appearance`, la unicidad *(jugador, partido)* es parcial como la del dorsal** —hay `deleted_at`
+  (§3.2)— así que va también por `.sql(raw: "CREATE UNIQUE INDEX uq_appearances ON appearances (player_id,
+  match_id) WHERE deleted_at IS NULL")`. Índices por `match_id` (la convocatoria) y por `player_id` (el
+  historial), uno por cada puerta de ámbito ([D-43]).
+- **Y lleva el primer `CHECK` *entre columnas* del esquema** ([D-42]): `CHECK (minutes IS NULL OR status =
+  'jugado')`, junto al `CHECK` de enumerado del propio `status`. No sustituye a la validación de dominio
+  —que es la que sabe decir cuál de los dos campos está mal y devuelve **422**—: protege la tabla de la
+  ingesta y de los *scripts*, que es el criterio de [D-28] para bajar una invariante al esquema.
 - PK con default `gen_random_uuid()` vía `.id(custom: .id, .uuid, .generated)` o `DEFAULT` en el `.sql(raw:)`
   de creación de tabla, según lo que exponga la versión de Fluent en uso (a confirmar al implementar).
 
@@ -1201,6 +1209,56 @@ Tres lecturas que no son evidentes en la tabla:
 - **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado (las
   apps de consulta pintan el distintivo).
 
+**`Appearance`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/appearances` | `CreateAppearance` | **201** + `AppearanceResponse` | 400, **403** (rol), **409** (ya convocado en ese partido), **422** (jugador/partido inexistente, equipo ajeno al partido, temporada archivada, `minutes` sin `jugado`) |
+| **GET** | `/v1/appearances?matchId=` **o** `?playerId=` | `ListAppearances` | **200** + `[AppearanceResponse]` | 400 (sin ámbito, o las dos puertas a la vez), 404 (el recurso del ámbito no existe) |
+| **GET** | `/v1/appearances/{id}` | `GetAppearance` | **200** + `AppearanceResponse` | 404 |
+| **PATCH** | `/v1/appearances/{id}` | `UpdateAppearance` | **200** + `AppearanceResponse` | 400, **403** (rol), 404, **422** (`minutes` sin `jugado`) |
+| **DELETE** | `/v1/appearances/{id}` | `DeleteAppearance` | **204** (borrado lógico) | **403** (rol), 404 |
+
+- **Primera de las tres entidades hijas de `Match`** (§4.2) y, por tanto, plantilla de las que vienen
+  (`Goal`, `Card`). Confirma que la regla del BFF ([D-21]) y el CRUD manual **no se contradicen**: `Match`
+  es de solo lectura porque su marcador es de la federación, y sus hijos son CRUD completo porque **nadie
+  más los escribe** — la federación no publica alineaciones de fútbol base. La frontera no está en el
+  árbol, está en **quién es el dueño de cada fila**.
+- **Interna del agregado `Match`, pero en ruta plana con ámbito obligatorio**, igual que `Round` dentro de
+  `Competition` y `Absence` dentro de `Player`. Ya se justificó al descartar `/rounds/{id}/standings`
+  ([D-34]); aquí además la segunda puerta (`?playerId=`) **no cabría** en una ruta anidada bajo el partido.
+- **Dos puertas de ámbito, y son alternativas, no combinables** → **400** si no viene ninguna **y también
+  si vienen las dos** ([D-43]). `?matchId=` es la **convocatoria** (la lista que rellena el entrenador);
+  `?playerId=` es el **historial** del jugador. Combinarlas devuelve como mucho una fila por la unicidad
+  *(jugador, partido)*, y para eso está el `GET` por id. Es la diferencia con las puertas de `Match` y
+  `Absence`, que sí acotan progresivamente.
+- **La ausencia de fila no es un estado** ([D-41]). `no_convocado` es un **hecho registrado** —estuvo
+  disponible y no se le llamó— y cuenta en la estadística; que no haya fila significa que **nadie apuntó
+  esa convocatoria**. De ahí que la lista devuelva solo lo registrado y no una fila por jugador de la
+  plantilla: el cliente cruza con `GET /v1/players?teamId=&seasonId=` por `playerId`, el mismo cruce que ya
+  hace con las ausencias activas ([D-38]).
+- **`minutes` está atado a `status = jugado`** ([D-42]) → **422** en cualquier otro caso, y en el `PATCH`
+  bajar de `jugado` exige mandar `minutes: null` en la misma llamada. Sigue siendo **opcional incluso
+  jugando** ([D-14]): `null` es "jugó, no sé cuánto", que **no es cero** — quien calcule el promedio
+  descarta los nulos.
+- **El equipo del jugador tiene que disputar el partido** → **422** si no. Es la única validación cruzada
+  del alta y es necesaria: sin ella se podría apuntar a un juvenil en el partido del cadete y contaminar la
+  estadística de los dos equipos. **No es 404** porque jugador y partido llegan en el **cuerpo**, no en la
+  ruta (mismo criterio que el `teamId` del alta de jugador, [D-37]).
+- **Se registra fila a fila; no hay alta masiva** ([D-44]). Es la decisión más discutible de este recurso
+  —una convocatoria son ~18 llamadas— y está tomada a favor de la coherencia del contrato, con la puerta
+  abierta a revisarla si el backoffice lo pide.
+- **`playerId` y `matchId` no están en el `PATCH`**: son identidad, no atributos. Una convocatoria apuntada
+  en el partido equivocado se borra y se crea de nuevo — misma línea que [D-37] y [D-40], y aquí además
+  cambiarlos chocaría con la unicidad.
+- **`DELETE` (lógico) no es lo mismo que marcar `no_convocado`**, y el backoffice tendrá los dos gestos
+  cerca: lo segundo registra una decisión técnica, lo primero deshace un apunte erróneo. Es la misma
+  distinción que en `Absence` entre borrar y cerrar.
+- **Lo que este recurso *no* devuelve:** los recuentos por jugador (JUGADOS / BAJA MÉDICA / SANCIÓN / NO
+  CONVOCADO) ni el promedio de minutos. Son agregación y llegarán como **modelo de lectura** propio (§3.4,
+  §4.5), igual que la clasificación se quedó fuera de `TeamResponse` ([D-34]).
+- **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
+
 ### 5.2 DTOs
 
 Los DTOs **conforman `Content`** (cruzan HTTP) y están **desacoplados** tanto de la entidad de dominio como
@@ -1289,6 +1347,17 @@ struct SeasonResponse: Content {
 - **`MatchOutcome` (`victoria`/`empate`/`derrota`) es un enumerado *relativo al equipo de la fila***, no un
   estado del partido. Convive con `MatchStatus`, que es absoluto, y no se confunden: un mismo partido es
   `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el otro.
+- **`AppearanceResponse` no embebe *ninguno* de sus dos padres**, y es el único DTO del contrato del que
+  eso se puede decir. No es una excepción a [D-32] sino su aplicación literal: se lee por sus **dos**
+  lados —convocatoria de un partido, historial de un jugador— y en cada uno de ellos **uno de los dos
+  padres es constante**, así que embeber cualquiera sobraría en la mitad de las pantallas. Donde
+  `PlayerResponse` decide no embeber el equipo por un ámbito, aquí la misma regla se aplica dos veces.
+- **`Appearance` es el primer DTO con una restricción *entre* campos** (`minutes` solo con `status =
+  jugado`, [D-42]), y **el spec no la expresa**: JSON Schema podría con un `if/then`, pero mezclarlo con
+  el `PATCH` parcial —donde `status` puede no venir y hay que mirar el valor almacenado— daría un esquema
+  ilegible que además solo cubriría la mitad de los casos. Se valida en el **dominio** y se reporta como
+  **422**, no como 400: es la misma división de trabajo que ya fija la validación en dos capas (abajo),
+  con la frontera puesta en si la regla se puede juzgar mirando **solo el cuerpo**.
 - **`PATCH` parcial:** `minProperties: 1` y `additionalProperties: false`; **campo ausente = no se
   modifica**, y en los anulables un `null` explícito **borra** el valor.
 - **Campos derivados: solo en respuesta, nunca en escritura.** `Season.isCurrent`; `Team.isOwn`
@@ -1342,6 +1411,13 @@ struct SeasonResponse: Content {
   dentro de una temporada → sin paginación, orden fijo por `start_date` descendente. Es el primer recurso
   con **ámbito alternativo** en vez de fijo, y la razón es la misma que en `Match`: dos pantallas entran
   por sitios distintos.
+- **`Appearance` lleva el ámbito alternativo un paso más allá: sus dos puertas son *excluyentes***
+  ([D-43]). En `Match` y `Absence` las puertas **acotan progresivamente** y combinarlas es legítimo; aquí
+  `?matchId=` + `?playerId=` devolvería como mucho **una** fila por la unicidad *(jugador, partido)*, así
+  que es un `GET` por id escrito de la forma más cara posible → **400**. Sin paginación, y con **orden
+  distinto según la puerta**: por dorsal ascendente con `?matchId=` (se lee como una plantilla), por fecha
+  de partido descendente con `?playerId=` (se lee como un historial). Es el único recurso del contrato cuyo
+  orden depende del ámbito, y es que son literalmente dos pantallas distintas.
 
 ### 5.4 Manejo de errores
 

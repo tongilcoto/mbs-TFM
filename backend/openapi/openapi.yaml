@@ -140,6 +140,24 @@ tags:
       convocatoria es un **hecho por partido** ("este domingo no jugó, por baja médica"). Ni una se deriva
       de la otra ni se contradicen: la ficha de plantilla pinta las dos cosas, el distintivo desde aquí y
       los recuentos desde `Appearance`.
+  - name: Appearances
+    description: |
+      Convocatorias: qué hizo cada jugador en cada partido —jugó, se quedó fuera por baja médica, por
+      sanción o por decisión técnica— y, opcionalmente, cuántos minutos. De aquí salen los recuentos
+      JUGADOS / BAJA MÉDICA / SANCIÓN / NO CONVOCADO de la pantalla de estadísticas.
+
+      **Escribe:** el administrador. Es **interna del agregado `Match`** (§4.2) —un gol, una tarjeta o una
+      convocatoria solo existen dentro de un partido— pero se sirve en **ruta plana con ámbito
+      obligatorio**, igual que `Round` dentro de `Competition` y `Absence` dentro de `Player` (§5.1).
+
+      **La federación no publica alineaciones de fútbol base**, así que aquí no hay frontera con la ingesta
+      que respetar: **CRUD completo**, como `Player` y `Absence`. Es además la primera de las tres entidades
+      hijas de `Match` (`Goal` y `Card` vendrán después) y fija el patrón que seguirán.
+
+      **Complementa a `Absence`, no la duplica** (D-41): la ausencia dice que un jugador estuvo fuera *un
+      periodo*; la convocatoria, qué pasó *ese domingo*. Ninguna se deriva de la otra — un lesionado de
+      baja larga genera una `Absence` y tantas `Appearance` con `status = baja_medica` como partidos se
+      pierda, y es el administrador quien registra ambas cosas.
 
 paths:
 
@@ -1711,6 +1729,227 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  # ─────────────────────────── Appearances (§5.1) ───────────────────────────
+  /appearances:
+    get:
+      tags: [Appearances]
+      operationId: listAppearances
+      summary: Lista las convocatorias de un partido o el historial de un jugador
+      description: |
+        **El ámbito es obligatorio: `matchId` o `playerId`** → **400** si no viene ninguno. Dos puertas,
+        como en `Absence` (§5.1), porque son las dos pantallas que existen: la **convocatoria del partido**
+        —la lista que rellena el entrenador el lunes— y el **historial del jugador**, del que salen sus
+        recuentos de temporada.
+
+        **Lo que no está no dice nada** (D-41). La respuesta trae **solo las filas registradas**, no una
+        por jugador de la plantilla: un partido sin convocatoria apuntada devuelve **200** con lista vacía,
+        y eso significa *no registrado*, no "no fue convocado nadie". Para pintar la pantalla de
+        convocatoria, el cliente cruza esta llamada con `GET /players?teamId=&seasonId=` por `playerId` —
+        el mismo cruce que ya hace con las ausencias activas (D-38).
+
+        `Appearance` no tiene temporada propia ni equipo propio: se alcanzan por el jugador (D-05, D-28).
+
+        **Sin paginación** (§5.3): las dos puertas traen techo —una convocatoria son ~18 filas, la
+        temporada de un jugador ~30 partidos—. **Orden fijo**: por dorsal ascendente con `matchId` (es como
+        se lee una convocatoria, igual que la plantilla), y por fecha de partido descendente con `playerId`
+        (un historial se lee de lo más reciente a lo más antiguo).
+      parameters:
+        - name: matchId
+          in: query
+          required: false
+          description: |
+            Partido cuya convocatoria se pide. Devuelve las filas de **los dos equipos si los dos son
+            propios** —un derbi entre el A y el B del club es un partido real (§3.6)—; para quedarse con
+            uno, se combina con `teamId`.
+          schema:
+            type: string
+            format: uuid
+        - name: playerId
+          in: query
+          required: false
+          description: |
+            Jugador cuyo historial de convocatorias se pide. Al ser `Player` identidad de *(equipo,
+            temporada)* (D-05), el ámbito ya queda acotado a una temporada sin pedirla aparte.
+          schema:
+            type: string
+            format: uuid
+        - name: teamId
+          in: query
+          required: false
+          description: |
+            Acota a un equipo **propio**. Solo tiene sentido junto a `matchId`, y solo hace falta en el
+            derbi entre dos equipos del club; en el resto de partidos es redundante.
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AppearanceStatus'
+      responses:
+        '200':
+          description: Convocatorias del ámbito.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppearanceResponse'
+        '400':
+          description: |
+            Falta el ámbito, o llegaron `matchId` y `playerId` a la vez —son dos puertas alternativas, no
+            un filtro combinable: la intersección es como mucho **una** fila (D-43), y para eso está el
+            `GET` por id—. También si se pasó `teamId` sin `matchId`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El partido, el jugador o el equipo del ámbito no existen en este club. Es el 404 **del
+            ámbito**: un partido sin convocatoria registrada devuelve **200** con lista vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Appearances]
+      operationId: createAppearance
+      summary: Registra la convocatoria de un jugador en un partido
+      description: |
+        Da de alta **una fila**: un jugador, un partido, un estado. La convocatoria entera se registra
+        repitiendo la llamada por cada jugador (D-44) — no hay alta masiva, y el porqué está en esa
+        decisión.
+
+        **`minutes` solo se admite con `status = jugado`** (D-42) → **422** en cualquier otro caso. Un
+        jugador que no fue convocado no jugó cero minutos: no jugó, y la distinción importa porque el
+        promedio de minutos se calcula sobre los partidos jugados.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppearanceRequest'
+      responses:
+        '201':
+          description: Convocatoria registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppearanceResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Ese jugador **ya tiene convocatoria en ese partido** (§3.5). Un jugador hace una sola cosa en
+            un partido; corregir lo apuntado es el `PATCH`, no un segundo `POST`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Regla de negocio (§5.4): el jugador **no existe** o está borrado; el partido no existe; la
+            temporada está **archivada**; **el equipo del jugador no disputa ese partido** —ni como local
+            ni como visitante—; o llegó `minutes` con un `status` distinto de `jugado` (D-42).
+
+            **No es 404** aunque incluya "no existe": jugador y partido llegan en el **cuerpo**, no en la
+            ruta (mismo criterio que el `teamId` del alta de jugador, D-37).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /appearances/{appearanceId}:
+    parameters:
+      - $ref: '#/components/parameters/AppearanceId'
+
+    get:
+      tags: [Appearances]
+      operationId: getAppearance
+      summary: Obtiene una convocatoria
+      responses:
+        '200':
+          description: Convocatoria.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppearanceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Appearances]
+      operationId: updateAppearance
+      summary: Corrige una convocatoria
+      description: |
+        Actualización **parcial**: los campos ausentes no se modifican. Es la vía normal de corregir lo
+        apuntado —el entrenador marca `no_convocado` el sábado y el domingo el chaval acaba jugando—.
+
+        **No incluye `playerId` ni `matchId`**: son la **identidad** de la fila (§3.5), no atributos suyos.
+        Una convocatoria apuntada en el jugador o en el partido equivocado se borra y se vuelve a crear.
+        Misma línea que `Player` (D-37) y `Absence` (D-40), y aquí además cambiarlos chocaría de frente con
+        la unicidad *(jugador, partido)*.
+
+        **Bajar de `jugado` a cualquier otro estado exige soltar los minutos** (D-42): o se manda
+        `minutes: null` en la misma llamada, o la operación devuelve **422**. El `null` explícito es la
+        convención de `PATCH` del contrato (§5.2).
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAppearanceRequest'
+      responses:
+        '200':
+          description: Convocatoria actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppearanceResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            El cambio dejaría `minutes` con un `status` distinto de `jugado` (D-42) — típicamente, bajar el
+            estado sin soltar los minutos en la misma llamada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Appearances]
+      operationId: deleteAppearance
+      summary: Borra una convocatoria
+      description: |
+        **Borrado lógico** (`deleted_at`, §3.5), como el del jugador (D-36) y el de la ausencia, y por el
+        mismo motivo: sirve a la auditoría, no al cliente. Nada cuelga de una convocatoria, así que no hay
+        guarda de dependientes que plantearse.
+
+        **Borrar no es lo mismo que marcar `no_convocado`** (D-41), y el backoffice tendrá los dos gestos
+        cerca. `no_convocado` es un **hecho registrado** —estuvo disponible y el entrenador no lo llamó— y
+        cuenta en la estadística; borrar deja la fila **sin registrar**, que es lo correcto cuando la
+        convocatoria se apuntó por error o en el partido equivocado.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Convocatoria borrada.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
 
   securitySchemes:
@@ -1787,6 +2026,17 @@ components:
       name: absenceId
       in: path
       required: true
+      schema:
+        type: string
+        format: uuid
+    AppearanceId:
+      name: appearanceId
+      in: path
+      required: true
+      description: |
+        Identificador **interno** (UUID) de la convocatoria. La fila también es direccionable por su par
+        *(jugador, partido)*, que es único (§3.5), pero el contrato no ofrece esa ruta: se llega a ella por
+        la lista de ámbito.
       schema:
         type: string
         format: uuid
@@ -2161,6 +2411,23 @@ components:
         caso de `otro` se repite lo bastante como para querer contarlo aparte, la salida es **un valor
         nuevo** en este enumerado, no un campo de texto libre que nadie podría agregar.
       enum: [lesion, enfermedad, sancion, otro]
+
+    AppearanceStatus:
+      type: string
+      description: |
+        Qué hizo el jugador en ese partido. Los cuatro valores son los cuatro recuentos de la pantalla de
+        estadísticas (JUGADOS / BAJA MÉDICA / SANCIÓN / NO CONVOCADO), y esa es exactamente la razón de que
+        sean cuatro: **el enumerado es la leyenda de la pantalla**, no una taxonomía de disponibilidad.
+
+        **`no_convocado` es un hecho, no la ausencia de dato** (D-41): significa que estuvo disponible y el
+        entrenador no lo llamó —decisión técnica—. Que **no haya fila** es cosa distinta: significa que
+        nadie apuntó la convocatoria de ese partido.
+
+        **Se solapa a propósito con `AbsenceType`** en dos valores (`baja_medica` ~ `lesion`/`enfermedad`,
+        `sancionado` ~ `sancion`) y no se deriva de él. Una `Absence` es un **periodo** y este campo es un
+        **hecho por partido**: el periodo dice por qué no estaba, la fila dice qué pasó ese domingo. Ni
+        una alimenta a la otra — las dos las escribe el administrador (D-41).
+      enum: [jugado, baja_medica, sancionado, no_convocado]
 
     FederationCode:
       type: string
@@ -3256,3 +3523,110 @@ components:
 
     # `Player.isAvailable` no existe: sería el mismo dato derivado dos veces y con dos consultas. La
     # plantilla pide `GET /absences?teamId=&seasonId=&active=true` y cruza por `playerId` (D-38).
+
+    # ───────────────────────── Appearance (§5.2) ─────────────────────────
+    CreateAppearanceRequest:
+      type: object
+      description: |
+        Alta de **una** convocatoria: un jugador, un partido, un estado. La lista entera se registra
+        repitiendo la llamada (D-44).
+
+        `playerId` y `matchId` son la **identidad** de la fila y no reaparecen en el `PATCH` (D-37).
+      additionalProperties: false
+      required: [playerId, matchId, status]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          description: |
+            Jugador convocado. **Su equipo tiene que disputar el partido** —como local o como visitante— o
+            la operación devuelve 422. Es la única validación cruzada del alta, y hace falta: sin ella se
+            podría apuntar a un juvenil en el partido del cadete y la estadística de los dos equipos
+            quedaría contaminada.
+        matchId:
+          type: string
+          format: uuid
+          description: |
+            Partido. **La temporada y la competición se alcanzan por aquí**, no por columnas propias
+            (D-28), igual que el equipo se alcanza por `playerId` (D-05).
+        status:
+          $ref: '#/components/schemas/AppearanceStatus'
+        minutes:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+          description: |
+            Minutos jugados. **Opcional siempre y solo válido con `status = jugado`** (D-14, D-42): un club
+            pequeño no sostiene la disciplina de cronometrar cada cambio, así que exigirlo dejaría el campo
+            vacío o inventado. `null` con `jugado` significa "jugó, no sé cuánto" — que es distinto de cero.
+
+            El tope de 120 cubre la prórroga; no se acota por modalidad porque la duración del partido
+            depende de la categoría (§3.6) y meter esa tabla aquí sería validar reglamento en el borde.
+          examples: [67]
+
+    UpdateAppearanceRequest:
+      type: object
+      description: |
+        Corrección parcial. **No incluye `playerId` ni `matchId`**: son identidad (§3.5), y cambiarlos
+        chocaría además con la unicidad *(jugador, partido)*.
+
+        **Bajar de `jugado` a otro estado exige mandar `minutes: null` en la misma llamada** (D-42), o la
+        operación devuelve 422. El `null` explícito borra el valor, según la convención de `PATCH` (§5.2).
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        status:
+          $ref: '#/components/schemas/AppearanceStatus'
+        minutes:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 120
+
+    AppearanceResponse:
+      type: object
+      description: |
+        Qué hizo un jugador en un partido. Es la unidad de la que salen los cuatro recuentos de la pantalla
+        de estadísticas y el promedio de minutos.
+
+        **No embebe ni el jugador ni el partido**: dentro de una convocatoria el partido es constante y
+        dentro de un historial lo es el jugador — en los dos casos el cliente ya tiene la otra mitad y
+        cruza por id. Es el criterio de D-32 (*embeber lo que varía dentro de la página*) aplicado a una
+        entidad que se lee por sus dos lados, así que embeber cualquiera de los dos sobraría en la mitad de
+        las pantallas.
+      required: [id, playerId, matchId, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Equipo y temporada se alcanzan por aquí (D-05, D-28).'
+        matchId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Jornada y competición se alcanzan por aquí (D-28).'
+        status:
+          $ref: '#/components/schemas/AppearanceStatus'
+        minutes:
+          type: [integer, 'null']
+          description: |
+            **Nulo también cuando el jugador sí jugó**: significa "no se apuntó", no "cero minutos"
+            (D-14). El cliente que calcule el promedio debe descartar los nulos, no tratarlos como ceros.
+          examples: [67]
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # No hay `AppearanceResponse.isAvailable` ni nada derivado de `Absence`: son dos registros
+    # independientes del mismo hecho visto de dos maneras (D-41). Los recuentos por jugador tampoco viven
+    # aquí — son agregación, y llegarán como modelo de lectura propio (§3.4, §4.5), igual que se dejó la
+    # clasificación fuera de `TeamResponse` (D-34).

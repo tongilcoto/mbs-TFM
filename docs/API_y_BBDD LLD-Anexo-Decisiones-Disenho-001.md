@@ -47,6 +47,8 @@
 | **D-35** | La foto del jugador es una clave de Storage, no una URL — y entra saneada por la API | §3.2, §5.1, §5.2 |
 | **D-38** | `Absence.active` no es columna: la disponibilidad es una pregunta con fecha | §3.2, §4.1, §5.1, §5.2 |
 | **D-39** | Dos ausencias activas sí, dos del mismo tipo no | §3.2, §3.5, §4.6 |
+| **D-41** | La convocatoria que no está no es "no convocado": ausencia de fila ≠ estado | §3.2, §3.3, §5.1, §5.2 |
+| **D-42** | `minutes` solo tiene sentido jugando, y nulo no es cero | §3.2, §4.6, §5.1, §5.2 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
 | **D-17** | La federación es un catálogo en código, y hay una por tenant | §3.2, §3.6 |
@@ -64,6 +66,8 @@
 | **D-36** | Borrar un jugador no pregunta por su historial: *soft delete* sin guarda de dependientes | §3.5, §4.6, §5.1 |
 | **D-37** | La plantilla es un hecho de (equipo, temporada): ámbito obligatorio e identidad inmutable | §3.2, §5.1, §5.2, §5.3 |
 | **D-40** | Dar de alta a un lesionado es un `PATCH`: cuándo un sub-recurso de estado está justificado | §5.1, §5.2, §5.3 |
+| **D-43** | Las dos puertas de `Appearance` son excluyentes, no acumulables | §5.1, §5.3 |
+| **D-44** | La convocatoria se registra fila a fila: sin alta masiva, por ahora | §5.1 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -678,6 +682,91 @@ realidad son dos.
 
 ---
 
+### D-41 · La convocatoria que no está no es "no convocado": ausencia de fila ≠ estado
+
+**La pregunta, que parece de detalle y no lo es.** `Appearance.status` tiene un valor `no_convocado`. Si un
+jugador de la plantilla **no tiene fila** para un partido, ¿es lo mismo?
+
+**No, y confundirlos rompería la estadística.** Son dos cosas distintas:
+
+| Situación | Qué significa | Cuenta en la estadística |
+|-----------|---------------|--------------------------|
+| Fila con `status = no_convocado` | Estaba disponible y **el entrenador no lo llamó** — decisión técnica | **Sí** |
+| **Sin fila** | **Nadie apuntó** la convocatoria de ese partido | **No** |
+
+Si la ausencia de fila significara `no_convocado`, un club que se salta el registro de tres jornadas
+—lo normal en fútbol base— vería a toda su plantilla acumulando "no convocado" sin que nadie lo decidiera.
+El dato que falta se convertiría en un juicio sobre el entrenador. Y al revés: obligar a crear las ~18 filas
+de cada partido para poder distinguir sería exigir una disciplina que [D-14] ya dio por perdida al hacer
+`minutes` opcional.
+
+**Decisión.** La lista **devuelve solo las filas registradas**, no una por jugador de la plantilla. El
+cliente que necesite pintar la convocatoria entera cruza `GET /v1/appearances?matchId=` con
+`GET /v1/players?teamId=&seasonId=` por `playerId`, y los jugadores sin fila salen como *sin registrar*.
+Es literalmente el mismo cruce que ya hace con las ausencias activas ([D-38]), y la razón es la misma: **el
+servidor no inventa filas que nadie escribió**.
+
+**Corolario en el borrado.** `DELETE` (lógico) y marcar `no_convocado` **no son intercambiables**, y el
+backoffice tendrá los dos gestos cerca — mismo aviso que [D-40] dio para `Absence`. Marcar registra un
+hecho; borrar deshace un apunte erróneo y devuelve la fila al estado *sin registrar*.
+
+**Y la relación con `Absence`, que es la otra confusión posible.** Los dos enumerados se solapan a propósito
+(`baja_medica` ~ `lesion`/`enfermedad`, `sancionado` ~ `sancion`) y **ninguno se deriva del otro**:
+
+- `Absence` es un **periodo** — "fuera del 5/12 al 6/1" — y de ella sale el distintivo NO DISPONIBLE.
+- `Appearance` es un **hecho por partido** — "este domingo no jugó, por baja médica" — y de ella salen los
+  recuentos.
+
+Un lesionado de baja larga genera **una** `Absence` y **tantas** `Appearance` como partidos se pierda. Se
+podría derivar lo segundo de lo primero cruzando fechas, y se descarta por lo mismo que [D-15] y la sanción
+de [D-10]: metería un **segundo escritor** en una tabla de dominio manual, y encima uno que se equivocaría
+—una baja puede empezar el sábado por la tarde, y el partido aplazado no se juega el día que dice el
+calendario—. Las dos las escribe el administrador.
+
+---
+
+### D-42 · `minutes` solo tiene sentido jugando, y nulo no es cero
+
+**Dos preguntas que van juntas.** ¿Qué son los minutos de quien no fue convocado? ¿Y los de quien jugó pero
+nadie cronometró?
+
+**La primera no tiene respuesta buena si el campo es libre.** Un `no_convocado` con `minutes = 0` es una
+fila que se lee de dos maneras —"no jugó" y "jugó cero minutos"— y las dos se cuelan en el promedio de
+minutos por partido con resultados distintos. La segunda ya la contestó [D-14]: los minutos son
+**opcionales** porque exigirlos siempre pediría una disciplina que un club pequeño no sostiene.
+
+**Decisión.** `minutes` es **válido solo con `status = jugado`**, y **opcional incluso entonces**. Los tres
+estados posibles del campo, y lo que significan:
+
+| `status` | `minutes` | Lectura |
+|----------|-----------|---------|
+| `jugado` | `67` | Jugó 67 minutos |
+| `jugado` | `null` | **Jugó, no se apuntó cuánto** |
+| cualquier otro | `null` | No jugó |
+| cualquier otro | un número | **422** |
+
+En el `PATCH`, bajar de `jugado` a otro estado **exige mandar `minutes: null` en la misma llamada** — el
+`null` explícito que ya es la convención del contrato (§5.2). No se limpia solo: un borrado implícito en
+cascada dentro de un `PATCH` parcial es justo el tipo de efecto lateral que el cliente no ve venir.
+
+**La consecuencia para quien calcule:** `null` **no es cero**. El promedio de minutos se calcula sobre las
+filas con valor, no sobre todas las de `jugado`. Está anotado en el spec, en el campo, porque es el error
+que se va a cometer.
+
+**Dónde se valida, que es la parte interesante.** Es la **primera invariante entre campos** del contrato, y
+**no va al spec**. JSON Schema la expresaría con un `if/then` en el `POST`, pero en el `PATCH` parcial
+—donde `status` puede no venir y hay que mirar el valor **almacenado**— no hay forma de escribirla. Un
+esquema que cubre la mitad de los casos es peor que ninguno: invita a confiar en él. Va al **dominio** y se
+reporta como **422**, no 400. La frontera que queda fijada: **400 es lo que se juzga mirando solo el cuerpo;
+422 es lo que necesita mirar el estado**.
+
+**Por qué no un `CHECK` en la BD, que aquí sí se podría.** Se hace, y no sustituye a lo anterior: el `CHECK`
+protege de la ingesta y de los *scripts* ([D-28] fijó el criterio), pero devuelve un error de constraint que
+el Controller tendría que traducir a ciegas. La validación de dominio es la que sabe decir *cuál* de los dos
+campos está mal.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -1136,6 +1225,72 @@ llamadas** — el N+1 que [D-32] y [D-34] ya combatieron. Un ámbito **a medias*
 **Lo que se asume a cambio.** Que el `PATCH` de `Absence` mezcla dos intenciones muy distintas —corregir una
 errata y dar el alta— bajo el mismo verbo. Es exactamente lo que el contrato ya acepta en `Season` o
 `Player`, y el precio de no tener un endpoint por transición.
+
+---
+
+### D-43 · Las dos puertas de `Appearance` son excluyentes, no acumulables
+
+**El contrato ya tenía dos formas de ámbito y esta es la tercera.** Conviene distinguirlas, porque se
+parecen y no son lo mismo:
+
+| Recurso | Ámbito | Combinar dos puertas |
+|---------|--------|----------------------|
+| `Round`, `StandingRow`, `Player` | **fijo** (obligatorio y único) | no aplica |
+| `Match`, `Absence` | **alternativo y acumulable** — acotan progresivamente | legítimo: `?teamId=` + `?seasonId=` acota más |
+| **`Appearance`** | **alternativo y excluyente** | **400** |
+
+**Por qué.** `?matchId=` da la convocatoria (~18 filas); `?playerId=` da el historial (~30 filas). Pero
+`?matchId=` **+** `?playerId=` devuelve **como mucho una fila**, porque el par *(jugador, partido)* es
+único (§3.5). Es un `GET` por identificador escrito de la forma más cara posible: el cliente que ya tiene
+los dos ids tiene también el de la fila, o lo obtiene de la lista que acaba de pedir. Admitirlo sería
+publicar dos caminos al mismo recurso y garantizar que alguien pagina el equivocado.
+
+**Decisión.** Exactamente una de las dos → **400** si no viene ninguna **y** si vienen las dos. `?teamId=`
+sigue siendo un **filtro**, no una puerta: acompaña a `?matchId=` y solo hace falta en el derbi entre dos
+equipos propios, donde la convocatoria trae las dos plantillas.
+
+**El orden también depende de la puerta, y es el único recurso del contrato donde pasa.** Por dorsal
+ascendente con `?matchId=` —una convocatoria se lee como una plantilla, [D-37]— y por fecha de partido
+descendente con `?playerId=` —un historial se lee del último al primero, como `Absence`—. No es una
+inconsistencia: son **dos pantallas distintas** que comparten tabla, y forzar un orden común dejaría a una
+de las dos ordenada por un criterio que no significa nada en ella.
+
+**Lo que se asume a cambio.** Que la regla de ámbito del contrato deja de ser una sola —"al menos uno"— y
+pasa a tener dos variantes. Se documenta en §5.3 junto a las otras, que es donde alguien la va a buscar.
+
+---
+
+### D-44 · La convocatoria se registra fila a fila: sin alta masiva, por ahora
+
+**El caso incómodo, dicho sin adornos.** Registrar la convocatoria de un partido son ~18 `POST`. Es la
+operación más repetitiva del backoffice y la única del contrato donde una pantalla se traduce en decenas de
+llamadas de escritura.
+
+**Lo que se consideró.** Un `PUT /v1/appearances?matchId=` que recibiera la lista entera y la sustituyera
+—*replace set*—, que es la forma habitual de resolverlo.
+
+**Por qué no, hoy.**
+
+| | Fila a fila | `PUT` masivo |
+|---|---|---|
+| Superficie del contrato | La que ya tienen `Player` y `Absence` | Un verbo y una semántica **nuevos**, sin precedente aquí |
+| Errores parciales | Cada fila responde lo suyo (409, 422) | Hay que inventar un cuerpo de error por índice, o abortar las 18 por una |
+| Borrado | Explícito | **Implícito**: lo que no viene en la lista desaparece — justo el efecto lateral que [D-42] rechazó |
+| Concurrencia | Última escritura por fila | Dos entrenadores guardando pisan la lista entera |
+
+El coste real, además, es menor de lo que parece: la convocatoria se rellena **una vez** por partido y
+después se corrige de una en una —"al final sí jugó"—, que es exactamente el caso que el `PATCH` ya sirve
+bien. Optimizar el alta inicial a costa de la superficie del contrato es optimizar el gesto menos frecuente.
+
+**Decisión.** CRUD fila a fila, como el resto del dominio manual. El backoffice encadena las llamadas tras
+un único botón de *Guardar*, igual que ya encadena alta de jugador y subida de foto ([D-35]).
+
+**Qué la haría cambiar, para no re-deliberarla desde cero.** Que el backoffice mida una latencia inaceptable
+en la pantalla de convocatoria, o que aparezca un **segundo** consumidor con la misma necesidad —`Goal` y
+`Card` tienen la misma forma y podrían pedirlo—. Si llega ese segundo caso, la salida es un mecanismo
+**genérico** de escritura por lotes para los tres hijos de `Match`, no un `PUT` a medida para este. Es el
+mismo criterio con el que se extrajo `TeamRef` (§5.2): **se generaliza cuando coinciden dos, no por
+anticipado**.
 
 ---
 
