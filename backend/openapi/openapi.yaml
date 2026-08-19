@@ -118,6 +118,28 @@ tags:
       son del mismo módulo, así que la tabla conserva **un único escritor** y el cliente no distingue el
       origen: la procedencia se expone una vez por tenant, en `ClubResponse.federationProvidesStandings`
       (D-29).
+  - name: Players
+    description: |
+      Plantilla: los jugadores del club, **solo de equipos propios** (§3.7). Una fila es *un jugador en un
+      equipo en una temporada* (D-05), y de ella cuelgan los eventos manuales —goles, tarjetas,
+      convocatorias, ausencias—.
+
+      **Escribe:** el administrador. Es el primer recurso de **dominio manual** del contrato y, por tanto,
+      el primero con **CRUD completo** (§5.1): aquí no hay ingesta que corrija ni frontera que respetar —la
+      federación no publica plantillas de fútbol base—, así que el club es el único dueño del dato.
+  - name: Absences
+    description: |
+      Ausencias: los periodos en los que un jugador **no está disponible** —lesión, enfermedad, sanción u
+      otra causa—. De ellas sale el distintivo DISPONIBLE / NO DISPONIBLE de la ficha de plantilla, con la
+      fecha de inicio y la de alta estimada.
+
+      **Escribe:** el administrador. Es **interna del agregado `Player`** (§4.2) pero se sirve en ruta
+      plana con ámbito obligatorio, igual que `Round` dentro de `Competition` (§5.1).
+
+      **No confundir con `Appearance`**: una ausencia es un **periodo** ("fuera del 5/12 al 6/1"); una
+      convocatoria es un **hecho por partido** ("este domingo no jugó, por baja médica"). Ni una se deriva
+      de la otra ni se contradicen: la ficha de plantilla pinta las dos cosas, el distintivo desde aquí y
+      los recuentos desde `Appearance`.
 
 paths:
 
@@ -1162,6 +1184,533 @@ paths:
   # `StandingRow` no es un agregado sino un modelo de lectura, y su unidad de consumo es la tabla de una
   # jornada. "La fila 4 de la jornada 22" no la pide ninguna pantalla, no se enlaza y no se edita.
 
+  # ───────────────────────────── Players (§5.1) ─────────────────────────────
+  /players:
+    get:
+      tags: [Players]
+      operationId: listPlayers
+      summary: Lista la plantilla de un equipo en una temporada
+      description: |
+        **`teamId` y `seasonId` son obligatorios los dos.** Una plantilla es un hecho de *(equipo,
+        temporada)* —esas dos coordenadas **son** la identidad de la fila (D-05, D-37)—, así que pedirla
+        sin una de ellas devolvería jugadores de varios años o de varios equipos mezclados, que no es lo
+        que muestra ninguna pantalla. Mismo criterio que el `roundId` de la clasificación (D-34).
+
+        **Sin paginación y con orden fijo por `shirtNumber` ascendente** (§5.3): el ámbito acota a los ~25
+        jugadores de un equipo, que es el orden en el que se lee una plantilla. Tampoco hay búsqueda por
+        nombre: la colección entera cabe en una pantalla.
+
+        **Los jugadores borrados no aparecen.** El borrado es lógico (D-36) y sirve a la auditoría, no al
+        cliente: no hay parámetro para incluirlos.
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          description: |
+            Equipo **propio** cuya plantilla se pide. Un equipo rival no tiene plantilla —no hay de dónde
+            sacarla (§3.7)— y devuelve lista vacía, no error.
+          schema:
+            type: string
+            format: uuid
+        - name: seasonId
+          in: query
+          required: true
+          description: Temporada del registro. Identificador **interno** (UUID), no el `federationSeasonId`.
+          schema:
+            type: string
+            format: uuid
+        - name: position
+          in: query
+          required: false
+          description: Filtra por demarcación.
+          schema:
+            $ref: '#/components/schemas/PlayerPosition'
+      responses:
+        '200':
+          description: Plantilla del equipo en esa temporada, ordenada por dorsal ascendente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlayerResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El equipo o la temporada no existen en este club. Es el 404 **del ámbito**, no de la colección:
+            un equipo propio sin plantilla dada de alta devuelve **200** con lista vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Players]
+      operationId: createPlayer
+      summary: Da de alta un jugador en la plantilla
+      description: |
+        **Primer `POST` de dominio manual del contrato.** A diferencia de `Season` y `Competition` —que
+        tienen `POST` por ser *entrada* de la ingesta (D-22)—, aquí no hay ingesta en absoluto: la
+        federación no publica plantillas de fútbol base, así que el club es el **único** escritor y la
+        regla "el BFF corrige, no crea" (D-21) sencillamente no aplica.
+
+        **`teamId` y `seasonId` se fijan aquí y no se cambian nunca** (D-37): son la identidad del
+        registro. Un jugador que sube de equipo a mitad de temporada es una **fila nueva** en el equipo
+        nuevo, igual que el que continúa al año siguiente lo es en la temporada nueva (D-05). Cambiarlos
+        por `PATCH` reescribiría el pasado: sus goles y tarjetas ya emitidos pasarían a contar para el
+        equipo al que se le mueve.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlayerRequest'
+      responses:
+        '201':
+          description: Jugador dado de alta.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Ese dorsal ya está ocupado en el mismo equipo y temporada (§3.5). El dorsal de un jugador
+            **borrado** no cuenta: el índice único es parcial (D-36).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Regla de negocio (§5.4). Tres casos, distinguibles por el `code` del *Problem*:
+            el equipo o la temporada **no existen** en este club; el equipo **no es propio**
+            (`opponentClubId != null`, §3.7); o la temporada está **archivada** (§5.1).
+
+            **No es un 404** aunque incluya el caso "no existe": el equipo llega en el **cuerpo**, no en la
+            ruta, y `/players` sí existe. Un 404 aquí respondería sobre el recurso equivocado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /players/{playerId}:
+    parameters:
+      - $ref: '#/components/parameters/PlayerId'
+
+    get:
+      tags: [Players]
+      operationId: getPlayer
+      summary: Obtiene un jugador
+      responses:
+        '200':
+          description: Jugador.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Players]
+      operationId: updatePlayer
+      summary: Actualiza parcialmente un jugador
+      description: |
+        Actualización **parcial**: los campos ausentes no se modifican.
+
+        **No incluye `teamId` ni `seasonId`** (D-37): son identidad, no atributos. Un cambio de equipo o de
+        temporada es una fila nueva, no una edición — igual que `modality` en `Team` (§3.2).
+
+        **Tampoco incluye la foto**: `photoUrl` es `readOnly` y se deriva de la clave del objeto en Storage
+        (D-35). La subida está **pendiente** (§9).
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlayerRequest'
+      responses:
+        '200':
+          description: Jugador actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Ese dorsal ya está ocupado en el mismo equipo y temporada (§3.5).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Players]
+      operationId: deletePlayer
+      summary: Borra un jugador de la plantilla
+      description: |
+        **Borrado lógico** (`deleted_at`, §3.5): el jugador desaparece de la plantilla y de las lecturas,
+        pero sus goles, tarjetas y convocatorias **siguen contando para el equipo** (D-36). Por eso
+        **no hay guarda de dependientes**: a diferencia de `Season` y `Competition` —que devuelven 409 si
+        tienen datos colgando— aquí no hay integridad que proteger, las referencias no se rompen.
+
+        **Libera el dorsal** para otro jugador del mismo equipo y temporada: el índice único de §3.5 es
+        parcial (`WHERE deleted_at IS NULL`).
+
+        **No es la vía del "derecho al olvido"**: borrar lógicamente no borra el dato personal de un menor.
+        Para eso está el purgado de temporada (`DELETE /seasons/{id}?cascade=true`, D-24).
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: |
+            Jugador borrado. **La foto no se borra del Storage**: el borrado es lógico y reversible por
+            recuperación, así que el objeto sigue ahí. Quien sí lo elimina es el purgado de temporada
+            (D-24).
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /players/{playerId}/photo:
+    parameters:
+      - $ref: '#/components/parameters/PlayerId'
+
+    put:
+      tags: [Players]
+      operationId: uploadPlayerPhoto
+      summary: Sube o reemplaza la foto de un jugador
+      description: |
+        **Única operación del contrato que no es JSON.** El cuerpo es la imagen **en crudo**
+        (`image/jpeg` o `image/png`), no un `multipart` ni un JSON con base64: aquí solo viaja un fichero,
+        y los campos del jugador ya tienen su propio `PATCH`.
+
+        **Por qué es una segunda llamada y no parte del `POST`** (D-35): la clave del objeto se **deriva del
+        `playerId`** (`players/{playerId}.jpg`), que no existe hasta que el alta responde; y separarlas
+        degrada mejor —si falla la subida, el jugador ya está creado y se reintenta la foto, en vez de
+        perder el formulario entero—. El backoffice encadena las dos tras un único botón de *Guardar*.
+
+        **El fichero pasa por la API a propósito, y la API lo sanea.** Antes de escribir en Storage el
+        servidor: comprueba que los **bytes** son realmente del tipo declarado (no la extensión),
+        **recodifica a JPEG**, **redimensiona** al lado máximo de la ficha y **descarta los metadatos EXIF**.
+        Ese último paso es el motivo de fondo: una foto salida de un móvil lleva la **geolocalización** de
+        dónde se hizo — la de un menor. Una subida directa a Storage con URL prefirmada guardaría esos
+        metadatos tal cual y la URL firmada los serviría.
+
+        **Idempotente**: reemplaza la foto anterior sobre la misma clave. Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        description: La imagen, en crudo. Tamaño máximo **5 MB**.
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: |
+            Foto almacenada. Se devuelve el jugador completo para que el cliente reciba la `photoUrl`
+            **ya firmada** sin una segunda lectura.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlayerResponse'
+        '400':
+          description: |
+            Los bytes no son una imagen válida del tipo declarado en el `Content-Type` — un `.heic` o un
+            `.pdf` renombrado. La comprobación es sobre el contenido, no sobre la cabecera.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: La imagen supera el tamaño máximo admitido (5 MB).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '415':
+          description: |
+            Tipo de contenido no admitido. Solo `image/jpeg` e `image/png`: son los dos formatos que
+            produce cualquier portátil, y bastan para una ficha de plantilla.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Players]
+      operationId: deletePlayerPhoto
+      summary: Quita la foto de un jugador
+      description: |
+        Borra el objeto de Storage y deja `photo_key` a nulo → `photoUrl` vuelve a ser `null` y la ficha
+        pinta las iniciales.
+
+        Existe como operación propia porque el `PATCH` **no lleva la foto** (D-35): un `null` explícito en
+        un campo derivado no significaría nada. Es el mismo criterio por el que `/ownership` es
+        sub-recurso y no un campo del `PATCH` de `Team`.
+
+        **Idempotente**: quitar la foto de un jugador que no la tenía devuelve 204. Requiere **rol
+        elevado** (§7.3).
+      responses:
+        '204':
+          description: Foto eliminada.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ──────────────────────────── Absences (§5.1) ────────────────────────────
+  /absences:
+    get:
+      tags: [Absences]
+      operationId: listAbsences
+      summary: Lista las ausencias de un jugador o de una plantilla
+      description: |
+        **El ámbito es obligatorio: `playerId`, o bien `teamId` **y** `seasonId`** → **400** si no viene
+        ninguno de los dos juegos. Dos puertas porque las pantallas entran por sitios distintos, igual que
+        `Match` admite tres (§5.1): la **ficha del jugador** pide su historial de bajas; la **plantilla**
+        pide las de sus ~25 jugadores de una vez, y sin esa segunda puerta pintar el distintivo de
+        disponibilidad costaría **veinticinco llamadas** — el mismo N+1 que ya se evitó en la clasificación
+        (D-34).
+
+        `Absence` no tiene temporada propia: se alcanza por el jugador (D-28), que es quien la lleva por ser
+        identidad (D-05).
+
+        **Sin paginación y con orden fijo por `startDate` descendente** (§5.3): el ámbito trae techo —las
+        bajas de un jugador en una temporada, o las de una plantilla— y el historial se lee de lo más
+        reciente a lo más antiguo.
+
+        **`active=true` es el filtro que pinta la pantalla**: devuelve solo las ausencias en curso, que es
+        exactamente lo que necesita el distintivo NO DISPONIBLE de cada ficha.
+      parameters:
+        - name: playerId
+          in: query
+          required: false
+          description: Jugador cuyo historial de ausencias se pide.
+          schema:
+            type: string
+            format: uuid
+        - name: teamId
+          in: query
+          required: false
+          description: |
+            Equipo **propio** cuya plantilla se consulta. Se combina obligatoriamente con `seasonId`: sin
+            ella devolvería las ausencias de todos los años del equipo mezcladas.
+          schema:
+            type: string
+            format: uuid
+        - name: seasonId
+          in: query
+          required: false
+          description: Temporada. Solo tiene sentido junto a `teamId`.
+          schema:
+            type: string
+            format: uuid
+        - name: active
+          in: query
+          required: false
+          description: |
+            `true` = solo las ausencias **en curso**; `false` = solo las ya cerradas. Se resuelve sobre el
+            mismo criterio derivado que `isActive` (D-38), no sobre una columna.
+          schema:
+            type: boolean
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AbsenceType'
+      responses:
+        '200':
+          description: Ausencias del ámbito, ordenadas por fecha de inicio descendente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AbsenceResponse'
+        '400':
+          description: |
+            Falta el ámbito, o se pasó `teamId` sin `seasonId` (o al revés). Un ámbito a medias no acota:
+            es el mismo 400 que la lista de plantilla sin sus dos coordenadas (D-37).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El jugador, el equipo o la temporada del ámbito no existen en este club. Es el 404 **del
+            ámbito**: un jugador sano, sin ninguna baja, devuelve **200** con lista vacía.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Absences]
+      operationId: createAbsence
+      summary: Registra una ausencia
+      description: |
+        Da de alta un periodo de indisponibilidad. **`startDate` es obligatoria; las dos de vuelta no**:
+        una lesión se registra el día que ocurre, sin saber aún cuándo vuelve (`expectedReturnDate` nula) y
+        desde luego sin fecha de alta real.
+
+        **Se admite registrar una ausencia ya cerrada** —con `actualReturnDate` en el mismo alta—: es el
+        caso de quien apunta en enero la gripe de diciembre.
+
+        **La sanción no se crea sola.** Los tramos de amarillas (`CompetitionSanctionBracket`, D-10)
+        dicen **cuándo toca**, pero registrar la ausencia sigue siendo un acto del administrador: derivarla
+        automáticamente de `Card` metería un segundo escritor en una tabla de dominio manual, que es
+        justo lo que el contrato evita en todas partes (§2.1).
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAbsenceRequest'
+      responses:
+        '201':
+          description: Ausencia registrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbsenceResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: |
+            Ese jugador ya tiene una ausencia **en curso del mismo tipo** (D-39). Dos lesiones abiertas a
+            la vez son, en la práctica, una que se olvidó de cerrar. Ausencias **de tipos distintos** sí
+            pueden solaparse: lesionado y sancionado a la vez es un estado real.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Regla de negocio (§5.4): el jugador **no existe** o está borrado; su temporada está
+            **archivada**; o las fechas no son coherentes —`startDate` posterior a cualquiera de las de
+            vuelta, o alta real anterior a la estimada sin serlo—.
+
+            **No es 404** aunque incluya "no existe": el jugador llega en el **cuerpo**, no en la ruta
+            (mismo criterio que el `teamId` del alta de jugador, D-37).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /absences/{absenceId}:
+    parameters:
+      - $ref: '#/components/parameters/AbsenceId'
+
+    get:
+      tags: [Absences]
+      operationId: getAbsence
+      summary: Obtiene una ausencia
+      responses:
+        '200':
+          description: Ausencia.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbsenceResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Absences]
+      operationId: updateAbsence
+      summary: Actualiza una ausencia — y es también el modo de darla por terminada
+      description: |
+        Actualización **parcial**: los campos ausentes no se modifican.
+
+        **Dar de alta al jugador es poner `actualReturnDate`, no llamar a un sub-recurso de estado**
+        (D-40). El contrato tiene tres sub-recursos de ese tipo —`/archive`, `/ownership`, `/photo`— y los
+        tres existen porque hacen algo que un campo no hace: ocultar un subárbol entero, mover nombre y
+        escudo entre entidades, o recibir un binario. Cerrar una baja es **escribir una fecha**; envolverlo
+        en un `PUT /absences/{id}/return` sería ceremonia sin contenido.
+
+        **Reabrir una baja cerrada por error** es el `null` explícito de la convención de `PATCH` (§5.2):
+        `{"actualReturnDate": null}` borra el valor y la ausencia vuelve a estar en curso.
+
+        **No incluye `playerId`**: una ausencia es de quien es. Registrarla en el jugador equivocado se
+        corrige borrándola y creándola bien, no trasladándola — mismo criterio que la identidad inmutable
+        de la propia plantilla (D-37).
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAbsenceRequest'
+      responses:
+        '200':
+          description: Ausencia actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbsenceResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            El cambio dejaría al jugador con dos ausencias en curso del mismo tipo (D-39) — reabrir una
+            baja antigua cuando ya hay otra abierta, o cambiarle el tipo a uno ya ocupado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Fechas incoherentes (§5.4).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Absences]
+      operationId: deleteAbsence
+      summary: Borra una ausencia
+      description: |
+        **Borrado lógico** (`deleted_at`, §3.5), como el del jugador (D-36) y por el mismo motivo: sirve a
+        la auditoría, no al cliente. Aquí es además el caso más simple del contrato —**nada cuelga de una
+        ausencia**—, así que no hay ni guarda de dependientes que plantearse.
+
+        **Es la vía correcta para una baja registrada por error**, frente a `PATCH`: una lesión que nunca
+        existió no se "cierra", se borra. Cerrarla dejaría en el historial un periodo de indisponibilidad
+        que no ocurrió.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Ausencia borrada.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 components:
 
   securitySchemes:
@@ -1221,6 +1770,23 @@ components:
       description: |
         Identificador **interno** (UUID) del partido. No es el `federationMatchId` (`codacta`), que además
         puede no existir (D-31).
+      schema:
+        type: string
+        format: uuid
+    PlayerId:
+      name: playerId
+      in: path
+      required: true
+      description: |
+        Identificador **interno** (UUID) del jugador. Identifica la fila *(jugador, equipo, temporada)*
+        (D-05): el mismo chaval en la temporada siguiente tiene otro `playerId`.
+      schema:
+        type: string
+        format: uuid
+    AbsenceId:
+      name: absenceId
+      in: path
+      required: true
       schema:
         type: string
         format: uuid
@@ -1574,6 +2140,27 @@ components:
         un mismo partido es `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el
         otro. Solo aparece dentro de la racha (`StandingResponse.form`, D-34).
       enum: [victoria, empate, derrota]
+
+    PlayerPosition:
+      type: string
+      description: |
+        Demarcación del jugador. **Cuatro valores gruesos, no un catálogo táctico**: la plantilla de fútbol
+        base la teclea un entrenador, y distinguir lateral de central o interior de mediocentro añade
+        decisiones donde solo hacía falta un rótulo. La pantalla de plantilla imprime exactamente esto
+        (`PORTERO`, `DEFENSA`…).
+      enum: [portero, defensa, centrocampista, delantero]
+
+    AbsenceType:
+      type: string
+      description: |
+        Causa de la ausencia. **`sancion` no la produce el sistema**: los tramos de amarillas (D-10) avisan
+        de que llega, pero registrarla es un acto del administrador — derivarla de `Card` daría dos
+        escritores a una tabla de dominio manual.
+
+        **`otro` es el cajón declarado** (viaje de estudios, decisión técnica, motivos familiares). Si un
+        caso de `otro` se repite lo bastante como para querer contarlo aparte, la salida es **un valor
+        nuevo** en este enumerado, no un campo de texto libre que nadie podría agregar.
+      enum: [lesion, enfermedad, sancion, otro]
 
     FederationCode:
       type: string
@@ -2413,3 +3000,259 @@ components:
     # No existe CreateStandingRequest ni UpdateStandingRequest (§5.1, D-21). El *fallback* cuando la
     # federación no publica clasificación es CÁLCULO desde `Match`, no un formulario en el backoffice
     # (D-15): así la tabla conserva un único escritor.
+
+    # ─────────────────────────── Player (§5.2) ───────────────────────────
+    CreatePlayerRequest:
+      type: object
+      description: |
+        Alta de un jugador en la plantilla de un equipo **propio** para una temporada. Es el primer DTO de
+        alta de **dominio manual** del contrato: los tres anteriores (`Season`, `Competition`) existían por
+        ser *entrada* de la ingesta (D-22); este existe porque aquí no hay ingesta.
+
+        **`teamId` y `seasonId` van en el alta y solo en el alta** (D-37): identifican la fila y no
+        reaparecen en `UpdatePlayerRequest`.
+      additionalProperties: false
+      required: [teamId, seasonId, fullName, shirtNumber, position]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+          description: |
+            Equipo **propio** (`isOwn == true`). Un equipo rival no tiene plantilla: no hay de dónde
+            sacarla, y el modelo solo cubre el detalle manual del club (§3.7) → **422** si no lo es.
+        seasonId:
+          type: string
+          format: uuid
+          description: |
+            Temporada del registro. **No se hereda del equipo**: `Team` no tiene temporada (§3.2), es la
+            misma entidad año tras año, así que la plantilla necesita decir de qué año habla (D-05).
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          examples: ['Marcos Díaz']
+        shirtNumber:
+          type: integer
+          minimum: 1
+          maximum: 99
+          description: |
+            Dorsal. **Único dentro del mismo equipo y temporada** (§3.5) → **409** si está ocupado. Es
+            invariante de dominio además de restricción de tabla: el VO `ShirtNumber` (§4.1) la garantiza
+            también fuera de este contrato.
+          examples: [1]
+        position:
+          $ref: '#/components/schemas/PlayerPosition'
+
+    UpdatePlayerRequest:
+      type: object
+      description: |
+        Actualización parcial. **No incluye `teamId` ni `seasonId`** —son identidad, no atributos
+        (D-37)— **ni la foto**, que se deriva de la clave de Storage y no se teclea (D-35).
+
+        Lo que queda es exactamente lo corregible de una plantilla tecleada a mano: una errata en el
+        nombre, un cambio de dorsal a mitad de temporada, una demarcación mal elegida.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        shirtNumber:
+          type: integer
+          minimum: 1
+          maximum: 99
+        position:
+          $ref: '#/components/schemas/PlayerPosition'
+
+    PlayerResponse:
+      type: object
+      description: |
+        Un jugador **en un equipo y una temporada** (D-05). Es la ficha de la plantilla, no un dosier
+        estadístico: goles, tarjetas, convocatorias y disponibilidad **no viajan aquí**. Salen de `Goal`,
+        `Card`, `Appearance` y `Absence`, que son agregaciones sobre entidades que este contrato todavía
+        no cubre, y llegarán como **modelo de lectura** propio —igual que `StandingResponse` no es un campo
+        gordo de `TeamResponse` (D-34)—, no engordando este esquema.
+
+        **Deliberadamente no embebe el equipo** (`TeamRef`, D-32): dentro de una plantilla el equipo es
+        **constante** —lo acaba de pedir el cliente como ámbito—, así que repetirlo veinticinco veces no
+        distingue una fila de otra. Es el mismo criterio por el que `TeamRef` no lleva `category`.
+      required: [id, teamId, seasonId, fullName, shirtNumber, position, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            **Inmutable** tras el alta (D-37). Siempre un equipo propio: la plantilla solo existe para
+            ellos (§3.7).
+        seasonId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            **Inmutable** tras el alta (D-37). Es el **único** sitio del subárbol, junto a `Competition`,
+            donde la temporada es columna propia y no se alcanza por FK: aquí es **identidad** (D-28).
+        fullName:
+          type: string
+          examples: ['Marcos Díaz']
+        shirtNumber:
+          type: integer
+          minimum: 1
+          maximum: 99
+          examples: [1]
+        position:
+          $ref: '#/components/schemas/PlayerPosition'
+        photoUrl:
+          type: [string, 'null']
+          format: uri
+          readOnly: true
+          description: |
+            **Derivado, no almacenado** (D-35): en BD vive `photo_key`, la clave del objeto en Storage —
+            mismo criterio que el escudo del club (D-19), y aquí además obligado, porque la foto de un menor
+            no puede quedar colgada de una URL pública ajena. El servidor devuelve una **URL firmada y de
+            vida corta**; el cliente la usa, no la guarda.
+
+            **Nulo** mientras no haya foto: se sube aparte, con `PUT /players/{playerId}/photo`, y nunca en
+            el alta ni en el `PATCH`. La ficha sin foto es un estado normal —el mockup pinta las
+            iniciales—, no un alta a medias.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # No hay campo `deletedAt` en PlayerResponse: el borrado es lógico (D-36), pero eso es asunto de
+    # auditoría y recuperación, no del cliente — un jugador borrado sencillamente no se devuelve.
+
+    # ─────────────────────────── Absence (§5.2) ───────────────────────────
+    CreateAbsenceRequest:
+      type: object
+      description: |
+        Alta de un periodo de indisponibilidad. **Solo `startDate` es obligatoria** de las tres fechas: una
+        lesión se apunta el día que ocurre, cuando todavía no se sabe cuándo vuelve.
+
+        **Admite crear la ausencia ya cerrada** (`actualReturnDate` en el alta), que es como se registra
+        una baja pasada.
+      additionalProperties: false
+      required: [playerId, type, startDate]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          description: |
+            Jugador que causa baja. **No reaparece en el `PATCH`**: una ausencia registrada en el jugador
+            equivocado se borra y se vuelve a crear, no se traslada (D-40).
+        type:
+          $ref: '#/components/schemas/AbsenceType'
+        startDate:
+          type: string
+          format: date
+          description: Primer día de indisponibilidad — el `INIC` del mockup.
+          examples: ['2024-12-05']
+        expectedReturnDate:
+          type: [string, 'null']
+          format: date
+          description: |
+            Alta **estimada** (`ALTA EST.` en el mockup). **Nula** mientras no haya pronóstico, que es el
+            estado normal los primeros días de una lesión. Es una previsión, no un compromiso: se corrige
+            por `PATCH` tantas veces como haga falta.
+          examples: ['2025-01-06']
+        actualReturnDate:
+          type: [string, 'null']
+          format: date
+          description: |
+            Alta **real**. Ponerla es lo que da la ausencia por terminada (D-38): no hay campo `active` ni
+            sub-recurso de cierre.
+
+    UpdateAbsenceRequest:
+      type: object
+      description: |
+        Actualización parcial, y **también el modo de dar de alta al jugador**: basta con `actualReturnDate`
+        (D-40).
+
+        **`actualReturnDate: null` explícito reabre** la ausencia, según la convención de `PATCH` del
+        contrato (§5.2) — el caso de haber cerrado una baja por error.
+
+        **No incluye `playerId`**: la ausencia es de quien es.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        type:
+          $ref: '#/components/schemas/AbsenceType'
+        startDate:
+          type: string
+          format: date
+        expectedReturnDate:
+          type: [string, 'null']
+          format: date
+        actualReturnDate:
+          type: [string, 'null']
+          format: date
+
+    AbsenceResponse:
+      type: object
+      description: |
+        Un periodo de indisponibilidad de un jugador. Es lo que pinta el distintivo DISPONIBLE /
+        NO DISPONIBLE de la ficha de plantilla, con sus dos fechas.
+
+        **No embebe el jugador**: dentro de un historial de bajas es constante, y dentro de una plantilla el
+        cliente ya tiene la lista de jugadores — `playerId` basta para cruzarlas. Mismo criterio por el que
+        `PlayerResponse` no embebe el equipo (D-32).
+      required: [id, playerId, type, startDate, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            **La temporada y el equipo se alcanzan por aquí**, no por columnas propias: `Absence` no las
+            lleva, y es deliberado (D-28). El jugador ya es identidad de equipo y temporada (D-05), así que
+            copiarlas sería exactamente la denormalización que esa regla prohíbe.
+        type:
+          $ref: '#/components/schemas/AbsenceType'
+        startDate:
+          type: string
+          format: date
+          examples: ['2024-12-05']
+        expectedReturnDate:
+          type: [string, 'null']
+          format: date
+          examples: ['2025-01-06']
+        actualReturnDate:
+          type: [string, 'null']
+          format: date
+          description: 'Nula mientras la ausencia siga en curso.'
+        isActive:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado en lectura, no almacenado** (D-38): la ausencia está en curso si **no tiene alta
+            real** y **su fecha de inicio ya llegó**. El borrador del modelo llevaba una columna `active`;
+            al derivarla, la bandera ya no puede contradecir a las fechas — mismo patrón que `isOwn`
+            (D-03), `isCurrent` y `isKickoffConfirmed` (D-30).
+
+            Depende del **día en que se pregunta**, como `Season.isCurrent`: una baja apuntada por
+            adelantado responde `false` hoy y `true` cuando llegue su `startDate`, sin que nadie la toque.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+
+    # `Player.isAvailable` no existe: sería el mismo dato derivado dos veces y con dos consultas. La
+    # plantilla pide `GET /absences?teamId=&seasonId=&active=true` y cruza por `playerId` (D-38).

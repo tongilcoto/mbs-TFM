@@ -1,7 +1,7 @@
 # Anexo de Decisiones · Bitácora de decisiones de diseño
 
 - **Estado:** vivo — se añade una entrada cada vez que se descarta una alternativa
-- **Fecha:** 2026-08-11
+- **Fecha:** 2026-08-14
 - **Documento principal:** [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · **Evidencia:** [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)
 
 > **Qué es este anexo.** El **por qué** del diseño: qué alternativa era tentadora, por qué se descartó, qué
@@ -44,6 +44,9 @@
 | **D-30** | El calendario nace provisional: fecha y hora separadas, confirmación derivada | §3.2, §3.7, §4.1, §5.1 |
 | **D-31** | `federation_match_id` se modela, pero la ingesta no puede depender de él | §3.2, §3.5, §3.7 |
 | **D-33** | `previous_position` se almacena: la fila entera ya es un *snapshot* | §3.2, §5.1 |
+| **D-35** | La foto del jugador es una clave de Storage, no una URL — y entra saneada por la API | §3.2, §5.1, §5.2 |
+| **D-38** | `Absence.active` no es columna: la disponibilidad es una pregunta con fecha | §3.2, §4.1, §5.1, §5.2 |
+| **D-39** | Dos ausencias activas sí, dos del mismo tipo no | §3.2, §3.5, §4.6 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
 | **D-17** | La federación es un catálogo en código, y hay una por tenant | §3.2, §3.6 |
@@ -58,6 +61,9 @@
 | **D-29** | La clasificación no es un campo de `Round`: es una capacidad de la federación | §3.7, §5.1, §5.2 |
 | **D-32** | `MatchResponse` embebe los equipos: proyección, no referencia ni expansión | §5.2, §5.3 |
 | **D-34** | La clasificación es un modelo de lectura: sin acceso por id, con la racha dentro | §3.4, §4.5, §5.1 |
+| **D-36** | Borrar un jugador no pregunta por su historial: *soft delete* sin guarda de dependientes | §3.5, §4.6, §5.1 |
+| **D-37** | La plantilla es un hecho de (equipo, temporada): ámbito obligatorio e identidad inmutable | §3.2, §5.1, §5.2, §5.3 |
+| **D-40** | Dar de alta a un lesionado es un `PATCH`: cuándo un sub-recurso de estado está justificado | §5.1, §5.2, §5.3 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -557,6 +563,121 @@ negocio real (alta a mitad de temporada)— es peor.
 
 ---
 
+### D-35 · La foto del jugador es una clave de Storage, no una URL — y entra saneada por la API
+
+**El modelo la traía mal desde el primer borrador.** §3.2 declaraba `Player.photo_url`, mientras que el
+escudo del club era `crest_key` — la clave del objeto en Storage, no una dirección ([D-19]). Dos campos con
+la misma función y forma opuesta en la misma tabla de entidades.
+
+**La incoherencia no es de estilo.** Un `photo_url` de texto libre significa que la foto **vive donde la haya
+puesto quien la pegó**: Google Fotos, WhatsApp, el servidor del club anterior. Y lo que se está alojando ahí
+es la **cara de un menor**, en un producto cuya región de despliegue se eligió por el RGPD (ADR). Con la
+clave, el fichero está en el Storage del tenant, se borra con él y no lo sirve nadie más.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| `photo_url` de texto libre | Aloja datos personales de menores fuera del control del producto; el purgado ([D-24]) borra la fila y deja la foto donde estaba |
+| Clave + URL pública permanente | Un identificador adivinable expone las fotos de la plantilla a quien no tiene token |
+| **Clave + URL firmada de vida corta** | **Elegida** |
+
+**Decisión.** En BD, `photo_key` (anulable). En el contrato, `photoUrl` **derivada y `readOnly`**: el
+servidor firma una URL de vida corta al responder. El cliente la usa, no la cachea. Es exactamente el
+reparto de [D-19] para el escudo, con un requisito extra —la firma— que allí no hacía falta: un escudo es
+público, una foto de un chaval de doce años no.
+
+**Por dónde entra el fichero: `PUT /v1/players/{id}/photo`, y no el `POST`.** La foto la sube un humano
+desde su portátil, así que el contrato tiene que recibir un binario en algún sitio. Tres formas posibles:
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| El fichero **dentro del `POST`** (`multipart` con los campos) | La clave del objeto se deriva del `playerId`, que **no existe hasta que el alta responde**; y un fallo a mitad de subida tumbaría el alta entera, obligando a reteclear el formulario. Además **no ahorra el segundo endpoint**: reemplazar la foto de un jugador ya creado lo necesita igual |
+| **Subida directa a Storage** con URL prefirmada | Es lo que más ahorra al servidor, y es exactamente lo que **no se puede hacer aquí** — ver abajo |
+| **`PUT` a un sub-recurso**, cuerpo en crudo | **Elegida** |
+
+**El argumento que decide no es de arquitectura, es el mismo de la decisión: el EXIF.** Una foto hecha con
+un móvil lleva metadatos con la **geolocalización** de dónde se tomó — la de un menor, típicamente su casa
+o su campo de entrenamiento. Si el navegador escribe directamente en Storage con una URL prefirmada, ahí
+queda el fichero **tal cual**, y la URL firmada lo sirve con sus coordenadas dentro. Habría cerrado la
+puerta del alojamiento (que era el problema de partida) dejando abierta la ventana de los metadatos.
+
+Al pasar por la API, el servidor **valida los bytes contra el `Content-Type` declarado** (no la extensión:
+un `.pdf` renombrado se rechaza), **recodifica a JPEG**, **redimensiona** al lado que pide la ficha y
+**descarta el EXIF**. Escribir en Storage deja de ser transportar un fichero ajeno para ser producir uno
+propio.
+
+**Detalles que quedan fijados con ella:** cuerpo `image/jpeg` o `image/png` (los dos formatos que produce
+cualquier portátil), tope de **5 MB** (**413** si se supera, **415** si el tipo no está admitido), clave
+derivada `players/{playerId}.jpg`, y `DELETE` del mismo sub-recurso para quitarla — porque un `null`
+explícito en un campo **derivado** del `PATCH` no significaría nada (mismo criterio que `/ownership`).
+
+**Lo que se asume a cambio.** El binario **pasa por Vapor**, con su coste de memoria y ancho de banda en un
+contenedor pequeño (ADR: tope de 20 $/mes). Se acepta porque el volumen es ridículo —~25 fotos por equipo,
+subidas una vez por temporada— y porque es el **único punto** donde se puede sanear el fichero. Si algún día
+el volumen cambiara, la salida no es la URL prefirmada sino un *worker* de post-proceso; el saneado no es
+negociable. Y que el borrado lógico de un jugador ([D-36]) **no borra el objeto**: sigue en Storage hasta el
+purgado de temporada ([D-24]), que es coherente con que el borrado sea recuperable.
+
+---
+
+### D-38 · `Absence.active` no es columna: la disponibilidad es una pregunta con fecha
+
+**El modelo lo traía como bandera.** §3.2 declaraba `Absence.active` junto a las tres fechas. Es la cuarta
+vez que aparece el mismo patrón —`is_own` ([D-03]), `is_current`, `is_kickoff_confirmed` ([D-30])— y se
+resuelve igual: **una columna que puede contradecir a los datos de los que se deduce no debe existir**.
+
+**Decisión.** `active` desaparece de la tabla. `isActive` se **deriva en lectura**: la ausencia está en curso
+si **no tiene `actual_return_date`** y **su `start_date` ya llegó**.
+
+**La segunda condición no es un adorno.** Con solo la primera, una baja apuntada por adelantado —"el
+sábado empieza a cumplir sanción"— contaría como activa desde el momento de teclearla. Con las dos, **pasa
+sola** a activa el día que toca y **sin que nadie la toque**, que es lo mismo que ya hace `Season.isCurrent`.
+El precio es que `isActive` **depende del día en que se pregunta**: el Dominio la resuelve con el `Clock`
+inyectado (§4.3), no con `Date()`, y por eso es testeable sin I/O (§8.1).
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Columna `active` mantenida por la aplicación | Se desincroniza en cuanto alguien escribe la fecha de alta por otra vía (una migración, una corrección manual, el purgado) |
+| Columna `active` con *trigger* | Segundo escritor para el mismo hecho, y lógica de dominio dentro de la BD |
+| **Derivarla de las fechas** | **Elegida** |
+
+**Consecuencia en el contrato:** el filtro `?active=true` de `GET /v1/absences` se resuelve sobre ese mismo
+criterio, no sobre una columna indexable. Es una comparación de fechas sobre un conjunto ya acotado por el
+ámbito (§5.1), así que no necesita índice propio.
+
+**Y una que se decide aquí para no repetirla:** `PlayerResponse` **no lleva `isAvailable`**. Sería el mismo
+dato derivado por segunda vez y con otra consulta; la plantilla pide
+`GET /v1/absences?teamId=&seasonId=&active=true` y cruza por `playerId`. Una llamada más para toda la
+plantilla, no una por jugador.
+
+---
+
+### D-39 · Dos ausencias activas sí, dos del mismo tipo no
+
+**La pregunta.** ¿Puede un jugador tener varias ausencias abiertas a la vez?
+
+**Sí, y el modelo tiene que admitirlo:** lesionado **y** sancionado simultáneamente es un estado real —la
+sanción corre mientras se recupera— y son dos periodos con causas, fechas y altas distintas. Colapsarlos en
+uno perdería información que la ficha muestra.
+
+**Pero dos del mismo tipo, no.** Dos lesiones abiertas a la vez no son dos lesiones: son una que **nadie
+cerró**. El modelo no las distingue —`Absence` no tiene descripción, solo tipo y fechas—, así que la segunda
+fila no aporta un hecho nuevo, solo ruido que deja al jugador no disponible para siempre.
+
+**Decisión.** Índice único **parcial**: `UNIQUE (player_id, type) WHERE actual_return_date IS NULL` (§3.5).
+→ **409** en el `POST`, y también en el `PATCH` que reabre una baja antigua teniendo otra abierta. Es la
+segunda unicidad parcial del modelo, después de la del dorsal ([D-36]), y por el motivo opuesto: allí para
+**no contar** filas borradas, aquí para **contar solo** las abiertas.
+
+**Por qué como índice y no como validación en la aplicación:** [D-28] fijó el criterio —una invariante se
+lleva al esquema **cuando se puede hacer estructuralmente imposible**—. Esta se puede, así que se hace.
+
+**Lo que se asume a cambio.** El caso raro de dos ausencias solapadas de tipo `otro` (un viaje de estudios
+que se cruza con un asunto familiar) queda bloqueado. Si apareciera de verdad, la salida es **un valor nuevo
+en el enumerado**, no relajar el índice: un tipo que necesita solaparse consigo mismo es un tipo que en
+realidad son dos.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -901,6 +1022,123 @@ pantalla que consume esto.
 
 ---
 
+### D-36 · Borrar un jugador no pregunta por su historial: *soft delete* sin guarda de dependientes
+
+**La pregunta.** `Season` y `Competition` devuelven **409** si tienen datos colgando (§5.1). ¿Debería
+`DELETE /v1/players/{id}` hacer lo mismo cuando el jugador ya tiene goles, tarjetas o convocatorias?
+
+**Por qué no, y no es una excepción caprichosa.** El 409 de `Season` protege una **integridad real**: su
+borrado es **físico** y en cascada ([D-24]), así que negarse es la única forma de que un `DELETE` distraído
+no se lleve media temporada por delante. El de `Player` es **lógico** (`deleted_at`, §3.5): las filas de
+`Goal`, `Card` y `Appearance` **siguen ahí y siguen apuntando a la misma PK**. No hay nada que romper, así
+que no hay nada que guardar. Poner un 409 aquí sería copiar la forma de la otra decisión sin su motivo.
+
+**El caso de negocio decide.** El borrado que de verdad ocurre en un club es *"me equivoqué al dar de alta a
+este chaval"* o *"este ya no viene"*, y a menudo se descubre **después** del primer partido. Con guarda de
+dependientes, ese jugador **no se puede quitar nunca** de la plantilla: la pantalla arrastra una ficha
+muerta el resto de la temporada.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| **409** si tiene eventos | Deja sin salida el caso real (alta errónea descubierta tarde) y protege una integridad que el *soft delete* no pone en riesgo |
+| Borrado **físico** en cascada de sus eventos | Falsea la estadística del **equipo**: los goles se marcaron y el partido se ganó con ellos. El historial no es del jugador, es del equipo |
+| **Soft delete sin guarda** | **Elegida** |
+
+**Decisión.** `DELETE` → **204** siempre; marca `deleted_at` y el jugador desaparece de todas las lecturas.
+Sus eventos sobreviven y **siguen contando para el equipo**. Sin `?force=`, sin 409, sin parámetro para
+listar borrados: el borrado lógico sirve a la **auditoría y la recuperación** (§3.5), no al cliente.
+
+**Consecuencia dura, y es la parte que hay que implementar bien:** el índice único del dorsal tiene que ser
+**parcial** — `UNIQUE (team_id, season_id, shirt_number) WHERE deleted_at IS NULL` (§3.5, §4.6). Sin el
+filtro, el jugador borrado seguiría ocupando el `9` y nadie podría reasignarlo, que es justo lo que se
+espera al borrar una ficha equivocada.
+
+**Lo que se asume a cambio.** Que las estadísticas de un equipo pueden incluir goles de alguien que ya no
+aparece en su plantilla. Es correcto —el gol se marcó—, pero conviene saberlo antes de que alguien lo
+reporte como descuadre. Y que **esto no es el "derecho al olvido"**: borrar lógicamente no elimina el dato
+personal de un menor; para eso está el purgado de temporada ([D-24]).
+
+---
+
+### D-37 · La plantilla es un hecho de (equipo, temporada): ámbito obligatorio e identidad inmutable
+
+**Una sola decisión con dos caras**, y verlas juntas es lo que la hace obvia. [D-05] estableció que una fila
+de `Player` es *un jugador en un equipo en una temporada*. De ahí salen las dos:
+
+**1 · En la lectura, `?teamId=` y `?seasonId=` son obligatorios los dos.** No son filtros: son la
+coordenada. Pedir `/v1/players` a secas devolvería todas las plantillas de todos los equipos de todos los
+años mezcladas, que no es una colección que pida ninguna pantalla —igual que el `GET /v1/rounds` sin
+competición o la clasificación sin jornada ([D-34])—. Con las dos, el techo es de ~25 filas → sin
+paginación, orden fijo por dorsal (§5.3). **Y sin `?q=`**: la colección entera cabe en una pantalla, así que
+buscar por nombre es superficie sin consumidor.
+
+**2 · En la escritura, esos mismos dos campos no se pueden cambiar.** Van en `CreatePlayerRequest` y **no**
+en `UpdatePlayerRequest`. El motivo no es de propiedad —los escribe el mismo administrador que hace el
+`PATCH`— sino de **historial**: los goles y tarjetas del jugador cuelgan de esta fila, y mover su `team_id`
+haría que eventos ya emitidos pasaran a contar para otro equipo. Un `PATCH` que reescribe el pasado no es
+una corrección.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| `?teamId=` opcional, `?seasonId=` opcional | La lista sin acotar no la pide ninguna pantalla y pierde el techo que permite no paginar |
+| Ruta anidada `/teams/{id}/players` | Expresa mejor la contención, pero rompe la convención de rutas planas de **todo** el contrato y sigue necesitando la temporada por *query* |
+| `PATCH` con `teamId` (traslado entre equipos) | Reasigna el historial ya emitido. El traslado correcto es **fila nueva** en el equipo nuevo, como el cambio de temporada ([D-05]) |
+
+**Decisión.** Ámbito obligatorio en `GET /v1/players` (**400** si falta), `teamId`/`seasonId` solo en el
+alta, y **422** si el equipo no es propio, no existe o la temporada está archivada. El 422 —y no 404— porque
+el equipo llega en el **cuerpo**: `/players` sí existe, y un 404 respondería sobre el recurso equivocado.
+En el `GET` de lista el 404 **sí** es del ámbito, como en `Round` y `Match`.
+
+**Lo que se asume a cambio.** Un jugador que sube de equipo a mitad de temporada queda partido en dos filas
+sin vínculo, y sus totales no se suman solos. Es la **misma contrapartida que [D-05] ya aceptó** para el
+cambio de temporada, extendida al cambio de equipo — no una nueva. Y que cada verano hay que volver a
+teclear la plantilla: el alta en bloque queda anotada como cuestión abierta (§9), no resuelta aquí.
+
+---
+
+### D-40 · Dar de alta a un lesionado es un `PATCH`: cuándo un sub-recurso de estado está justificado
+
+**La tentación era clara.** El contrato ya tiene tres sub-recursos de estado —`PUT /seasons/{id}/archive`,
+`PUT /teams/{id}/ownership` ([D-20]), `PUT /players/{id}/photo` ([D-35])—, y "dar de alta al jugador" **suena**
+igual: un verbo del negocio, algo que el entrenador *hace*. `PUT /v1/absences/{id}/return` encajaba a la
+vista.
+
+**Por qué no.** Los tres que existen comparten una propiedad que este no tiene: **hacen algo que escribir un
+campo no hace**.
+
+| Sub-recurso | Qué hace que un campo no haría |
+|-------------|--------------------------------|
+| `/archive` | Oculta **el subárbol entero** de la temporada, y su reverso (`DELETE`) lo restaura |
+| `/ownership` | **Orquesta entre entidades**: pone `opponent_club_id` a nulo *y* copia nombre y escudo del `OpponentClub` al `Club` |
+| `/photo` | Recibe un **binario**, lo valida, lo recodifica y lo escribe en Storage |
+| ~~`/return`~~ | **Escribe una fecha.** Nada más |
+
+**Decisión.** Cerrar una ausencia es `PATCH {"actualReturnDate": "2025-01-06"}`. Y **reabrirla** —el caso de
+haberla cerrado por error— es `PATCH {"actualReturnDate": null}`, que ya significa "borra el valor" en la
+convención de `PATCH` del contrato (§5.2): no hace falta inventarle semántica.
+
+**El criterio que queda fijado para lo que venga:** un sub-recurso de estado se justifica cuando la
+operación **orquesta, oculta o transporta**; no cuando pone un valor. Envolver una asignación en un `PUT`
+con nombre bonito no la hace más auditable —el `updated_at` y la auditoría son los mismos—, solo añade una
+ruta que mantener y una decisión que el cliente tiene que aprender.
+
+**Corolario del mismo razonamiento, en la dirección contraria: `DELETE` no es "cerrar".** Los dos botones
+caerán cerca en el backoffice y no son intercambiables. Una baja **que ocurrió** se cierra y queda en el
+historial; una **registrada por error** se borra ([D-36]). Cerrar la falsa dejaría en la ficha un periodo de
+indisponibilidad que nunca existió, y las dos fechas lo harían pasar por real.
+
+**Alcance de la lista, que es la otra mitad de la forma del recurso.** `GET /v1/absences` exige ámbito y
+admite **dos**: `?playerId=` (la ficha del jugador) o `?teamId=` **+** `?seasonId=` (la plantilla entera).
+La segunda no es comodidad: sin ella, pintar el distintivo de disponibilidad de 25 fichas cuesta **25
+llamadas** — el N+1 que [D-32] y [D-34] ya combatieron. Un ámbito **a medias** (`teamId` sin `seasonId`) es
+**400**, no un filtro parcial: no acota nada, y devolvería las bajas de todos los años del equipo.
+
+**Lo que se asume a cambio.** Que el `PATCH` de `Absence` mezcla dos intenciones muy distintas —corregir una
+errata y dar el alta— bajo el mismo verbo. Es exactamente lo que el contrato ya acepta en `Season` o
+`Player`, y el precio de no tener un endpoint por transición.
+
+---
+
 ## Documentación
 
 ### D-25 · El *spec* OpenAPI es la fuente de verdad campo a campo
@@ -971,6 +1209,18 @@ limpio.
 [D-32]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-34]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-19]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-35]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-36]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-37]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-10]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-20]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-38]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-39]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-40]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo de la Federación §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
