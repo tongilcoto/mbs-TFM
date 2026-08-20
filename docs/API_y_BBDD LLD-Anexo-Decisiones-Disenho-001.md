@@ -59,6 +59,9 @@
 | **D-18** | *Upsert* por tipo de campo: semilla, volátil, propiedad y emparejamiento | §3.7 |
 | **D-19** | Los escudos se descargan; la clave del objeto se deriva del `slug` | §3.7 |
 | **D-20** | Arranque en frío: reclamación de equipo propio como sub-recurso de estado | §3.6, §5.1 |
+| **D-55** | La capacidad de clasificación es «¿por jornada?», no «¿publica?» | §3.6, §3.7, §5.1, §5.2 |
+| **D-56** | «Volátil» no es «pisar siempre»: la fuente solo gana cuando dice algo | §3.7, §5.6 |
+| **D-57** | El acta entra como fuente de estado, y solo para los partidos del club | §3.3, §3.7, §5.6 |
 | **Contrato de la API** | | |
 | **D-21** | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra | §5.1 |
 | **D-22** | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos | §5.1 |
@@ -503,10 +506,12 @@ externo, la única clave son las **coordenadas** (jornada, local, visitante) —
 que **la fecha se mueve cada semana**, así que cualquier emparejamiento que la incluyera duplicaría partidos
 sistemáticamente. Un identificador estable del proveedor es exactamente lo que [D-06] previó para este caso.
 
-**Por qué no puede ser obligatorio.** `codacta` es un campo **de la RFFM**, no del contrato genérico de
-"federación". El catálogo en código ([D-17]) ya soporta dos proveedores y se sabe que **difieren en
-capacidades** —la FCF ni siquiera publica clasificación ([D-29])—; dar por hecho que todos publican un
-identificador de acta sería repetir el error que [D-29] corrigió: elevar una particularidad de un proveedor a
+**Por qué no puede ser obligatorio, y ahora está confirmado.** `codacta` es un campo **de la RFFM**, no del
+contrato genérico de "federación". El catálogo en código ([D-17]) ya soporta dos proveedores que **difieren
+en capacidades** ([D-55]), y la observación posterior lo zanjó: **la FCF no tiene identificador de partido
+en absoluto** ([Anexo FCF §C.3]) — hay que emparejar por *(temporada, competición, grupo, jornada, local,
+visitante)*. Dar por hecho que todos publican un identificador de acta sería repetir el error que [D-29]
+corrigió: elevar una particularidad de un proveedor a
 invariante del modelo. Además, la clave puede faltar **dentro** de la propia RFFM en respuestas parciales.
 
 **Decisión.** `Match.federation_match_id`, **anulable**, único (con `NULL` que no comparan iguales, §3.5),
@@ -526,7 +531,7 @@ partido en otra jornada—, que crearía un duplicado sin forma de detectarlo. M
 columna anulable; no modelarlo cuesta una operación de fusión que aún no existe (§9).
 
 **Alternativa descartada: exponerlo como capacidad del catálogo**, al estilo de
-`federationProvidesStandings` ([D-29]). Se rechaza porque **no tiene consecuencia visible para el cliente**:
+`federationProvidesRoundStandings` ([D-29]). Se rechaza porque **no tiene consecuencia visible para el cliente**:
 que el emparejamiento use una clave u otra no cambia nada de lo que la app pinta. La capacidad de
 clasificación sí se expone porque el usuario ve la diferencia (oficial vs calculada). Este queda como
 detalle del adaptador.
@@ -825,18 +830,18 @@ señalar, no bloquear—. Bloquearla costaría más de lo que evita.
 escribe solo la ingesta y vienen de la misma API. Tratarlos igual sería un error.
 
 **Dónde se rompe.** La clasificación **siempre se puede calcular** desde los `Match` con marcador — por eso
-[D-15] la declaró agnóstica a la fuente y [D-29] dejó `federationProvidesStandings` como dato de
+[D-15] la declaró agnóstica a la fuente y [D-29] dejó `federationProvidesRoundStandings` como dato de
 **procedencia** que las apps pueden ignorar.
 
 El ranking de goleadores **no se puede calcular**: incluye jugadores rivales y [D-09] descartó modelar sus
 *rosters*. Calcularlo desde `Goal` daría un ranking de nuestra plantilla presentado como ranking de la liga,
 que es peor que no tener ranking.
 
-**Decisión.** `ClubResponse.federationProvidesScorers`, hermano de `federationProvidesStandings` —mismo
+**Decisión.** `ClubResponse.federationProvidesScorers`, hermano de `federationProvidesRoundStandings` —mismo
 origen ([D-17]: catálogo en código), misma granularidad (una federación por tenant)— pero con un **peso
 distinto que conviene no aplanar**:
 
-| | `federationProvidesStandings` | `federationProvidesScorers` |
+| | `federationProvidesRoundStandings` | `federationProvidesScorers` |
 |---|---|---|
 | Qué dice | De dónde **viene** el dato | **Si hay** dato |
 | Si es `false` | La clasificación existe igual, calculada ([D-15]) | `GET /v1/league-scorers` devuelve **siempre** vacío |
@@ -994,6 +999,130 @@ ingesta lo crea **directamente como propio** y `/ownership` deja de ser el camin
 
 ---
 
+### D-55 · La capacidad no es «¿publica clasificación?» sino «¿puede recuperar una jornada pasada?»
+
+**La observación en la que se apoyaba [D-29] era falsa.** Decía que la RFFM publica clasificación y la FCF
+no. Los volcados demuestran que **las dos la publican** — la FCF incluso con más detalle (desglose
+casa/fuera, coeficiente, racha). Lo que las separa es otra cosa:
+
+| | RFFM | FCF |
+|---|---|---|
+| Endpoint | `/api/standings?idGroup=…&round=9` | `/classificacio/…` |
+| **Granularidad** | **histórica, por jornada** | **solo la actual** |
+
+**Por qué importa tanto.** El modelo es un ***snapshot* por jornada** ([D-33], [D-34]). Con la RFFM se puede
+pedir la jornada 9 dos años después; con la FCF, lo que no se capturó esa semana **no se recupera nunca**.
+
+**Decisión.** La capacidad del catálogo ([D-17]) pasa a ser
+**`federationProvidesRoundStandings`**: *«¿puede la ingesta recuperar la clasificación de una jornada
+pasada?»*. RFFM `true`, FCF `false`.
+
+**Lo que esto cambia en la operación, que es menos de lo que parece.** Con la FCF, cada pasada semanal
+ingiere la clasificación vigente y **la guarda como el *snapshot* de la jornada en curso**. En régimen
+estacionario, por tanto, **todas las jornadas acaban teniendo clasificación oficial**: lo que no se puede es
+**rellenar hacia atrás**. El *fallback* calculado de [D-15] sigue existiendo, pero su disparador ya no es «la
+federación no publica» sino **«esta jornada es anterior a nuestra primera sincronización»**.
+
+**Y eso salva la premisa de [D-29].** El riesgo era que la procedencia pasara a variar **por jornada** dentro
+del mismo tenant, que es justo lo que [D-29] descartó al rechazar `Round.hasStandings`. No ocurre: la
+varianza queda confinada a la **ventana de arranque**, que es el mismo hueco que [D-33] ya contemplaba para
+`previous_position` cuando un club da de alta la competición a mitad de temporada. No es una capacidad, es un
+*backfill*.
+
+**Lo que se asume a cambio.** Que en la FCF una jornada pasada que nadie capturó tiene clasificación
+**calculada**, con las limitaciones conocidas: sin desempate por enfrentamiento directo y **sin sanciones
+administrativas**. Es peor dato que el oficial, pero es el único posible, y afecta solo al histórico previo
+al alta.
+
+---
+
+### D-56 · «Volátil» no es «pisar siempre»: la fuente solo gana cuando dice algo
+
+**El caso que rompe [D-18].** `match_date` y `kickoff_time` están clasificados como **volátiles**: la ingesta
+los pisa en cada pasada, incluso ya confirmados, porque una suspensión los mueve ([D-30]). La FCF obliga a
+matizarlo: **cuando un partido se juega, su página deja de publicar la fecha y la hora** y las sustituye por
+el marcador ([Anexo FCF §C.6]). Pisar «siempre» significaría **borrar el dato el lunes siguiente al
+partido**, para siempre.
+
+No es una rareza catalana: la app de Madrid tiene una función dedicada a defenderse del mismo caso, aunque no
+se haya reproducido en los volcados de la RFFM.
+
+**Decisión.** «Volátil» se redefine como **la fuente gana cuando la fuente dice algo**. Un campo **ausente o
+vacío no es un valor**: es ausencia de información, y **nunca sobrescribe** lo que ya hay. Vale para toda la
+ingesta, no solo para la FCF.
+
+**El matiz que hace falta para no romper [D-30].** Un `kickoff_time` vacío **sí es significativo** mientras el
+partido no se ha jugado —es «horario aún sin confirmar», y una suspensión debe poder devolverlo a nulo—. Lo
+que lo desambigua es el marcador:
+
+| Estado del partido | `kickoff_time` vacío significa | La ingesta |
+|--------------------|--------------------------------|------------|
+| **Sin marcador** | horario **no confirmado** todavía | **lo escribe**: es el dato real ([D-30]) |
+| **Con marcador** | la fuente **dejó de publicarlo** | **lo ignora**: conservar lo que hay |
+
+`match_date` no necesita ese matiz: es `NOT NULL` en el modelo (§3.2) y un partido siempre tiene fecha
+nominal, así que **vacío nunca es un valor válido** para ella.
+
+**Consecuencia operativa: la ingesta tiene que ser incremental de verdad.** Un partido que no se sincroniza
+**antes** de jugarse pierde su fecha real de forma irrecuperable en la FCF. Refuerza el anclaje semanal de
+§5.6 y convierte el *«no puede ser mayor que una semana»* de una recomendación en un requisito.
+
+**Lo que se asume a cambio.** Que la ingesta ya no puede escribirse como un `UPDATE` ciego de los campos
+volátiles: hay que distinguir **ausente**, **vacío** y **con valor**, que es justo lo que los dos anexos
+documentan campo a campo. Es más código, y es inevitable.
+
+---
+
+### D-57 · El acta entra como fuente de **estado**, y solo para los partidos del club
+
+**Qué desbloquea.** El calendario **no trae estado de partido** (§F.2): la ingesta deriva
+`programado`/`finalizado` de que haya marcador, y por eso `aplazado` y `suspendido` (§3.3) llevan desde el
+principio siendo **valores inalcanzables**. El acta sí lo trae: `suspendido`, `acta_cerrada` y
+`partido_en_juego` ([Anexo RFFM §F.10]). Y se actualiza **antes** que el calendario.
+
+**Qué cuesta.** Una petición **por partido**. Pedir el acta de todos los partidos de un grupo son ~240 por
+temporada; multiplicado por los grupos de un club, se dispara.
+
+**Decisión.** El acta se consulta **solo para los partidos en los que juega un equipo propio**, y **solo**
+para escribir `Match.status`. Dos consecuencias:
+
+- El coste cae a la escala del club —sus equipos, sus partidos— en vez de la de la competición. Es
+  exactamente el mismo recorte de alcance que §3.7 aplica al detalle manual: **lo que no es del club, no se
+  detalla**.
+- `Match.status` deja de derivarse del marcador **para los partidos propios** y pasa a ser dato ingerido de
+  verdad. Para los ajenos sigue derivándose, y por tanto sigue sin poder valer `aplazado`. Se acepta: la
+  clasificación no necesita ese matiz y ninguna pantalla lo pide para partidos de terceros.
+
+**Sigue habiendo un solo escritor.** El acta es ingesta, y `Match` ya era salida de la ingesta ([D-21]). No
+se abre ninguna frontera nueva.
+
+**Lo que el acta trae y de momento NO se ingiere, con sus dos bloqueos.** El acta contiene goles con autor y
+minuto, tarjetas con `segunda_amarilla`, y alineaciones. Es tentador, porque llenaría solo `Goal`, `Card` y
+`Appearance` — pero **no es decidible todavía**:
+
+1. **No sabemos los códigos.** `tipo_gol` y `codigo_tipo_amonestacion` valen `"100"` en todo lo observado. La
+   leyenda de la web demuestra que hay al menos tres tipos de gol y dos de tarjeta (§F.10), pero **falta
+   capturar un acta con penalti, gol en propia puerta y roja**. Sin eso no se puede mapear nada.
+2. **No hay forma de atar `codjugador` a nuestro `Player`.** El acta identifica al jugador con el código
+   federativo; nuestro `Player` es **dominio manual y no tiene identificador de federación** ([D-05]).
+   Ingerir un gol dejaría `scorer_player_id` sin resolver. Habilitarlo exigiría **añadir
+   `Player.federation_player_id`**, que es un cambio de modelo con consecuencias propias —y que de paso
+   permitiría lo que [D-09] dio por imposible: unir `LeagueScorer` con la plantilla—.
+
+Y aunque se desbloqueen los dos, quedaría lo de fondo: **sería un segundo escritor** en tablas donde el
+contrato garantiza uno solo (§2.1), la misma línea que sostienen [D-10], [D-41], [D-46] y [D-53]. La salida
+previsible es **propiedad por campo**, como ya hace [D-18] dentro de una fila: el acta pondría el esqueleto
+—quién, cuándo, de qué tipo— y el club el desglose que la federación no publica —zona, lado, parte del
+cuerpo, asistencia—. Es la división de §3.7 aplicada un nivel más abajo. **Pero no se decide aquí:** se
+decide cuando existan los dos datos que faltan.
+
+**Lo que se asume a cambio.** Que durante un tiempo se llama a un endpoint rico y se aprovecha un 5 % de lo
+que devuelve. Es deliberado: el alcance ampliado depende de una observación pendiente, y ampliarlo a ciegas
+—mapeando `"100"` a «gol normal» por conjetura— metería datos mal clasificados en las tablas que sostienen
+toda la estadística.
+
+---
+
 ## Contrato de la API
 
 ### D-21 · El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra
@@ -1107,9 +1236,13 @@ peor, que se dispara a principio de temporada, cuando aún no hay partidos jugad
 debería estar ahí. La web **siempre** muestra clasificación.
 
 **La pregunta que sí era real** no era "¿hay?" sino "¿es **oficial** o la hemos calculado nosotros?". Es un
-dato de **procedencia** (§3.7), y la observación que la desbloquea llegó después: **la RFFM publica
-clasificación y la FCF no** ([Anexo de la Federación §F.6]). O sea que **la varianza es entre federaciones**,
-no entre competiciones ni entre jornadas.
+dato de **procedencia** (§3.7), y la varianza es **entre federaciones**, no entre competiciones ni entre
+jornadas.
+
+> **Corrección.** Esta decisión se apoyaba en que «la RFFM publica clasificación y la FCF no». **Era falso**:
+> las dos la publican, y lo que las separa es poder pedirla **por jornada pasada** ([D-55]). La conclusión
+> aguanta —la varianza sigue siendo entre federaciones y el campo sigue siendo uno por tenant— pero el campo
+> se llamó de otro modo: **`federationProvidesRoundStandings`**.
 
 **Alternativa intermedia, también descartada: `Competition.standingsSource`.** Parecía el nivel natural
 —hermano de `last_synced_at`—, pero como hay **una federación por tenant** ([D-17]), dentro de un *schema*
@@ -1118,7 +1251,7 @@ exactamente la redundancia que [D-28] acaba de rechazar, y por el mismo motivo.
 
 **Decisión.** La capacidad vive en el **catálogo de federaciones en código** ([D-17]), que pasa así a
 describir **qué sabe hacer** cada proveedor y no solo sus coordenadas. Al contrato sale **una sola vez por
-tenant**, derivada y `readOnly`: `ClubResponse.federationProvidesStandings`. Su consumidor es el
+tenant**, derivada y `readOnly`: `ClubResponse.federationProvidesRoundStandings` ([D-55]). Su consumidor es el
 **backoffice**, para rotular "clasificación calculada" y que el administrador no la confunda con la oficial;
 las apps de consulta pueden ignorarla.
 

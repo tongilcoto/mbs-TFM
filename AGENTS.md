@@ -19,7 +19,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
-| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM) — API](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/openapi/openapi.yaml) |
+| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/openapi/openapi.yaml) |
 | **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
@@ -34,7 +34,13 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   **el BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra.** Al tocar el spec o el LLD, respetar
   esta frontera: no añadir `POST`/`DELETE` a entidades de salida.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
-  Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant.
+  Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
+  **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
+- **Los dos proveedores no son intercambiables** y sus diferencias están medidas: la RFFM es JSON y sirve
+  clasificación por jornada; la **FCF es *scraping* de HTML**, cuesta una petición por jornada, no tiene
+  identificador de partido y **borra la fecha del partido al jugarse**. De ahí que en la ingesta un campo
+  **ausente o vacío nunca sobrescriba** (`D-56`) y que la cadencia semanal sea un requisito, no una
+  recomendación (§5.6). Evidencia campo a campo en los anexos de federación; no deducir nada de memoria.
 
 ## Dónde va cada cosa al documentar
 

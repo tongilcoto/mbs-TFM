@@ -109,9 +109,10 @@ tags:
       Clasificación por jornada. Es un ***snapshot***: cada jornada tiene la suya, y de ahí salen la columna
       PREV y la navegación entre jornadas.
 
-      **Escribe:** la **ingesta**, y solo ella — ingerida o **calculada** desde `Match` si el proveedor no
-      la publica (D-15). Las dos vías son del mismo módulo, así que la tabla conserva **un único escritor**;
-      la procedencia se expone una vez por tenant en `ClubResponse.federationProvidesStandings` (D-29).
+      **Escribe:** la **ingesta**, y solo ella — ingerida, o **calculada** desde `Match` en las jornadas que
+      la fuente ya no sirve (D-15, D-55). Las dos vías son del mismo módulo, así que la tabla conserva **un
+      único escritor**; la procedencia se expone una vez por tenant en
+      `ClubResponse.federationProvidesRoundStandings` (D-29).
   - name: Players
     description: |
       Plantilla: los jugadores del club, **solo de equipos propios** (§3.7). Una fila es *un jugador en un
@@ -2749,8 +2750,8 @@ components:
     ClubResponse:
       type: object
       required:
-        [id, name, shortName, slug, federation, federationProvidesStandings, federationProvidesScorers,
-         settings, createdAt, updatedAt]
+        [id, name, shortName, slug, federation, federationProvidesRoundStandings,
+         federationProvidesScorers, settings, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2788,17 +2789,22 @@ components:
           description: |
             Federación del club. **Se fija al aprovisionar** y ninguna operación de esta API la cambia:
             determina a qué API se sincroniza todo el tenant.
-        federationProvidesStandings:
+        federationProvidesRoundStandings:
           type: boolean
           readOnly: true
           description: |
             **Derivado del catálogo de federaciones en código** (D-17), no almacenado: `true` si la
-            federación de este club publica clasificación propia (**RFFM sí**), `false` si hay que
-            calcularla desde los `Match` (**FCF no**) — el *fallback* de D-15.
+            federación permite pedir la clasificación **de una jornada pasada** (**RFFM sí**), `false` si
+            solo publica la vigente (**FCF**) — D-55.
 
-            **No condiciona si hay clasificación**: la hay siempre, por una vía o por la otra. Es un
-            dato de **procedencia** (§3.7) para que el backoffice pueda rotular "clasificación calculada"
-            y el administrador sepa que no es la oficial. Las apps de consulta pueden ignorarlo.
+            **Las dos federaciones publican clasificación**; lo que las separa es poder recuperarla hacia
+            atrás. Con `false`, la ingesta guarda cada semana la clasificación vigente como *snapshot* de
+            su jornada, así que en régimen estacionario **también hay dato oficial**: lo que no se puede es
+            rellenar las jornadas **anteriores al alta**, que se calculan desde `Match` (D-15).
+
+            **No condiciona si hay clasificación**: la hay siempre. Es un dato de **procedencia** (§3.7)
+            para que el backoffice pueda rotular "clasificación calculada". Las apps de consulta pueden
+            ignorarlo.
 
             Vive aquí, y no en `Round` ni en `Competition`, porque la capacidad es **de la federación** y
             hay **una por tenant** (§3.6): dentro de un club el valor es constante (D-29).
@@ -2810,9 +2816,9 @@ components:
             si la federación publica ranking de goleadores.
 
             **Pero, al contrario que aquél, este sí condiciona que haya dato** (D-48). La clasificación
-            existe siempre —ingerida o calculada (D-15)—, así que `federationProvidesStandings` solo habla
-            de *procedencia*. Aquí no hay *fallback* posible: calcular el ranking exigiría la plantilla de
-            los rivales, que no tenemos ni vamos a tener (D-09). Si esto es `false`,
+            existe siempre —ingerida o calculada (D-15)—, así que `federationProvidesRoundStandings` solo
+            habla de *procedencia*. Aquí no hay *fallback* posible: calcular el ranking exigiría la
+            plantilla de los rivales, que no tenemos ni vamos a tener (D-09). Si esto es `false`,
             `GET /v1/league-scorers` devuelve **siempre** página vacía.
 
             **Por eso las apps no pueden ignorarlo**: es la diferencia entre ocultar la pantalla de
@@ -3008,14 +3014,16 @@ components:
     MatchStatus:
       type: string
       description: |
-        Estado del partido. **Lo deriva la ingesta; no llega de la federación**: el objeto de partido no
-        trae campo de estado (Anexo de la Federación §F.2), solo goles vacíos o llenos → `finalizado` si
-        hay marcador, `programado` si no.
+        Estado del partido. **Lo escribe la ingesta**, por dos vías según de quién sea el partido (D-57):
 
-        **`aplazado` y `suspendido` son hoy inalcanzables**: no se ha observado cómo los señala la fuente
-        y, sin `PATCH` sobre `Match` (D-21), nadie más puede fijarlos. Se conservan porque son estados
-        reales del dominio; si resultara que la fuente nunca los distingue, lo que sobra son los dos
-        valores, no el campo (Anexo de la Federación §F.6).
+        - **Partidos de un equipo propio** → del **acta** (Anexo de la Federación §F.10), que sí trae
+          `suspendido`, `acta_cerrada` y `partido_en_juego`. Aquí los cuatro valores son alcanzables.
+        - **Partidos ajenos** → **derivado del marcador**, porque el calendario no trae estado (§F.2):
+          `finalizado` si hay goles, `programado` si no. Aquí **solo esos dos** son posibles.
+
+        La asimetría es deliberada: el acta cuesta **una petición por partido**, así que se pide solo para
+        lo que es del club (D-57). Ninguna pantalla necesita saber que el partido de otros dos equipos se
+        aplazó, y la clasificación tampoco.
       enum: [programado, finalizado, aplazado, suspendido]
 
     MatchOutcome:
@@ -3827,7 +3835,7 @@ components:
 
         **Agnóstica a la fuente** (D-15): la misma fila vale ingerida de la federación o calculada desde
         `Match`, y **no lleva marca de procedencia** — esa es capacidad de la federación y se expone una
-        sola vez por tenant, en `ClubResponse.federationProvidesStandings` (D-29).
+        sola vez por tenant, en `ClubResponse.federationProvidesRoundStandings` (D-29, D-55).
       required:
         [id, competitionId, roundId, team, position, played, won, drawn, lost, goalsFor, goalsAgainst,
          points, form, createdAt, updatedAt]
@@ -4461,12 +4469,14 @@ components:
           minimum: 1
           readOnly: true
           description: |
-            Posición en el ranking **según el proveedor**, y **anulable** porque no todos la publican: hay
-            fuentes que devuelven la lista ya ordenada y sin numerar. Cuando falta, el orden lo fija
-            `goals` descendente (§5.3) y el cliente numera si quiere.
+            Posición en el ranking **según el proveedor**, y **anulable** — que no era una precaución
+            teórica: **la RFFM no la publica** (Anexo de la Federación §F.13). Devuelve la lista ya ordenada
+            por goles descendente y sin numerar, así que aquí llega **siempre nula** y el orden de la
+            respuesta es la única señal.
 
-            Se respeta el valor del proveedor en vez de recalcularlo porque los **criterios de desempate**
-            son suyos y no los conocemos.
+            Se respeta el valor del proveedor cuando lo hay, en vez de recalcularlo, porque los **criterios
+            de desempate** son suyos y no los conocemos. Cuando no lo hay, los empates —dos goleadores con
+            45 goles en la muestra— quedan sin desempate declarado.
         createdAt:
           type: string
           format: date-time

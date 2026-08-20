@@ -12,10 +12,25 @@
 > se sigue una decisión, la decisión vive en el [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) y el modelo
 > resultante en el LLD; aquí queda la evidencia que la sostiene.
 >
+> **Alcance: solo RFFM.** La **FCF (Cataluña)** tiene su [anexo propio](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) — un anexo
+> por federación, porque son dos proveedores independientes y mezclarlos haría ilegibles los dos. Las
+> **diferencias de capacidad** entre ambos se comparan allí, que es donde tienen consecuencia ([D-17]).
+>
 > **Salvedad general.** Nada de esto es un contrato publicado. Es **ingeniería inversa** de la app iOS
-> existente y de la web pública (RFFM Madrid; queda por explorar la Federación Cataluña). Todo lo que sigue
-> puede cambiar sin aviso, y por eso el modelo trata estos identificadores como **datos de integración**,
-> nunca como claves de unión (§3.7 del LLD).
+> existente y de la web pública. Todo lo que sigue puede cambiar sin aviso, y por eso el modelo trata estos
+> identificadores como **datos de integración**, nunca como claves de unión (§3.7 del LLD).
+
+**Convención de fiabilidad**, usada de §F.7 en adelante:
+
+| Marca | Significado |
+|-------|-------------|
+| **[C]** | **Comprobado** en el código de la app o en un volcado real |
+| **[I]** | **Inferido** — razonable, pero no verificado |
+| **[N]** | **No observable** desde esta app; hay que probarlo contra el servidor real |
+
+> **Nota de numeración.** §F.7 en adelante se **añadieron después** de que el LLD y el *spec* ya
+> referenciasen §F.1–§F.6. Se han anexado en vez de intercalarse para no romper esas referencias, así que
+> §F.6 (*pendiente de observar*) queda **en medio** y no al final. Es deliberado.
 
 ---
 
@@ -227,47 +242,354 @@ Dos consecuencias, ambas ya recogidas en el LLD:
 
 ## F.6 Pendiente de observar
 
-Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD):
+Lo que falta para cerrar el contrato de ingesta (§5.6 del LLD). **Seis puntos que esta lista tenía se han
+resuelto** con los volcados: cuatro en §F.12, y los dos grandes —acta y goleadores— en §F.10 y §F.13.
 
-- **Respuesta del endpoint de clasificación** — *forma* de la respuesta, aún sin muestra. Lo que **ya está
-  confirmado** es que **existe**: la RFFM **sí** publica clasificación. La **FCF (Cataluña) no**, y ahí
-  `StandingRow` se calcula desde `Match` ([D-15]).
+- **Cómo se señala un partido aplazado o suspendido *en el calendario*.** §F.10 confirma que el **acta** trae
+  `suspendido`, `acta_cerrada` y `partido_en_juego`, pero el objeto de partido del calendario sigue sin campo
+  de estado (§F.2). Falta ver qué hace la fuente **en el calendario** cuando un partido se aplaza de verdad:
+  ¿solo mueve la fecha? Mientras no se sepa, `aplazado` y `suspendido` (§3.3 del LLD) solo son alcanzables
+  **leyendo el acta**, a una petición por partido.
+- **`codacta_origen` con valor.** Sigue llegando vacío en las dos actas observadas. Es la pieza que diría si
+  un partido reprogramado conserva puntero a su acta original — y con ella, si la reprogramación es
+  detectable sin comparar fechas. **[I]** hasta que se vea un caso real.
+- **Los códigos de `tipo_gol` y `codigo_tipo_amonestacion` distintos de `"100"`.** La leyenda de la web
+  demuestra que existen —tres tipos de gol y dos de tarjeta (§F.10)— pero el acta observada no los ejercita.
+  **Hace falta capturar un acta con penalti, gol en propia puerta y tarjeta roja**; es lo que decide si el
+  desglose de `Goal` y el tipo de `Card` pueden llegar de la fuente o siguen siendo entrada manual.
+- **Si `goles_penalti[]` es la tanda de penaltis** —lo sugiere su vecindad con `hay_penaltis`,
+  `penaltis_casa` y `penaltis_fuera`— o los penaltis convertidos en juego. Llega vacía en la muestra.
+- **El `buildId` de la ruta de datos de Next.js** (§F.10): confirmado que cambia entre despliegues. Falta
+  decidir cómo se obtiene y se refresca —o si se usa la ruta HTML, más estable pero con parseo.
+- **Política de refresco del escudo**: la ruta de origen cambia detectablemente si el club lo cambia, pero no
+  está decidido cada cuánto se comprueba.
+- **Paginación de `/competicion/terrenosjuego`**: el nombre del parámetro de página (§F.7).
+- **Si los códigos de modalidad `3`, `4` y `5` devuelven datos** — el catálogo los declara, pero solo se han
+  ejercitado `1` y `2` (§F.9).
+- **`puntos_sancion`** (§F.8): la fuente lo publica y el modelo no lo recoge. **Aplazado a propósito** — se
+  revisará al final del diseño, no ahora.
 
-  **Qué hay que buscar en la muestra, ahora que el contrato está escrito** (§3.2, §5.1):
-
-  | Campo destino | Qué comprobar en la respuesta |
-  |---------------|-------------------------------|
-  | `position`, `played`, `won`, `drawn`, `lost`, `goals_for`, `goals_against`, `points` | Se dan por seguros; confirmar nombres y que `points` venga **calculado por la fuente** y no haya que deducirlo (sanciones con descuento de puntos) |
-  | **`previous_position`** | **El más incierto.** Si la RFFM no lo publica, hay que calcularlo al ingerir comparando con el *snapshot* anterior — y aceptar que sea nulo cuando no lo haya ([D-33]) |
-  | Identificación del equipo | Si viene `codigo_equipo` (como en el calendario, §F.3) el emparejamiento es directo; si solo viene el nombre, hay que degradar como en §3.7 |
-  | Granularidad | **Si la respuesta es por jornada o solo la clasificación actual.** Es la pregunta que más condiciona: el modelo es un *snapshot* **por jornada**, y si la fuente solo da la última, las jornadas pasadas habrá que calcularlas desde `Match` o construirlas incrementalmente pasada a pasada |
-
-  > Esta es la **primera diferencia de capacidad observada entre federaciones**, y por eso no es solo un
-  > dato de integración: fija que el catálogo en código ([D-17]) describa **qué sabe hacer** cada
-  > proveedor, no solo sus coordenadas. Consecuencia en el contrato: se descartó `Round.hasStandings` y
-  > la procedencia se expone una sola vez por tenant, en `ClubResponse` ([D-29]).
-- **Respuesta del endpoint de goleadores** — mapeo a `LeagueScorer`.
-- **Si el calendario devuelve `division_label` y `group_label` como texto.** Si no los devuelve, son los dos
-  únicos rótulos que el administrador tendrá que **teclear** en el alta en vez de limitarse a confirmar lo
-  que le muestra el *preview*. Es el único punto del diseño del alta que depende de un dato aún no observado.
-- **Correspondencia `tipojuego` ↔ modalidad** más allá de `1` = fútbol-11.
-- **Cómo se señala un partido aplazado o suspendido.** El objeto de partido **no trae campo de estado**
-  (§F.2): solo goles vacíos o llenos, de donde la ingesta deriva `programado`/`finalizado`. Los otros dos
-  valores del enumerado `Match.status` (§3.3 del LLD) **no se han observado**, y como `Match` no tiene
-  `PATCH` ([D-21]) hoy son **inalcanzables**: nadie puede fijarlos. Falta ver qué hace la fuente cuando un
-  partido se aplaza de verdad — ¿mueve la fecha y ya está, o lo marca de algún modo? Si resultara que no
-  hay forma de distinguirlo, **lo que sobra son los dos valores, no el campo**.
-- **Si `codacta` viene siempre.** Se ha visto en las cuatro muestras, todas de calendario completo. Falta
-  confirmar que no falta en respuestas parciales — es lo que decide si el segundo paso de la cadena de
-  emparejamiento de partidos ([D-31]) es un recurso excepcional o el camino habitual.
-- **Federación Cataluña**: host, contrato y numeración. Todo lo anterior es RFFM. Ya se sabe una cosa: **no
-  publica clasificación** (ver arriba).
-- **Política de refresco del escudo**: la ruta de origen es detectablemente distinta si el club lo cambia,
-  pero no está decidido cada cuánto se comprueba.
+> Lo pendiente de la **FCF** no se lista aquí: vive en su [propio anexo](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md).
 
 ---
 
-*Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · `D-nn` → [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)*
+## F.7 Catálogo de endpoints
+
+La RFFM tiene **dos familias** de endpoints, y conviene no confundirlas: **[C]**
+
+- **API REST JSON**, bajo `/api/…` — devuelve JSON directamente.
+- **Páginas Next.js**, bajo `/competicion/…` y `/acta-partido/…` — devuelven **HTML** del que hay que extraer
+  el bloque `<script id="__NEXT_DATA__" type="application/json">`.
+
+Transporte, común a todas: **GET** siempre, parámetros en *query string*, **sin cabeceras** (ni `Accept`, ni
+*User-Agent*), **sin autenticación**, respuesta **UTF-8**. **[C]**
+
+| Endpoint | Parámetros | Devuelve |
+|----------|------------|----------|
+| `GET /api/competitions` | `temporada`, `tipojuego` | Array de competiciones |
+| `GET /api/groups` | `competicion` | Array de grupos — **con `total_jornadas` y `total_equipos`** |
+| `GET /competicion/calendario` | `temporada`, `tipojuego`, `competicion`, `grupo` | HTML → calendario **completo** (§F.1) |
+| `GET /api/standings` | **`idGroup`**, `round` | Clasificación **de esa jornada** (§F.8) |
+| `GET /competicion/terrenosjuego` | `search`, `codcampo`, `codtipocampo` | HTML → campos, **paginado** |
+| `GET /acta-partido/{codacta}` | + `temporada`, `competicion`, `grupo` | HTML → **acta completa** (§F.10) |
+
+Detalles que importan al escribir el adaptador:
+
+- **`idGroup` es el único parámetro en *camelCase*** de toda la API; el resto va en minúscula
+  (`codcampo`, `codtipocampo`, `competicion`, `grupo`). Y el del calendario es **`grupo`**, no `codgrupo`.
+- **`temporada` es el código numérico (`21`), no la etiqueta.** La documentación del proyecto iOS afirma lo
+  contrario y **se equivoca**: el volcado real muestra `"temporada": "21"`. **[C]**
+- **`/api/groups` no admite `temporada` ni `tipojuego`**: el código de competición ya es único por temporada.
+- **`total_jornadas` viene dado** y es el dato bueno. La app lo ignora y estima las jornadas como
+  *(nº equipos − 1) × 2*, que falla en ligas de ida sola o con promoción. **Usar el campo.**
+- **El catálogo de temporadas y el de modalidades no tienen endpoint propio**: van incrustados en la página
+  del calendario, en `seasons[]` y `gameTypes[]`. Para arrancar la ingesta hay que pedir un calendario
+  cualquiera y leerlos de ahí. **[C]**
+- **`currentRound`** viene en el calendario y **la app no lo usa**. Es el mejor disparador para una ingesta
+  incremental. **[C]**
+- **`/competicion/terrenosjuego` está paginado** (`total_paginas`, `pagina_siguiente`) y la app **no lo
+  pagina**: se queda con el primer resultado. El nombre del parámetro de página es **[N]**.
+- **No hay coordenadas GPS de los campos.** La app suple esa carencia con una base local curada a mano. Si
+  la geolocalización llega a hacer falta, **la federación no la da**. **[C]**
+- La app **imprime el código HTTP pero no lo valida**: un 500 acabaría en el parser de JSON con un error
+  engañoso. Validar `2xx` explícitamente.
+
+**Endpoints que existen en el sitio y la app no consume** (del menú incrustado en el propio calendario):
+`/competicion/goleadores`, `/competicion/clasificaciones`, `/competicion/resultados-y-jornadas`,
+`/competicion/tabla-cruzada`, `/competicion/clubes`, `/competicion/comparativa-equipos`. **[N]**
+
+---
+
+## F.8 Clasificación: la publica la federación, y por jornada
+
+`GET /api/standings?idGroup=24037980&round=9`. Es **histórica**: devuelve la foto de la clasificación *tras*
+la jornada pedida — exactamente la granularidad que el modelo necesita (§3.2). **[C]**
+
+```json
+{ "estado": "1", "sesion_ok": "1",
+  "competicion": "SEGUNDA ALEVIN F-7", "codigo_competicion": "24037935",
+  "grupo": "GRUPO 17", "codigo_grupo": "24037980",
+  "jornada": "9", "fecha_jornada": "20-12-2025",
+  "clasificacion": [
+    { "posicion": "1", "codequipo": "23995505", "nombre": "ESCUELA FUTBOL BARRIO PILAR 'C'",
+      "url_img": "/pnfg/pimg/Clubes/00100_0011943963_Logo_Escuela.jpg?nova=1",
+      "jugados": "9", "ganados": "8", "perdidos": "0", "empatados": "1",
+      "goles_a_favor": "81", "goles_en_contra": "18",
+      "puntos": "25", "puntos_sancion": "0", "puntos_local": "13", "puntos_visitante": "12",
+      "racha_partidos": [ {"tipo":"G","color":"#04B431"}, {"tipo":"P","color":"#F78181"} ] } ],
+  "promociones": [] }
+```
+
+| Campo destino (§3.2) | Origen | Estado |
+|----------------------|--------|--------|
+| `position`, `played`, `goals_for`, `goals_against`, `points` | `posicion`, `jugados`, `goles_a_favor`, `goles_en_contra`, `puntos` | ✅ directos |
+| `won`, `drawn`, `lost` | `ganados`, `empatados`, `perdidos` | ✅ — pero **el orden en el JSON es `ganados, perdidos, empatados`**: leer por nombre, nunca por posición |
+| **`previous_position`** | **No se publica** | ❌ Hay que **calcularlo comparando con el *snapshot* anterior**, y aceptar nulo cuando no lo haya — exactamente lo que [D-33] previó |
+| Identificación del equipo | **`codequipo`** | ✅ **Coincide con el `codigo_equipo_*` del calendario** (§F.3) → unión directa por id, sin degradar a nombre |
+
+**Lo que la fuente da y el modelo hoy no recoge:** desglose casa/fuera completo, `puntos_local` /
+`puntos_visitante`, **`puntos_sancion`** (puntos descontados por sanción), `coeficiente`, `color` de fila
+(promoción/descenso), `racha_partidos[]` con los últimos cinco resultados, y un array **`promociones[]`**
+vacío en la muestra pero previsiblemente con las líneas de ascenso y descenso. **[C]**
+
+> **Aviso al cuadrar.** En la jornada 9 de la muestra, `jugados` vale **8 en nueve equipos y 9 en cuatro**:
+> la clasificación «a jornada N» refleja los partidos **realmente disputados**, no N por equipo. No asumir
+> `jugados == round`.
+
+---
+
+## F.9 Modalidades: el catálogo completo, publicado por la propia fuente
+
+Va incrustado en el calendario, en `gameTypes[]`. Resuelve la correspondencia que §F.1 dejaba abierta: **[C]**
+
+| `codigo_tipo_juego` | `nombre` | Modalidad |
+|:-------------------:|----------|-----------|
+| `1` | `Futbol-11` | Fútbol 11 |
+| `2` | `Futbol-7` | Fútbol 7 |
+| `3` | `Fútbol Sala` | Fútbol sala |
+| `4` | `Fútbol-5` | Fútbol 5 |
+| `5` | `Fútbol-Playa` | Fútbol playa |
+
+El propio catálogo es tipográficamente inconsistente (`Futbol-11` sin acento, `Fútbol Sala` con acento y con
+espacio): **usar el código, nunca el nombre**. La app solo ejercita `1` y `2`; que `3`, `4` y `5` devuelvan
+datos es **[I]**.
+
+> **No confundir con `codtipocampo`**, el parámetro de `/competicion/terrenosjuego`, que solo tiene **dos**
+> valores (`1` = Fútbol 11, `2` = Fútbol 7) pese a coincidir en los dos primeros.
+
+---
+
+## F.10 El acta del partido — **volcado real**
+
+El endpoint que la app no usa y que contiene los **datos oficiales** del encuentro. Verificado sobre un
+volcado completo del partido `5408196` (Primera Infantil, Grupo 12, jornada 1). **[C]**
+
+### La llamada
+
+```
+https://www.rffm.es/_next/data/{buildId}/acta-partido/{codacta}.json
+    ?temporada=21&competicion=24037637&grupo=24037649&codacta=5408196
+```
+
+**Es la ruta de datos de Next.js, no la página HTML.** Devuelve **JSON directo** —sin `__NEXT_DATA__` que
+extraer— y es por tanto la vía preferible.
+
+> **Pero el `buildId` cambia en cada despliegue.** El volcado nuevo trae `inlzUL9hzqhAubIvBCD2y`; el anterior,
+> `qncO_Up-CDoWqLGk4miRX`. **Confirmado empíricamente [C]**, y es la trampa de esta ruta: no se puede
+> codificar. Hay que leerlo del `__NEXT_DATA__` de cualquier página y **refrescarlo cuando dé 404**. La
+> alternativa estable es pedir el HTML de `/acta-partido/{codacta}` y extraer el bloque, como en §F.7.
+>
+> Nótese que `codacta` va **dos veces**: en la ruta y como parámetro.
+
+### Estado del partido — lo que el calendario no da
+
+| Campo | Valor observado | Para qué sirve |
+|-------|-----------------|----------------|
+| `acta_cerrada` | `"1"` | El acta está firmada: resultado definitivo |
+| `partido_en_juego` | `"0"` | Partido en directo |
+| **`suspendido`** | `"0"` | **El campo que hace alcanzable `Match.status = suspendido`** (§3.3) |
+| `codacta_origen` | `""` | **Sigue sin observarse con valor.** **[I]** apuntaría al acta original de un partido reprogramado |
+
+El acta **se identifica a sí misma**: trae `jornada`, `nombre_competicion`, `nombre_grupo`, `fecha`, `hora`,
+`campo`, `codigo_campo`, los dos `codigo_equipo_*` y los dos marcadores. No hace falta cruzarla con nada.
+
+### Goles, tarjetas y alineaciones — formas reales
+
+```json
+"goles_equipo_local": [
+  {"codjugador": "16314233", "nombre_jugador": "CARRASCO CHIROQUE, STEFANO ADRIAN", "minuto": "4",  "tipo_gol": "100"},
+  {"codjugador": "20378397", "nombre_jugador": "CURIA SUAREZ, MARCEL",              "minuto": "12", "tipo_gol": "100"}
+],
+"tarjetas_equipo_local": [
+  {"codigo_tipo_amonestacion": "100", "codjugador": "16314233", "segunda_amarilla": "0",
+   "minuto": "55", "nombre_jugador": "CARRASCO CHIROQUE, STEFANO ADRIAN"}
+],
+"jugadores_equipo_local": [
+  {"codjugador": "22877610", "foto": "", "dorsal": "13", "sexo": "0", "nombre_jugador": "GIL ALEJANDRO, JAVIER",
+   "titular": "0", "suplente": "1", "capitan": "0", "portero": "1", "posicion": "",
+   "posicion_jugador_abreviatura": "", "ver_estadisiticas_jugador": "1"}
+],
+"arbitros_partido": [
+  {"cod_arbitro": "1401836", "tipo_arbitro": "ARBITRO", "nombre_arbitro": "PINTOS CANARIO, ALEJANDRO"}
+]
+```
+
+Observaciones sobre estas listas:
+
+- **`tarjetas_*` trae `segunda_amarilla`** como campo propio, además de `codigo_tipo_amonestacion`. Es
+  exactamente la distinción que el modelo hace en `Card` ([D-45]).
+- **`tipo_gol` y `codigo_tipo_amonestacion` valen `"100"`** en todo lo observado (nueve goles, dos tarjetas).
+  Ningún otro valor **en esta muestra** — pero no son campos de un solo valor: ver abajo.
+- `hay_penaltis`, `penaltis_casa` y `penaltis_fuera` llegan como **cadena vacía**, no `"0"` — coherente con
+  §F.11. Junto a ellos va **`goles_penalti[]`**, vacía aquí; por su vecindad con los tres anteriores es la
+  **tanda de penaltis**, no los penaltis convertidos en juego. **[I]**
+
+### La leyenda de la web acota el espacio de valores
+
+La página del acta pinta esta leyenda: **[C]**
+
+> ⚽ Gol · 🔴 Gol en propia puerta · Penalti · Tarjeta amarilla · Tarjeta roja
+
+**La leyenda no viaja en el JSON** —se renderiza en el cliente desde un mapa fijo; buscar `penalti`,
+`amarilla`, `roja` o `propia` en el volcado no devuelve ninguna correspondencia código↔etiqueta—. Pero
+**demuestra que los códigos existen**, aunque esta acta no los ejercite:
+
+| Campo | Valores que la leyenda implica | Observado |
+|-------|--------------------------------|-----------|
+| `tipo_gol` | **≥ 3**: gol, gol en propia puerta, penalti | solo `"100"` |
+| `codigo_tipo_amonestacion` | **≥ 2**: amarilla, roja | solo `"100"` |
+
+Dado que la muestra son nueve goles de jugada y dos amarillas, `"100"` es **[I]** «gol normal» y «amarilla»
+respectivamente. Los demás códigos son **[N]**: hay que capturar un acta con penalti, propia puerta o roja.
+
+**Comparación con el modelo, que es donde esto importa** (§3.3):
+
+| `Goal.play_type` | Icono en la leyenda |
+|------------------|---------------------|
+| `juego_abierto` | ⚽ Gol |
+| `en_propia_puerta` | 🔴 Gol en propia puerta |
+| `penalti` | Penalti |
+| **`falta`** | **ninguno** |
+
+Tres de los cuatro valores del enumerado tienen contrapartida en la fuente; **`falta` no la tiene**. La RFFM
+no distingue el gol de falta directa. En `Card`, la correspondencia es completa: los dos valores del
+enumerado más `segunda_amarilla` como campo aparte, igual que en el modelo.
+- **`posicion` y `posicion_jugador_abreviatura` llegan vacías** en las 36 fichas de jugador, pese a existir.
+- `esquema_local` / `esquema_visitante` traen la **formación** (`"1-4-4-2"`, `"1-4-3-3"`).
+- Typo del proveedor que hay que respetar literalmente: **`ver_estadisiticas_jugador`**.
+- Valores centinela en texto: `entrenador_visitante` = **`"No presenta"`**, y `entrenador_local` llega con un
+  **espacio inicial** (`" CHUECA MANZANERO, ALEJANDRO"`). Sanear.
+
+### Dos confirmaciones colaterales
+
+1. **El `host` de los escudos ya no es una inferencia.** El propio `game` trae
+   `"host": "https://appweb.rffm.es/"`, que era justo lo que §F.4 daba por **[I]**. Ahora es **[C]**.
+2. **El sufijo `(HA)` duplicado es un artefacto del calendario.** Aquí el campo llega limpio:
+   `"CANAL ISABEL II (HA)"`, con **un solo** `(HA)`, frente al `(HA)(HA)` del calendario (§F.11).
+
+> **Advertencia de datos personales.** El acta trae **nombre, dorsal, código federativo y hueco de foto de
+> jugadores de categorías infantiles**, más los de árbitros, entrenadores y delegados. Es el material más
+> sensible de toda la fuente y condiciona cualquier decisión sobre ingerirlo (§8, RGPD).
+
+**Coste:** una petición **por partido** — ~240 por grupo y temporada.
+
+---
+
+## F.11 Rarezas adicionales observadas en los volcados
+
+Complementan las de §F.5, que siguen siendo válidas. **[C]** salvo indicación.
+
+| Observación | Consecuencia |
+|-------------|--------------|
+| **Todo llega como cadena, sin excepción**: `posicion`, `puntos`, `goles_casa`, `currentRound`… Nunca hay números ni booleanos en JSON; las banderas son `"0"`/`"1"` | Conversión explícita en todo el adaptador |
+| El parser de la app **filtra todo lo que no sea dígito** al convertir | **Un `-3` se convertiría en `3`.** Si `puntos_sancion` o una diferencia pudiera venir negativa, se corrompe: **preservar el signo** |
+| Se han visto `&nbsp;` y espacios duros **dentro de campos numéricos** (el parser los limpia) | Sanear antes de convertir |
+| **Dos formatos de fecha en el mismo proveedor**: `dd-MM-yyyy` en datos operativos (`fecha`, `fecha_jornada`), **`yyyy-MM-dd` ISO** en catálogos (`seasons[].fecha_inicio`, `competitions[].FechaInicio`) | Parseo explícito **según el campo** |
+| **Sin huso horario en ningún payload** | Fijar `Europe/Madrid` explícitamente **[I]**; cuidado con los cambios de hora |
+| `"" ` y `"0"` **no son intercambiables**, y el mismo objeto usa ambos: `puntos_sancion` llega `"0"`, `coeficiente` llega `""` | Distinguir vacío de cero |
+| El sufijo `(HA)` aparece en **240 de 240** nombres de campo, con variantes `(HA)(HA)`, `(HA) (HA)` y `(H.A.)(HA)` | La limpieza literal de la app **falla** en dos de las tres. Regex: `\s*\((?:HA\|H\.A\.)\)\s*`, aplicada repetidamente |
+| **Acentos inconsistentes por campo**: equipos y campos **sin** acentos (`ANGELES`, `CHAMBERI`); personas y catálogos **con** acentos (`GARCÍA`, `Fútbol Sala`) | Comparar nombres con *folding* de diacríticos |
+| `calendar.rounds[].`**`equipos[]`** es la lista de **partidos**, no de equipos | Nombre engañoso del proveedor |
+| El calendario asigna la jornada por **índice de array** en la app, ignorando `jornada` y `codjornada` | **Usar `jornada`**, no la posición |
+| `NombreCategoria` viene **truncado a 40 caracteres** (`"PRIMERA DIVISION AUTONOMICA FEMENINO CAD"`) | El rótulo de división puede llegar cortado |
+| El nombre de grupo **no tiene formato estable**: `"Grupo 1"` en un endpoint, `"GRUPO 17"` en otro | Normalizar |
+| **No hay campo de género** en ninguna entidad; solo se infiere del texto (`FÚTBOL FEMENINO`) | ❌ Falta |
+| `estado` y `sesion_ok` acompañan a todas las respuestas, siempre `"1"` | **[I]** `"1"` = OK. `sesion_ok` sugiere que el *backend* legacy podría devolver `"0"` con lista vacía **en vez de un error HTTP**: una lista vacía no siempre significa «no hay datos» |
+| `"(No asignado)"` aparece como **nombre real** de equipo | Tolerarlo |
+| Los códigos son **cadenas de longitud variable** (3 a 8 dígitos), con espacios de numeración antiguos y nuevos conviviendo | No normalizar a entero, no rellenar con ceros |
+| **La etiqueta de temporada llega como `"2025-2026"`**, no `"2024/25"` | Reformatear al `label` del modelo (§3.2) |
+| **`?nova=1`** aparece en la URL del escudo de forma inconsistente (0/240 en calendario, 13/13 en clasificación) | Normalizar quitando el *query* si se usa como clave |
+
+---
+
+## F.12 Confirmaciones que cierran cuestiones abiertas
+
+Cuatro puntos que §F.6 daba por pendientes y los volcados resuelven: **[C]**
+
+1. **`codacta` viene siempre y es único.** 240 de 240 partidos lo traen, con 240 valores distintos. La cadena
+   de degradación de [D-31] es una **red de seguridad, no el camino habitual** — al menos en calendarios
+   completos.
+2. **La RFFM publica clasificación por jornada** (§F.8), con la granularidad exacta del modelo.
+3. **Los rótulos de división y grupo llegan como texto** (`NombreCategoria`, `nombre_grupo_categoria`,
+   `groups[].nombre`): el administrador **confirma**, no teclea. Era el único punto del alta que dependía de
+   un dato sin observar.
+4. **La correspondencia `tipojuego` ↔ modalidad está completa** (§F.9), y la publica la propia fuente.
+
+---
+
+## F.13 Goleadores — **volcado real**
+
+Era el último hueco grande de §F.6. **Existe, es JSON, y no está donde se había inferido.** **[C]**
+
+```
+https://www.rffm.es/api/scorers?idGroup=24037649&idCompetition=24037637
+```
+
+**Es un endpoint `/api/…` JSON puro**, no la página `/competicion/goleadores` con `__NEXT_DATA__` que §F.6
+suponía por simetría. Dos parámetros, **los dos en *camelCase***: `idGroup` e `idCompetition`. Sin
+`temporada` ni `tipojuego` — el código de grupo ya es único por temporada, igual que en `/api/groups` (§F.7).
+
+```json
+{ "estado": "1", "sesion_ok": "1",
+  "competicion": "PRIMERA INFANTIL", "grupo": "Grupo 12",
+  "goles": [
+    { "codigo_jugador": "19740208", "foto": "",
+      "jugador": "HERRA RODRIGUEZ, RODRIGO",
+      "escudo_equipo": "/pnfg/pimg/Clubes/00100_0011870589_IMG_2415.png",
+      "nombre_equipo": "S.A.D. OCIO Y DEPORTE CANAL B", "codigo_equipo": "10634103",
+      "partidos_jugados": "25", "goles": "45", "goles_penalti": "4", "goles_por_partidos": "1.80" } ] }
+```
+
+### Mapeo a `LeagueScorer` (§3.2)
+
+| Campo destino | Origen | Estado |
+|---------------|--------|--------|
+| `full_name` | `jugador` | ✅ `"APELLIDOS, NOMBRE"` |
+| `team_label` | `nombre_equipo` | ✅ Texto del proveedor, **con la letra pegada sin comillas** en la muestra (`… CANAL B`) |
+| `goals` | `goles` | ✅ |
+| **`rank`** | **No se publica** | ❌ **No hay campo de puesto.** La lista llega **ordenada por goles descendente** (verificado en las 208 filas) y la posición es implícita |
+
+Que `rank` sea anulable en el modelo no era una precaución teórica: **este proveedor no lo da**. El orden de
+la respuesta es la única señal, y los empates —dos jugadores con 45 goles en la muestra— quedan sin desempate
+declarado.
+
+### Lo que la fuente da de más
+
+`codigo_jugador` (208 valores, **todos únicos y no vacíos**), **`codigo_equipo`** —que **casa con el
+`codigo_equipo_*` del calendario** (§F.3) y permitiría unir el goleador con su `Team` sin emparejar por
+nombre—, `escudo_equipo`, `partidos_jugados`, `goles_penalti` y `goles_por_partidos`.
+
+`foto` llega **vacía en las 208 filas**.
+
+### Un dato que valida la paginación
+
+**208 goleadores en un solo grupo.** El ámbito «competición» no acota cuántos jugadores han marcado en ella,
+que es exactamente el razonamiento con el que [D-49] decidió paginar este recurso frente a no paginar la
+clasificación. La estimación era «potencialmente doscientos»; la realidad, 208.
+
+---
+
+*Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · `§C.x` → [Anexo FCF](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) · `D-nn` → [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)*
 
 <!-- Definiciones de enlace -->
 [D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
