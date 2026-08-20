@@ -697,41 +697,31 @@ realidad son dos.
 **La pregunta, que parece de detalle y no lo es.** `Appearance.status` tiene un valor `no_convocado`. Si un
 jugador de la plantilla **no tiene fila** para un partido, ¿es lo mismo?
 
-**No, y confundirlos rompería la estadística.** Son dos cosas distintas:
+**No, y confundirlos rompería la estadística.** `status = no_convocado` es un **hecho** —estaba disponible
+y el entrenador no lo llamó— y **cuenta**; que no haya fila significa que **nadie lo apuntó** y **no
+cuenta**.
 
-| Situación | Qué significa | Cuenta en la estadística |
-|-----------|---------------|--------------------------|
-| Fila con `status = no_convocado` | Estaba disponible y **el entrenador no lo llamó** — decisión técnica | **Sí** |
-| **Sin fila** | **Nadie apuntó** la convocatoria de ese partido | **No** |
+Si la ausencia de fila significara `no_convocado`, un club que se salta tres jornadas —lo normal en fútbol
+base— vería a toda su plantilla acumulando "no convocado" sin que nadie lo decidiera: el dato que falta se
+convertiría en un juicio sobre el entrenador. Y obligar a crear las ~18 filas de cada partido exigiría una
+disciplina que [D-14] ya dio por perdida.
 
-Si la ausencia de fila significara `no_convocado`, un club que se salta el registro de tres jornadas
-—lo normal en fútbol base— vería a toda su plantilla acumulando "no convocado" sin que nadie lo decidiera.
-El dato que falta se convertiría en un juicio sobre el entrenador. Y al revés: obligar a crear las ~18 filas
-de cada partido para poder distinguir sería exigir una disciplina que [D-14] ya dio por perdida al hacer
-`minutes` opcional.
-
-**Decisión.** La lista **devuelve solo las filas registradas**, no una por jugador de la plantilla. El
-cliente que necesite pintar la convocatoria entera cruza `GET /v1/appearances?matchId=` con
-`GET /v1/players?teamId=&seasonId=` por `playerId`, y los jugadores sin fila salen como *sin registrar*.
-Es literalmente el mismo cruce que ya hace con las ausencias activas ([D-38]), y la razón es la misma: **el
-servidor no inventa filas que nadie escribió**.
+**Decisión.** La lista **devuelve solo las filas registradas**. El cliente que pinte la convocatoria entera
+cruza con `GET /v1/players?teamId=&seasonId=` por `playerId`, el mismo cruce que ya hace con las ausencias
+([D-38]). La razón es la misma: **el servidor no inventa filas que nadie escribió**.
 
 **Corolario en el borrado.** `DELETE` (lógico) y marcar `no_convocado` **no son intercambiables**, y el
 backoffice tendrá los dos gestos cerca — mismo aviso que [D-40] dio para `Absence`. Marcar registra un
 hecho; borrar deshace un apunte erróneo y devuelve la fila al estado *sin registrar*.
 
-**Y la relación con `Absence`, que es la otra confusión posible.** Los dos enumerados se solapan a propósito
-(`baja_medica` ~ `lesion`/`enfermedad`, `sancionado` ~ `sancion`) y **ninguno se deriva del otro**:
+**Y la relación con `Absence`**, que es la otra confusión posible. Los enumerados se solapan a propósito
+(`baja_medica` ~ `lesion`/`enfermedad`) y **ninguno se deriva del otro**: `Absence` es un **periodo** —de
+ahí el distintivo NO DISPONIBLE— y `Appearance` un **hecho por partido** —de ahí los recuentos—.
 
-- `Absence` es un **periodo** — "fuera del 5/12 al 6/1" — y de ella sale el distintivo NO DISPONIBLE.
-- `Appearance` es un **hecho por partido** — "este domingo no jugó, por baja médica" — y de ella salen los
-  recuentos.
-
-Un lesionado de baja larga genera **una** `Absence` y **tantas** `Appearance` como partidos se pierda. Se
-podría derivar lo segundo de lo primero cruzando fechas, y se descarta por lo mismo que [D-15] y la sanción
-de [D-10]: metería un **segundo escritor** en una tabla de dominio manual, y encima uno que se equivocaría
-—una baja puede empezar el sábado por la tarde, y el partido aplazado no se juega el día que dice el
-calendario—. Las dos las escribe el administrador.
+Un lesionado de baja larga genera **una** `Absence` y **tantas** `Appearance` como partidos se pierda.
+Derivar lo segundo cruzando fechas se descarta por lo mismo que [D-15] y [D-10]: metería un **segundo
+escritor** en una tabla de dominio manual, y encima uno que se equivocaría —una baja puede empezar el sábado
+por la tarde y un partido aplazado no se juega el día que dice el calendario—.
 
 ---
 
@@ -740,10 +730,9 @@ calendario—. Las dos las escribe el administrador.
 **Dos preguntas que van juntas.** ¿Qué son los minutos de quien no fue convocado? ¿Y los de quien jugó pero
 nadie cronometró?
 
-**La primera no tiene respuesta buena si el campo es libre.** Un `no_convocado` con `minutes = 0` es una
-fila que se lee de dos maneras —"no jugó" y "jugó cero minutos"— y las dos se cuelan en el promedio de
-minutos por partido con resultados distintos. La segunda ya la contestó [D-14]: los minutos son
-**opcionales** porque exigirlos siempre pediría una disciplina que un club pequeño no sostiene.
+**La primera no tiene respuesta buena si el campo es libre.** Un `no_convocado` con `minutes = 0` se lee de
+dos maneras —"no jugó" y "jugó cero minutos"— y las dos se cuelan en el promedio con resultados distintos.
+La segunda ya la contestó [D-14].
 
 **Decisión.** `minutes` es **válido solo con `status = jugado`**, y **opcional incluso entonces**. Los tres
 estados posibles del campo, y lo que significan:
@@ -763,17 +752,14 @@ cascada dentro de un `PATCH` parcial es justo el tipo de efecto lateral que el c
 filas con valor, no sobre todas las de `jugado`. Está anotado en el spec, en el campo, porque es el error
 que se va a cometer.
 
-**Dónde se valida, que es la parte interesante.** Es la **primera invariante entre campos** del contrato, y
-**no va al spec**. JSON Schema la expresaría con un `if/then` en el `POST`, pero en el `PATCH` parcial
-—donde `status` puede no venir y hay que mirar el valor **almacenado**— no hay forma de escribirla. Un
-esquema que cubre la mitad de los casos es peor que ninguno: invita a confiar en él. Va al **dominio** y se
-reporta como **422**, no 400. La frontera que queda fijada: **400 es lo que se juzga mirando solo el cuerpo;
-422 es lo que necesita mirar el estado**.
+**Dónde se valida.** Es la **primera invariante entre campos** del contrato y **no va al spec**: JSON
+Schema la expresaría con un `if/then` en el `POST`, pero en el `PATCH` parcial —donde `status` puede no venir
+y hay que mirar el valor **almacenado**— no hay forma de escribirla, y un esquema que cubre la mitad de los
+casos invita a confiar en él. Va al **dominio**, como **422**. La frontera que queda fijada: **400 es lo que
+se juzga mirando solo el cuerpo; 422 es lo que necesita mirar el estado**.
 
-**Por qué no un `CHECK` en la BD, que aquí sí se podría.** Se hace, y no sustituye a lo anterior: el `CHECK`
-protege de la ingesta y de los *scripts* ([D-28] fijó el criterio), pero devuelve un error de constraint que
-el Controller tendría que traducir a ciegas. La validación de dominio es la que sabe decir *cuál* de los dos
-campos está mal.
+El `CHECK` en BD se pone igualmente —protege de la ingesta y de los *scripts*, [D-28]— pero no sustituye a
+la validación de dominio, que es la que sabe decir *cuál* de los dos campos está mal.
 
 ---
 
@@ -782,50 +768,33 @@ campos está mal.
 **La pregunta.** Un jugador ve amarilla en el minuto 20, segunda amarilla en el 70 y se va expulsado.
 ¿Cuántas filas de `Card` son?
 
-**La respuesta intuitiva —tres— es la que rompe la cuenta.** Dos `amarilla` y una `roja` describen fielmente
-lo que enseñó el árbitro, y aun así es el peor modelo de los tres candidatos:
+**La respuesta intuitiva —tres— es la que rompe la cuenta**, y el argumento es de modelo, no de reglamento:
+**una fila no sabe apuntar a otra.** Con `amarilla`, `amarilla`, `roja` nada ata esas dos amarillas a esa
+roja, así que la cuenta de acumulación ([D-10]) las suma y no deben sumar. Excluirlas exigiría o una FK
+entre tarjetas —una entidad que se referencia a sí misma para decir "esta canceló a aquella"— o una consulta
+que reste por partido, que es una regla implícita que alguien olvidará. La otra alternativa, un tercer valor
+`doble_amarilla`, obliga a toda consulta de "¿expulsado?" a recordar dos valores para siempre.
 
-| Modelo | Filas | Problema |
-|--------|-------|----------|
-| Una fila por cartulina | `amarilla`, `amarilla`, `roja` | **Nada ata esas dos amarillas a esa roja.** La cuenta de acumulación ([D-10]) las suma, y no deben sumar |
-| Tercer valor en el enumerado (`doble_amarilla`) | 1 | Toda consulta de "¿expulsado?" tiene que acordarse de dos valores en vez de uno, para siempre |
-| **Una fila por sanción** | `roja` + `is_second_yellow = true` | El que se elige |
+**Decisión.** `type` tiene **dos valores** y la doble amarilla es una `roja` con **`is_second_yellow =
+true`**; las amarillas que la causaron **no se registran ni acumulan**. Consecuencias:
 
-El argumento decisivo es el primero, y es de modelo, no de reglamento: **una fila no sabe apuntar a otra**.
-Para excluir de la acumulación las amarillas que provocaron una expulsión haría falta o una FK entre
-tarjetas —una entidad que se referencia a sí misma para expresar "esta canceló a aquella"— o una consulta
-que reste, por partido, las amarillas de los jugadores que además tienen roja de doble amarilla. Lo primero
-es sobra de modelo para un caso; lo segundo es una regla implícita que alguien olvidará en la siguiente
-consulta que escriba.
-
-**Decisión.** `type` tiene **dos valores** (`amarilla`, `roja`) y la expulsión por doble amarilla es una
-`roja` con **`is_second_yellow = true`**. Las dos amarillas que la causaron **no se registran** y **no
-acumulan**. Consecuencias:
-
-- La cuenta de acumulación ([D-10]) es `COUNT(*) WHERE type = 'amarilla'`, sin excepciones que recordar.
-- "¿Está expulsado?" es `type = 'roja'`, sin excepciones que recordar.
+- Acumulación = `COUNT(*) WHERE type = 'amarilla'`; "¿expulsado?" = `type = 'roja'`. Sin excepciones.
 - `is_second_yellow` conserva lo único que la distinción aporta: **roja directa y doble amarilla no cuestan
-  lo mismo**, ni para el reglamento ni para la ficha.
-- **Invariante entre columnas:** `is_second_yellow = true` exige `type = roja`. Es la segunda del contrato y
-  se trata como la primera ([D-42]): dominio → 422, `CHECK` de refuerzo en el esquema.
-- **Unicidad *(jugador, partido, tipo)*** (§3.5). Recoge dos reglas en un índice: no se puede ser expulsado
-  dos veces, y una segunda amarilla **no es otra fila amarilla** sino la expulsión. Amarilla **y** roja en
-  el mismo partido sí conviven: es la amarilla que acumula más una roja directa posterior, dos hechos
-  independientes.
-- **Una amarilla suelta ya apuntada bloquea el alta de la doble amarilla** (422): esa amarilla queda
-  absorbida por la expulsión, así que la vía es borrarla. Es el caso del administrador que apunta en
-  directo y luego corrige, y se resuelve con los dos verbos que ya existen.
+  lo mismo**.
+- **Invariante entre columnas:** `is_second_yellow = true` exige `type = roja`. Segunda del contrato, misma
+  técnica que la primera ([D-42]): dominio → 422, `CHECK` de refuerzo.
+- **Unicidad *(jugador, partido, tipo)*** (§3.5): ni dos expulsiones ni dos amarillas sueltas. Amarilla y
+  roja directa en el mismo partido sí conviven — dos hechos independientes.
+- **Una amarilla suelta ya apuntada bloquea el alta de la doble amarilla** (422): queda absorbida por la
+  expulsión, así que hay que borrarla.
 
-**Lo que se asume a cambio, y no es menor.** El recuento de amarillas de la ficha **no coincide con el
-número de cartulinas** que el jugador vio en la temporada: quien fue expulsado por doble amarilla tiene dos
-cartulinas que no aparecen. Se acepta porque el recuento que importa —el que decide si hay sanción— es
-justamente el de las que acumulan, y una cifra que mezclara ambas no serviría para ninguna de las dos cosas.
-Si algún día hace falta el número literal de cartulinas, sale de `COUNT(amarilla) + 2 × COUNT(roja con
-is_second_yellow)` sin tocar el modelo.
+**Lo que se asume a cambio, y no es menor.** El recuento de amarillas de la ficha **no coincide con las
+cartulinas que el jugador vio**: al expulsado por doble amarilla le faltan dos. Se acepta porque el recuento
+que importa es el que decide la sanción, y una cifra que mezclara ambas no serviría para ninguna. El número
+literal sale de `COUNT(amarilla) + 2 × COUNT(roja con is_second_yellow)` sin tocar el modelo.
 
-**Lo que queda fuera a propósito.** Cuántos partidos cuesta cada sanción. Es reglamento por competición,
-varía más que los tramos de amarillas y hoy nadie lo pide: la ausencia se registra a mano con sus fechas
-([D-10]), que es la información que la pantalla necesita.
+**Fuera a propósito:** cuántos partidos cuesta cada sanción. Es reglamento por competición y hoy nadie lo
+pide; la ausencia se registra a mano con sus fechas ([D-10]).
 
 ---
 
@@ -835,18 +804,14 @@ varía más que los tramos de amarillas y hoy nadie lo pide: la ausencia se regi
 debería validarse contra lo primero: no se puede ver una tarjeta en un partido al que no fuiste convocado.
 
 **Por qué no.** La premisa es cierta en el campo y falsa en los datos. `Appearance` es **entrada manual y
-opcional** —[D-41] fijó que la ausencia de fila significa *no registrado*, no *no convocado*—, así que
-validar contra ella haría que apuntar una tarjeta **fallase según si el entrenador rellenó antes la
-convocatoria**. El administrador que va al partido, anota las dos amarillas y luego se olvida de la lista de
-convocados se encontraría con un 422 incomprensible: el dato que le falta no es el que está metiendo.
+opcional** —[D-41]: la ausencia de fila significa *no registrado*, no *no convocado*—, así que validar
+contra ella haría que apuntar una tarjeta **fallase según si el entrenador rellenó antes la convocatoria**,
+con un 422 sobre un dato que no es el que se está metiendo. Impondría además un **orden de entrada** que
+ninguna pantalla pide.
 
-Impondría además un **orden de entrada** —primero convocatoria, luego eventos— que ninguna pantalla pide y
-que el propio contrato no impone en ningún otro sitio.
-
-**Decisión.** `Card` valida que el **equipo del jugador dispute el partido** —que es la invariante que
-protege la estadística de contaminarse, y se comprueba contra `Match`, no contra otro registro manual— y
-**nada más**. La coherencia entre convocatoria y eventos es responsabilidad del que introduce los datos, no
-del esquema. Vale igual para `Goal` cuando llegue.
+**Decisión.** `Card` valida que el **equipo del jugador dispute el partido** —contra `Match`, no contra otro
+registro manual— y **nada más**. La coherencia entre convocatoria y eventos es de quien introduce los datos,
+no del esquema. Vale igual para `Goal`.
 
 **Lo que se asume a cambio.** Que puede existir una tarjeta de un jugador marcado como `no_convocado`. Es
 una incoherencia detectable —y una buena candidata a **aviso** en el backoffice, que es donde corresponde:
@@ -856,19 +821,16 @@ señalar, no bloquear—. Bloquearla costaría más de lo que evita.
 
 ### D-48 · El ranking de goleadores no tiene *fallback*, y por eso su capacidad sí condiciona el dato
 
-**El paralelismo aparente.** `StandingRow` y `LeagueScorer` se parecen mucho: las dos son modelos de
-lectura, las dos las escribe solo la ingesta, las dos vienen de la API de la federación. Invitaba a
-tratarlas igual — y sería un error.
+**El paralelismo aparente.** `StandingRow` y `LeagueScorer` se parecen: los dos son modelos de lectura, los
+escribe solo la ingesta y vienen de la misma API. Tratarlos igual sería un error.
 
-**Dónde se rompe.** La clasificación **siempre se puede calcular**: los `Match` con marcador contienen todo
-lo necesario, y por eso [D-15] pudo declararla *agnóstica a la fuente* y [D-29] pudo decir que
-`federationProvidesStandings` es un dato de **procedencia** que las apps pueden ignorar —la tabla está ahí
-en cualquier caso—.
+**Dónde se rompe.** La clasificación **siempre se puede calcular** desde los `Match` con marcador — por eso
+[D-15] la declaró agnóstica a la fuente y [D-29] dejó `federationProvidesStandings` como dato de
+**procedencia** que las apps pueden ignorar.
 
-El ranking de goleadores **no se puede calcular**, y no por falta de ganas: incluye jugadores rivales, y
-[D-09] ya descartó modelar los *rosters* ajenos por coste desproporcionado. `Goal` solo tiene los goles de
-nuestros jugadores. Un ranking calculado desde `Goal` sería un ranking de nuestra plantilla presentado como
-ranking de la liga, que es peor que no tener ranking.
+El ranking de goleadores **no se puede calcular**: incluye jugadores rivales y [D-09] descartó modelar sus
+*rosters*. Calcularlo desde `Goal` daría un ranking de nuestra plantilla presentado como ranking de la liga,
+que es peor que no tener ranking.
 
 **Decisión.** `ClubResponse.federationProvidesScorers`, hermano de `federationProvidesStandings` —mismo
 origen ([D-17]: catálogo en código), misma granularidad (una federación por tenant)— pero con un **peso
@@ -880,15 +842,13 @@ distinto que conviene no aplanar**:
 | Si es `false` | La clasificación existe igual, calculada ([D-15]) | `GET /v1/league-scorers` devuelve **siempre** vacío |
 | ¿Pueden ignorarlo las apps? | Sí | **No** |
 
-**Consecuencia para el cliente, que es el motivo de que el campo exista.** Con `false`, la app **oculta la
-pantalla** de goleadores en vez de pintar una lista vacía. Sin el campo, un vacío es ambiguo —¿no publica?,
-¿no se ha sincronizado aún?, ¿va lento?— y la única lectura razonable del usuario es "está roto".
+**Consecuencia para el cliente, que es el motivo del campo.** Con `false` la app **oculta la pantalla** en
+vez de pintar una lista vacía. Sin el campo, un vacío es ambiguo —¿no publica?, ¿no se ha sincronizado?— y
+la lectura razonable del usuario es "está roto".
 
-**Lo que se asume a cambio.** Un segundo *booleano* de capacidad en `ClubResponse`, y el riesgo de que la
-lista crezca según se soporten más federaciones. Si llegan tres o cuatro, la salida es agruparlos en un
-objeto `federationCapabilities`, no seguir añadiendo campos sueltos — pero eso se hace **cuando pase**, con
-el mismo criterio con el que se extrajo `TeamRef` ([D-32]): se generaliza al segundo o tercer caso, no por
-anticipado. Con dos, dos campos.
+**Lo que se asume a cambio.** Un segundo *booleano* de capacidad en `ClubResponse`. Si llegan tres o cuatro,
+la salida es agruparlos en un `federationCapabilities` — pero **cuando pase**, con el criterio de [D-32]: se
+generaliza al segundo o tercer caso, no por anticipado.
 
 ---
 
@@ -897,20 +857,13 @@ anticipado. Con dos, dos campos.
 **La pregunta.** Un defensa nuestro marca en propia. `scoring_team_id` es el **rival** —es quien se lleva el
 gol— y `conceding_team_id` somos nosotros. ¿Y `scorer_player_id`?
 
-**Las dos opciones tienen un coste real:**
+**El coste está repartido.** Dejarlo nulo conserva limpia la invariante "el goleador es del equipo que
+marca", pero **pierde el dato** de quién lo hizo. Guardarlo lo conserva a costa de romper esa invariante.
 
-| | Dejarlo nulo | Guardar al autor |
-|---|---|---|
-| Invariante "el goleador es del equipo que marca" | **Se conserva**, limpia | **Se rompe**: pasa a depender de `play_type` |
-| El dato "quién marcó en propia" | **Se pierde** | Se conserva |
-| Riesgo | Ninguno | Que alguien cuente ese gol como gol del jugador |
+**Decisión.** Se **guarda el autor**, y el gol **no le suma**. Perder información para preservar la
+elegancia de una invariante sería cambiar dato por comodidad de esquema.
 
-**Decisión.** Se **guarda el autor**, y el gol **no le suma**. Es un dato que el club quiere —un gol en
-propia es algo que pasó y que alguien hizo—, y perderlo para preservar la elegancia de una invariante sería
-cambiar información por comodidad de esquema.
-
-**Lo que eso obliga a aceptar, dicho sin suavizar: la pertenencia del goleador deja de ser una regla fija y
-pasa a depender de un enumerado.**
+**Lo que obliga a aceptar: la pertenencia del goleador pasa a depender de un enumerado.**
 
 - `play_type != en_propia_puerta` → `scorer_player_id` es del equipo de `scoring_team_id`
 - `play_type == en_propia_puerta` → `scorer_player_id` es del equipo de `conceding_team_id`
@@ -925,13 +878,11 @@ cruza `en_propia_puerta`, o la operación devuelve 422. Igual que `status`/`minu
 `counts_for_scorer` almacenada, por lo mismo que no hay `is_own` ni `active`: una bandera puede contradecir
 al campo del que depende, y la consulta no ([D-03], [D-38]).
 
-**Y el gol en propia no admite asistencia.** `assist_player_id` y `assisted` quedan fuera → 422. Atribuir
-una asistencia a un gol en propia es ambiguo en cualquier sistema de estadística —¿al que centró, al que
-desvió?— y no hay respuesta que no sea una convención inventada. Se prefiere el hueco al dato dudoso.
+**Y el gol en propia no admite asistencia** → 422. Atribuirla es ambiguo en cualquier sistema —¿al que
+centró, al que desvió?— y toda respuesta sería una convención inventada. Se prefiere el hueco al dato dudoso.
 
-**Lo que se asume a cambio.** Que un `GET /v1/goals?scorerPlayerId=` devuelve también sus goles en propia, y
-que quien cuente goles a partir de esa lista sin filtrar `playType` contará de más. Está anotado en el spec,
-en el propio parámetro, porque es el error que se va a cometer.
+**Lo que se asume a cambio.** Que `GET /v1/goals?scorerPlayerId=` devuelve también sus goles en propia, y
+quien cuente sin filtrar `playType` contará de más. Anotado en el spec, en el propio parámetro.
 
 ---
 
@@ -1407,24 +1358,20 @@ parecen y no son lo mismo:
 | `Match`, `Absence` | **alternativo y acumulable** — acotan progresivamente | legítimo: `?teamId=` + `?seasonId=` acota más |
 | **`Appearance`** | **alternativo y excluyente** | **400** |
 
-**Por qué.** `?matchId=` da la convocatoria (~18 filas); `?playerId=` da el historial (~30 filas). Pero
-`?matchId=` **+** `?playerId=` devuelve **como mucho una fila**, porque el par *(jugador, partido)* es
-único (§3.5). Es un `GET` por identificador escrito de la forma más cara posible: el cliente que ya tiene
-los dos ids tiene también el de la fila, o lo obtiene de la lista que acaba de pedir. Admitirlo sería
-publicar dos caminos al mismo recurso y garantizar que alguien pagina el equivocado.
+**Por qué.** `?matchId=` **+** `?playerId=` devuelve **como mucho una fila**, porque el par es único
+(§3.5): un `GET` por identificador escrito de la forma más cara posible. Admitirlo sería publicar dos
+caminos al mismo recurso.
 
 **Decisión.** Exactamente una de las dos → **400** si no viene ninguna **y** si vienen las dos. `?teamId=`
 sigue siendo un **filtro**, no una puerta: acompaña a `?matchId=` y solo hace falta en el derbi entre dos
 equipos propios, donde la convocatoria trae las dos plantillas.
 
-**El orden también depende de la puerta, y es el único recurso del contrato donde pasa.** Por dorsal
-ascendente con `?matchId=` —una convocatoria se lee como una plantilla, [D-37]— y por fecha de partido
-descendente con `?playerId=` —un historial se lee del último al primero, como `Absence`—. No es una
-inconsistencia: son **dos pantallas distintas** que comparten tabla, y forzar un orden común dejaría a una
-de las dos ordenada por un criterio que no significa nada en ella.
+**El orden también depende de la puerta**: por dorsal con `?matchId=` —se lee como una plantilla— y por
+fecha de partido descendente con `?playerId=` —se lee como un historial—. No es inconsistencia: son **dos
+pantallas distintas** que comparten tabla, y un orden común dejaría a una de las dos ordenada por un criterio
+que no significa nada en ella.
 
-**Lo que se asume a cambio.** Que la regla de ámbito del contrato deja de ser una sola —"al menos uno"— y
-pasa a tener dos variantes. Se documenta en §5.3 junto a las otras, que es donde alguien la va a buscar.
+**Lo que se asume a cambio.** Que la regla de ámbito pasa a tener dos variantes. Documentado en §5.3.
 
 ---
 
@@ -1446,37 +1393,32 @@ llamadas de escritura.
 | Borrado | Explícito | **Implícito**: lo que no viene en la lista desaparece — justo el efecto lateral que [D-42] rechazó |
 | Concurrencia | Última escritura por fila | Dos entrenadores guardando pisan la lista entera |
 
-El coste real, además, es menor de lo que parece: la convocatoria se rellena **una vez** por partido y
-después se corrige de una en una —"al final sí jugó"—, que es exactamente el caso que el `PATCH` ya sirve
-bien. Optimizar el alta inicial a costa de la superficie del contrato es optimizar el gesto menos frecuente.
+El coste real es además menor de lo que parece: la convocatoria se rellena **una vez** por partido y luego
+se corrige de una en una, que es lo que el `PATCH` ya sirve bien. Optimizar el alta inicial a costa de la
+superficie del contrato es optimizar el gesto menos frecuente.
 
-**Decisión.** CRUD fila a fila, como el resto del dominio manual. El backoffice encadena las llamadas tras
-un único botón de *Guardar*, igual que ya encadena alta de jugador y subida de foto ([D-35]).
+**Decisión.** CRUD fila a fila. El backoffice encadena las llamadas tras un único botón de *Guardar*, igual
+que ya encadena alta de jugador y subida de foto ([D-35]).
 
-**Qué la haría cambiar, para no re-deliberarla desde cero.** Que el backoffice mida una latencia inaceptable
-en la pantalla de convocatoria, o que aparezca un **segundo** consumidor con la misma necesidad —`Goal` y
-`Card` tienen la misma forma y podrían pedirlo—. Si llega ese segundo caso, la salida es un mecanismo
-**genérico** de escritura por lotes para los tres hijos de `Match`, no un `PUT` a medida para este. Es el
-mismo criterio con el que se extrajo `TeamRef` (§5.2): **se generaliza cuando coinciden dos, no por
-anticipado**.
+**Qué la haría cambiar.** Una latencia inaceptable medida en el backoffice, o un **segundo** consumidor con
+la misma necesidad. En ese caso la salida es un mecanismo **genérico** de lotes para los tres hijos de
+`Match`, no un `PUT` a medida: **se generaliza cuando coinciden dos, no por anticipado** (§5.2).
 
 ---
 
 ### D-47 · Cuándo dos puertas de ámbito se combinan: la regla que faltaba
 
-**El problema.** [D-43] declaró excluyentes las dos puertas de `Appearance`, y al llegar `Card` la misma
-pregunta se responde al revés. Dos recursos gemelos —hijos de `Match`, ámbito por partido o por jugador— con
-reglas opuestas parece una incoherencia, y sin un criterio explícito lo sería: cada recurso nuevo volvería a
-deliberarse desde cero y el resultado dependería de quién lo escriba.
+**El problema.** [D-43] declaró excluyentes las puertas de `Appearance` y en `Card` la misma pregunta se
+responde al revés. Sin un criterio explícito eso es una incoherencia, y cada recurso nuevo volvería a
+deliberarse desde cero.
 
 **El criterio.** No es el recurso, es la **clave única**:
 
 > Dos puertas de ámbito se **combinan** salvo que su intersección sea la **clave única** de la tabla.
 
 Cuando la intersección colapsa a una fila, combinar las puertas es un `GET` por identificador escrito de la
-forma más cara posible, y publicarlo da **dos caminos al mismo recurso** — uno de ellos, además, sin `id` en
-la URL, así que no se puede enlazar ni cachear. Cuando no colapsa, la intersección es un subconjunto legítimo
-que alguna pantalla va a pedir.
+forma más cara posible: **dos caminos al mismo recurso**, uno sin `id` en la URL y por tanto no enlazable.
+Cuando no colapsa, es un subconjunto legítimo que alguna pantalla pedirá.
 
 **Aplicado a lo que hay:**
 
@@ -1491,28 +1433,23 @@ La diferencia entre las dos últimas filas es **una columna en el índice**, y s
 un jugador ve una amarilla y una roja directa en el mismo partido y son dos hechos distintos ([D-45]),
 mientras que hace exactamente una cosa por partido en cuanto a convocatoria ([D-41]).
 
-**Decisión.** El criterio queda enunciado en §5.3 y se aplica a los recursos que vengan sin volver a
-deliberar. `Goal` lo hereda: su clave no incluye jugador —hay goles sin `scorer_player_id` ([D-04])— así que
-sus puertas se combinan.
+**Decisión.** El criterio queda enunciado en §5.3 y se aplica sin volver a deliberar. `Goal` lo heredó: su
+clave no incluye jugador —hay goles sin `scorer_player_id` ([D-04])— así que sus cuatro puertas se combinan.
 
-**Lo que se asume a cambio.** Que la regla de ámbito del contrato tiene dos variantes y hay que mirar la
-tabla para saber cuál aplica. Es el precio de no tener ni una convención uniforme que publique rutas
-inútiles, ni una decisión ad hoc por recurso. La alternativa —permitir siempre la combinación y devolver la
-única fila— se descartó por lo mismo que se descartó `GET /standings/{id}` ([D-34]): **superficie sin
-consumidor**.
+**Lo que se asume a cambio.** Que la regla de ámbito tiene dos variantes y hay que mirar la tabla. La
+alternativa —permitir siempre la combinación y devolver la única fila— se descartó por lo mismo que
+`GET /standings/{id}` ([D-34]): **superficie sin consumidor**.
 
 ---
 
 ### D-49 · Lo que decide la paginación es el techo, no el ámbito — y en un ranking la paginación es el top-N
 
-**La confusión que este recurso destapa.** Desde [D-34], el contrato viene aplicando una regla implícita
-—"si exige ámbito, no se pagina"— que funcionó en `Round`, `StandingRow`, `Player`, `Absence`, `Appearance`
-y `Card` porque en todos ellos coincidían dos cosas distintas. `LeagueScorer` las separa: exige
-`?competitionId=`, igual que `StandingRow` exige `?roundId=`, y **sí** se pagina.
+**La confusión que este recurso destapa.** El contrato venía aplicando una regla implícita —"si exige
+ámbito, no se pagina"— que funcionó hasta ahora porque dos cosas distintas coincidían. `LeagueScorer` las
+separa: exige `?competitionId=` igual que `StandingRow` exige `?roundId=`, y **sí** se pagina.
 
-**El criterio real, que ya estaba escrito y conviene aislar.** §5.3 lo dijo al comparar `Round` y `Match`:
-*el ámbito acota **qué** se pide; la paginación acota **cuánto** llega*. Lo que decide es si el ámbito trae
-**techo**:
+**El criterio real** ya estaba escrito en §5.3 al comparar `Round` y `Match`: *el ámbito acota **qué** se
+pide; la paginación, **cuánto** llega*. Lo que decide es si el ámbito trae **techo**:
 
 | Recurso | Ámbito | Techo que trae | Pagina |
 |---------|--------|----------------|:------:|
@@ -1523,22 +1460,19 @@ y `Card` porque en todos ellos coincidían dos cosas distintas. `LeagueScorer` l
 | `Match` | competición o equipo | **ninguno** (~380, o sin límite) | **sí** |
 | **`LeagueScorer`** | competición | **ninguno** — cuántos marcaron no lo acota nada | **sí** |
 
-Una competición acota los **equipos** a veinte; no acota los **jugadores que han marcado en ella**, que en
-una liga de veinte equipos pueden ser doscientos.
+Una competición acota los **equipos** a veinte; no acota los **jugadores que han marcado en ella**, que
+pueden ser doscientos.
 
-**Y el hallazgo que hace la decisión barata:** como el orden **es** el ranking y es fijo, la paginación ya
-resuelve el top-N. `?perPage=20` **es** "los veinte máximos goleadores". No hace falta un `?limit=`, ni un
-`?top=`, ni un endpoint aparte para la pantalla de portada: el sobre de paginación que ya existe (§5.3)
-sirve a los dos casos —la pantalla que quiere veinte y la que quiere recorrerlo entero— sin añadir nada.
+**Y el hallazgo que abarata la decisión:** como el orden **es** el ranking y es fijo, la paginación ya
+resuelve el top-N. `?perPage=20` **es** "los veinte máximos goleadores", sin `?limit=`, `?top=` ni endpoint
+aparte para la portada.
 
-**Decisión.** Se pagina por techo, no por ámbito, y el criterio queda enunciado así en §5.3. Es la vara con
-la que se mide `Goal` cuando llegue: su ámbito natural (`?matchId=`) trae techo —los goles de un partido—
-pero `?playerId=` o `?teamId=` no lo traen, así que probablemente pagine.
+**Decisión.** Se pagina por techo, no por ámbito. Fue la vara con la que se midió `Goal`: `?matchId=` trae
+techo pero `?scoringTeamId=` o `?scorerPlayerId=` no, así que pagina.
 
-**Lo que se asume a cambio.** Que dos recursos con ámbito obligatorio se comporten distinto es una asimetría
-que el cliente tiene que aprender. Se mitiga con lo de siempre: está en la tabla de §5.3 y en el spec, y el
-sobre `{ data, page, perPage, total }` hace la diferencia **visible en la respuesta** — no hay forma de
-paginar por accidente creyendo que se recibió la lista entera.
+**Lo que se asume a cambio.** Que dos recursos con ámbito obligatorio se comporten distinto. Se mitiga con
+el sobre `{ data, page, perPage, total }`, que hace la diferencia **visible en la respuesta**: no hay forma
+de paginar por accidente creyendo que llegó la lista entera.
 
 ---
 
@@ -1554,9 +1488,9 @@ tramos (`0-5, 6-10, 11-13, 14-16`) **son una secuencia contigua**, no cuatro fil
 | `PATCH` de `yellow_to` en `6-10` | El `yellow_from` del **siguiente** deja de cuadrar → o se cascadea, o se devuelve 422 |
 | `POST` de un tramo | Solo es válido al final, y solo si `yellow_from` es el `yellow_to` anterior más uno |
 
-Son tres reglas, ninguna evidente, para editar una tabla de **cuatro filas que se toca una vez por
-temporada**. Y cada estado intermedio inválido es alcanzable: el cliente que borra el tramo 2 para volver a
-crearlo deja la competición en un estado sin sentido entre las dos llamadas.
+Son tres reglas, ninguna evidente, para editar **cuatro filas que se tocan una vez por temporada**. Y cada
+estado intermedio inválido es alcanzable: quien borra el tramo 2 para recrearlo deja la competición sin
+sentido entre las dos llamadas.
 
 **Decisión.** `PUT /v1/sanction-brackets?competitionId=` **sustituye el conjunto entero**. Sin `POST`, sin
 `PATCH`, sin `DELETE`, sin ruta por `{id}`. `{"thresholds": []}` borra los tramos, que es un estado
@@ -1576,18 +1510,17 @@ La regla que queda: **el lote es la respuesta correcta cuando la unidad de consi
 cuando solo es más cómodo.** [D-44] sigue en pie para los hijos de `Match`.
 
 **Corolario sobre los identificadores.** El `id` de cada tramo **no direcciona nada y no es estable entre
-escrituras**: un `PUT` sustituye el conjunto, así que pueden salir ids nuevos con los mismos umbrales. Vale
-como clave de lista en el cliente —igual que en `StandingRow` ([D-34])— y para nada más. Cualquier cliente
-que lo guardara estaría asumiendo una permanencia que el contrato no promete.
+escrituras** —un `PUT` puede devolver ids nuevos con los mismos umbrales—. Vale como clave de lista, igual
+que en `StandingRow` ([D-34]), y para nada más.
 
 ---
 
 ### D-51 · El cuerpo son umbrales, no tramos: cuando lo derivable es la relación entre filas
 
-**Lo que queda por decidir una vez el `PUT` es del conjunto** ([D-50]): qué lleva ese conjunto. Lo natural
-era la lista de tramos tal cual se almacenan —`[{seq: 1, yellowFrom: 0, yellowTo: 5}, …]`—, y sigue estando
-mal, aunque menos: se pueden expresar huecos, solapes, `seq` repetidos y `seq` que no case con el orden del
-array. Cuatro validaciones y cuatro mensajes de error para un dato que **no tiene esos grados de libertad**.
+**Lo que queda por decidir una vez el `PUT` es del conjunto** ([D-50]): qué lleva. Lo natural era la lista
+de tramos tal cual se almacenan —`[{seq: 1, yellowFrom: 0, yellowTo: 5}, …]`—, y sigue estando mal: se
+pueden expresar huecos, solapes, `seq` repetidos y `seq` que no case con el orden. Cuatro validaciones para
+un dato que **no tiene esos grados de libertad**.
 
 **La observación.** Un conjunto de tramos contiguos que empieza en 0 queda **completamente determinado por
 la lista ascendente de sus `yellow_to`**. `[5, 10, 13, 16]` solo puede significar `0-5, 6-10, 11-13, 14-16`.
@@ -1598,20 +1531,15 @@ Todo lo demás es derivable: `seq` es la posición en el array, `yellow_from` es
 De las cuatro validaciones queda **una**: umbrales estrictamente ascendentes — y es **400**, no 422, porque
 se juzga mirando solo el cuerpo (§5.4).
 
-Es el criterio de [D-28] —*una invariante se lleva a la estructura cuando se puede hacer imposible*—
-aplicado por primera vez **al DTO** en vez de al esquema. Y es también el principio de "derivar en lectura"
-llevado un paso más allá: hasta ahora lo derivado era un **campo** (`isCurrent`, `isOwn`, `displayName`);
-aquí lo derivado es la **relación entre filas**, así que lo que se recorta del DTO de escritura es la fila
-entera.
+Es [D-28] —*una invariante se lleva a la estructura cuando se puede hacer imposible*— aplicado por primera
+vez **al DTO** en vez de al esquema. Y es "derivar en lectura" un paso más allá: hasta ahora lo derivado era
+un **campo**; aquí es la **relación entre filas**, así que lo que se recorta del DTO de escritura es la fila
+entera. **El criterio general: el DTO de escritura lleva lo mínimo que determina el estado**, no un reflejo
+del de lectura.
 
-**El criterio general que deja para lo que venga:** el DTO de escritura lleva **lo mínimo que determina el
-estado**, no un reflejo del DTO de lectura.
-
-**Lo que se asume a cambio, y es lo único incómodo.** El cuerpo no se parece a la respuesta, que es una
-asimetría que ningún otro recurso del contrato tiene. Se acepta porque la alternativa es peor —un DTO
-simétrico que admite cuatro formas de estar mal— y porque el backoffice, que es quien lo va a usar, ya
-piensa en umbrales: el formulario pregunta "¿a las cuántas amarillas hay sanción?", no "¿dónde empieza el
-tramo 3?".
+**Lo que se asume a cambio.** El cuerpo no se parece a la respuesta, asimetría que ningún otro recurso tiene.
+Se acepta porque la alternativa admite cuatro formas de estar mal, y porque el backoffice ya piensa en
+umbrales: el formulario pregunta "¿a las cuántas amarillas hay sanción?", no "¿dónde empieza el tramo 3?".
 
 **Y una consecuencia del modelo que conviene tener escrita, porque no se ve venir: cambiar los tramos es
 retroactivo.** Las amarillas pendientes se calculan **en vivo** sobre `Card` ([D-10]); no hay contador
@@ -1628,25 +1556,20 @@ encima del problema.
 **La pregunta que hará cualquiera que lea el contrato.** Si un `Match` dice 3-1 y solo hay dos `Goal`
 registrados, ¿es un error?
 
-**No, y no puede serlo**, porque las dos cifras tienen dueños distintos y naturalezas distintas:
+**No, y no puede serlo**: el marcador es de la federación y es **completo y autoritativo** ([D-21]); los
+goles son **entrada manual y parcial por diseño** ([D-04]). Un club que apunta el resultado el domingo y el
+desglose el miércoles pasa días con la tabla incompleta; uno que nunca apunta los goles del rival tiene ese
+bloque vacío para siempre, y su clasificación sigue bien.
 
-- **El marcador es de la federación** ([D-21]) y es **completo y autoritativo**.
-- **Los goles son entrada manual y parcial por diseño** ([D-04]). Un club que apunta el resultado el domingo
-  y el desglose el miércoles pasa varios días con la tabla incompleta. Un club que nunca apunta los goles
-  del rival tiene el bloque de "goles recibidos" vacío para siempre, y su clasificación sigue bien.
+Validar el cuadre convertiría el estado **normal** del sistema en un error, y obligaría además a apuntar los
+goles en un orden concreto o a admitir estados inválidos temporalmente — que es no validar, pero con más
+código.
 
-Validar el cuadre convertiría el estado **normal** del sistema en un error, y peor: obligaría a apuntar los
-goles en un orden concreto —no podrías registrar el tercero antes que el segundo— o a permitir estados
-inválidos temporalmente, que es lo mismo que no validar pero con más código.
+**Decisión.** **No se valida**, ni en `POST` ni en `PATCH` ni en `DELETE`.
 
-**Decisión.** **No se valida.** Ni en el `POST`, ni en el `PATCH`, ni en el `DELETE`. Se pueden registrar
-más goles que el marcador, menos, o ninguno.
-
-**Dónde sí vive la comprobación: en el backoffice, como aviso.** Es exactamente el criterio de [D-46] para
-la tarjeta sin convocatoria —**señalar, no bloquear**— y esta es su segunda aplicación, así que ya es
-convención: **las incoherencias entre dos registros manuales, o entre uno manual y uno ingerido, se avisan
-en la interfaz; no se imponen en el contrato.** El backoffice tiene la información para pintar "3-1, 2 goles
-registrados" junto al partido, que es lo útil.
+**Dónde sí vive la comprobación: en el backoffice, como aviso.** Es el criterio de [D-46] —**señalar, no
+bloquear**— y su segunda aplicación, así que ya es convención: **las incoherencias entre registros manuales,
+o entre uno manual y uno ingerido, se avisan en la interfaz; no se imponen en el contrato.**
 
 **Corolario en el borrado.** Borrar un gol **no descuadra el marcador**, porque nunca estuvo cuadrado por
 contrato. Es lo que permite que el `DELETE` sea el borrado lógico simple del resto del dominio manual
@@ -1661,27 +1584,24 @@ copiadas del `Match`, para que "goles a favor" y "goles en contra" sean filtros 
 dijo que mantenerlas consistentes es tarea de la capa de aplicación, "nunca del usuario". Faltaba
 materializarlo en el contrato.
 
-**Si las dos estuvieran en el DTO de alta**, el cliente podría enviar un par que no son los dos equipos del
-partido, o los mismos dos invertidos, o uno correcto y otro no. Serían tres validaciones para reconstruir
-algo que **el servidor ya sabe**: los dos equipos están en el `Match`, y con saber cuál de ellos marcó, el
-otro queda determinado.
+**Si las dos estuvieran en el DTO de alta**, el cliente podría enviar un par que no son los del partido, o
+invertidos, o uno bien y otro mal: tres validaciones para reconstruir algo que **el servidor ya sabe**. Los
+dos equipos están en el `Match`, y con saber cuál marcó, el otro queda determinado.
 
 **Decisión.** El cuerpo lleva **`scoringTeamId`** y no `concedingTeamId`. El servidor lo deriva del `Match`.
 Queda **una** validación —que `scoringTeamId` sea uno de los dos equipos del partido— en vez de tres, y la
 incoherencia entre las dos columnas **deja de ser expresable**. Es el criterio de [D-28] aplicado al DTO,
 como en [D-51].
 
-**Una categoría nueva que conviene nombrar, porque no encaja en las dos que ya había.** El contrato venía
-distinguiendo *derivado en lectura* (`isOwn`, `displayName`, `isCurrent`: se calcula al responder, no se
-almacena) y *propiedad de la ingesta* (`federationTeamId`, `slug`: se almacena, lo escribe otro módulo).
-`concedingTeamId` no es ninguna de las dos: **se almacena** —esa es toda la gracia de [D-04]— y **lo escribe
-el servidor** en la misma operación en que el cliente escribe lo demás. Llamémoslo **denormalización de
+**Una categoría nueva que conviene nombrar.** El contrato distinguía *derivado en lectura* (`isOwn`,
+`displayName`: se calcula al responder, no se almacena) y *propiedad de la ingesta* (`federationTeamId`: se
+almacena, lo escribe otro módulo). `concedingTeamId` no es ninguna: **se almacena** —esa es la gracia de
+[D-04]— y **lo escribe el servidor** en la misma operación que el resto. Llamémoslo **denormalización de
 servidor**: se guarda, se lee, y el cliente no la toca.
 
-**Lo que se asume a cambio.** Que el DTO de escritura y el de lectura difieren en un campo, cosa que solo
-volvía a pasar en `SanctionBracket` ([D-51]) y por un motivo distinto. La alternativa —aceptar el campo y
-rechazarlo si no cuadra— sería pedirle al cliente un dato que no le corresponde para después decirle que se
-equivocó.
+**Lo que se asume a cambio.** Que los DTOs de escritura y lectura difieren en un campo, cosa que solo pasa
+además en `SanctionBracket` ([D-51]). La alternativa —aceptar el campo y rechazarlo si no cuadra— sería
+pedirle al cliente un dato que no le corresponde para luego decirle que se equivocó.
 
 ---
 

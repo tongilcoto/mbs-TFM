@@ -64,7 +64,8 @@ dos módulos, pero cada entidad tiene **un solo dueño de escritura**, y el repa
 |-------|---------------|-----------|----------------|
 | **Entrada de la ingesta** (configuración) | administrador, vía **BFF** | `Season`, `Competition` | CRUD completo |
 | **Salida de la ingesta** | módulo de **Federación** | `Round`, `Match`, `OpponentClub`, `Team`, `StandingRow`, `LeagueScorer` | lectura + `PATCH` de corrección |
-| **Dominio manual** | administrador, vía **BFF** | `Player`, `Absence`, `Appearance`, `Card`, `Goal`, `CompetitionSanctionBracket` | CRUD completo |
+| **Dominio manual** | administrador, vía **BFF** | `Player`, `Absence`, `Appearance`, `Card`, `Goal` | CRUD completo |
+| **Configuración manual** | administrador, vía **BFF** | `CompetitionSanctionBracket` | lectura + **`PUT` del conjunto** ([D-50]) |
 
 La regla que se deriva —**el BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra**— y su matriz
 operación a operación están en **§5.1**; la política que impide que una sincronización pise una corrección,
@@ -283,7 +284,7 @@ opcional (§3.5).
 | **Player** (Jugador)                              | `team_id`, `season_id`, `full_name`, **`photo_key?`**, `shirt_number`, `position`, `deleted_at?`                                                                                | Solo equipos propios (`Team.opponent_club_id IS NULL`) — la federación no publica plantillas de fútbol base. **Registro por temporada**: una fila = un jugador en un equipo en una temporada concreta ([D-05]). `team_id` y `season_id` son **identidad, no atributos**: no se editan, un cambio de equipo o de año es **otra fila** ([D-37]). **`photo_key`** = clave del objeto en Storage, **no una URL** ([D-35]): mismo criterio que `Club.crest_key` ([D-19]) y aquí además obligado, porque es la foto de un menor; la URL firmada se deriva en lectura. **`deleted_at`** = *soft delete*, **sin guarda de dependientes**: los eventos del jugador borrado siguen contando para el equipo ([D-36]). Stats derivadas por temporada desde eventos ligados a este `Player`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Absence** (Disponibilidad)                      | `player_id`, `type`, `start_date` (INIC), **`expected_return_date?`** (ALTA EST.), **`actual_return_date?`**, `deleted_at?`                                                     | Periodo de indisponibilidad. **`active` deja de ser columna**: se deriva de que no haya alta real **y** haya llegado `start_date` ([D-38]) — el mismo tratamiento que `is_own` ([D-03]) o `is_kickoff_confirmed` ([D-30]). Las dos fechas de vuelta son **anulables**: la estimada no se conoce los primeros días, la real solo al alta. **Ninguna FK a `Season` ni a `Team`**: se alcanzan por el jugador, que ya es identidad de ambos ([D-05], [D-28]). Un jugador puede tener **varias ausencias activas de tipos distintos** (lesionado y sancionado a la vez), pero **no dos del mismo tipo** ([D-39])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Appearance** (Convocatoria)                     | `player_id`, `match_id`, `status`, `minutes?`, `deleted_at?`                                                                                                                    | Único(jugador, partido) **entre las no borradas**. Cuenta JUGADOS/BAJA MÉDICA/SANCIÓN/NO CONVOCADO. **`player_id` y `match_id` son identidad, no atributos**: no se editan ([D-37]). **La ausencia de fila no es un estado** ([D-41]): `no_convocado` es un hecho registrado —decisión técnica— y cuenta en la estadística; que no haya fila significa que nadie apuntó esa convocatoria. **`minutes` solo con `status = jugado`** ([D-42]) y **opcional incluso entonces** ([D-14]): nulo es "jugó, no sé cuánto", que no es cero. **Ninguna FK a `Season`, `Team` ni `Competition`**: el equipo y la temporada se alcanzan por el jugador, la jornada y la competición por el partido ([D-05], [D-28]). Invariante cruzada: **el equipo del jugador disputa el partido**. **`deleted_at`** = *soft delete*, sin guarda de dependientes ([D-36])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`, `deleted_at?`                                                                                                    | Único(jugador, partido, tipo) **entre las no borradas**: no se puede ser expulsado dos veces, y una segunda amarilla **no es otra fila amarilla** ([D-45]). Amarilla **y** roja en el mismo partido sí conviven (la que acumula más la roja directa posterior). **Una fila es una sanción, no una cartulina** ([D-45]): la doble amarilla es **una** fila `roja` con `is_second_yellow = true`, y las dos amarillas que la causaron **no acumulan** para el tramo ([D-10]). `is_second_yellow = true` exige `type = roja` — segunda invariante entre columnas, como la de [D-42]. **`minute`** opcional ([D-14]): nulo es "no se apuntó". **No se exige `Appearance`** del jugador en ese partido ([D-46]). "Amarillas pendientes de sanción" se calcula (§3.6). **`deleted_at`** = *soft delete* ([D-36]) |
+| **Card** (Tarjeta)                                | `player_id`, `match_id`, `type`, `is_second_yellow`, `minute?`, `deleted_at?`                                                                                                    | **Una fila es una sanción, no una cartulina** ([D-45]): la doble amarilla es **una** fila `roja` con `is_second_yellow = true`, y las amarillas que la causaron **no acumulan** ([D-10]). Único(jugador, partido, tipo) **entre las no borradas** — amarilla y roja directa sí conviven. `is_second_yellow = true` exige `type = roja` (segunda invariante entre columnas, como [D-42]). **`minute`** opcional ([D-14]). **No se exige `Appearance`** ([D-46]). "Amarillas pendientes" se calcula (§3.6). **`deleted_at`** = *soft delete* ([D-36]) |
 | **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?`              | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial). **Cubre las dos direcciones** de los partidos del equipo propio (el mockup desglosa también los goles recibidos), pero no los partidos entre rivales (§3.7). **`conceding_team_id` no se escribe: se deriva del `Match`** ([D-54]) — la mitad de la denormalización que el cliente no puede contradecir. **`scorer_player_id` anulable** (los goles del rival no tienen goleador conocido, [D-09]) y **el equipo al que debe pertenecer depende de `play_type`** ([D-52]): el que marca en un gol normal, el que **encaja** en `en_propia_puerta` — donde además el gol **no suma** al goleador aunque quede registrado a su nombre. **`assisted` no es redundante con `assist_player_id`**: `true` con jugador nulo es el gol encajado con asistencia rival ([D-09]). **Sin unicidad alguna** —un jugador marca dos veces en un partido— y **sin cuadre con el marcador** ([D-53]). **`deleted_at`** = *soft delete* ([D-36])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                                                     | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura. **Se ingiere, no se calcula** ([D-09]): el ranking incluye rivales, de los que no hay plantilla — `full_name` y `team_label` son **texto del proveedor**, no claves, y no se emparejan con `Player` ni con `Team`. **Estado vigente único, no *snapshot* por jornada** (a diferencia de `StandingRow`): el *upsert* lo pisa en cada sincronización, sin histórico ni `PREV`. **`rank`** anulable —no todos los proveedores lo publican— y **se respeta el suyo** en vez de recalcularlo: los criterios de desempate son ajenos. **Sin *fallback*** ([D-48]): si la federación no lo publica, no hay nada que calcular y la tabla queda vacía. **`synced_at`** es marca del *upsert* (retirar filas que el proveedor dejó de publicar), **no viaja en el DTO** ([D-29])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **CompetitionSanctionBracket** (Tramo de sanción) | `competition_id`, `seq`, `yellow_from`, `yellow_to`                                                                                                                             | Config por competición (§3.6). Sanción al alcanzar `yellow_to`; "pendientes" = `yellow_to − acumuladas`. **Es una secuencia, no filas independientes** ([D-50]): tramos contiguos y ordenados por `seq`, sin huecos ni solapes — la unidad de escritura es el **conjunto entero**, no la fila. **`seq` y `yellow_from` son derivados** ([D-51]): el conjunto queda determinado por la lista ascendente de `yellow_to`, así que un conjunto inválido no se puede ni expresar. **Sin borrado lógico** (§4.4): es configuración, no un hecho — una competición sin tramos simplemente no tiene filas ([D-10]). **Retroactivo**: las pendientes se calculan en vivo sobre `Card`, así que cambiar los umbrales reinterpreta las tarjetas ya registradas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -600,10 +601,10 @@ través de su **raíz**; las referencias **entre** agregados son **por identidad
   §3.4 se sirven como **modelos de lectura** (CQRS-lite, §4.5) con puerto de consulta propio. Así conviven
   agregados limpios para escribir y consultas directas indexadas para leer.
 
-> **Decisión abierta (a confirmar):** la granularidad de arriba es una **propuesta**. Lo más discutible es si
-> `Competition` debe **contener** `Round`/`SanctionBracket` o si alguno merece raíz propia (si se editan de
-> forma muy independiente). No bloquea §5; se afina más adelante. *(La tercera pata de esta duda,
-> `Participation`, se resolvió por eliminación: [D-27].)*
+> **Las tres dudas de granularidad que tenía esta tabla quedaron resueltas al escribir §5:**
+> `Participation` se eliminó ([D-27]); `Round` es interna y de solo lectura ([D-21]); y
+> `SanctionBracket` es interna y **se escribe como conjunto a través de su competición** ([D-50]), que era
+> justo la pregunta —si se editaba de forma tan independiente como para merecer raíz propia—. No la merece.
 
 ### 4.3 Puertos de salida: repositorios y otros (capa Aplicación)
 
@@ -1070,19 +1071,13 @@ Tres lecturas que no son evidentes en la tabla:
   hijos** (`Goal`, `Card`, `Appearance`, §4.2), no sus campos. El marcador es de la federación; cómo se llegó
   a él es del club. *Consecuencia asumida:* **no hay amistosos** — un partido fuera de competición federada
   no tiene por dónde entrar ([D-21]).
-- **El ámbito es obligatorio: al menos uno de `?roundId=`, `?competitionId=` o `?teamId=`** → **400** si no
-  viene ninguno. Mismo criterio que el `competitionId` de `Round`, pero con tres puertas en vez de una porque
-  las pantallas entran por sitios distintos: la de **jornada** pide `?roundId=` (los ~10 partidos de esa
-  fecha), la de **equipo** pide `?teamId=` **+** `?seasonId=` (su calendario de la temporada, que puede
-  abarcar liga **y** copa — dos `Competition`, [D-12]). Sin ámbito, `GET /v1/matches` sería el histórico
-  completo del club, que no lo pide ninguna pantalla.
-- **`?teamId=` casa contra los dos lados**, local y visitante (`home_team_id = :id OR away_team_id = :id`).
-  Es la consulta que sostienen los índices compuestos de §4.6 — los mismos que quedaron al eliminar
-  `Participation` ([D-27]).
-- **Paginado**, a diferencia de `Round`, aunque los dos exijan ámbito. La razón es el **techo**: las jornadas
-  de una competición son ~34 **por definición**, mientras que aquí el ámbito más ancho admitido
-  (`?competitionId=` de una liga de 20 equipos ⇒ ~380 partidos, o `?teamId=` sin temporada ⇒ sin techo)
-  desborda lo que se puede servir de una vez. Sigue la convención general de §5.3.
+- **Ámbito obligatorio: al menos uno de `?roundId=`, `?competitionId=` o `?teamId=`** → **400** si falta.
+  Tres puertas porque las pantallas entran por sitios distintos: **jornada** (`?roundId=`) y **equipo**
+  (`?teamId=` + `?seasonId=`, que puede abarcar liga **y** copa — dos `Competition`, [D-12]).
+- **`?teamId=` casa contra los dos lados**, local y visitante. La sostienen los índices compuestos de §4.6,
+  los mismos que quedaron al eliminar `Participation` ([D-27]).
+- **Paginado**, a diferencia de `Round`, aunque los dos exijan ámbito: aquí el ámbito **no trae techo**
+  ([D-49]).
 - **Resto de filtros:** `?seasonId=`, `?status=`. `?seasonId=` se alcanza por FK vía `Competition`, no por
   columna propia ([D-28]).
 - **Orden por `(match_date, kickoff_time)`**, con las horas sin confirmar **al final del día** (`NULLS LAST`)
@@ -1106,13 +1101,10 @@ Tres lecturas que no son evidentes en la tabla:
 |--------|------|-------------|-------|---------|
 | **GET** | `/v1/standings?roundId=` | `GetStanding` | **200** + `[StandingResponse]` | 400 (falta `roundId`), 404 (jornada inexistente) |
 
-- **Un solo endpoint, y sin `GET /{id}`** ([D-34]). Es el único recurso del contrato sin acceso por
-  identificador, y es deliberado: `StandingRow` **no es un agregado sino un modelo de lectura** (§4.2), y su
-  **unidad de consumo es la tabla entera de una jornada**. "La fila 4 de la jornada 22" no la pide ninguna
-  pantalla, no se puede enlazar y no se puede editar. Publicar la ruta sería superficie sin consumidor —el
-  mismo criterio con el que se eliminó `Participation` ([D-27]).
-- **`?roundId=` obligatorio** → **400** si falta. Una clasificación **solo existe respecto de una jornada**:
-  es un *snapshot*, no un estado global de la competición. Mismo patrón que el `competitionId` de `Round`.
+- **Un solo endpoint, sin `GET /{id}`** ([D-34]): `StandingRow` no es un agregado sino un **modelo de
+  lectura** (§4.2) cuya unidad de consumo es la tabla de una jornada. Publicar la ruta sería superficie sin
+  consumidor, el criterio con el que se eliminó `Participation` ([D-27]).
+- **`?roundId=` obligatorio** → **400** si falta: una clasificación solo existe respecto de una jornada.
 - **La "clasificación actual" la resuelve el cliente, y el contrato no la nombra.** La app ya trae
   `Round.isCurrent` en el payload del selector de jornada (§5.1), así que sabe qué jornada pedir sin llamada
   extra. **No se ofrece `?competitionId=` a secas** porque "la última jornada con datos" es un **tercer
@@ -1147,41 +1139,26 @@ Tres lecturas que no son evidentes en la tabla:
 | **PUT** | `/v1/players/{id}/photo` | `UploadPlayerPhoto` | **200** + `PlayerResponse` | 400 (no es imagen), **403** (rol), 404, **413** (>5 MB), **415** (tipo no admitido) |
 | **DELETE** | `/v1/players/{id}/photo` | `DeletePlayerPhoto` | **204** (idempotente) | **403** (rol), 404 |
 
-- **Primer recurso de *dominio manual*, y por eso el primero con CRUD completo.** Las cuatro operaciones no
-  son una excepción a la regla del BFF ([D-21]) sino su **complemento**: esa regla protege la frontera con
-  la ingesta, y aquí **no hay frontera** que proteger —la federación no publica plantillas de fútbol base—.
-  `Season` y `Competition` tienen `POST` a pesar de ser del árbol de la ingesta, por ser su **entrada**
-  ([D-22]); `Player` lo tiene porque **nadie más escribe** aquí.
-- **`teamId` y `seasonId` son obligatorios los dos en la lista**, no filtros opcionales. Una plantilla es un
-  hecho de *(equipo, temporada)*: esas dos coordenadas **son** la identidad de la fila ([D-05]). Mismo
-  criterio que el `roundId` de la clasificación, con la misma consecuencia —techo de ~25 filas → **sin
-  paginación** (§5.3)— y **orden fijo por dorsal ascendente**, que es como se lee una plantilla. Tampoco hay
-  `?q=`: la colección entera cabe en una pantalla. Filtro opcional: `?position=`.
-- **Y son inmutables en la escritura** ([D-37]): van en el `POST` y **no** en el `PATCH`. Un jugador que
-  sube de equipo a mitad de temporada es una **fila nueva**, igual que el que continúa al año siguiente
-  ([D-05]). Permitir el cambio reescribiría el pasado: los goles y tarjetas ya emitidos pasarían a contar
-  para el equipo al que se le mueve. El ámbito obligatorio de la lectura y la inmutabilidad de la escritura
-  son **la misma decisión** vista desde los dos lados.
+- **Primer recurso de *dominio manual* y primero con CRUD completo.** No es excepción a la regla del BFF
+  ([D-21]) sino su complemento: aquí **no hay frontera** que proteger, porque la federación no publica
+  plantillas de fútbol base.
+- **`teamId` y `seasonId` son obligatorios en la lista**, no filtros: esas dos coordenadas **son** la
+  identidad de la fila ([D-05]). Techo de ~25 filas → sin paginación, orden fijo por dorsal y sin `?q=`
+  (§5.3). Filtro opcional: `?position=`.
+- **Y son inmutables en la escritura** ([D-37]): van en el `POST`, no en el `PATCH`. Cambiarlos reescribiría
+  el pasado —los goles y tarjetas ya emitidos pasarían a contar para otro equipo—. Ámbito obligatorio en la
+  lectura e inmutabilidad en la escritura son **la misma decisión** por los dos lados.
 - **La plantilla solo existe para equipos propios** (§3.7) → **422** si el `teamId` del cuerpo apunta a un
-  rival. **No es 404 aunque el caso incluya "no existe"**: el equipo llega en el **cuerpo**, no en la ruta,
-  y `/players` sí existe; un 404 respondería sobre el recurso equivocado. En el `GET` de lista, en cambio,
-  el **404 sí es del ámbito** —como en `Round` y `Match`—, y un equipo propio sin plantilla dada de alta
-  devuelve **200** con lista vacía.
-- **`DELETE` es borrado lógico y no tiene guarda de dependientes** ([D-36]), a diferencia de `Season` y
-  `Competition`, que devuelven 409 si tienen datos colgando. Aquí no hay integridad que proteger: los
-  eventos siguen apuntando a la fila y **siguen contando para el equipo**; lo que desaparece es el jugador
-  de la plantilla. Libera el dorsal (índice parcial, §3.5). **No es la vía del "derecho al olvido"**: para
-  eso está el purgado de temporada ([D-24]).
-- **`photoUrl` es derivado y de solo lectura** ([D-35]): en BD vive `photo_key`, y la respuesta lleva una URL
-  firmada de vida corta. **La foto entra por su propio sub-recurso, no por el alta**: `PUT
-  /v1/players/{id}/photo` con el binario en crudo (`image/jpeg`/`image/png`, tope 5 MB). Es la **única
-  operación no-JSON del contrato**, y la razón de que sea una segunda llamada es doble: la clave del objeto
-  se deriva del `playerId` —que no existe hasta que responde el `POST`— y separarlas hace que un fallo de
-  subida no tumbe el alta. El backoffice encadena las dos tras un único botón de *Guardar*.
-- **El fichero pasa por la API porque la API lo *sanea*** ([D-35]): valida los bytes contra el tipo
-  declarado, **recodifica a JPEG**, redimensiona al lado de la ficha y **descarta el EXIF**. Ese último paso
-  es el motivo de fondo —el EXIF de una foto hecha con un móvil lleva la **geolocalización** de un menor—, y
-  es lo que descarta la subida directa a Storage con URL prefirmada, que guardaría el fichero tal cual llega.
+  rival: llega en el **cuerpo**, no en la ruta. En el `GET` de lista el **404 sí es del ámbito**.
+- **`DELETE` es borrado lógico y sin guarda de dependientes** ([D-36]): los eventos siguen contando para el
+  equipo, y el dorsal se libera (índice parcial, §3.5). **No es la vía del "derecho al olvido"** — para eso
+  está el purgado de temporada ([D-24]).
+- **`photoUrl` es derivado y de solo lectura** ([D-35]): en BD vive `photo_key` y la respuesta lleva una URL
+  firmada de vida corta. **La foto entra por su propio sub-recurso**, con el binario en crudo — única
+  operación no-JSON del contrato— porque la clave se deriva del `playerId` y separarlas degrada mejor.
+- **El fichero pasa por la API porque la API lo *sanea*** ([D-35]): recodifica a JPEG, redimensiona y
+  **descarta el EXIF**, que en la foto de un menor lleva geolocalización. Eso descarta la subida directa a
+  Storage con URL prefirmada.
 - **El borrado lógico del jugador no borra su foto** del Storage (sigue siendo recuperable); quien la
   elimina es el purgado de temporada ([D-24]). Para quitarla sin borrar al jugador está `DELETE
   /v1/players/{id}/photo`, sub-recurso propio porque un `null` en un campo **derivado** del `PATCH` no
@@ -1203,18 +1180,13 @@ Tres lecturas que no son evidentes en la tabla:
 | **PATCH** | `/v1/absences/{id}` | `UpdateAbsence` | **200** + `AbsenceResponse` | 400, **403** (rol), 404, **409**, **422** (fechas) |
 | **DELETE** | `/v1/absences/{id}` | `DeleteAbsence` | **204** (borrado lógico) | **403** (rol), 404 |
 
-- **Interna del agregado `Player`** (§4.2) pero **en ruta plana con ámbito obligatorio**, igual que `Round`
-  dentro de `Competition`. Es la convención de todo el contrato, y ya se justificó al descartar
-  `/rounds/{id}/standings` ([D-34]).
-- **Dos puertas de ámbito: `?playerId=`, o `?teamId=` **y** `?seasonId=`** → **400** si no viene ninguna, y
-  también si llega una a medias (`teamId` sin `seasonId`). La primera puerta es la **ficha del jugador**
-  —su historial de bajas—; la segunda es la **plantilla**, y sin ella pintar el distintivo de
-  disponibilidad de 25 fichas costaría **25 llamadas**: el mismo N+1 que ya se evitó en la clasificación
-  ([D-34]). Mismo patrón que las tres puertas de `Match`.
-- **Filtros: `?active=true|false` y `?type=`.** `?active=true` es el que sirve la pantalla —solo las bajas
-  en curso—, y se resuelve sobre el criterio derivado de [D-38], no sobre una columna. Sin paginación y con
-  **orden fijo por `start_date` descendente** (§5.3): el ámbito trae techo y un historial se lee del último
-  al primero.
+- **Interna del agregado `Player`** (§4.2) pero **en ruta plana con ámbito obligatorio**, como `Round`
+  dentro de `Competition` ([D-34]).
+- **Dos puertas: `?playerId=`, o `?teamId=` **y** `?seasonId=`** → **400** si falta o llega a medias. La
+  segunda es la **plantilla**: sin ella, pintar el distintivo de disponibilidad de 25 fichas costaría 25
+  llamadas, el N+1 que ya se evitó en la clasificación ([D-34]).
+- **Filtros: `?active=true|false` y `?type=`**, el primero resuelto sobre el criterio derivado de [D-38], no
+  sobre una columna. Sin paginación, orden fijo por `start_date` descendente (§5.3).
 - **`isActive` es derivado en lectura** ([D-38]): no hay alta real **y** la fecha de inicio ya llegó.
   Depende del día en que se pregunta, como `Season.isCurrent` — una baja apuntada por adelantado pasa sola
   a activa sin que nadie la toque.
@@ -1243,44 +1215,27 @@ Tres lecturas que no son evidentes en la tabla:
 | **PATCH** | `/v1/appearances/{id}` | `UpdateAppearance` | **200** + `AppearanceResponse` | 400, **403** (rol), 404, **422** (`minutes` sin `jugado`) |
 | **DELETE** | `/v1/appearances/{id}` | `DeleteAppearance` | **204** (borrado lógico) | **403** (rol), 404 |
 
-- **Primera de las tres entidades hijas de `Match`** (§4.2) y, por tanto, plantilla de las que vienen
-  (`Goal`, `Card`). Confirma que la regla del BFF ([D-21]) y el CRUD manual **no se contradicen**: `Match`
-  es de solo lectura porque su marcador es de la federación, y sus hijos son CRUD completo porque **nadie
-  más los escribe** — la federación no publica alineaciones de fútbol base. La frontera no está en el
-  árbol, está en **quién es el dueño de cada fila**.
-- **Interna del agregado `Match`, pero en ruta plana con ámbito obligatorio**, igual que `Round` dentro de
-  `Competition` y `Absence` dentro de `Player`. Ya se justificó al descartar `/rounds/{id}/standings`
-  ([D-34]); aquí además la segunda puerta (`?playerId=`) **no cabría** en una ruta anidada bajo el partido.
-- **Dos puertas de ámbito, y son alternativas, no combinables** → **400** si no viene ninguna **y también
-  si vienen las dos** ([D-43]). `?matchId=` es la **convocatoria** (la lista que rellena el entrenador);
-  `?playerId=` es el **historial** del jugador. Combinarlas devuelve como mucho una fila por la unicidad
-  *(jugador, partido)*, y para eso está el `GET` por id. Es la diferencia con las puertas de `Match` y
-  `Absence`, que sí acotan progresivamente.
-- **La ausencia de fila no es un estado** ([D-41]). `no_convocado` es un **hecho registrado** —estuvo
-  disponible y no se le llamó— y cuenta en la estadística; que no haya fila significa que **nadie apuntó
-  esa convocatoria**. De ahí que la lista devuelva solo lo registrado y no una fila por jugador de la
-  plantilla: el cliente cruza con `GET /v1/players?teamId=&seasonId=` por `playerId`, el mismo cruce que ya
-  hace con las ausencias activas ([D-38]).
-- **`minutes` está atado a `status = jugado`** ([D-42]) → **422** en cualquier otro caso, y en el `PATCH`
-  bajar de `jugado` exige mandar `minutes: null` en la misma llamada. Sigue siendo **opcional incluso
-  jugando** ([D-14]): `null` es "jugó, no sé cuánto", que **no es cero** — quien calcule el promedio
-  descarta los nulos.
-- **El equipo del jugador tiene que disputar el partido** → **422** si no. Es la única validación cruzada
-  del alta y es necesaria: sin ella se podría apuntar a un juvenil en el partido del cadete y contaminar la
-  estadística de los dos equipos. **No es 404** porque jugador y partido llegan en el **cuerpo**, no en la
-  ruta (mismo criterio que el `teamId` del alta de jugador, [D-37]).
-- **Se registra fila a fila; no hay alta masiva** ([D-44]). Es la decisión más discutible de este recurso
-  —una convocatoria son ~18 llamadas— y está tomada a favor de la coherencia del contrato, con la puerta
-  abierta a revisarla si el backoffice lo pide.
-- **`playerId` y `matchId` no están en el `PATCH`**: son identidad, no atributos. Una convocatoria apuntada
-  en el partido equivocado se borra y se crea de nuevo — misma línea que [D-37] y [D-40], y aquí además
-  cambiarlos chocaría con la unicidad.
-- **`DELETE` (lógico) no es lo mismo que marcar `no_convocado`**, y el backoffice tendrá los dos gestos
-  cerca: lo segundo registra una decisión técnica, lo primero deshace un apunte erróneo. Es la misma
-  distinción que en `Absence` entre borrar y cerrar.
-- **Lo que este recurso *no* devuelve:** los recuentos por jugador (JUGADOS / BAJA MÉDICA / SANCIÓN / NO
-  CONVOCADO) ni el promedio de minutos. Son agregación y llegarán como **modelo de lectura** propio (§3.4,
-  §4.5), igual que la clasificación se quedó fuera de `TeamResponse` ([D-34]).
+- **Primera de las tres entidades hijas de `Match`** (§4.2) y plantilla de las que vienen. Confirma que la
+  regla del BFF ([D-21]) y el CRUD manual no se contradicen: **la frontera no está en el árbol, está en
+  quién es el dueño de cada fila**.
+- **Interna del agregado `Match`, pero en ruta plana con ámbito obligatorio** ([D-34]). Aquí además la
+  segunda puerta (`?playerId=`) no cabría anidada bajo el partido.
+- **Dos puertas de ámbito, alternativas y no combinables** → **400** si no viene ninguna **y si vienen las
+  dos** ([D-43]): su intersección es como mucho una fila, y para eso está el `GET` por id.
+- **La ausencia de fila no es un estado** ([D-41]): `no_convocado` es un hecho registrado y cuenta; que no
+  haya fila significa que nadie apuntó esa convocatoria. La lista devuelve solo lo registrado, y el cliente
+  cruza con `GET /v1/players?teamId=&seasonId=` — el mismo cruce que ya hace con las ausencias ([D-38]).
+- **`minutes` está atado a `status = jugado`** ([D-42]) → **422**; en el `PATCH` el par viaja junto. Sigue
+  siendo **opcional incluso jugando** ([D-14]): `null` es "jugó, no sé cuánto", que **no es cero**.
+- **El equipo del jugador tiene que disputar el partido** → **422** (no 404: llegan en el cuerpo, [D-37]).
+  Sin esa validación se contaminaría la estadística de dos equipos.
+- **Se registra fila a fila; no hay alta masiva** ([D-44]) — la decisión más discutible del recurso, tomada
+  a favor de la coherencia del contrato.
+- **`playerId` y `matchId` no están en el `PATCH`**: son identidad ([D-37]) y cambiarlos chocaría con la
+  unicidad.
+- **`DELETE` (lógico) no es lo mismo que marcar `no_convocado`**: lo segundo registra una decisión técnica,
+  lo primero deshace un apunte erróneo. Misma distinción que borrar vs. cerrar en `Absence`.
+- **Los recuentos y el promedio de minutos no salen de aquí**: son **modelo de lectura** (§3.4, §4.5).
 - **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
 
 **`Card`:**
@@ -1293,35 +1248,21 @@ Tres lecturas que no son evidentes en la tabla:
 | **PATCH** | `/v1/cards/{id}` | `UpdateCard` | **200** + `CardResponse` | 400, **403** (rol), 404, **409**, **422** (`isSecondYellow` sin `roja`) |
 | **DELETE** | `/v1/cards/{id}` | `DeleteCard` | **204** (borrado lógico) | **403** (rol), 404 |
 
-- **Segunda entidad hija de `Match`** y confirmación de que `Appearance` sirvió de plantilla: ruta plana con
-  ámbito, CRUD completo, identidad inmutable, borrado lógico. Lo que cambia son dos cosas, y las dos salen
-  de que **el par *(jugador, partido)* no es único aquí**.
-- **Las dos puertas de ámbito *sí* se combinan** ([D-47]), al revés que en `Appearance` ([D-43]). No es una
-  excepción sino la misma regla leída bien: **dos puertas se combinan salvo que su intersección sea la clave
-  única de la tabla**. En `Appearance` lo era —una fila— y por eso era un `GET` por id disfrazado; aquí un
-  jugador puede ver amarilla **y** roja directa en el mismo partido, así que la intersección es un conjunto
-  pequeño y con sentido de pantalla.
-- **Una fila es una sanción, no una cartulina** ([D-45]). La expulsión por doble amarilla es **una** fila
-  `roja` con `is_second_yellow = true`; las dos amarillas no se registran aparte y **no acumulan** para el
-  tramo ([D-10]). El motivo es de modelo, no de reglamento: una fila no sabe apuntar a otra, así que dos
-  amarillas sueltas más una roja serían tres hechos sin vínculo y la cuenta de acumulación las sumaría.
-- **Unicidad *(jugador, partido, tipo)*** → **409**. Recoge dos invariantes en un índice: no se puede ser
-  expulsado dos veces, y una segunda amarilla no es otra fila amarilla sino la expulsión.
-- **`is_second_yellow = true` exige `type = roja`** → **422**, y en el `PATCH` bajar a `amarilla` exige
-  mandar `isSecondYellow: false` en la misma llamada. Es la **segunda invariante entre columnas** del
-  contrato y se valida donde la primera ([D-42]): en el dominio, con `CHECK` de refuerzo en el esquema.
-- **No se exige que el jugador tenga `Appearance` en ese partido** ([D-46]). Son dos registros manuales
-  independientes; atarlos impondría un orden de entrada —primero la convocatoria, luego las tarjetas— que
-  ninguna pantalla pide y que convertiría un dato que falta en un error, justo lo que [D-41] evitó.
-- **El `DELETE` recalcula las pendientes de sanción**, porque el recuento es agregación en vivo sobre esta
-  tabla ([D-10]), no un contador almacenado. Es lo que se quiere —una tarjeta apuntada por error no debe
-  acercar a nadie a una sanción— pero conviene decirlo: es el primer borrado del contrato con un efecto
+- **Segunda entidad hija de `Match`**, con la plantilla de `Appearance`: ruta plana con ámbito, CRUD
+  completo, identidad inmutable, borrado lógico. Lo que cambia sale todo de que **el par *(jugador,
+  partido)* no es único aquí**.
+- **Las dos puertas de ámbito *sí* se combinan** ([D-47]), al revés que en `Appearance` ([D-43]) — la misma
+  regla, no una excepción.
+- **Una fila es una sanción, no una cartulina** ([D-45]): la doble amarilla es **una** fila `roja` con
+  `is_second_yellow = true`, y las amarillas que la causaron **no acumulan** ([D-10]).
+- **Unicidad *(jugador, partido, tipo)*** → **409**; amarilla y roja directa sí conviven.
+- **`is_second_yellow = true` exige `type = roja`** → **422**; en el `PATCH` el par viaja junto. Segunda
+  invariante entre columnas, validada donde la primera ([D-42]).
+- **No se exige `Appearance` del jugador en ese partido** ([D-46]).
+- **El `DELETE` recalcula las pendientes de sanción** ([D-10]): es el primer borrado del contrato con efecto
   visible fuera de su propio recurso.
-- **De `Card` no nace ninguna `Absence`** ([D-10]): los tramos dicen cuándo toca la sanción; registrarla es
-  un acto del administrador. Es la misma regla de escritor único que gobierna todo el dominio manual (§2.1).
-- **Lo que este recurso *no* devuelve:** las amarillas pendientes ni el ciclo de acumulación. Dependen de los
-  tramos de la competición y del historial entero del jugador, no de la fila → **modelo de lectura** (§3.4,
-  §4.5), como en `Appearance`.
+- **De `Card` no nace ninguna `Absence`** ([D-10]); las pendientes y el ciclo de acumulación son **modelo de
+  lectura** (§3.4, §4.5), no campos de este recurso.
 - **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
 
 **`LeagueScorer`:**
@@ -1330,42 +1271,31 @@ Tres lecturas que no son evidentes en la tabla:
 |--------|------|-------------|-------|---------|
 | **GET** | `/v1/league-scorers?competitionId=` | `ListLeagueScorers` | **200** + página de `LeagueScorerResponse` | 400 (falta `competitionId`), 404 (competición inexistente) |
 
-- **Cierra la superficie de *salida de la ingesta*.** Con esto, las seis entidades que escribe la ingesta
-  (`OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer`) tienen su contrato completo, y
-  la regla del BFF ([D-21]) queda aplicada en todas: aquí en su forma más extrema —**un solo verbo, un solo
-  endpoint, un solo DTO**—, porque el dato no solo lo escribe otro módulo: **es de jugadores ajenos**.
-- **Un solo endpoint, sin `GET /{id}`**, exactamente como `StandingRow` ([D-34]) y por el mismo motivo: es
-  un **modelo de lectura** (§4.2, §4.5) cuya unidad de consumo es la tabla. "El goleador número 7" no lo
-  pide ninguna pantalla, no se puede enlazar y no se puede editar.
-- **Sin `PATCH`, como `Round`** ([D-21]) y por la misma razón —no hay nada **deducido** que corregir— más
-  una propia: el nombre y el equipo son **texto del proveedor sobre jugadores de otros clubes**, así que
-  una corrección no solo la pisaría el siguiente *upsert* ([D-18]), es que no nos corresponde hacerla.
-- **El ámbito es la competición, no la jornada**, y esa es la diferencia de fondo con `StandingRow`: la
-  clasificación es un ***snapshot* por jornada** y esto es un **estado vigente único** que la ingesta pisa
-  en cada sincronización. No hay histórico de goleadores ni columna PREV, porque el proveedor publica el
-  ranking a día de hoy.
-- **Paginado, al revés que `StandingRow`** ([D-49]). Las dos exigen ámbito, pero el criterio de §5.3 es el
-  techo, no el ámbito: ~20 equipos allí, potencialmente **doscientos** goleadores aquí. Y como el orden
-  **es** el ranking, la paginación resuelve gratis el top-N de la pantalla — `?perPage=20` es la tabla de
-  los veinte máximos goleadores.
-- **Orden fijo por `rank` ascendente** (`NULLS LAST`), con `goals` descendente como criterio real y el
-  nombre como desempate estable. Sin `?sort=` ni `?order=`: un ranking desordenado no es un ranking.
-- **`rank` es anulable y se respeta el del proveedor** en vez de recalcularlo desde `goals`: los criterios
-  de desempate son suyos y no los conocemos. Cuando falta, ordena `goals` y el cliente numera si quiere.
-- **No hay *fallback*, y esto lo separa de toda la demás salida de la ingesta** ([D-48]). `StandingRow`
-  existe siempre —ingerida o calculada ([D-15])—; el ranking de goleadores **solo existe si el proveedor lo
-  publica**, porque calcularlo exigiría la plantilla de los rivales ([D-09]). La capacidad se declara en
-  **`ClubResponse.federationProvidesScorers`**, hermano de `federationProvidesStandings` pero con un peso
-  distinto: aquél habla de *procedencia* y las apps pueden ignorarlo; este dice **si va a haber dato**, y
-  es la diferencia entre ocultar la pantalla y pintar un vacío que parece un fallo.
-- **`teamLabel` es texto, no un `TeamRef`** ([D-32]) — la diferencia visible con `StandingResponse`. Allí
-  las filas son equipos ya ingeridos, con `id` y escudo; aquí puede aparecer un equipo de otra categoría o
-  con el nombre escrito de otra forma, y forzar el emparejamiento produciría filas mal atribuidas. Sin
-  escudo, por tanto.
-- **`syncedAt` no viaja en el DTO** pese a existir como columna (§3.2): sería la **columna constante** que
-  [D-28] y [D-29] ya rechazaron —el mismo instante repetido en doscientas filas— y la pregunta que
-  respondería ya la responde `CompetitionResponse.lastSyncedAt`, que es la granularidad correcta. En BD sí
-  se conserva: es la marca con la que el *upsert* retira las filas que el proveedor dejó de publicar (§3.7).
+- **Cierra la superficie de *salida de la ingesta*** — las seis entidades que escribe la ingesta ya tienen
+  contrato. Aquí la regla del BFF ([D-21]) llega a su forma más extrema —**un verbo, un endpoint, un
+  DTO**—, porque el dato no solo lo escribe otro módulo: **es de jugadores ajenos**.
+- **Un solo endpoint, sin `GET /{id}`**, como `StandingRow` ([D-34]): modelo de lectura cuya unidad de
+  consumo es la tabla.
+- **Sin `PATCH`, como `Round`** ([D-21]), más una razón propia: el nombre y el equipo son texto del
+  proveedor sobre jugadores de otros clubes, así que corregirlos **no nos corresponde** —y lo pisaría el
+  siguiente *upsert* ([D-18])—.
+- **El ámbito es la competición, no la jornada**: a diferencia de la clasificación, esto es un **estado
+  vigente único** que el *upsert* pisa en cada sincronización. Sin histórico ni columna PREV.
+- **Paginado, al revés que `StandingRow`** ([D-49]): el criterio es el techo, no el ámbito — ~20 equipos
+  allí, potencialmente **doscientos** goleadores aquí. Y como el orden **es** el ranking, `?perPage=20` es
+  el top-20 sin inventar un `?limit=`.
+- **Orden fijo por `rank` ascendente** (`NULLS LAST`, `goals` descendente como criterio real, nombre como
+  desempate estable). Sin `?sort=` ni `?order=`.
+- **`rank` es anulable y se respeta el del proveedor**: los criterios de desempate son suyos.
+- **No hay *fallback*, y eso lo separa del resto de la salida de la ingesta** ([D-48]): calcularlo exigiría
+  la plantilla de los rivales ([D-09]). La capacidad se declara en
+  **`ClubResponse.federationProvidesScorers`**, que a diferencia de su hermano **no se puede ignorar**: es
+  la diferencia entre ocultar la pantalla y pintar un vacío que parece un fallo.
+- **`teamLabel` es texto, no un `TeamRef`** ([D-32]): puede llegar un equipo de otra categoría o escrito de
+  otra forma, y forzar el emparejamiento daría filas mal atribuidas. Sin escudo, por tanto.
+- **`syncedAt` no viaja en el DTO** pese a ser columna (§3.2): sería la **columna constante** que [D-28] y
+  [D-29] rechazaron, y esa pregunta ya la responde `CompetitionResponse.lastSyncedAt`. En BD se conserva:
+  es la marca con la que el *upsert* retira lo que el proveedor dejó de publicar (§3.7).
 - **El `GET` es accesible a cualquier rol autenticado**; no hay escritura que proteger.
 
 **`Goal`:**
@@ -1378,43 +1308,30 @@ Tres lecturas que no son evidentes en la tabla:
 | **PATCH** | `/v1/goals/{id}` | `UpdateGoal` | **200** + `GoalResponse` | 400, **403** (rol), 404, **422** |
 | **DELETE** | `/v1/goals/{id}` | `DeleteGoal` | **204** (borrado lógico) | **403** (rol), 404 |
 
-- **Cierra el contrato** y es la tercera hija de `Match`, tras `Appearance` y `Card`. Confirma el patrón sin
-  novedades de forma —ruta plana, ámbito, CRUD, identidad inmutable, borrado lógico— y concentra toda su
-  dificultad en las **invariantes**, que son las más ricas del modelo.
-- **Cuatro puertas de ámbito, y se combinan** ([D-47]): la clave de `Goal` no incluye jugador —un jugador
-  marca dos veces en un partido, y hay goles sin goleador— así que ninguna intersección colapsa a una fila.
-  Es, de hecho, **el único recurso sin unicidad alguna**.
+- **Cierra el contrato.** Tercera hija de `Match`, sin novedades de forma —ruta plana, ámbito, CRUD,
+  identidad inmutable, borrado lógico—: toda su dificultad está en las **invariantes**.
+- **Cuatro puertas de ámbito, y se combinan** ([D-47]): la clave no incluye jugador, así que ninguna
+  intersección colapsa a una fila. Es **el único recurso sin unicidad alguna**.
 - **Las dos puertas de equipo son la razón de ser de [D-04]:** `?scoringTeamId=` da los goles a favor y
-  `?concedingTeamId=` los goles en contra, cada una un filtro directo e indexado **sin *join***. Son
-  literalmente los dos bloques de la pantalla de estadísticas.
-- **Paginado** ([D-49]), a diferencia de `Appearance` y `Card`: `?matchId=` trae techo, pero un equipo o un
-  jugador sin `?seasonId=` no. Se aplica el criterio del techo, no el del ámbito — tal y como [D-49] predijo.
-- **Se escribe quién marca; el servidor deriva quién encaja** ([D-54]). `concedingTeamId` no está en ningún
-  DTO de escritura: sale del `Match`. Así la denormalización de [D-04] **no puede quedar incoherente**,
-  porque el cliente no tiene forma de contradecirla.
-- **El gol en propia puerta invierte la invariante del goleador** ([D-52]): en `play_type =
-  en_propia_puerta` el `scorer_player_id` pertenece al equipo que **encaja**. Se guarda —el autor de un gol
-  en propia es un dato que el club quiere— pero **no le suma**: el conteo de goleador excluye ese tipo de
-  jugada en la consulta, no con una bandera almacenada que pudiera contradecir a `play_type` (mismo
-  criterio que [D-03] y [D-38]). Y no admite asistencia.
-- **Tercera invariante entre campos del contrato:** `assist_player_id != null ⇒ assisted = true`. Misma
-  familia que [D-42] y [D-45], mismo tratamiento —dominio → **422**, `CHECK` de refuerzo— y mismo corolario
-  en el `PATCH`: el par viaja junto. A ella se suman la pertenencia del asistente al equipo que marca y el
-  que nadie se asiste a sí mismo.
-- **`assisted` no es redundante con `assist_player_id`**, aunque lo parezca: en un gol **encajado** sabemos
-  que hubo asistencia pero no de quién, porque el asistente es rival ([D-09]). `assisted = true` con
-  jugador nulo es esa fila, y es la que alimenta el CON ASISTENCIA del bloque de goles recibidos. Por eso
-  es campo declarado y no derivado.
-- **Al menos uno de los dos equipos tiene que ser propio** → **422**. El detalle manual no existe para
-  partidos entre rivales (§3.7). Es la versión de `Goal` de la comprobación que `Appearance` y `Card` hacen
-  sobre el equipo del jugador.
-- **No se valida contra el marcador** ([D-53]): el resultado es de la federación y estos goles son entrada
-  manual y parcial. Que no cuadren es lo normal. El `DELETE` tampoco descuadra nada, por lo mismo.
-- **El `PATCH` es la operación normal aquí**, no la excepcional: se apunta el gol en caliente con lo mínimo
-  y se completa el desglose después. Los seis campos de clasificación son editables; la identidad
-  (`matchId`, `scoringTeamId`) no.
-- **Lo que este recurso *no* devuelve:** los desgloses agregados por dimensión. Son agregación sobre esta
-  tabla (`GoalBreakdown`, §3.4, §4.5), como en `Appearance` y `Card`.
+  `?concedingTeamId=` los de en contra, cada una indexada y **sin *join***. Son los dos bloques de la
+  pantalla de estadísticas.
+- **Paginado** ([D-49]): `?matchId=` trae techo, pero un equipo o un jugador sin `?seasonId=` no.
+- **Se escribe quién marca; el servidor deriva quién encaja** ([D-54]), así la denormalización de [D-04] no
+  puede quedar incoherente.
+- **El gol en propia puerta invierte la invariante del goleador** ([D-52]): el `scorer_player_id` es del
+  equipo que **encaja**. Se guarda pero **no le suma** —el conteo excluye ese `play_type` en la consulta, no
+  con una bandera almacenada— y no admite asistencia.
+- **Tercera invariante entre campos:** `assist_player_id != null ⇒ assisted = true`. Misma familia que
+  [D-42] y [D-45] y mismo tratamiento. Se le suman la pertenencia del asistente al equipo que marca y el que
+  nadie se asiste a sí mismo.
+- **`assisted` no es redundante con `assist_player_id`**: en un gol **encajado** sabemos que hubo asistencia
+  pero no de quién ([D-09]), y esa fila es la que alimenta el CON ASISTENCIA de goles recibidos.
+- **Al menos uno de los dos equipos tiene que ser propio** → **422** (§3.7).
+- **No se valida contra el marcador** ([D-53]): es entrada manual y parcial, que no cuadre es lo normal. El
+  `DELETE` tampoco descuadra nada, por lo mismo.
+- **El `PATCH` es la operación normal aquí**: se apunta el gol en caliente y se completa el desglose
+  después. Los seis campos de clasificación son editables; la identidad no.
+- **Los desgloses agregados no salen de aquí**: son **modelo de lectura** (`GoalBreakdown`, §3.4, §4.5).
 - **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
 
 **`CompetitionSanctionBracket`:**
@@ -1424,42 +1341,29 @@ Tres lecturas que no son evidentes en la tabla:
 | **GET** | `/v1/sanction-brackets?competitionId=` | `GetSanctionBrackets` | **200** + `[SanctionBracketResponse]` | 400 (falta `competitionId`), 404 (competición inexistente) |
 | **PUT** | `/v1/sanction-brackets?competitionId=` | `ReplaceSanctionBrackets` | **200** + `[SanctionBracketResponse]` | 400 (umbrales no ascendentes), **403** (rol), 404 |
 
-- **Es el primer recurso de *configuración*, no de hechos**, y de ahí que rompa dos patrones a la vez: no
-  tiene borrado lógico (§4.4) y **no se escribe fila a fila**. Todo el dominio manual anterior —`Player`,
-  `Absence`, `Appearance`, `Card`— registra **lo que pasó**; esto declara **cómo se cuenta**.
+- **Primer recurso de *configuración*, no de hechos**, y de ahí que rompa dos patrones: sin borrado lógico
+  (§4.4) y **sin escritura fila a fila**. El resto del dominio manual registra **lo que pasó**; esto declara
+  **cómo se cuenta**.
 - **La unidad de escritura es el conjunto** ([D-50]) → `PUT` que sustituye la lista, sin `POST`, `PATCH`,
-  `DELETE` ni ruta por `{id}`. **No es una restricción de propiedad** —lo escribe el administrador, no la
-  ingesta— **sino de consistencia**: los tramos son una **secuencia** contigua, un tramo suelto no
-  significa nada y un hueco los invalida a todos. Es el caso que [D-44] anticipó sin nombrarlo: allí se
-  rechazó la escritura por lotes porque las filas eran **independientes** y el borrado implícito era un
-  efecto lateral no deseado; aquí las filas **no** son independientes y el borrado implícito es
-  exactamente la semántica que se busca.
+  `DELETE` ni ruta por `{id}`. **No es restricción de propiedad sino de consistencia**: los tramos son una
+  secuencia contigua y un hueco los invalida a todos. Es el extremo opuesto de [D-44]: allí las filas eran
+  independientes y el borrado implícito un efecto lateral no deseado; aquí es la semántica que se busca.
 - **El cuerpo son los umbrales, no los tramos** ([D-51]): `{"thresholds": [5, 10, 13, 16]}` produce
-  `0-5, 6-10, 11-13, 14-16`, con `seq` y `yellow_from` **derivados** en el servidor. Así un conjunto con
-  huecos, solapes o `seq` desordenado **no se puede expresar**, y no hay que rechazarlo — el criterio de
-  [D-28] (hacer la invariante estructuralmente imposible) aplicado al DTO en vez de al esquema. Queda un
-  solo error de forma: umbrales no estrictamente ascendentes, que es **400** porque se juzga mirando solo
-  el cuerpo (§5.4).
-- **La respuesta sí devuelve los tramos completos.** La asimetría es deliberada: **se escribe lo mínimo que
-  determina el conjunto, se lee lo que la pantalla necesita** — el cliente pinta `0-5, 6-10` sin rehacer la
-  derivación.
-- **`{"thresholds": []}` borra los tramos** y deja la competición sin sanción por acumulación, que es un
-  estado legítimo ([D-10]). No hay `DELETE` propio: sería una segunda forma de hacer lo mismo.
-- **`PUT` idempotente** y **sin paginación**, con orden fijo por `seq` ascendente (§5.3): son tres o cuatro
-  filas y su orden **es** su significado.
-- **El `id` de cada tramo no direcciona nada y no es estable entre escrituras** ([D-50]): un `PUT`
-  sustituye el conjunto, así que los tramos resultantes pueden traer ids nuevos aunque los umbrales no
-  hayan cambiado. Vale como clave de lista en el cliente, igual que en `StandingRow` ([D-34]), y para nada
-  más.
-- **Cambiar los tramos es retroactivo** ([D-51]), y conviene decirlo porque no se ve venir: las amarillas
-  pendientes se calculan **en vivo** sobre `Card` ([D-10]), no hay contador almacenado. Corregir una
-  configuración mal metida a mitad de temporada reinterpreta las tarjetas ya registradas — que es lo que se
-  quiere, pero significa que alguien puede pasar a estar sancionado sin que haya ocurrido nada en el campo.
-- **De aquí no nace ninguna `Absence`** ([D-10]): los tramos dicen cuándo toca; registrarla es del
-  administrador. Tercera vez que aparece la misma regla —en `Absence`, en `Card` y aquí— y es la misma:
-  **un solo escritor por tabla** (§2.1).
-- **La escritura exige rol elevado** (§7.3), como toda la configuración de competición ([D-22]). El `GET`
-  es accesible a cualquier rol autenticado: las apps lo necesitan para pintar las pendientes.
+  `0-5, 6-10, 11-13, 14-16`, con `seq` y `yellow_from` derivados. Así un conjunto con huecos, solapes o
+  `seq` desordenado **no se puede expresar** — [D-28] aplicado al DTO en vez de al esquema. Queda un solo
+  error de forma: umbrales no ascendentes, que es **400** (§5.4).
+- **La respuesta sí devuelve los tramos completos**: se escribe lo mínimo que determina el conjunto, se lee
+  lo que la pantalla necesita.
+- **`{"thresholds": []}` borra los tramos** ([D-10]); no hay `DELETE` propio.
+- **`PUT` idempotente, sin paginación**, orden fijo por `seq` (§5.3): su orden **es** su significado.
+- **El `id` de cada tramo no direcciona nada ni es estable entre escrituras** ([D-50]): vale como clave de
+  lista, igual que en `StandingRow` ([D-34]), y para nada más.
+- **Cambiar los tramos es retroactivo** ([D-51]): las pendientes se calculan en vivo sobre `Card` ([D-10]),
+  así que alguien puede pasar a estar sancionado sin que haya ocurrido nada en el campo.
+- **De aquí no nace ninguna `Absence`** ([D-10]) — tercera aparición de la misma regla: **un solo escritor
+  por tabla** (§2.1).
+- **La escritura exige rol elevado** (§7.3), como toda la configuración de competición ([D-22]); el `GET`
+  es accesible a cualquier rol autenticado.
 
 ### 5.2 DTOs
 
