@@ -1,0 +1,110 @@
+Licencia propietaria — Todos los derechos reservados
+====================================================
+
+Copyright (c) 2026 Antonio Gil Coto
+
+Identificador SPDX: LicenseRef-Proprietary
+
+
+1. Objeto
+---------
+
+Esta licencia ampara **todo el contenido de este repositorio**: el código fuente
+de todos sus artefactos (base de datos, API backend, web backoffice y las
+aplicaciones iOS y Android), la especificación OpenAPI, la documentación de
+diseño (HLD, ADR, LLD y sus anexos) y los recursos gráficos propios.
+
+En adelante, "el Software".
+
+
+2. Reserva de derechos
+----------------------
+
+Todos los derechos están reservados. **No se concede ninguna licencia de uso,
+copia, modificación, fusión, publicación, distribución, sublicencia ni venta**
+del Software, ni total ni parcialmente, salvo autorización previa y por escrito
+del titular del copyright.
+
+En particular, y sin que la enumeración sea limitativa, queda prohibido sin dicha
+autorización:
+
+  a) desplegar u operar el Software, o cualquier obra derivada, como servicio
+     para terceros;
+  b) redistribuir el Software o fragmentos sustanciales del mismo;
+  c) reutilizar la documentación de diseño o la especificación de la API como
+     base de un producto distinto.
+
+
+3. Uso académico
+----------------
+
+Este repositorio constituye un **Trabajo de Fin de Máster (TFM)**. Se autoriza
+expresamente a la institución académica evaluadora, y a los miembros del tribunal
+designado, a **acceder, consultar, ejecutar y evaluar** el Software a los solos
+efectos de dicha evaluación, así como a conservar las copias que exija su
+normativa interna de depósito y archivo.
+
+Esta autorización no transfiere la titularidad ni habilita ninguno de los usos
+del apartado 2.
+
+
+4. Contenido de terceros
+------------------------
+
+El Software integra datos procedentes de fuentes externas —en particular de la
+Real Federación de Fútbol de Madrid (RFFM) y de la Federació Catalana de Futbol
+(FCF)— obtenidos mediante integración con sus sistemas públicos.
+
+  a) **Ese contenido no es objeto de esta licencia** y pertenece a sus
+     respectivos titulares. Lo aquí licenciado es exclusivamente el software y la
+     documentación que lo procesan, no los datos procesados.
+  b) Este proyecto **no está afiliado, patrocinado ni respaldado** por la RFFM,
+     por la FCF ni por ninguna otra federación deportiva, y no lo representa.
+  c) Las descripciones de sistemas de terceros contenidas en la documentación son
+     el resultado de **observación de sus interfaces públicas** y se aportan a
+     título informativo. No constituyen contratos publicados por dichas entidades
+     ni comprometen su comportamiento futuro.
+
+Las dependencias de terceros que el Software incorpore conservan sus propias
+licencias, que prevalecen sobre esta en lo que a ellas respecta.
+
+
+5. Datos personales
+-------------------
+
+El Software trata datos personales, incluidos **datos de menores de edad**. Esta
+licencia regula únicamente los derechos sobre el Software; **no autoriza ningún
+tratamiento de datos personales** ni exime a quien lo despliegue del cumplimiento
+del Reglamento (UE) 2016/679 (RGPD) y de la normativa española aplicable.
+
+
+6. Ausencia de garantía
+-----------------------
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
+IMPLÍCITA, INCLUIDAS SIN LIMITACIÓN LAS GARANTÍAS DE COMERCIABILIDAD, IDONEIDAD
+PARA UN FIN DETERMINADO Y NO INFRACCIÓN. EN NINGÚN CASO EL TITULAR DEL COPYRIGHT
+SERÁ RESPONSABLE DE RECLAMACIÓN, DAÑO U OTRA RESPONSABILIDAD, YA SEA EN UNA
+ACCIÓN CONTRACTUAL, EXTRACONTRACTUAL O DE OTRO TIPO, DERIVADA DE O RELACIONADA
+CON EL SOFTWARE O SU USO.
+
+
+7. Contacto
+-----------
+
+Para solicitar una licencia de uso, o para cualquier consulta sobre estos
+términos, dirigirse al titular del copyright a través del repositorio.
+
+
+---
+
+Notice (English, non-binding summary)
+-------------------------------------
+
+Copyright (c) 2026 Antonio Gil Coto. All rights reserved. This is proprietary software;
+no permission is granted to use, copy, modify or distribute it without prior
+written authorisation. Academic evaluation of this Master's thesis by the
+assessing institution is expressly permitted (section 3). Third-party data
+ingested by this software is not covered by this licence and belongs to its
+respective owners; this project is not affiliated with any sports federation
+(section 4). The authoritative text is the Spanish version above.
