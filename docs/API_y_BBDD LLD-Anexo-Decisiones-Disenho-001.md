@@ -51,8 +51,9 @@
 | **D-42** | `minutes` solo tiene sentido jugando, y nulo no es cero | §3.2, §4.6, §5.1, §5.2 |
 | **D-45** | Una fila es una sanción, no una cartulina: la doble amarilla es *una* roja | §3.2, §3.3, §3.5, §4.6, §5.1, §5.2 |
 | **D-46** | La tarjeta no exige convocatoria: dos registros manuales independientes | §3.2, §5.1 |
-| **D-52** | El gol en propia puerta: se guarda su autor, pero no le suma | §3.2, §3.3, §3.6, §4.6, §5.1, §5.2 |
 | **D-48** | El ranking de goleadores no tiene *fallback*, y su capacidad sí condiciona el dato | §3.2, §5.1, §5.2 |
+| **D-52** | El gol en propia puerta: se guarda su autor, pero no le suma | §3.2, §3.3, §3.6, §4.6, §5.1, §5.2 |
+| **D-58** | El género es de la competición, y el equipo lo hereda | §3.2, §3.3, §3.5, §5.1, §5.2 |
 | **Integración** | | |
 | **D-16** | Las coordenadas de la federación son configuración tecleada, no descubrimiento | §3.7, §5.1, §5.6 |
 | **D-17** | La federación es un catálogo en código, y hay una por tenant | §3.2, §3.6 |
@@ -152,7 +153,7 @@ texto libre del proveedor ("C.D. RIVAL 'B'") en club + letra. A cambio, la corre
 solo sitio**, que es donde hacía falta.
 
 **Confirmación independiente:** la propia API pone el escudo bajo `/pnfg/pimg/Clubes/…` y usa un id de club
-distinto del de equipo ([Anexo de la Federación §F.3] y [Anexo de la Federación §F.4]).
+distinto del de equipo ([Anexo RFFM §F.3] y [Anexo RFFM §F.4]).
 
 ---
 
@@ -245,7 +246,7 @@ duda de si faltaba modelar la **división**.
 **Respuesta:** `Team` **no la necesita** —y no debe tenerla—. La división es atributo de **dónde compite**,
 no de **quién es**: un equipo que asciende sigue siendo el mismo, y el cambio ya queda registrado en que sus
 **partidos** son de otra `Competition`. Lo confirma la evidencia: el mismo `codigo_equipo` en dos
-divisiones ([Anexo de la Federación §F.3]).
+divisiones ([Anexo RFFM §F.3]).
 
 **El problema real era otro y más peligroso:** `Competition` tenía un campo **`category_label`** que en el
 ejemplo valía "Honor" —una **división**— mientras `Team.category` significa **categoría de edad**. Dos cosas
@@ -352,7 +353,7 @@ era el filtro `?seasonId=` de `GET /v1/teams`.
 
 1. **No tenía atributos propios.** Solo las dos FK. La única columna que la habría justificado —el
    `codigo_equipo`— se le negó explícitamente al comprobar que es **estable entre temporadas** y por tanto
-   pertenece a `Team` ([Anexo de la Federación §F.3]).
+   pertenece a `Team` ([Anexo RFFM §F.3]).
 2. **La ingesta descubre los equipos *desde* el calendario** (§3.7). Un equipo entra en el sistema porque
    aparece en un `Match`; no hay ninguna otra puerta. Así que `Participation` no podía contener una sola fila
    que `Match` no implicara ya: era un **índice de `Match`** mantenido a mano, con el coste de consistencia
@@ -498,7 +499,7 @@ inventado.
 ### D-31 · `federation_match_id` se modela, pero la ingesta no puede depender de él
 
 **El punto de partida.** Las cuatro muestras del objeto de partido traen `codacta`, el identificador del acta
-([Anexo de la Federación §F.2]), y el anexo lo tenía anotado como "candidato natural a clave externa de
+([Anexo RFFM §F.2]), y el anexo lo tenía anotado como "candidato natural a clave externa de
 `Match`, no modelado aún". Al escribir el contrato de `Match` toca resolverlo.
 
 **Por qué modelarlo.** El *upsert* de la ingesta necesita reconocer un partido ya visto. Sin identificador
@@ -891,6 +892,57 @@ quien cuente sin filtrar `playType` contará de más. Anotado en el spec, en el 
 
 ---
 
+### D-58 · El género es de la competición, y el equipo lo hereda
+
+**Contexto — un agujero, no una preferencia.** `Team.gender` es **obligatorio** y **entra en la clave única**
+de `Team` (§3.5). Su único escritor es la ingesta ([D-21]). Y la RFFM **no publica género en ninguna
+entidad**: ni el objeto de partido (§F.2), ni el equipo (§F.3), ni la clasificación (§F.8). Durante varias
+revisiones el modelo exigió un valor que la fuente no daba. No era una decisión pendiente: era una columna
+sin origen.
+
+**Lo que resuelve el hueco** ([Anexo RFFM §F.14]): el género **sí está**, pero embebido en el **nombre de la
+competición** que devuelve `GET /api/competitions` — `"TERCERA FEDERACION DE FÚTBOL FEMENINO"`. Es un rótulo,
+no un campo. Y es un atributo **de la competición**, no del equipo.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — `Competition.gender`, y `Team` lo hereda** | La ingesta escribe `Team.gender` desde la competición en la que descubre al equipo, igual que ya hace con `modality`. El administrador **confirma** el valor en el alta | **Elegida** |
+| B — La ingesta infiere el género del nombre de la competición, equipo a equipo | Misma inferencia repetida N veces, sin sitio donde corregirla una sola vez. Es el error que [D-03] ya cometió con la identidad del club | Descartada |
+| C — `gender` editable a mano en `Team` (`PATCH`) | Deja la ingesta escribiendo un valor arbitrario en una **columna de la clave única**: el primer equipo que colisione da un 409 sin salida, que es justo lo que [D-21] evitó en el alta de equipos | Descartada |
+| D — Sacar `gender` de la clave única de `Team` | Hace representable el "Infantil A" masculino y el femenino como **un solo equipo**. Rompe el modelo por comodidad de integración | Descartada |
+
+**Decisión: A.** `Competition` gana un campo `gender` (el mismo enumerado `Gender` de §3.3, compartido con
+`Team`, igual que `Modality` ya se comparte). La ingesta escribe `Team.gender` **tomándolo de la
+competición**, con lo que `gender` queda `readOnly` en el contrato — **desaparece de
+`UpdateTeamRequest`**, exactamente como `modality` ([D-07]). La validación de §3.2 se amplía por tercera
+vez: un equipo solo participa en competiciones de su **edad**, su **modalidad** y **su género**.
+
+**Es literalmente [D-07] otra vez, y eso es lo que lo respalda.** Mismo hueco (la fuente no lo estructura),
+mismo destino (`Competition` + `Team`), mismo efecto en la clave única, misma consecuencia en el contrato.
+Que la segunda ocurrencia se resuelva con la forma de la primera es señal de que la forma era correcta.
+
+**Dónde se pone el valor: lo propone la máquina, lo confirma el humano.** El `POST /v1/competitions/preview`
+devuelve el género **inferido** del nombre; el `POST /v1/competitions` lo recibe como campo. No se da la
+inferencia por buena por tres razones, las tres del anexo ([Anexo RFFM §F.14]): `mixto` **no es expresable**
+en la fuente, el rótulo puede llegar **truncado** y perder el marcador, y un error aquí **no degrada, colisiona**.
+Es el mismo trato que ya reciben `divisionLabel` y `groupLabel` desde [Anexo RFFM §F.12] —el administrador
+confirma, no teclea— y encaja con [D-16]: la coordenada de la competición es configuración humana.
+
+**Mutabilidad: la guarda de [D-22], sin inventar una nueva.** `gender` es editable por `PATCH` **solo
+mientras `last_synced_at` sea nulo**; después, **409**. Cambiarlo tras la primera sincronización no corrige
+una errata: desalinea el género de la competición del de los equipos que ya se crearon a partir de ella.
+Es la misma forma de daño que repuntar a otro calendario, así que se reutiliza la misma guarda en vez de
+añadir un mecanismo.
+
+**Lo que se asume a cambio.** (1) Un equipo cuyo género real sea `mixto` se registrará como lo inscribe la
+federación salvo que el administrador lo corrija **en el alta de la competición**; después ya no. (2) Un club
+con el mismo equipo en competiciones de distinto género tendría **dos filas `Team`**, que es lo correcto pero
+conviene decirlo. (3) La FCF también embebe el género en el nombre (`COPA CATALUNYA MASCULINA`,
+[Anexo FCF §C.8]); que la regla de parseo sea distinta allí **no afecta al modelo**, porque el punto de
+entrada es el mismo campo confirmado por un humano.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -901,7 +953,7 @@ quien cuente sin filtrar `playType` contará de más. Anotado en el spec, en el 
 **Esas llamadas no existen como API.** La cadena es la **navegación web** de la federación, para navegador y
 ratón. Nadie —ni nosotros ni el club— sabe de antemano que su grupo es el `24037549`.
 
-**Decisión.** La coordenada (cuatro parámetros, [Anexo de la Federación §F.1]) es **configuración que teclea un
+**Decisión.** La coordenada (cuatro parámetros, [Anexo RFFM §F.1]) es **configuración que teclea un
 administrador**, copiando la URL del navegador. `Season` y `Competition` dejan de ser "salida de la ingesta"
 y pasan a ser su **entrada** ([D-22]).
 
@@ -967,7 +1019,7 @@ migración de datos. La API compone la URL pública en el DTO.
 **Decisión 2 — el nombre del fichero sale del `slug`, no del `federation_club_id`.** La tentación era
 `crests/opponents/{federation_club_id}.png`, pero eso ataría un identificador **interno y permanente** al
 valor de un sistema de terceros que puede no estar disponible (es una inferencia sobre un nombre de fichero,
-[Anexo de la Federación §F.4]) ni ser estable. La clave se deriva del **`slug`**, generado al crear la fila a partir del
+[Anexo RFFM §F.4]) ni ser estable. La clave se deriva del **`slug`**, generado al crear la fila a partir del
 nombre y **inmutable** después. Así es legible (`crests/opponents/celtic-castilla.png`), no depende de la
 Federación, y **sobrevive a las correcciones de nombre** — no porque se recalcule, sino porque **no se
 recalcula nunca**: el fichero conserva su nombre original, algo desfasado pero estable y sin huérfanos. Un
@@ -1788,18 +1840,32 @@ limpio.
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · Evidencia → [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)*
 
 <!-- Definiciones de enlace -->
+[D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-04]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-05]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-07]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-08]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-09]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-10]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-11]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-13]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-14]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-16]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-18]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-19]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-20]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-21]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-22]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-23]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-24]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-25]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -1808,21 +1874,53 @@ limpio.
 [D-32]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-34]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-19]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-35]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-36]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-37]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-10]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-20]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-38]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-39]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-40]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-41]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-42]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-43]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-44]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-45]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-46]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-47]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-48]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-49]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-50]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-51]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-52]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-53]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-54]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-55]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
-[Anexo de la Federación §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
-[Anexo de la Federación §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
-[Anexo de la Federación §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
-[Anexo de la Federación §F.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
-[Anexo de la Federación §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.11]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.12]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.14]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo FCF]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

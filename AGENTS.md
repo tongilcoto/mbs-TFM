@@ -33,6 +33,11 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   `Match`, `Round`… — solo corregibles) y *dominio manual* (`Player`, `Goal`, `Card`…). Regla:
   **el BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra.** Al tocar el spec o el LLD, respetar
   esta frontera: no añadir `POST`/`DELETE` a entidades de salida.
+- **`modality` y `gender` los hereda `Team` de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
+  clave única de `Team` y **ninguno es campo de escritura de `Team`**. La federación no publica género por
+  equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
+  en el alta. No devolver `gender` a `UpdateTeamRequest`: una inferencia mal puesta ahí no da un dato feo, da
+  un 409 de unicidad.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
@@ -65,6 +70,12 @@ LLD (`D-25`).
 - **Autenticación:** **Supabase Auth** (`auth.users`), *pool* compartido; *claims* de tenant (`club_id`, `role`) hechos cumplir por la API/RLS.
 - **Multi-tenancy:** **una sola base de código**; aislamiento por **_schema_ por club** (tier gestionado) o **proyecto por club** (tier dedicado). Modelo *pooled* (`club_id` en tablas compartidas) descartado.
 - **Despliegue:** **PaaS con Docker**, **Fly.io** preferente para Vapor (compilación de Swift en *builder* remoto/CI, no en el host); Railway/Render como alternativas. Tope de coste **20 $/mes** en el tier gestionado.
+
+## Licencia
+
+Repositorio **propietario** — ver [LICENSE](./LICENSE) (`LicenseRef-Proprietary`, declarada también en
+`info.license` del *spec*). No es código abierto: no publicar fragmentos fuera del repositorio ni añadir
+cabeceras de licencias permisivas a ficheros nuevos.
 
 ## Idioma
 

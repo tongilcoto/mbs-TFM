@@ -268,6 +268,11 @@ resuelto** con los volcados: cuatro en §F.12, y los dos grandes —acta y golea
   ejercitado `1` y `2` (§F.9).
 - **`puntos_sancion`** (§F.8): la fuente lo publica y el modelo no lo recoge. **Aplazado a propósito** — se
   revisará al final del diseño, no ahora.
+- **El array completo de `/api/competitions` para una temporada** (§F.14). Se ha observado **un** `nombre`.
+  Falta contar las variantes del marcador de género —¿siempre `FEMENINO`, siempre al final?— y comprobar si
+  este campo sufre el **truncado a 40 caracteres** que §F.11 vio en `NombreCategoria`. No bloquea el diseño
+  ([D-58] no depende de que la inferencia acierte), pero decide cuánto acierta el valor propuesto en el
+  `/preview`.
 
 > Lo pendiente de la **FCF** no se lista aquí: vive en su [propio anexo](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md).
 
@@ -286,7 +291,7 @@ Transporte, común a todas: **GET** siempre, parámetros en *query string*, **si
 
 | Endpoint | Parámetros | Devuelve |
 |----------|------------|----------|
-| `GET /api/competitions` | `temporada`, `tipojuego` | Array de competiciones |
+| `GET /api/competitions` | `temporada`, `tipojuego` | Array de competiciones — **su `nombre` es la única fuente de género** (§F.14) |
 | `GET /api/groups` | `competicion` | Array de grupos — **con `total_jornadas` y `total_equipos`** |
 | `GET /competicion/calendario` | `temporada`, `tipojuego`, `competicion`, `grupo` | HTML → calendario **completo** (§F.1) |
 | `GET /api/standings` | **`idGroup`**, `round` | Clasificación **de esa jornada** (§F.8) |
@@ -513,7 +518,7 @@ Complementan las de §F.5, que siguen siendo válidas. **[C]** salvo indicación
 | El calendario asigna la jornada por **índice de array** en la app, ignorando `jornada` y `codjornada` | **Usar `jornada`**, no la posición |
 | `NombreCategoria` viene **truncado a 40 caracteres** (`"PRIMERA DIVISION AUTONOMICA FEMENINO CAD"`) | El rótulo de división puede llegar cortado |
 | El nombre de grupo **no tiene formato estable**: `"Grupo 1"` en un endpoint, `"GRUPO 17"` en otro | Normalizar |
-| **No hay campo de género** en ninguna entidad; solo se infiere del texto (`FÚTBOL FEMENINO`) | ❌ Falta |
+| **No hay campo de género** en ninguna entidad; solo se infiere del texto (`FÚTBOL FEMENINO`) | Resuelto en **§F.14**: el género va en el **nombre de la competición**, y de ahí lo toma el modelo ([D-58]). No hay campo propio en ninguna entidad |
 | `estado` y `sesion_ok` acompañan a todas las respuestas, siempre `"1"` | **[I]** `"1"` = OK. `sesion_ok` sugiere que el *backend* legacy podría devolver `"0"` con lista vacía **en vez de un error HTTP**: una lista vacía no siempre significa «no hay datos» |
 | `"(No asignado)"` aparece como **nombre real** de equipo | Tolerarlo |
 | Los códigos son **cadenas de longitud variable** (3 a 8 dígitos), con espacios de numeración antiguos y nuevos conviviendo | No normalizar a entero, no rellenar con ceros |
@@ -589,16 +594,125 @@ clasificación. La estimación era «potencialmente doscientos»; la realidad, 2
 
 ---
 
+## F.14 El género vive en el nombre de la competición
+
+Era el último **hueco de modelo** que la fuente parecía no cubrir: §F.11 anotaba que **ninguna entidad de la
+RFFM tiene campo de género**, y `Team.gender` (§3.3 del LLD) es obligatorio y **parte de la clave única de
+`Team`** (§3.5). La respuesta está en `GET /api/competitions`: **[C]**
+
+```
+https://www.rffm.es/api/competitions?temporada=22&tipojuego=1
+```
+
+```json
+{ "nombre": "TERCERA FEDERACION DE FÚTBOL FEMENINO" }
+```
+
+**El género es un atributo de la competición, no del equipo**, y la fuente lo publica **solo como texto
+dentro del rótulo**. No hay campo, ni código, ni bandera. Es el mismo patrón que la división y el grupo
+(§F.12): rótulo legible, no dato estructurado.
+
+Consecuencia para el modelo: el género entra por la **competición** —donde el administrador lo confirma en el
+alta— y de ahí lo hereda `Team`, exactamente como ya ocurre con la modalidad ([D-58]). Lo que **no** puede
+hacer la ingesta es inferirlo equipo a equipo: el nombre del equipo no lo lleva (§F.2, §F.3).
+
+### La regla de parseo, y por qué solo puede *proponer*
+
+| Marcador en el `nombre` | Género |
+|-------------------------|--------|
+| contiene `FEMENINO` / `FEMENINA` (con o sin acento, con *folding* de diacríticos — §F.11) | `femenino` |
+| ningún marcador | `masculino` (valor por defecto de la fuente) |
+| — | **`mixto` no aparece nunca**: la RFFM no lo representa |
+
+Tres razones por las que esta inferencia se propone al administrador en el `/preview` y **no se da por
+buena** (§5.1 del LLD):
+
+1. **`mixto` es inalcanzable desde la fuente.** El enumerado del modelo tiene tres valores y la RFFM solo
+   sabe expresar dos. En fútbol base los equipos mixtos existen aunque la federación los inscriba como
+   masculinos, así que el único que puede poner ese valor es el club. **[C]**
+2. **El truncado a 40 caracteres puede comerse el marcador.** §F.11 observó `NombreCategoria` truncado en
+   `"PRIMERA DIVISION AUTONOMICA FEMENINO CAD"` — exactamente 40 caracteres, con `FEMENINO` salvado por los
+   pelos y `CADETE` decapitado. Un rótulo un poco más largo perdería el marcador y **la inferencia daría
+   `masculino` sin error ninguno**. Si el truncado afecta también al `nombre` de `/api/competitions` es
+   **[N]**: se ha observado en otro campo y otro endpoint. Pero basta la posibilidad para no confiar el
+   valor a un `contains`.
+3. **Un error aquí no da un dato feo, da un 409.** Como `gender` entra en la clave única de `Team`, una
+   inferencia equivocada colisiona con el equipo ya existente en vez de degradarse en silencio.
+
+> **Alcance de la muestra.** Un único `nombre` observado, aportado por el desarrollador. Que el marcador sea
+> **siempre** `FEMENINO` y **siempre** al final del rótulo es **[I]**: convendría volcar el array completo de
+> `/api/competitions` para una temporada y contar las variantes.
+
+---
+
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · `§C.x` → [Anexo FCF](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) · `D-nn` → [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)*
 
 <!-- Definiciones de enlace -->
+[D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-04]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-05]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-06]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-07]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-08]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-09]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-10]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-11]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-13]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-14]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-16]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-18]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-19]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-20]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-21]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-22]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-23]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-24]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-25]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-27]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-28]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-30]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-31]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-32]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-33]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-34]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-35]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-36]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-37]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-38]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-39]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-40]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-41]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-42]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-43]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-44]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-45]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-46]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-47]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-48]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-49]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-50]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-51]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-52]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-53]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-54]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-55]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo FCF]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.6]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

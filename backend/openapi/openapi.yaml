@@ -14,6 +14,9 @@ openapi: 3.1.0
 info:
   title: API de gestión técnica de clubes de fútbol
   version: 0.1.0
+  license:
+    name: Propietario — todos los derechos reservados
+    identifier: LicenseRef-Proprietary
   description: |
     API *tenant-aware* para la gestión de estadísticas de clubes de fútbol base.
     La consumen el **backoffice web** (escritura) y las **apps móviles** (lectura).
@@ -570,6 +573,11 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/TeamCategory'
+        - name: gender
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/Gender'
       responses:
         '200':
           description: Competiciones.
@@ -648,10 +656,12 @@ paths:
 
         - **Rótulos** (`ageCategory`, `divisionLabel`, `groupLabel`): siempre editables. Es la misma
           corrección que en `OpponentClub` — texto que se muestra.
-        - **Coordenadas** (`federationCompetitionId`, `federationGroupId`): editables **solo mientras no
-          haya datos ingeridos** (`lastSyncedAt == null`). Cambiarlas después es **repuntar a otro
-          calendario**, y dejaría los partidos y jornadas del anterior colgando de una competición que ya
-          no los describe → **409**. Entonces la vía es borrar y volver a crear (§3.7).
+        - **Coordenadas** (`federationCompetitionId`, `federationGroupId`) **y `gender`**: editables
+          **solo mientras no haya datos ingeridos** (`lastSyncedAt == null`). Cambiar las coordenadas
+          después es **repuntar a otro calendario**, y dejaría los partidos y jornadas del anterior
+          colgando de una competición que ya no los describe → **409**. Entonces la vía es borrar y volver
+          a crear (§3.7). `gender` cae de este lado porque **se propaga**: la ingesta ya lo copió a cada
+          `Team`, donde es parte de la clave única (D-58).
 
         No admite `seasonId`: una competición no se muda de temporada.
 
@@ -836,7 +846,7 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/TeamGender'
+            $ref: '#/components/schemas/Gender'
         - name: modality
           in: query
           required: false
@@ -2994,8 +3004,21 @@ components:
         por `letter` (§3.2).
       enum: [prebenjamin, benjamin, alevin, infantil, cadete, juvenil, senior]
 
-    TeamGender:
+    Gender:
       type: string
+      description: |
+        Género de la competición y, por herencia, del equipo (§3.3). **Compartido entre `Competition` y
+        `Team`**, igual que `Modality`.
+
+        Forma parte de la **clave única de `Team`** (§3.5): el "Infantil A" masculino y el femenino del
+        mismo club son equipos **distintos**.
+
+        **La federación no publica este dato como campo.** Lo embebe en el nombre de la competición
+        (`"TERCERA FEDERACION DE FÚTBOL FEMENINO"`), así que el `preview` lo **infiere y lo propone**, el
+        administrador lo **confirma** en el alta de la competición, y `Team` lo **hereda** de ahí (D-58).
+        Por eso es `readOnly` en `Team` y escribible en `Competition`.
+
+        **`mixto` no es expresable en la fuente**: solo lo puede poner un humano.
       enum: [masculino, femenino, mixto]
 
     Modality:
@@ -3176,11 +3199,19 @@ components:
         Lo que hay en la coordenada. **Nada de esto se ha persistido**: es un dato de pantalla para que
         un humano confirme antes de guardar.
       required:
-        [modality, ageCategory, divisionLabel, groupLabel, federationCompetitionId,
+        [modality, gender, ageCategory, divisionLabel, groupLabel, federationCompetitionId,
          federationGroupId, roundCount, teams, alreadyRegistered]
       properties:
         modality:
           $ref: '#/components/schemas/Modality'
+        gender:
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+          description: |
+            **Propuesta, no hecho** (D-58). Sale de buscar el marcador `FEMENINO` en el nombre de la
+            competición; sin marcador se propone `masculino`. El administrador puede cambiarlo antes de
+            confirmar, y a veces **debe**: `mixto` no es expresable en la fuente y el rótulo puede llegar
+            truncado.
         ageCategory:
           $ref: '#/components/schemas/TeamCategory'
         divisionLabel:
@@ -3231,7 +3262,7 @@ components:
     CreateCompetitionFromUrlRequest:
       type: object
       description: Forma A — se pega la URL del calendario y el servidor la descompone.
-      required: [seasonId, federationCalendarUrl, ageCategory, divisionLabel, groupLabel]
+      required: [seasonId, federationCalendarUrl, gender, ageCategory, divisionLabel, groupLabel]
       additionalProperties: false
       properties:
         seasonId:
@@ -3244,6 +3275,13 @@ components:
           description: La misma URL que se envió al `preview`.
           examples:
             - 'https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549'
+        gender:
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+          description: |
+            Confirmación del valor que propuso el `preview` (D-58). **Obligatorio y sin defecto**: es el
+            campo que la ingesta copiará a cada `Team` que cree, donde entra en la clave única (§3.5),
+            así que no se deja implícito.
         ageCategory:
           $ref: '#/components/schemas/TeamCategory'
         divisionLabel:
@@ -3277,7 +3315,7 @@ components:
         Forma B — coordenada ya descompuesta. `modality` sustituye aquí al parámetro `tipojuego`, que no
         se almacena: se codifica al llamar con el mapa de la federación (§3.6).
       required:
-        [seasonId, modality, federationCompetitionId, federationGroupId,
+        [seasonId, modality, gender, federationCompetitionId, federationGroupId,
          ageCategory, divisionLabel, groupLabel]
       additionalProperties: false
       properties:
@@ -3287,6 +3325,8 @@ components:
           description: UUID **interno** de la temporada, no el `federationSeasonId`.
         modality:
           $ref: '#/components/schemas/Modality'
+        gender:
+          $ref: '#/components/schemas/Gender'
         federationCompetitionId:
           type: string
           minLength: 1
@@ -3317,11 +3357,21 @@ components:
         `lastSyncedAt` sea `null` — después, cambiarlas es repuntar a otro calendario y devuelve **409**
         (§3.7).
 
+        **`gender` sigue la regla de las coordenadas, no la de los rótulos** (D-58), y es el único campo
+        no-coordenada que lo hace: los rótulos solo se muestran, pero el género **ya se propagó** a cada
+        `Team` que creó la ingesta, donde forma parte de la clave única (§3.5). Cambiarlo después de
+        sincronizar dejaría la competición diciendo una cosa y sus equipos otra → **409**.
+
         No admite `seasonId` (una competición no se muda de temporada) ni `modality` (con los datos ya
         ingeridos, cambiarla invalidaría la identidad de los equipos, §3.5).
       additionalProperties: false
       minProperties: 1
       properties:
+        gender:
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+          description: |
+            Editable **solo mientras `lastSyncedAt` sea `null`**; después, **409** (D-58).
         ageCategory:
           $ref: '#/components/schemas/TeamCategory'
         divisionLabel:
@@ -3340,7 +3390,7 @@ components:
     CompetitionResponse:
       type: object
       required:
-        [id, seasonId, modality, ageCategory, divisionLabel, groupLabel,
+        [id, seasonId, modality, gender, ageCategory, divisionLabel, groupLabel,
          federationCompetitionId, federationGroupId, displayName, createdAt, updatedAt]
       properties:
         id:
@@ -3353,6 +3403,8 @@ components:
           readOnly: true
         modality:
           $ref: '#/components/schemas/Modality'
+        gender:
+          $ref: '#/components/schemas/Gender'
         ageCategory:
           $ref: '#/components/schemas/TeamCategory'
         divisionLabel:
@@ -3498,7 +3550,14 @@ components:
           description: Letra que distingue equipos de la misma categoría ("A", "B"…).
           examples: ['A']
         gender:
-          $ref: '#/components/schemas/TeamGender'
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+          readOnly: true
+          description: |
+            **Lo hereda de la competición**, igual que `modality` (D-58). La federación no publica género
+            por equipo —lo embebe en el nombre de la competición— así que el valor bueno es el que un
+            humano confirmó allí. No es campo de escritura de este recurso: para cambiarlo, `PATCH` de la
+            competición (y solo antes de la primera sincronización).
         modality:
           allOf:
             - $ref: '#/components/schemas/Modality'
@@ -3567,7 +3626,10 @@ components:
         Actualización parcial. **No incluye `opponentClubId`**: un equipo no cambia de club, y uno propio
         no se convierte en rival ni al revés — para eso está `/ownership`.
 
-        **Tampoco incluye `modality`**: es identidad del equipo y parte de su clave única (§3.5).
+        **Tampoco incluye `modality` ni `gender`**: son identidad del equipo, parte de su clave única
+        (§3.5), y **los dos se heredan de la competición** (D-07, D-58). Corregir el género de un equipo
+        es corregir el de **su competición**, donde se arregla una vez para todos sus equipos — el mismo
+        movimiento que llevó el nombre del club de `Team` a `OpponentClub` (D-03).
       additionalProperties: false
       minProperties: 1
       properties:
@@ -3576,8 +3638,6 @@ components:
         letter:
           type: [string, 'null']
           minLength: 1
-        gender:
-          $ref: '#/components/schemas/TeamGender'
 
     # ─────────────────────────── Round (§5.2) ───────────────────────────
     RoundResponse:
