@@ -325,6 +325,7 @@ Calculadas por consulta o vistas materializadas:
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
 - Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), **`Card`(jugador, partido, tipo)** ([D-45]) y `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- **Que esas unicidades sean *por tenant* no necesita nada especial: comprobado.** Al vivir cada tabla en el *schema* de su club, un índice único normal ya es único **por club** — dos clubes pueden tener a la vez la temporada `2024/25` con el mismo `federation_season_id` sin colisionar, que es el comportamiento que se quiere y el que un `UNIQUE` global impediría. No hacen falta claves compuestas con `tenant_id` ni índices parciales por club: eso sería la solución del modelo *una tabla compartida con columna discriminadora*, que no es el elegido (§6). Ejecutado contra Postgres real en el [spike de tenancy](../spikes/tenancy/README.md).
 - **La unicidad de `Match` no es un adorno: es la clave del *fallback* de la ingesta.** Dos equipos se enfrentan **una vez por jornada**, así que (`round_id`, `home_team_id`, `away_team_id`) identifica el partido sin depender de la fecha —que se mueve cada semana (§3.2)— ni del `federation_match_id` —que puede no venir—. Es exactamente el segundo paso de la cadena de emparejamiento de §3.7, y sin el índice único no sería una clave, solo una consulta. No lleva `competition_id` porque `Round` ya lo fija. *Asunción:* no hay repeticiones de partido dentro de la misma jornada; una eliminatoria a doble vuelta son **dos jornadas** ([D-12]).
 - **`modality` es parte de la clave única de `Team`, no un adorno.** Sin ella, el "Infantil A masculino" de fútbol-11 y el de fútbol-sala del mismo club **colisionan**, y el modelo no podría representar un club con equipos en dos modalidades (§3.6). Es la razón por la que la modalidad no puede quedarse como simple parámetro de la URL de integración.
 - **`gender` está en esa misma clave por el mismo motivo, y de ahí sale su regla de escritura** ([D-58]). El "Infantil A" masculino y el femenino del mismo club son **equipos distintos**; sin `gender` en la clave, uno pisaría al otro. Y como la clave es única, **una inferencia equivocada no produce un dato feo: produce un 409**. Por eso el valor no lo inventa la ingesta equipo a equipo, sino que lo hereda de una `Competition` cuyo género **confirmó un humano** en el alta (§5.1). Es el criterio general de este modelo: **lo que entra en una clave única no se infiere de texto libre sin que alguien lo valide**.
@@ -847,17 +848,29 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
     de cualquier *schema* de tenant) con la lista de clubes del tier *managed* y su nombre de *schema*. **No
     es la entidad de dominio `Club`** (§3.2, tabla `clubs` **dentro** de cada *schema* de tenant): son cosas
     distintas — este `public.tenants` es infraestructura de tenancy (ver §6.3), no datos de un club.
-  - Un `AsyncCommand` propio (p. ej. `migrate-tenants`, distinto del `migrate` de serie) que: obtiene esa
-    lista, y para cada club abre conexión con `SET search_path TO <schema_del_club>` (o registra
-    dinámicamente un `DatabaseID` por tenant, según lo que permita la API de configuración de Fluent) y
-    ejecuta el migrador sobre esa conexión.
+  - Un `AsyncCommand` propio (`migrate-tenants`, distinto del `migrate` de serie) que obtiene esa lista y,
+    para cada club, **registra dinámicamente un `DatabaseID` por tenant** y ejecuta el migrador sobre él.
+    De las dos vías que este punto dejaba abiertas, **funciona y se elige ésta**: `Databases.use` está
+    protegido por *lock* y los drivers se crean bajo demanda, así que **registrar *pools* en caliente es
+    seguro**. Con `SQLPostgresConfiguration.searchPath` el driver emite el `SET search_path` **al abrir cada
+    conexión**, de modo que el DDL sin cualificar (`CREATE TABLE "seasons"`) aterriza en el *schema* del club
+    — y con él la propia `_fluent_migrations`. Comprobado en el [spike](../spikes/tenancy/README.md).
+  - **Restricción dura: este comando va por la conexión *directa*, nunca por el *pooler*** (§6.4). Se apoya
+    en un `SET` de **sesión**, que en modo transacción deja de significar lo que parece; el precio de que
+    falle no es leer mal, es crear la tabla en el *schema* equivocado, y eso no se deshace reintentando.
+  - **El contraste de `space` es lo que hace que esto encaje**, y conviene tenerlo presente al añadir
+    modelos: `TenantRecord` lleva `space = "public"` y se emite **cualificado**, así que la resolución de
+    tenant no depende del `search_path`; las tablas de dominio (§3) **no** llevan `space` y las resuelve el
+    `search_path` de la conexión. Es el mecanismo, no un detalle de estilo (§6.2).
   - Cada *schema* de tenant acaba con su propia tabla de control de Fluent (`_fluent_migrations`), aislada
     igual que el resto de sus datos — el progreso de migración se rastrea **por club**, no globalmente.
   - Altas de club nuevas (tier *managed*): crear el *schema* y ejecutar el migrador completo contra él (no
     solo la migración "pendiente" más reciente), ya que parte de cero.
 
-> El detalle final de automatización (orquestación, idempotencia ante fallos a mitad de recorrido,
-> paralelismo) queda como cuestión abierta — ver §9.3.
+> **La idempotencia por club está resuelta**: `_fluent_migrations` vive dentro de cada *schema*, así que el
+> progreso se rastrea por club (revertir uno no toca a los demás), y un alta nueva recibe el juego completo,
+> no solo la última pendiente — las tres cosas comprobadas. Lo que sigue abierto es el **fallo a mitad de
+> recorrido** y el **paralelismo entre clubes** — ver §9.3.
 
 ---
 
@@ -1731,20 +1744,186 @@ bloquea diseño: **los códigos de `tipo_gol` y `codigo_tipo_amonestacion`**, qu
 
 *Cómo se resuelve y aísla cada club en tiempo de ejecución y en provisión.*
 
-- **6.1 Resolución del tenant** — subdominio / *claim* `club_id` del JWT.
-- **6.2 Enrutado a datos** — `SET search_path` al *schema* del club; **reseteo** al devolver la conexión al *pool*.
-- **6.3 Provisión** — tier gestionado (*schema* por club) vs tier dedicado (proyecto Supabase por club, Management API).
-- **6.4 *Pooling* de conexiones** — implicaciones del cambio de *schema* por petición.
+> **Base empírica.** Esta sección ya no es diseño sobre el papel. Sus cuatro hipótesis se ejecutaron contra
+> un **Postgres 16 real** y un **PgBouncer 1.25 en modo transacción** en el
+> [spike de tenancy](../spikes/tenancy/README.md) — 18 tests, con las medidas citadas literalmente abajo.
+> Donde una afirmación **no** esté medida se dice explícitamente, y en §6.5 queda la lista de lo que sigue
+> sin comprobar. El spike es desechable: la que manda es esta sección.
+
+### 6.1 Resolución del tenant
+
+Hay **dos** fuentes del club en una petición y conviene fijar la jerarquía antes que nada, porque no tienen
+la misma fiabilidad:
+
+> **El *claim* `club_id` del JWT es autoritativo. El subdominio es enrutado. Si no coinciden, se rechaza.**
+
+La razón es que cualquiera puede enviar la cabecera `Host` que quiera; el *claim* va **firmado** por Supabase
+Auth y lo valida el middleware (§7.1/§7.2). Tratar el subdominio como autorización sería confiar una decisión
+de aislamiento a un dato que controla el cliente. Rechazar la discrepancia en vez de dar prioridad a uno de
+los dos es lo que evita la clase entera de confusiones "el token dice un club y la URL dice otro".
+
+**Cadena de resolución** — una vez el club está determinado:
+
+1. Slug del club (subdominio, contrastado con el *claim*).
+2. `public.tenants` → `schema_name` (§6.3).
+3. Ese *schema* es el que entra en el `search_path` de la transacción (§6.2).
+
+El paso 2 consulta una tabla **cualificada** (`"public"."tenants"`), no una tabla sin cualificar: la
+resolución de tenant **no puede depender del `search_path`**, que es justo lo que está a punto de fijarse.
+Es lo que se espera de una tabla de infraestructura y en Fluent se consigue con `space = "public"` en el
+modelo (§4.7).
+
+**Cierre por arriba.** Club desconocido → **404**; petición sin club → **400**. Medido: en ninguno de los dos
+casos se llega a tocar un *schema* de tenant.
+
+**Extracción del slug: contra un sufijo de dominio configurado, no contra un contador de etiquetas.** Partir
+el `Host` por puntos y quedarse con la primera etiqueta funciona hasta que alguien pide el ápice del dominio:
+`api.myapp.com` tiene tantas etiquetas como `atleti.myapp.com` y se resolvería como un club llamado "api".
+La regla es recortar un sufijo conocido por configuración y exigir que quede exactamente una etiqueta
+delante; si no queda ninguna, la petición no es de tenant.
+
+**Reparto de nombres públicos.** *Decidido, no medido* — no forma parte de lo que el spike ejecutó:
+
+- **Un subdominio por club, un solo backend.** El `Host` viaja en cada petición, así que un único proceso
+  sirve a todos los clubes. Dar de alta un club **no toca infraestructura**: es una fila en `public.tenants`
+  (§6.3). Requiere DNS *wildcard* (`*.myapp.com`) y certificado *wildcard* — que Let's Encrypt solo emite por
+  el desafío **DNS-01**, y que **no cubre el ápice** (hay que añadirlo como SAN aparte).
+- **El backoffice y la API comparten origen**, bajo el mismo host del club y separados por prefijo de path
+  (`atleti.myapp.com/` para el bundle, `atleti.myapp.com/api/v1/…` para la API). Un proxy inverso reparte.
+  Así **no hay CORS**: el origen es esquema+host+puerto y compartir dominio padre no cuenta. La alternativa
+  —un host `api.` aparte— obliga a un *preflight* `OPTIONS` en cada petición autenticada y a una lista de
+  orígenes **dinámica** validada contra `public.tenants`, que es código de seguridad propio para un problema
+  evitable. Las apps nativas son ajenas a CORS en cualquier caso: es política de navegador.
+- **Preservar el `Host` en el proxy.** Si delante hay balanceador, CDN o *ingress*, debe reenviar el `Host`
+  original o poblar `X-Forwarded-Host`. Es **el** fallo clásico de este patrón —todas las peticiones acaban
+  resolviendo al mismo club, o a ninguno— y merece un test de humo en cuanto haya proxy.
+- **Lista de nombres reservados** para el slug (`www`, `api`, `admin`, `app`, `status`, `mail`, `staging`),
+  desde el alta del primer club. Y los slugs son **públicos y, en la práctica, inmutables**: cambiarlos rompe
+  enlaces guardados.
+
+### 6.2 Enrutado a datos
+
+> **`SET LOCAL search_path TO <schema_del_club>` dentro de la transacción de la petición.**
+
+El `search_path` es una lista ordenada de *schemas* que Postgres recorre para resolver los nombres de tabla
+**sin cualificar**. Con él fijado al *schema* del club, el mismo SQL —byte a byte— lee y escribe en los datos
+de un club o de otro. Ése es todo el mecanismo de aislamiento, y §3.5 confirma que basta: las unicidades por
+tenant salen con índices normales por *schema*, sin nada especial.
+
+**`LOCAL` no es un adorno.** Postgres revierte el ajuste al cerrar la transacción, así que la conexión vuelve
+limpia al *pool* **sin código de reseteo**. La redacción anterior de esta sección pedía un reseteo explícito
+al devolver la conexión; el spike ejecutó esa frase al pie de la letra como **control negativo** y la fuga
+apareció:
+
+```
+· EVIDENCIA · A′ · search_path tras devolver la conexión (pid 7495): club_a
+· EVIDENCIA · A  · search_path tras devolver la conexión (pid 7484): "$user", public
+```
+
+Misma conexión física, sin reseteo, sin fuga. La diferencia importa porque **la corrección deja de depender
+de que alguien se acuerde de limpiar en el camino de error**, que es exactamente el tipo de invariante que no
+debe confiarse a la disciplina del programador. El control negativo se conserva en la batería a propósito: si
+un día pasa a fallar, será porque el driver empezó a limpiar las conexiones, y entonces hay que revisar esta
+conclusión.
+
+**Un solo punto de paso.** Todo acceso a datos de tenant entra por un único ámbito (`withTenantDB` en el
+spike; el repositorio de §4.3 en el backend). El resto del código no sabe qué hay debajo, y por eso la
+elección de §6.4 es reversible.
+
+**Qué cuesta.** Todo acceso de tenant queda **dentro de una transacción**. Para escrituras ya lo estaría;
+para lecturas es una transacción de solo lectura, barata, y a cambio da consistencia de instantánea dentro de
+la petición.
+
+**Contraste de `space`, que es lo que hace que todo encaje.** Las tablas de dominio (§3) se emiten **sin
+cualificar** y las resuelve el `search_path`; las de infraestructura (`public.tenants`) llevan
+`space = "public"` y se emiten **cualificadas**. Mezclarlo al revés rompe una de las dos cosas: o la
+resolución de tenant depende del *schema* que va a fijar, o el DDL de dominio aterriza en `public`.
+
+**Aislamiento comprobado**, no supuesto: dos clubes crean la misma `label` y el mismo `federation_season_id`
+sin colisionar (si no hubiera aislamiento sería un 409); 40 peticiones concurrentes alternando clubes sobre
+el mismo *pool* no cruzan ni una fila; y una **misma conexión física** sirviendo a dos clubes con el **mismo
+SQL** tampoco los cruza — no hay caché de plan ni de sentencia preparada atada al OID de la tabla.
+
+### 6.3 Provisión
+
+**Tier gestionado (*schema* por club).** Alta = crear el *schema* + registrar el club + ejecutar el juego
+**completo** de migraciones contra él (§4.7). Es un comando administrativo, no un endpoint.
+
+**Tier dedicado (proyecto Supabase por club, Management API).** No necesita nada de §6.1–§6.4: el proyecto
+*es* el tenant. **Su forma exacta sigue abierta** (§9.2), y el spike no lo tocó.
 
 > **Registro de tenants (plano de control).** El tier gestionado necesita, **fuera** de los *schemas* de
-> tenant, una tabla de plano de control (p. ej. `public.tenants`) que liste los clubes gestionados y su
-> *schema* asociado. La usan la **resolución de tenant** (§6.1, subdominio/`club_id` → *schema*) y el
-> recorrido de **migraciones por tenant** (§4.7). **No forma parte del modelo de dominio de §3** (que vive
-> íntegro dentro de cada *schema* de club) ni debe confundirse con la entidad `Club` (§3.2): es
-> infraestructura de tenancy. En el tier dedicado (un proyecto por club) no hace falta, porque el proyecto
-> *es* el tenant.
+> tenant, una tabla de plano de control (`public.tenants`) que liste los clubes gestionados y su *schema*
+> asociado. La usan la **resolución de tenant** (§6.1) y el recorrido de **migraciones por tenant** (§4.7).
+> **No forma parte del modelo de dominio de §3** (que vive íntegro dentro de cada *schema* de club) ni debe
+> confundirse con la entidad `Club` (§3.2): es infraestructura de tenancy. En el tier dedicado no hace falta.
 >
-> Resto pendiente. Ver decisiones 3–4 del ADR.
+> Ver decisiones 3–4 del ADR.
+
+### 6.4 *Pooling* de conexiones
+
+Hay **dos** formas de que una conexión acabe apuntando al *schema* de un club, y no son intercambiables:
+
+| | **A · `SET LOCAL` en transacción** | **B · *pool* dedicado por tenant** |
+|---|---|---|
+| Cómo fija el *schema* | Sentencia dentro de la transacción de la petición | `SQLPostgresConfiguration.searchPath`: el driver emite un `SET` de sesión **al abrir** cada conexión |
+| Conexiones | **Un** *pool*, dimensionable, independiente del nº de clubes | **Un *pool* por club** — 50 clubes = 50 juegos de conexiones vivas |
+| Reseteo | No hay nada que resetear | No hace falta: la conexión nunca sirve a otro club… *si no hay pooler delante* |
+| Detrás de un *pooler* en modo transacción | **Aísla** | **Cruza datos entre clubes** |
+| Uso | **Peticiones** (por defecto) | **Migraciones**, y solo por conexión directa |
+
+**La estrategia A es el camino por defecto**, por tres razones en este orden: no hay reseteo que olvidar
+(§6.2); el número de conexiones no crece con el número de clubes, y el límite de conexiones de Supabase es un
+recurso escaso y compartido; y es la única compatible con el *pooling* en modo transacción.
+
+**El *pooling* en modo transacción no es opcional: es como Supabase sirve las conexiones de aplicación.** En
+ese modo la conexión de servidor se devuelve al *pool* al cerrar **cada transacción**, y la siguiente puede
+atenderla otra. Consecuencias, ya medidas y no inferidas:
+
+- **A aguanta.** La transacción es justamente la unidad que el *pooler* no parte. 40 peticiones concurrentes
+  sobre **una única** conexión de servidor, sin un solo cruce, y sin dejar rastro en ella al terminar.
+- **B cruza filas entre clubes.** Su `SET` es de **sesión** y el driver lo emite **una sola vez**, al abrir.
+  Bastan tres consultas en fila, sin concurrencia:
+
+  ```
+  · EVIDENCIA · B · vía pooler → A ["2023/24", "2024/25"] · B ["2019/20"] · A otra vez ["2019/20"]
+  ```
+
+  La tercera lectura es el club A leyendo las filas del club B: su conexión de cliente ya estaba abierta, así
+  que el driver no reemitió el `SET`, y la conexión de servidor llevaba puesto el *schema* que dejó B.
+- **Y contamina al plano de control**, que no fija ningún `search_path` porque no lo necesita y por tanto
+  hereda el del último club. Como `_fluent_migrations` es una tabla **sin `space`**, su DDL va sin cualificar:
+
+  ```
+  · EVIDENCIA · B · DDL del plano de control sin cualificar → en pooler_club_a: true · en public: false
+  ```
+
+  Una migración del plano de control creando su tabla **dentro del *schema* de un club**. Leer mal se
+  reintenta; un `CREATE TABLE` en el sitio equivocado, no.
+
+> **Corolario operativo, y es una restricción dura: las migraciones van por la conexión directa, nunca por el
+> *pooler*.** Supabase publica los dos puertos precisamente por esto. La estrategia B es correcta para
+> `migrate-tenants` —proceso administrativo, corto, un club cada vez— **solo** contra el puerto directo.
+
+**El fallo de B, además, no es reproducible.** Sin fijar el *event loop*, el driver reparte las peticiones
+entre ellos y **cada uno abre su propia conexión con su propio `SET`**: que la fuga aparezca depende de en
+qué *event loop* caiga la petición y de si esa conexión acaba de abrirse. Un fallo de aislamiento
+intermitente es peor que uno constante, y es una razón independiente de todas las anteriores para no querer B
+en el camino de las peticiones.
+
+### 6.5 Lo que no está comprobado
+
+Enumerado para que nadie cite §6 más allá de su alcance:
+
+- **Supavisor en concreto.** §6.4 se midió contra **PgBouncer**. Supavisor es otra implementación (Elixir),
+  no un *fork*, y el resultado depende de detalles que no tienen por qué coincidir. La conclusión
+  conservadora —estrategia A— vale para ambos; **la contraria no se puede extrapolar**.
+- **Auth real.** El club se resolvió por cabecera y subdominio, **no** por *claim* de un JWT validado contra
+  Supabase. La jerarquía de §6.1 está decidida, no ejecutada. Es el hueco más grande de esta sección.
+- **RLS (§7.4)** como capa extra. Aquí el aislamiento es solo por `search_path`.
+- **Escala.** Dos o tres clubes y **una** entidad sin FKs. Ni 50 clubes, ni el juego completo de migraciones
+  en orden de dependencia, ni el coste real de N *pools*.
+- **Tier dedicado (§6.3).**
 
 ---
 
@@ -1753,7 +1932,9 @@ bloquea diseño: **los códigos de `tipo_gol` y `codigo_tipo_amonestacion`**, qu
 *Identidad y permisos, coherentes con la multi-tenancy.*
 
 - **7.1 Supabase Auth** — validación del JWT (JWKS) en Vapor (JWTKit).
-- **7.2 Claims de tenant** — `club_id`, `role` inyectados vía **Auth Hook**.
+- **7.2 Claims de tenant** — `club_id`, `role` inyectados vía **Auth Hook**. **El *claim* `club_id` es la
+  fuente autoritativa del tenant; el subdominio es enrutado, y una discrepancia entre ambos se rechaza**
+  (§6.1). Nada de esto se ha ejecutado todavía: es la mayor superficie sin comprobar de §6 (§6.5).
 - **7.3 Roles** — escritura (backoffice) vs solo lectura (apps móviles).
 - **7.4 RLS** — políticas por *schema* como capa extra de autorización a nivel de fila.
 
@@ -1803,7 +1984,11 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 
 1. Enfoque OpenAPI definitivo (design-first vs code-first).
 2. Forma exacta del tier dedicado (proyecto Supabase vs despliegue completo) y su provisión.
-3. Estrategia de automatización de migraciones por tenant.
+3. Estrategia de automatización de migraciones por tenant — **estrechada**. El mecanismo y la idempotencia
+   por club están resueltos y comprobados (§4.7, §6.4): registro dinámico de `DatabaseID`, `_fluent_migrations`
+   por *schema*, juego completo en las altas, y la restricción de ir por conexión directa. Queda abierto el
+   **fallo a mitad de recorrido** (qué pasa con los clubes ya migrados cuando el número 30 revienta) y el
+   **paralelismo** entre clubes, que a 50 clubes deja de ser una cuestión estética.
 4. Estrategia de retención (RGPD, datos de menores): política de **archivado** (`Season.archived_at`, reversible, §5) frente a **erasure** físico (`DELETE ?cascade=true`) — plazos de conservación y "derecho al olvido" por decidir. El *mecanismo* ya está ([D-24]); falta la **política**.
 5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado.
 6. **Política de refresco de escudos** ([D-19]).
