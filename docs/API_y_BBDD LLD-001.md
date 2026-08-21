@@ -1975,6 +1975,17 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 - **Entornos** (dev/staging/prod) y datos semilla.
 - **CI/CD** — *build* en CI/builder remoto, migraciones, despliegue; ejecución de la pirámide de §8.1 en CI
   (unit siempre; integración con Postgres de servicio).
+  - **La RAM del *build* deja de ser un riesgo: está medida.** Pico de memoria **anónima** de
+    `swift build -c release --static-swift-stdlib`: **1,54 GiB** — por debajo del suelo de 2–4 GB que
+    estimaba el ADR (Anexo D.2), y breve (p50 del build: 0,09 GiB). **No hace falta *runner* especial ni
+    *builder* remoto por motivos de memoria.** Detalle y metodología en el
+    [spike de tenancy](../spikes/tenancy/README.md).
+  - **Lo que sí hay que vigilar en CI es el tiempo**, no la memoria: ~175 s solo el paso de compilación, sin
+    caché y con las capas base ya presentes. En un *runner* limpio se suman la descarga de `swift:6.0-jammy`
+    y la resolución de dependencias, así que **la caché de capas es la palanca**, no el tamaño de la máquina.
+  - **Ojo al extrapolar la cifra de RAM:** `swift build` paraleliza por núcleos, así que **más CPUs = más
+    pico**. La medida se tomó en 10 núcleos; un *runner* con menos pedirá menos. Y es un **suelo**: el spike
+    compila una entidad y cero capas (§2.2), así que conviene repetirla cuando el backend tenga forma.
 
 > Resto pendiente.
 

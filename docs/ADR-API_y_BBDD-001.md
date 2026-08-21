@@ -176,7 +176,10 @@ backoffice será TS/React, (b) las apps móviles son **nativas** (iOS Swift, And
 - **ORM oficial (Fluent)** cumple el requisito 2 sin terceros, con Postgres recomendado y **enrutado por
   tenant** (registrar varias BD / `search_path`), que encaja con la Decisión 4.
 - **El riesgo de RAM en *build* se neutraliza** compilando en **CI o *builder* remoto** (no en el host) →
-  el host solo ejecuta el binario, con footprint pequeño (ver Anexo D.2).
+  el host solo ejecuta el binario, con footprint pequeño (ver Anexo D.2). **Medido después de decidir: el
+  pico real son 1,54 GiB de memoria anónima**, así que el riesgo era menor de lo estimado y **ni siquiera
+  hace falta un *runner* especial** — cabe en cualquier CI estándar. Compilar fuera del host se mantiene por
+  la razón de siempre (el host solo ejecuta), no por la RAM.
 
 **Riesgos asumidos (Anexo D.4):** cantera/*handoff* más pequeña (server-Swift) y ecosistema SaaS (Stripe,
 email…) menos maduro que Node/Python; mitigables, no bloqueantes.
@@ -416,10 +419,17 @@ vs despliegue completo); propiedad/facturación del silo; automatización de mig
 - **Compila para Linux** vía el **Dockerfile multi-stage** de Vapor; **migraciones** como paso separado.
 - **La RAM crítica es la de *build*, no la de *runtime*** — y **no se paga en el host**:
   - **Qué dispara la RAM de *build*:** el **grafo de dependencias** (Vapor, SwiftNIO, drivers, compilados
-    desde fuente) y el **enlazado**, más que los *endpoints* o las LOC. Fija un **suelo de ~2–4 GB** que se
-    alcanza casi de inmediato, **casi independiente del tamaño de tu app**; crece despacio. El modo `release`
-    + *whole-module optimization* dispara el pico. **Métrica real:** RSS pico en `swift build -c release`
-    (paso de enlazado), medido empíricamente — no cuentes *endpoints*.
+    desde fuente) y el **enlazado**, más que los *endpoints* o las LOC. Fija un suelo que se alcanza casi de
+    inmediato, **casi independiente del tamaño de tu app**; crece despacio. El modo `release` +
+    *whole-module optimization* dispara el pico. **Métrica real:** RSS pico en `swift build -c release`,
+    medido empíricamente — no cuentes *endpoints*.
+  - > **Verificación (posterior a este ADR).** La estimación de este anexo era un suelo de **~2–4 GB**. Se
+    > midió en el [spike de tenancy](../spikes/tenancy/README.md), dos pases `--no-cache` con *builder*
+    > limpio: el pico de memoria **anónima** —la que dispara el OOM killer— es de **1,54 GiB**, por
+    > **debajo** del suelo estimado, y es un pico breve (p50 del build: 0,09 GiB). El paso de compilación
+    > tarda ~175 s y la imagen final son 434 MB. **Cuidado al citar otras cifras:** `memory.peak` del cgroup
+    > da 5,00 GiB, pero incluye *page cache*, que es reclamable y no provoca OOM. La estimación de 2–4 GB se
+    > mantiene aquí como registro de lo que se creyó al decidir; **el número bueno es 1,54 GiB**.
   - **Runtime**, en cambio, es **ligero**: un servicio Vapor pequeño va cómodo en **512 MB–1 GB**.
 - **Modelos de despliegue (todos mantienen "push → deploy"):**
 
@@ -452,7 +462,8 @@ Sí, con dos enfoques (elegir uno — ver §10):
   código**: Vapor **API↔iOS** vs NestJS **API↔backoffice**. Se elige el eje **API↔iOS**.
 - **Riesgos de negocio asumidos:** **cantera server-Swift pequeña** (peor *handoff*/contratación que TS/Python);
   **ecosistema SaaS** (Stripe, email…) menos maduro; patrones multi-tenant menos documentados que SQLAlchemy/
-  TypeORM. Mitigables, no bloqueantes; el temor a la **RAM de *build* queda neutralizado** compilando fuera del host.
+  TypeORM. Mitigables, no bloqueantes; el temor a la **RAM de *build*** queda **descartado por medición**
+  (1,54 GiB de pico anónimo, ver D.2) y no solo por la mitigación de compilar fuera del host.
 
 **Fuentes:**
 [Fluent · Vapor Docs](https://docs.vapor.codes/fluent/overview/) ·

@@ -337,11 +337,46 @@ Enumerado para que nadie cite estas conclusiones más allá de su alcance:
 |---|---|
 | Imagen final (multi-stage, `ubuntu:jammy` + binario estático) | **434 MB** |
 | Suite completa contra Postgres real | 18 tests, 2,7 s (11 directos + 7 vía pooler) |
-| RAM de compilación de Swift en el *builder* | **sin medir** — pendiente |
+| RAM de compilación de Swift en el *builder* (pico de memoria **anónima**) | **1,54 GiB** |
+| Idem, incluyendo *page cache* (`memory.peak` del cgroup) | 5,00 GiB |
+| Paso `swift build -c release --static-swift-stdlib` | 174–183 s |
+| Build completo `--no-cache` | 285–294 s |
 
-La RAM de compilación estaba entre lo que el `Dockerfile` se proponía medir (el ADR la da por
-neutralizada y nadie la había comprobado). Requiere un `docker build --no-cache` observando
-`docker stats`; no se llegó a hacer.
+### La RAM de compilación — **medida, y el ADR era pesimista**
+
+Era lo que el `Dockerfile` se proponía comprobar: el ADR daba el riesgo por neutralizado y nadie
+lo había ejecutado. El Anexo D.2 hacía además una predicción cuantitativa — *"fija un suelo de
+~2–4 GB que se alcanza casi de inmediato"* — y pedía literalmente *"RSS pico en `swift build -c
+release`, medido empíricamente"*.
+
+**El pico de memoria anónima es 1,54 GiB**, por debajo del suelo que el ADR predecía. Dos pases
+independientes con `--no-cache`, contenedor de *builder* nuevo cada vez.
+
+Y es un pico **breve**, no una meseta:
+
+| p50 | p90 | p99 | máx |
+|---|---|---|---|
+| 0,09 GiB | 0,72 GiB | 1,25 GiB | **1,54 GiB** |
+
+Consecuencia práctica: **no hace falta *builder* remoto ni *runner* especial**. Cabe en la VM de
+Docker Desktop (7,75 GiB) y sobra en un *runner* estándar de GitHub Actions. En CI la métrica a
+vigilar es el **tiempo**, no la memoria.
+
+> **Cómo medirlo, porque el primer intento dio un número tres veces mayor.** `memory.peak` del
+> cgroup marca **5,00 GiB**, pero incluye *page cache* — y un build Swift lee medio Vapor y escribe
+> muchísimos `.o`. Esas páginas son **reclamables**: bajo presión el kernel las desaloja en vez de
+> matar el proceso. Lo que dispara el OOM killer es la memoria **anónima**, que es la que da 1,54.
+> Los dos instrumentos concuerdan una vez se sabe qué mide cada uno: `docker stats` (que descuenta
+> el *page cache* inactivo) dio 1,70 GiB, a un 10 % del muestreo fino de `memory.stat`/`anon`.
+>
+> Y el muestreo tiene que ser **fino**: a 2 s el pico se puede perder entero, porque —como muestra
+> la tabla de percentiles— la mitad del build transcurre por debajo de 0,1 GiB. Aquí se muestreó a
+> 0,5 s (498 muestras).
+
+**Esta cifra es un suelo, no un techo.** El spike compila **una** entidad y **cero** capas. El grueso
+del coste es compilar Vapor, NIO y Fluent —que no van a crecer—, pero el código propio sí: 14
+entidades, dominio, puertos, adaptadores y su batería. Conviene repetir la medida cuando el backend
+tenga forma.
 
 ---
 
@@ -351,7 +386,10 @@ neutralizada y nadie la había comprobado). Requiere un `docker build --no-cache
 - Vapor 4.122.0 · Fluent 4.13.0 / FluentKit 1.57.0 · fluent-postgres-driver 2.12.0 · postgres-nio 1.33.1
 - PostgreSQL 16.14 (`postgres:16-alpine`, contenedor efímero en `:5433`)
 - PgBouncer 1.25.2 (`edoburu/pgbouncer`, `pool_mode = transaction`, `default_pool_size = 1`, en `:6432`)
-- Docker 29.7.2
+- Docker 29.7.2 · BuildKit v0.32.2 en *builder* `docker-container`
+- Medidas de build tomadas en una VM de Docker Desktop de **7,75 GiB y 10 CPUs**. Ojo al comparar:
+  `swift build` paraleliza por núcleos, así que **más CPUs = más pico de RAM**. Un *runner* de CI con
+  menos núcleos pedirá menos memoria que esta cifra, no más.
 
 > Los tests de fuga fijan la base de datos a **un** *event loop*; con
 > `maxConnectionsPerEventLoop: 1` (el valor por defecto del driver) eso significa **una** conexión
