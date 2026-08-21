@@ -1,0 +1,4 @@
+.build/
+.swiftpm/
+docker-compose.yml
+README.md

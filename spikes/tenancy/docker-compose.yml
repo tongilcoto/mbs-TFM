@@ -1,0 +1,43 @@
+# Entorno del spike (§8.1: la integración se prueba contra Postgres real).
+#
+#   docker compose up -d
+#   docker compose down -v      ← -v borra el volumen: la BD es desechable a propósito
+#
+# Dos puertos, a propósito:
+#   :5433 → Postgres directo.  Es contra el que corre la batería principal.
+#   :6432 → PgBouncer en modo transacción. Es contra el que corre `PoolerTests`,
+#           que verifica el punto 3 de la recomendación del README (§6.4).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: tfm-tenancy-spike-db
+    environment:
+      POSTGRES_USER: tfm
+      POSTGRES_PASSWORD: tfm
+      POSTGRES_DB: tfm_spike
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tfm -d tfm_spike"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # El pooler en modo transacción, delante del MISMO Postgres. Es la única diferencia
+  # entre las dos baterías: mismo código, mismo esquema, otro socket.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: tfm-tenancy-spike-pgbouncer
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./pgbouncer/userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "6432:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
