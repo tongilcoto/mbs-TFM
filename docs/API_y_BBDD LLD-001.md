@@ -1,6 +1,6 @@
 # LLD-001 · Diseño de bajo nivel — API backend y Base de datos
 
-- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 14 entidades de §3.2, contrato completo**) y §8.1 (testing) redactadas; **§6 (multi-tenancy) y §7 (auth) siguen siendo esqueleto**, igual que §1 y §8.2
+- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 18 entidades de §3.2, contrato completo**), §6 (multi-tenancy, **medida** contra Postgres y PgBouncer reales), §7 (auth y autorización) y §8.1 (testing) redactadas; **siguen siendo esqueleto §1 y §8.2**
 - **Fecha:** 2026-08-20 (revisión: el género es de la competición, no una inferencia por equipo — [D-58])
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [HLD-001](./Project%20HLD-001.md) · [ADR-API_y_BBDD-001](./ADR-API_y_BBDD-001.md)
@@ -288,6 +288,10 @@ opcional (§3.5).
 | **Goal** (Gol)                                    | `match_id`, `scoring_team_id`, `conceding_team_id`, `scorer_player_id?`, `assist_player_id?`, `minute?`, `zone?`, `side?`, `body_part?`, `play_type?`, `assisted?`              | **Denormalizado a propósito** (§3.6): `scoring_team_id`/`conceding_team_id` se copian del `Match` al crear el gol → goles a favor de un equipo = `WHERE scoring_team_id = :id_del_equipo`; goles en contra = `WHERE conceding_team_id = :id_del_equipo`, **sin join**. Todos los campos de clasificación (`zone`…`assisted`) son **opcionales** (entrada manual parcial). **Cubre las dos direcciones** de los partidos del equipo propio (el mockup desglosa también los goles recibidos), pero no los partidos entre rivales (§3.7). **`conceding_team_id` no se escribe: se deriva del `Match`** ([D-54]) — la mitad de la denormalización que el cliente no puede contradecir. **`scorer_player_id` anulable** (los goles del rival no tienen goleador conocido, [D-09]) y **el equipo al que debe pertenecer depende de `play_type`** ([D-52]): el que marca en un gol normal, el que **encaja** en `en_propia_puerta` — donde además el gol **no suma** al goleador aunque quede registrado a su nombre. **`assisted` no es redundante con `assist_player_id`**: `true` con jugador nulo es el gol encajado con asistencia rival ([D-09]). **Sin unicidad alguna** —un jugador marca dos veces en un partido— y **sin cuadre con el marcador** ([D-53]). **`deleted_at`** = *soft delete* ([D-36])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **LeagueScorer** (Goleador de liga)               | `competition_id`, `full_name`, `team_label`, `goals`, `rank?`, `synced_at?`                                                                                                     | **Ingerida de la API de la liga** (§3.7); no ligada a `Player`; solo lectura. **Se ingiere, no se calcula** ([D-09]): el ranking incluye rivales, de los que no hay plantilla — `full_name` y `team_label` son **texto del proveedor**, no claves, y no se emparejan con `Player` ni con `Team`. **Estado vigente único, no *snapshot* por jornada** (a diferencia de `StandingRow`): el *upsert* lo pisa en cada sincronización, sin histórico ni `PREV`. **`rank`** anulable —no todos los proveedores lo publican— y **se respeta el suyo** en vez de recalcularlo: los criterios de desempate son ajenos. **Sin *fallback*** ([D-48]): si la federación no lo publica, no hay nada que calcular y la tabla queda vacía. **`synced_at`** es marca del *upsert* (retirar filas que el proveedor dejó de publicar), **no viaja en el DTO** ([D-29])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **CompetitionSanctionBracket** (Tramo de sanción) | `competition_id`, `seq`, `yellow_from`, `yellow_to`                                                                                                                             | Config por competición (§3.6). Sanción al alcanzar `yellow_to`; "pendientes" = `yellow_to − acumuladas`. **Es una secuencia, no filas independientes** ([D-50]): tramos contiguos y ordenados por `seq`, sin huecos ni solapes — la unidad de escritura es el **conjunto entero**, no la fila. **`seq` y `yellow_from` son derivados** ([D-51]): el conjunto queda determinado por la lista ascendente de `yellow_to`, así que un conjunto inválido no se puede ni expresar. **Sin borrado lógico** (§4.4): es configuración, no un hecho — una competición sin tramos simplemente no tiene filas ([D-10]). **Retroactivo**: las pendientes se calculan en vivo sobre `Card`, así que cambiar los umbrales reinterpreta las tarjetas ya registradas                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **StaffMember** (Personal del club)               | `full_name`, `email`, **`user_id?`**, `deleted_at?`                                                                                                                             | Una persona que trabaja en el club, **técnica o no**. **`user_id`** = UUID de `auth.users`: **identificador externo**, mismo patrón que los `federation_*_id` ([D-06]) — se guarda para vincular, nunca como clave de unión interna. **Anulable a propósito**, y es la razón de que esta entidad exista: el admin monta la estructura de la pretemporada en julio, cuando media plantilla técnica todavía no ha aceptado la invitación. Sin ella no se podría registrar "Juan entrena al Cadete A" hasta que Juan entrase por primera vez, ni pintar la lista de candidatos a un puesto en el backoffice. **El administrador también es un `StaffMember`**: la distinción técnico/administrativo se lee del puesto, no de la tabla. Único(`email`); único(`user_id`) entre los no nulos ([D-59]) |
+| **StaffPosition** (Puesto)                        | `name`, **`level`**, **`scope_kind`**, `grants_all_verbs`, `is_technical`, `deleted_at?`                                                                                        | Catálogo **por tenant**, precargado y con CRUD del admin: cada club nombra sus cargos como quiera. **`level`** = la pirámide (0 = administración); **no autoriza escrituras** —eso lo hace el ámbito— sino que gobierna **quién puede nombrar a quién** ([D-62]). **`scope_kind`** (§3.3) dice sobre qué eje de la identidad de `Team` alcanza el puesto, y es lo que evita enumerar un puesto por categoría ([D-60]). **`grants_all_verbs`** solo lo lleva el puesto de administración ([D-61]). `is_technical` es cosmética: filtra listas en la UI. Único(`name`) |
+| **PositionPermission** (Permiso de puesto)        | `staff_position_id`, **`verb`**                                                                                                                                                 | Qué casos de uso concede un puesto. **`verb` es `text` sin `CHECK` y sin tabla de catálogo** ([D-61]): el catálogo lo fija el código (un `enum … CaseIterable`) y lo publica `GET /v1/permissions/verbs`; la validación ocurre en el caso de uso (**422**), no en la BD. Único(`staff_position_id`, `verb`) |
+| **StaffAssignment** (Asignación)                  | `staff_member_id`, `staff_position_id`, **`season_id`**, **`scope_kind`**, `team_id?`, `modality?`, `category?`, `gender?`, `deleted_at?`                                        | Quién ocupa qué puesto, sobre qué ámbito y en qué temporada. **Múltiple a propósito** —un coordinador casi siempre entrena además a un equipo—, y de ahí que el permiso se evalúe **por asignación** y nunca colapsando a la persona ([D-62]). **`season_id` es identidad, no atributo**, por el mismo criterio que `Player` ([D-05], [D-37]): cambiarlo es **otra fila**, de ahí que no haya `PATCH` (§5.1). **Las cuatro columnas de ámbito son anulables y excluyentes**: exactamente la que corresponde al `scope_kind` va informada, y `club` las lleva **todas** nulas. `scope_kind` se **duplica** aquí desde el puesto con **FK compuesta** (`staff_position_id`, `scope_kind`) → único caso en que [D-28] permite copiar un campo ([D-62]). Unicidad: ver §3.5 |
 
 ### 3.3 Enumerados (propuesta)
 
@@ -307,6 +311,11 @@ opcional (§3.5).
 - **Goal.side:** `derecha, izquierda, centro`.
 - **Goal.body_part:** `pie, cabeza, otro`.
 - **Goal.play_type:** `juego_abierto, penalti, falta, en_propia_puerta`.
+- **StaffPosition.scope_kind:** `club, modality, category, gender, team`. **No es un enumerado de negocio
+  sino un discriminante estructural**: nombra sobre qué eje de la clave de identidad de `Team` (§3.5)
+  alcanza un puesto, y por eso sus valores son nombres de columnas de `Team` más `club` (todos) — no una
+  lista de cargos. Es lo que permite que "Coordinador Cadete", "Coordinador Juvenil" y los demás sean **un**
+  puesto con distinto ámbito en vez de siete puestos ([D-60]).
 
 ### 3.4 Vistas derivadas (agregaciones, no tablas base)
 
@@ -325,6 +334,8 @@ Calculadas por consulta o vistas materializadas:
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
 - Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), **`Card`(jugador, partido, tipo)** ([D-45]) y `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- **`StaffAssignment` vuelve a caer en la trampa de los `NULL`, y con la misma salida.** Lo único a impedir es ocupar el mismo puesto sobre el mismo ámbito dos veces en la misma temporada: `(staff_member_id, staff_position_id, season_id, team_id, modality, category, gender)`. Pero las cuatro columnas de ámbito son anulables y un puesto de `scope_kind = club` las lleva **todas** nulas — así que un `UNIQUE` normal **no protegería nada**: dos filas idénticas de "Director Técnico, temporada 2024/25" no comparan iguales. Es literalmente el caso de `Team` de más abajo, y se resuelve igual: **`UNIQUE NULLS NOT DISTINCT`** (Postgres 15+, disponible en Supabase). Aquí **no** sirve el índice parcial: no hay una condición que separe los casos, hay cinco combinaciones de ámbito ([D-62]).
+- **La coherencia ámbito↔puesto es estructural, no de aplicación.** `StaffAssignment` duplica `scope_kind` desde `StaffPosition` con **FK compuesta** (`staff_position_id`, `scope_kind`) —lo que exige un `UNIQUE (id, scope_kind)` en `staff_positions`, redundante pero necesario para poder referenciarlo—, más un `CHECK` que ata `scope_kind` a qué columna de ámbito va informada. Es el **único** caso del modelo donde [D-28] autoriza copiar un campo, y precisamente por el motivo que esa decisión exige ([D-62]).
 - **Que esas unicidades sean *por tenant* no necesita nada especial: comprobado.** Al vivir cada tabla en el *schema* de su club, un índice único normal ya es único **por club** — dos clubes pueden tener a la vez la temporada `2024/25` con el mismo `federation_season_id` sin colisionar, que es el comportamiento que se quiere y el que un `UNIQUE` global impediría. No hacen falta claves compuestas con `tenant_id` ni índices parciales por club: eso sería la solución del modelo *una tabla compartida con columna discriminadora*, que no es el elegido (§6). Ejecutado contra Postgres real en el [spike de tenancy](../spikes/tenancy/README.md).
 - **La unicidad de `Match` no es un adorno: es la clave del *fallback* de la ingesta.** Dos equipos se enfrentan **una vez por jornada**, así que (`round_id`, `home_team_id`, `away_team_id`) identifica el partido sin depender de la fecha —que se mueve cada semana (§3.2)— ni del `federation_match_id` —que puede no venir—. Es exactamente el segundo paso de la cadena de emparejamiento de §3.7, y sin el índice único no sería una clave, solo una consulta. No lleva `competition_id` porque `Round` ya lo fija. *Asunción:* no hay repeticiones de partido dentro de la misma jornada; una eliminatoria a doble vuelta son **dos jornadas** ([D-12]).
 - **`modality` es parte de la clave única de `Team`, no un adorno.** Sin ella, el "Infantil A masculino" de fútbol-11 y el de fútbol-sala del mismo club **colisionan**, y el modelo no podría representar un club con equipos en dos modalidades (§3.6). Es la razón por la que la modalidad no puede quedarse como simple parámetro de la URL de integración.
@@ -777,7 +788,13 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
   (`app.migrations.add(...)`), no el nombre de fichero:
   `Club → Season → OpponentClub → Team → Competition → Round → Match → StandingRow → Player → Absence →
-  Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket`.
+  Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket →
+  StaffMember → StaffPosition → PositionPermission → StaffAssignment`.
+- **Las cuatro de *staff* (§7.3) van al final** porque `StaffAssignment` depende de `StaffMember`,
+  `StaffPosition`, `Season` y `Team`. Dos de ellas llevan además **datos de precarga**: el catálogo de
+  puestos y sus permisos nacen con una propuesta razonable que el admin luego edita, así que su migración
+  no es solo DDL. Es el primer caso del juego en que una migración inserta filas, y conviene que la semilla
+  sea **idempotente** — un club nuevo la recibe entera (§4.7), pero un club existente no debe duplicarla.
 - `CHECK` de enumerados junto a la columna: `.field("status", .string, .required)` +
   `.sql(raw: "ALTER TABLE matches ADD CONSTRAINT chk_matches_status CHECK (status IN ('programado', ...))")`
   (`SQLKit`, ver Anexo D.1 del ADR).
@@ -878,7 +895,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 
 *Superficie REST que consumen backoffice (escritura) y apps móviles (lectura). Cada endpoint es un
 **adaptador primario** (Controller) que mapea DTO ↔ dominio, invoca un **caso de uso** y usa el
-**repositorio** (§4.3). **El contrato está completo: las 14 entidades de §3.2 tienen sus endpoints**, y cada
+**repositorio** (§4.3). **El contrato está completo: las 18 entidades de §3.2 tienen sus endpoints**, y cada
 una fija una plantilla que reutilizan las siguientes:*
 
 | Plantilla | Recurso que la fija | Rasgos |
@@ -893,6 +910,7 @@ una fija una plantilla que reutilizan las siguientes:*
 | **Dominio manual** | `Player` | CRUD completo, ámbito obligatorio, identidad inmutable, borrado lógico |
 | Entidad **interna de un agregado** | `Absence`, `Appearance`, `Card`, `Goal` | ruta plana con ámbito (fijo o alternativo) |
 | **Configuración** (no hechos) | `CompetitionSanctionBracket` | `PUT` del conjunto, sin borrado lógico |
+| **Control de acceso** | `StaffMember`, `StaffPosition`, `StaffAssignment` | CRUD del admin; asignación sin `PATCH` (es identidad); catálogo de verbos **servido desde código** |
 
 ### 5.1 Recursos y endpoints
 
@@ -926,6 +944,10 @@ tenía la versión anterior de este contrato, en [D-21].
 | `Player`, `Absence` | dominio manual | ✓ | ✓ | ✓ | ✓ |
 | `Goal`, `Card`, `Appearance` | dominio manual | ✓ | ✓ | ✓ | ✓ |
 | `CompetitionSanctionBracket` | dominio manual (**configuración**) | ✗ | ✓ | ✗ | ✗ — **`PUT` del conjunto** ([D-50]) |
+| `StaffMember` | **control de acceso** | ✓ | ✓ | ✓ | ✓ *(lógico)* |
+| `StaffPosition` | **control de acceso** | ✓ | ✓ | ✓ | ✓ *(lógico)* |
+| `PositionPermission` | control de acceso (**configuración**) | ✗ | ✓ | ✗ | ✗ — **`PUT` del conjunto**, como [D-50] |
+| `StaffAssignment` | **control de acceso** | ✓ | ✓ | ✗ *(es identidad, [D-37])* | ✓ *(lógico)* |
 
 Tres lecturas que no son evidentes en la tabla:
 
@@ -1410,6 +1432,79 @@ Tres lecturas que no son evidentes en la tabla:
 - **La escritura exige rol elevado** (§7.3), como toda la configuración de competición ([D-22]); el `GET`
   es accesible a cualquier rol autenticado.
 
+
+**Control de acceso (§7.3).** Cinco bloques: la identidad de las personas, el catálogo de puestos, sus
+permisos, las asignaciones, y el catálogo de verbos —que es el único endpoint de esta API que **no lee de
+la base de datos**.
+
+**`StaffMember`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/staff-members` | `CreateStaffMember` | **201** + `StaffMemberResponse` | 400, **403** (rol), 409 (`email` duplicado) |
+| **GET** | `/v1/staff-members` | `ListStaffMembers` | **200** + `[StaffMemberResponse]` | — |
+| **GET** | `/v1/staff-members/{id}` | `GetStaffMember` | **200** + `StaffMemberResponse` | 404 |
+| **PATCH** | `/v1/staff-members/{id}` | `UpdateStaffMember` | **200** + `StaffMemberResponse` | 400, **403**, 404, 409 |
+| **DELETE** | `/v1/staff-members/{id}` | `DeleteStaffMember` | **204** (borrado lógico) | **403**, 404 |
+| **POST** | `/v1/staff-members/{id}/invite` | `InviteStaffMember` | **202** | **403**, 404, 409 (ya vinculado) |
+
+- **El `GET` es abierto a cualquier miembro autenticado del club**, y no es un descuido: es lo que permite
+  al backoffice pintar la lista de candidatos a un puesto ([D-64] fija que la lectura es abierta). Lo que va
+  con rol es escribir.
+- **`user_id` no es campo de entrada.** Lo rellena `InviteStaffMember` cuando la persona acepta y GoTrue
+  crea su cuenta; hasta entonces es nulo y el `StaffMember` ya puede recibir asignaciones (§3.2).
+- **El borrado es lógico**, con el criterio de `Player` ([D-36]): las asignaciones pasadas siguen siendo
+  histórico válido de quién dirigió qué.
+
+**`StaffPosition` y sus permisos:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/staff-positions` | `CreateStaffPosition` | **201** + `StaffPositionResponse` | 400, **403**, 409 (`name` duplicado) |
+| **GET** | `/v1/staff-positions` | `ListStaffPositions` | **200** + `[StaffPositionResponse]` | — |
+| **PATCH** | `/v1/staff-positions/{id}` | `UpdateStaffPosition` | **200** + `StaffPositionResponse` | 400, **403**, 404, 409 |
+| **DELETE** | `/v1/staff-positions/{id}` | `DeleteStaffPosition` | **204** (lógico) | **403**, 404, **409** (con asignaciones vigentes) |
+| **PUT** | `/v1/staff-positions/{id}/permissions` | `SetPositionPermissions` | **204** | 400, **403**, 404, **422** (verbo desconocido) |
+| **GET** | `/v1/permissions/verbs` | `ListVerbs` | **200** + `[VerbResponse]` | — |
+
+- **Los permisos van por `PUT` del conjunto**, no fila a fila: es la plantilla de
+  `CompetitionSanctionBracket` ([D-50]) y por el mismo motivo — son **configuración**, se editan en una
+  pantalla y se guardan de una vez.
+- **`ListVerbs` no toca la base de datos** ([D-61]): sirve `Verb.allCases` desde el binario, así que la
+  respuesta es idéntica para todos los tenants y solo cambia al desplegar → **`ETag` con la versión del
+  build y `Cache-Control` largo**.
+- **`422`, no `400`, para un verbo desconocido**: la petición está bien formada, el valor no existe en el
+  catálogo del código ([D-61]).
+- **`DELETE` de un puesto con asignaciones vigentes da 409**, no borra en cascada: dejar gente sin cargo por
+  un clic es peor que obligar a reasignar.
+
+**`StaffAssignment`:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **POST** | `/v1/staff-assignments` | `CreateStaffAssignment` | **201** + `StaffAssignmentResponse` | 400, **403** (nivel/ámbito), 404, 409 (duplicada) |
+| **GET** | `/v1/staff-assignments?seasonId=&staffMemberId=&teamId=` | `ListStaffAssignments` | **200** + `[StaffAssignmentResponse]` | 400 (falta ámbito) |
+| **DELETE** | `/v1/staff-assignments/{id}` | `DeleteStaffAssignment` | **204** (lógico) | **403**, 404 |
+
+- **Sin `PATCH`, y es deliberado.** Puesto, ámbito y temporada son **identidad**: cambiarlos es otra
+  asignación, no una edición — el mismo criterio que `Player` con `team_id`/`season_id` ([D-37], [D-62]).
+- **El `403` de `POST` es el de la regla del nivel** ([D-62]): es el único endpoint donde el permiso depende
+  de **qué se está creando**, no solo de sobre qué.
+- **`seasonId` obligatorio en el `GET`**, como en el resto de colecciones grandes con ámbito: sin él la
+  respuesta mezcla temporadas y no significa nada.
+
+**`/v1/me` — el contexto del actor:**
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/me` | `GetMe` | **200** + `MeResponse` | — |
+
+Devuelve el `StaffMember` del usuario, sus asignaciones vigentes y **los verbos efectivos por ámbito**. No
+es azúcar: sin él el backoffice no puede decidir qué botones pinta, y acabaría probando operaciones para
+descubrir por el `403` si podía hacerlas. **Es una conveniencia de UI, no la autoridad**: la comprobación
+real ocurre siempre en el caso de uso (§7.4).
+
+
 ### 5.2 DTOs
 
 Los DTOs **conforman `Content`** (cruzan HTTP) y están **desacoplados** tanto de la entidad de dominio como
@@ -1657,7 +1752,7 @@ struct SeasonResponse: Content {
 ### 5.5 OpenAPI
 
 - **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
-  (OpenAPI **3.1**). Cubre **las 14 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
+  (OpenAPI **3.1**). Cubre **las 18 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
   valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
 - **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
   queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
@@ -1931,14 +2026,122 @@ Enumerado para que nadie cite §6 más allá de su alcance:
 
 *Identidad y permisos, coherentes con la multi-tenancy.*
 
-- **7.1 Supabase Auth** — validación del JWT (JWKS) en Vapor (JWTKit).
-- **7.2 Claims de tenant** — `club_id`, `role` inyectados vía **Auth Hook**. **El *claim* `club_id` es la
-  fuente autoritativa del tenant; el subdominio es enrutado, y una discrepancia entre ambos se rechaza**
-  (§6.1). Nada de esto se ha ejecutado todavía: es la mayor superficie sin comprobar de §6 (§6.5).
-- **7.3 Roles** — escritura (backoffice) vs solo lectura (apps móviles).
-- **7.4 RLS** — políticas por *schema* como capa extra de autorización a nivel de fila.
+> **La línea que gobierna toda esta sección:**
+> **el JWT contesta *quién* y *de qué club*; el *schema* del tenant contesta *qué puede hacer*** ([D-59]).
 
-> Pendiente. Ver decisión 3 y Anexo B del ADR.
+### 7.1 Autenticación — Supabase Auth
+
+GoTrue emite el JWT; **Vapor lo valida** con JWTKit contra el JWKS del proyecto (§4). La API no confía en
+ningún dato de la petición que no venga firmado.
+
+**GoTrue autentica, no autoriza** (ADR, Anexo B.5): emite el token, pero no concede acceso a *schemas* ni
+conoce los equipos de nadie. Todo lo de §7.3 en adelante es responsabilidad de esta API.
+
+### 7.2 *Claims* y resolución de tenant
+
+El JWT lleva el `sub` (identidad del usuario) y **`club_id`**, inyectado vía **Auth Hook**. La jerarquía
+frente al subdominio la fija §6.1: **el *claim* es autoritativo, el `Host` es enrutado, y una discrepancia
+se rechaza**.
+
+> **El rol NO viaja en el JWT** ([D-59]), y es un cambio respecto a la redacción anterior de este apartado.
+> La autorización se lee de las tablas de §7.3, dentro del *schema* del tenant.
+
+### 7.3 El modelo: **puesto**, **ámbito** y **verbo**
+
+Un permiso es una terna — **quién** puede ejecutar **qué** **sobre qué**:
+
+| Eje | Qué es | Dónde vive |
+|---|---|---|
+| **Puesto** | el cargo: Coordinador, Entrenador, Ayudante… | `staff_positions` (dato, CRUD del admin) |
+| **Ámbito** | sobre qué equipos alcanza ese cargo | `staff_assignments` (dato) |
+| **Verbo** | qué operación concreta | **código** — es el caso de uso |
+
+**El ámbito es un filtro sobre la clave de identidad de `Team`** (§3.5), no una jerarquía aparte. Un puesto
+declara su `scope_kind` (§3.3) y la asignación aporta el valor ([D-60]):
+
+| Puesto | `scope_kind` | Alcanza |
+|---|---|---|
+| Administrador, Director Técnico | `club` | todos los equipos propios |
+| Director de Modalidad | `modality` | los de esa `Team.modality` |
+| Coordinador | `category` | los de esa `Team.category` |
+| Coordinador de Fútbol Femenino | `gender` | los de ese `Team.gender` |
+| Entrenador, Entrenador Ayudante | `team` | **ese** equipo |
+
+El rótulo que ve el usuario —"Coordinador Cadete"— es **derivado**: nombre del puesto + valor de ámbito. El
+catálogo de puestos es **dato** (precargado y editable por el club); lo estructural es que la jerarquía sea
+piramidal y con ámbitos anidados.
+
+**El verbo es el caso de uso de §5.1** —`CreatePlayer`, `UpdateAbsence`, `CreateGoal`…—, y **su catálogo lo
+fija el código**: un `enum Verb: String, CaseIterable` que publica `GET /v1/permissions/verbs`. No hay tabla
+de verbos ni `CHECK`; la validación ocurre en el caso de uso (**422** si no existe) ([D-61]).
+
+**Regla de evaluación** ([D-62]) — el punto donde estos modelos se implementan mal, porque una persona tiene
+**varias asignaciones a la vez**:
+
+> **¿Existe *alguna* asignación de esta persona que conceda *este verbo* sobre un ámbito que contenga *este
+> objetivo*?** Por asignación, **nunca** por persona colapsada.
+
+**El `level` no autoriza escrituras** —eso lo hace el ámbito—; gobierna **quién puede nombrar a quién**:
+
+> Para nombrar a alguien en un puesto de nivel *N* sobre un ámbito *S*, hace falta *alguna* asignación
+> propia con nivel < *N* **y** ámbito que contenga *S*.
+
+**El puesto de administración no enumera verbos**: lleva `grants_all_verbs`, para que un endpoint nuevo no
+nazca inaccesible en cada *release* ([D-61]).
+
+#### Lectura abierta, escritura con ámbito
+
+**Las lecturas no llevan ámbito**: cualquier miembro autenticado del club ve todo el club. **El ámbito solo
+muerde en escritura**, y eso acota el radio a **cinco entidades** de las diecinueve, porque la matriz de
+propiedad de §5.1 ya reparte el resto:
+
+| Entidad | Quién escribe |
+|---|---|
+| `Player`, `Absence`, `Appearance`, `Card`, `Goal` | **técnicos, con ámbito** |
+| `Season`, `Competition`, `Club`, `CompetitionSanctionBracket` | administración del club |
+| `Team`, `OpponentClub`, `Round`, `Match`, `StandingRow`, `LeagueScorer` | la ingesta (actor de sistema) |
+| `StaffMember`, `StaffPosition`, `PositionPermission` | administración del club |
+| `StaffAssignment` | admin **y coordinadores**, por la regla del nivel |
+
+### 7.4 Dónde vive la decisión: en el caso de uso
+
+> **La autorización se comprueba en la frontera del caso de uso** (capa de Aplicación, §2.2/§4), no en el
+> controlador ni en la base de datos ([D-63]).
+
+El caso de uso recibe un **contexto de actor** —tenant, `StaffMember` y sus asignaciones vigentes— y consulta
+una política; el repositorio se queda tonto.
+
+> **Consecuencia para el arranque del backend:** ese contexto debe **atravesar la frontera de los casos de
+> uso desde el primer día**, aunque al principio solo lleve el club. Añadir después un parámetro a todas las
+> firmas es el refactor caro que esta decisión existe para evitar.
+
+### 7.5 Semántica de errores: **403, no 404**
+
+Escribir fuera del propio ámbito devuelve **403**, con **verbo** y **motivo de ámbito** en el cuerpo para que
+la UI pueda decir *"no gestionas el Cadete A"*. El 404 que se usaría para no revelar existencia aquí sería
+una mentira, porque las lecturas son abiertas al club ([D-64]).
+
+**El aislamiento entre clubes no usa este mecanismo**: un recurso de otro tenant sencillamente **no existe**
+para la consulta, porque el `search_path` de §6.2 no lo alcanza. Ahí el 404 es literal.
+
+### 7.6 RLS — refuerzo posterior, no mecanismo primario
+
+**Aplazado a propósito** ([D-63]). El aislamiento entre clubes lo da el *schema* (§6.2) y la autorización de
+fila el caso de uso (§7.4). **La costura ya está construida**: el `SET LOCAL search_path` de §6.2 es el punto
+único por el que pasa todo acceso de tenant, y es donde iría un `SET LOCAL app.actor_id`.
+
+Ganaría peso si algún día un cliente hablase **directamente con PostgREST** con su JWT, sin pasar por esta
+API. Ahí RLS sería la única defensa.
+
+### 7.7 Lo que no está comprobado
+
+- **Nada de §7 se ha ejecutado.** §6 está medida contra Postgres real; esto es diseño. El *Auth Hook* que
+  inyecta `club_id`, la validación JWKS en Vapor y la discrepancia `Host` vs *claim* son las tres primeras
+  cosas que conviene ejercitar (Supabase corre en local con `supabase start`).
+- **El coste de la comprobación de ámbito** ([D-62]) y el de leer las asignaciones en cada petición
+  ([D-59]). Ninguno medido.
+- **La política de arrastre de asignaciones entre temporadas** — ver §9.9.
+- **Qué ve un jugador o un tutor** si algún día tienen cuenta — ver §9.10.
 
 ---
 
@@ -2011,6 +2214,14 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    El remedio natural es un alta en bloque o un "clonar plantilla de", pero **no se diseña todavía**:
    depende de si la promoción de categoría se resuelve por copia o por otra vía, y el CRUD de §5.1 no lo
    prejuzga.
+9. **Arrastrar las *asignaciones de staff* entre temporadas.** `StaffAssignment` lleva `season_id` por
+   identidad (§3.2), así que hereda literalmente el problema de §9.8: cada verano hay que rehacer los
+   cargos. Lo que se decida allí aplica aquí, y conviene resolverlas **juntas** — son la misma pregunta
+   sobre dos tablas.
+10. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
+    lectura y que basta con pertenecer al club. Un jugador —o el tutor de un menor— viendo la ficha, las
+    ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
+    RGPD que no se han diseñado. Hoy no bloquea porque las cuentas son de *staff* (ADR, Anexo C.4).
 
 > **Dónde está lo demás.** Las cuestiones de **dominio del modelo de datos** quedaron resueltas (§3.6, con
 > el razonamiento en el [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)). Lo que falta por **observar** de la
@@ -2079,6 +2290,12 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-59]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-60]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-61]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de Decisiones]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

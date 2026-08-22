@@ -82,6 +82,13 @@
 | **D-51** | El cuerpo son umbrales, no tramos: lo derivable es la relación entre filas | §3.2, §5.1, §5.2, §5.3 |
 | **D-53** | El marcador manda y los goles no lo contradicen: sin validación de cuadre | §3.6, §5.1 |
 | **D-54** | La denormalización de `Goal` no llega al DTO: se escribe quién marca | §3.2, §5.1, §5.2 |
+| **Autorización** | | |
+| **D-59** | La autorización vive en el tenant, y el rol no viaja en el JWT | §3.2, §6.1, §7.1, §7.2 |
+| **D-60** | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team` | §3.2, §3.3, §7.3 |
+| **D-61** | El verbo es el caso de uso, y su catálogo vive en código: sin tabla ni `CHECK` | §3.2, §5.1, §7.3 |
+| **D-62** | El permiso se evalúa por asignación, nunca por persona colapsada | §3.2, §3.5, §7.3 |
+| **D-63** | La autorización se comprueba en el caso de uso, no en RLS | §2.2, §4, §7.4, §7.6, §8.1 |
+| **D-64** | Escribir fuera de ámbito es 403, no 404: el 404 solo miente si la lectura es abierta | §5.1, §7.5 |
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
@@ -1790,6 +1797,276 @@ pedirle al cliente un dato que no le corresponde para luego decirle que se equiv
 
 ---
 
+## Autorización
+
+### D-59 · La autorización vive en el tenant, y el rol no viaja en el JWT
+
+**Contexto.** Supabase Auth (GoTrue) emite un JWT y admite *claims* personalizados vía **Auth Hook**. La
+tentación es evidente: meter ahí `club_id` **y** `role`, y que la API no tenga que consultar nada para
+autorizar. El borrador de §7.2 decía exactamente eso.
+
+**Por qué el club sí y el rol no.** No son la misma clase de dato:
+
+| | `club_id` | `role` |
+|---|---|---|
+| ¿Cambia? | prácticamente nunca | cada temporada, y a media temporada |
+| ¿Es escalar? | sí | **no** — depende del equipo (§7.3) |
+| ¿Quién es la fuente? | la provisión del tenant | las tablas de *staff* del club |
+
+Tres consecuencias de meterlo en el *claim*, cada una suficiente por sí sola:
+
+1. **Un JWT vale hasta que expira.** Degradar a alguien —o retirarle un equipo— no surtiría efecto hasta
+   la siguiente renovación. Un permiso revocado que sigue funcionando media hora no es un permiso.
+2. **El permiso es por objetivo, no por persona** ([D-62]). Un mismo usuario es Entrenador de un equipo y
+   Ayudante de otro; eso no cabe en un *claim* escalar sin inventar una codificación que habría que
+   versionar.
+3. **Duplicaría la fuente de verdad.** El dato ya está en `staff_assignments`, que es donde el admin lo
+   edita. Dos copias con latencia distinta es la definición del problema.
+
+**Y por qué la autorización va dentro del *schema* del tenant.** `auth.users` es de **proyecto**, no de
+tenant (ADR, Anexo C.4): en el tier gestionado lo comparten todos los clubes. Guardar ahí los permisos —en
+`raw_user_meta_data` o en una tabla del *schema* `auth`— pondría los datos de acceso de todos los clubes en
+una tabla común, que es exactamente la fuga que §6 entera existe para evitar. Además obligaría a escribir
+por la Management API de Supabase, un camino distinto y con credenciales distintas al del resto del
+backoffice.
+
+**Decisión.** **El JWT contesta *quién* (`sub`) y *de qué club* (`club_id`). El *schema* del tenant
+contesta *qué puede hacer*.** El rol sale del *claim*; `StaffMember`, `StaffPosition`, `StaffAssignment` y
+`PositionPermission` viven dentro del *schema*, con el resto del dominio.
+
+**Qué se asume a cambio.** Cada petición autorizada necesita **leer las asignaciones vigentes** del actor,
+que el *claim* daba gratis. Es una consulta por petición sobre tablas pequeñas y cacheables por la
+duración de la petición; se acepta a cambio de que revocar tenga efecto inmediato. El coste no está medido
+(§7.7).
+
+---
+
+### D-60 · Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`
+
+**La propuesta de partida.** Un catálogo de puestos por club con la jerarquía real de un club de base:
+Director Técnico, Director Fútbol 11, Director F7, Coordinador Senior, Coordinador Juvenil, Coordinador
+Cadete, Coordinador Alevín, Coordinador Benjamín, Coordinador Pre-Benjamín, Entrenador, Entrenador
+Ayudante. Once puestos con un `nivel` numérico.
+
+**Lo que delata el problema.** Los seis coordinadores son, exactamente, el enumerado `Team.category` de
+§3.3 (`prebenjamin, benjamin, alevin, infantil, cadete, juvenil, senior`) **menos uno**: al escribir la
+lista a mano se quedó fuera Infantil. No es un descuido anecdótico, es la propiedad del diseño — enumerar a
+mano un producto cartesiano garantiza que alguien se deje una celda, y la garantiza **otra vez** cada vez
+que la federación toque las categorías.
+
+Lo mismo con Director Fútbol 11 / Director F7, que son `Team.modality` enumerada a mano.
+
+**La observación.** Lo que distingue a esos puestos **no es un número de jerarquía: es sobre qué equipos
+alcanzan**. Y ese eje ya estaba escrito en el modelo — es la **clave de identidad de `Team`** de §3.5:
+(`opponent_club_id`, `category`, `letter`, `gender`, `modality`).
+
+**Decisión.** Un puesto lleva un `scope_kind` (§3.3) que nombra **sobre qué eje de la identidad de `Team`**
+alcanza, y la asignación aporta el valor concreto:
+
+| Puesto | `scope_kind` | Alcanza |
+|---|---|---|
+| Administrador, Director Técnico | `club` | todos los equipos propios |
+| Director de Modalidad | `modality` | los de esa `Team.modality` |
+| Coordinador | `category` | los de esa `Team.category` |
+| Coordinador de Fútbol Femenino | `gender` | los de ese `Team.gender` |
+| Entrenador, Entrenador Ayudante | `team` | **ese** equipo |
+
+Once puestos se convierten en cinco, y el rótulo que ve el usuario —"Coordinador Cadete"— es **derivado**:
+nombre del puesto + valor de ámbito, igual que `is_own` ([D-03]) o `is_kickoff_confirmed` ([D-30]).
+
+**Corolario: el `level` no autoriza escrituras.** Con ámbitos, un Coordinador Cadete escribe sobre los
+equipos Cadete porque su ámbito los contiene, no porque su número sea menor. Guardar las dos cosas sería
+denormalizar contra [D-28]. El número se reserva para **delegar la asignación** ([D-62]).
+
+**Qué se asume a cambio.** Un club con una estructura que **no** se corte por categoría, modalidad, género
+ni equipo —por ejemplo "coordinador de porteros de todo el club"— no encaja. Se resuelve dándole ámbito
+`club` con un puesto de pocos verbos, que es una aproximación, no el modelo exacto. Se acepta porque los
+cuatro ejes cubren la estructura que un club de base usa de verdad, y ampliar el enumerado más adelante es
+una migración de `CHECK`, no un rediseño.
+
+**Frontera estructura/dato.** El catálogo de puestos es **dato**: se precarga con una propuesta razonable y
+el admin lo edita, así que un cargo que falte cuesta una fila, no una migración. Lo estructural —y por eso
+va en el modelo— es que la jerarquía técnica sea **piramidal y con ámbitos anidados**, que sí es universal.
+Los requisitos se validaron con un ayudante de director técnico de un club real, y ese puesto se dejó
+**fuera** del catálogo de precarga a propósito, como prueba de que el catálogo es editable.
+
+---
+
+### D-61 · El verbo es el caso de uso, y su catálogo vive en código: sin tabla ni `CHECK`
+
+**Qué falta por nombrar.** Con puesto ([D-60]) y ámbito ya se sabe *quién* y *sobre qué*. Falta *qué*: lo
+que separa a un Entrenador de un Entrenador Ayudante, que comparten ámbito (`team`) y difieren en
+operaciones.
+
+**Por qué no el método HTTP.** Era lo inmediato —`POST`/`PATCH`/`DELETE`— y se rompe en el propio contrato:
+
+- §5.1 usa **sub-recursos de estado** (`/archive`, `/photo`), así que "PATCH" no es una cosa sola.
+- El mismo método sobre el mismo recurso significa cosas distintas: `UpdatePlayer` cambia un dorsal,
+  `UploadPlayerPhoto` sube **la foto de un menor** ([D-35]). Conceder lo primero no implica lo segundo.
+- Ataría el permiso al **transporte**. El mismo caso de uso puede invocarse desde un `AsyncCommand` de
+  ingesta, donde no hay método HTTP que comprobar.
+
+**Decisión.** **El verbo es el caso de uso de §5.1** — `CreatePlayer`, `DeletePlayer`, `UpdateAbsence`,
+`CreateGoal`… Y su catálogo **lo fija el código**: un `enum Verb: String, CaseIterable`, del que el
+compilador genera `allCases`, publicado por `GET /v1/permissions/verbs`.
+
+Para que la correspondencia sea estructural y no una convención que se erosiona, cada caso de uso protegido
+declara el suyo (`protocol AuthorizedUseCase { static var verb: Verb { get } }`): no se puede registrar uno
+sin decir bajo qué verbo se protege.
+
+**Por qué no hay tabla de verbos ni `CHECK`**, que es la parte contraintuitiva. [D-02] ya descartó los
+`ENUM` nativos porque obligan a alterar **cada** *schema* de tenant; con los verbos el problema es de otra
+magnitud, porque no son un enumerado de dominio:
+
+| | `Team.category` | `verb` |
+|---|---|---|
+| Cuántos valores | 7 | decenas, y creciendo |
+| Cada cuánto cambia | casi nunca | **cada endpoint nuevo** |
+| Qué es | un hecho sobre el fútbol | un reflejo del **código desplegado** |
+| Un valor inválido… | **corrompe** datos y rompe la validación equipo↔competición | **es inerte** |
+
+Ese último renglón es el que permite prescindir de la restricción: la comprobación pregunta *"¿alguna
+asignación concede **este** verbo?"*, y una fila con un verbo que ya no existe **no casa con nada nunca**.
+No abre permisos, no corrompe datos, no rompe consultas. Es basura inofensiva, y basta una limpieza
+ocasional contra el catálogo.
+
+Hay además un argumento que descarta la tabla aunque el coste de migrar fuese cero: **la restricción en la
+BD estaría mintiendo**. Durante un despliegue progresivo, o mientras el *schema* de un club no se ha
+migrado, lo que la BD cree que son verbos válidos y lo que el código sabe **no coinciden**. Solo el código
+puede ser autoritativo, porque el código es quien aplica el permiso.
+
+**Dónde queda la integridad, y por qué es más fuerte.** Una FK garantiza que la cadena **existe en una
+tabla**; el `enum` garantiza que **corresponde a código que se ejecuta**. Si el mismo tipo se usa en el
+endpoint, en la validación de `SetPositionPermissions` y en la comprobación de permisos, un `switch` sin
+actualizar **no compila**. Es el criterio de [D-28] —*"solo si la deriva se puede hacer estructuralmente
+imposible"*— con el sistema de tipos en el papel que allí hace la FK compuesta.
+
+La validación de escritura ocurre en el caso de uso (**422** si el verbo no existe, no 400: la petición está
+bien formada, el valor no está en el catálogo), que es donde vive el resto de la autorización ([D-63]).
+
+**Corolario: el puesto de administración no enumera verbos.** Lleva `grants_all_verbs`. Con lista explícita,
+cada endpoint nuevo nacería inaccesible para todos hasta que alguien fuese a marcarlo — un estropicio en
+cada *release*. Con el comodín, un caso de uso nuevo funciona desde el primer minuto para quien manda y se
+delega hacia abajo deliberadamente.
+
+**Qué se asume a cambio.** El catálogo es cacheable a lo bestia (`ETag` con la versión del *build*), pero
+un cliente que lo cachee **entre despliegues** verá una lista incompleta. Se acepta: la consecuencia es una
+casilla que no aparece en una pantalla de administración, no un fallo de seguridad.
+
+---
+
+### D-62 · El permiso se evalúa por asignación, nunca por persona colapsada
+
+**El hecho que lo fuerza.** Una persona tiene **varias asignaciones a la vez**, y no como excepción: un
+coordinador casi siempre entrena además a un equipo, y un ayudante en un equipo puede ser entrenador en
+otro, de la misma categoría o de otra.
+
+**El error que hay que evitar, en concreto.** Lo intuitivo es calcular "el rol del usuario" y después
+comprobar. Con asignaciones múltiples eso **filtra permisos**:
+
+> Ayudante en el Cadete A, Entrenador en el Infantil B. Colapsando a "es Entrenador", puede borrar
+> jugadores **del Cadete A**.
+
+**Decisión.** La pregunta es siempre:
+
+> **¿Existe *alguna* asignación de esta persona que conceda *este verbo* sobre un ámbito que contenga
+> *este objetivo*?**
+
+El mismo ejemplo, resuelto bien:
+
+| Operación | Objetivo | Resultado |
+|---|---|---|
+| `CreateGoal` | partido del Cadete A | ✓ se lo concede su asignación de **Ayudante** |
+| `DeletePlayer` | jugador del Cadete A | ✗ es Entrenador, **pero del Infantil B** |
+| `DeletePlayer` | jugador del Infantil B | ✓ |
+
+**La regla del nivel es también por asignación**, y por el mismo motivo: para nombrar a alguien en un puesto
+de nivel *N* sobre un ámbito *S* hace falta **alguna** asignación propia con nivel < *N* **y** ámbito que
+contenga *S*. Un Coordinador Cadete que además entrena al Infantil B puede nombrar entrenadores **de
+Cadete**, no del Infantil por el hecho de ser coordinador. Así el admin deja de ser cuello de botella sin
+que nadie pueda ascender a un igual.
+
+**Consecuencias en el modelo** (§3.2, §3.5):
+
+- **`StaffAssignment` no tiene `PATCH`** (§5.1): puesto, ámbito y temporada son identidad, y cambiarlos es
+  otra asignación — el criterio de `Player` con `team_id`/`season_id` ([D-37]).
+- **Su unicidad cae en la trampa de los `NULL`** que §3.5 ya documenta para `Team`: un puesto de ámbito
+  `club` lleva las cuatro columnas de ámbito nulas, así que dos filas idénticas no comparan iguales. Se
+  resuelve con `UNIQUE NULLS NOT DISTINCT`, no con índice parcial —no hay una condición que separe los
+  casos, hay cinco combinaciones—.
+- **`scope_kind` se duplica** desde el puesto a la asignación con **FK compuesta**. Es el único caso del
+  modelo donde [D-28] autoriza copiar un campo, y por el motivo que esa decisión exige: hace la deriva
+  imposible en vez de confiarla a la capa de aplicación.
+
+**Qué se asume a cambio.** Resolver "¿este objetivo cae en algún ámbito mío?" obliga a llegar hasta el
+`Team` del objetivo: un `Goal` cuelga de `Match`, un `Absence` de `Player`. Son *joins* que una comprobación
+por rol escalar no necesitaría. Sin medir (§7.7).
+
+---
+
+### D-63 · La autorización se comprueba en el caso de uso, no en RLS
+
+**La alternativa tentadora.** Postgres tiene **Row Level Security**: políticas por *schema* que filtran
+filas según una variable de sesión. Con §6.2 ya fijando `SET LOCAL search_path` dentro de la transacción de
+la petición, añadir un `SET LOCAL app.actor_id` al lado es literalmente una línea, y el aislamiento pasaría
+a ser **imposible de saltar** desde el código.
+
+**Por qué aun así no es el mecanismo primario.** Tres razones independientes:
+
+1. **Rompe la pirámide de §8.1.** La arquitectura de §2.2 se eligió para que Dominio y Aplicación sean
+   testeables **sin base de datos**. Poner la autorización en SQL la saca de los tests rápidos y la deja
+   solo en los de integración, que son los pocos y lentos.
+2. **La semántica de errores deja de ser tuya.** RLS produce filas **invisibles**: un `UPDATE` que no casa
+   devuelve cero filas, y distinguir "no existe" de "no es tuyo" exige trabajo extra. §7.5 ([D-64]) necesita
+   poder decir cuál de las dos cosas pasó.
+3. **Lógica escondida en migraciones** es lógica invisible para los tests de Swift y para quien lee el caso
+   de uso.
+
+Hay además un encaje que no es casualidad: si **el verbo es el caso de uso** ([D-61]), la comprobación no
+puede vivir en otro sitio. Es la misma decisión vista desde el otro lado.
+
+**Decisión.** La autorización se comprueba en la **frontera del caso de uso** (capa de Aplicación). El caso
+de uso recibe un **contexto de actor** —tenant, `StaffMember` y sus asignaciones vigentes— y consulta una
+política; el repositorio se queda tonto.
+
+**RLS queda como refuerzo posterior, no descartado.** Ganaría peso si algún día un cliente hablase
+directamente con **PostgREST** usando su JWT, sin pasar por esta API: ahí sería la única defensa. La costura
+está construida y es la de §6.2, lo que hace la decisión reversible sin rediseño.
+
+**Consecuencia para el arranque del backend, y es la cara de esta decisión.** El contexto de actor debe
+**atravesar la frontera de los casos de uso desde el primer día**, aunque en las primeras fases solo lleve
+el club. Añadir después un parámetro a todas las firmas —y a todos sus tests— es exactamente el refactor
+caro que esta decisión existe para evitar.
+
+**Qué se asume a cambio.** Un error de programación en un caso de uso **sí** puede saltarse la
+comprobación, cosa que con RLS no pasaría. Se acepta porque el aislamiento **entre clubes** —que es el
+riesgo grave— no depende de esto: lo da el *schema* (§6.2), medido y con control negativo.
+
+---
+
+### D-64 · Escribir fuera de ámbito es 403, no 404
+
+**La regla habitual y por qué aquí no aplica.** El criterio general en APIs con autorización por fila es
+devolver **404** cuando el actor no debería ni saber que el recurso existe: un 403 confirma la existencia y
+filtra información.
+
+Aquí esa preocupación **no tiene objeto**, porque §7.3 decide que **las lecturas son abiertas a todo el
+club**: el mismo usuario puede hacer `GET` de ese jugador y verlo entero. Un 404 sería una mentira que se
+desmonta con una petición más, y además impediría a la UI decir nada útil.
+
+**Decisión.** **403**, con **verbo** y **motivo de ámbito** en el cuerpo, para que el backoffice pueda decir
+*"no gestionas el Cadete A"* en vez de un error genérico.
+
+**Lo que no cambia.** El aislamiento **entre clubes** no usa este mecanismo: un recurso de otro tenant
+sencillamente **no existe** para la consulta, porque el `search_path` de §6.2 no lo alcanza. Ahí el 404 es
+literal, no una política — y por eso no filtra nada.
+
+**Qué se asume a cambio.** Si algún día las lecturas dejasen de ser abiertas —§9.10, cuentas de jugadores o
+tutores—, esta decisión hay que revisarla **entera**: con lectura restringida, el 403 sí filtraría existencia
+y volvería a tener sentido el 404.
+
+---
+
 ## Documentación
 
 ### D-25 · El *spec* OpenAPI es la fuente de verdad campo a campo
@@ -1898,6 +2175,12 @@ limpio.
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-59]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-60]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-61]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
