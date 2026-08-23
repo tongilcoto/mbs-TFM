@@ -92,6 +92,7 @@
 | **Documentación** | | |
 | **D-25** | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica | §5.2, §5.5 |
 | **D-26** | El LLD se queda con lo normativo; deliberación y evidencia van a anexos | — |
+| **D-65** | Design-first: el *spec* genera los tipos, pero no valida | §5.5, §8.2, §9.1 |
 
 ---
 
@@ -2114,6 +2115,76 @@ limpio.
 
 ---
 
+### D-65 · Design-first: el *spec* genera los tipos, pero no valida
+
+**Contexto.** §9.1 llevaba abierta desde el ADR (Anexo D.3) con dos enfoques sobre la mesa. Entretanto, el
+*spec* dejó de ser una promesa: son **5734 líneas escritas a mano** en paralelo al §5 del LLD, con
+descripciones que citan `§x` y `D-nn`, 78 bloques de `examples` y 20 `tag` que declaran **quién escribe**
+cada recurso ([D-25]).
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Design-first** · `swift-openapi-generator` + `vapor/swift-openapi-vapor` | El *spec* es la fuente de verdad. Un plugin de build genera los tipos y un `APIProtocol` con **un método por `operationId`**; el servidor lo conforma | **Elegida** |
+| **B — Code-first** · `VaporToOpenAPI` | Rutas Vapor libres con anotaciones; el documento OpenAPI se **genera** de ellas, más Swagger UI | Descartada |
+
+**Decisión: A.** El motivo de fondo es el mismo que en [D-61]: poner la integridad en el **sistema de tipos**
+y no en la disciplina. Con `APIProtocol`, si el contrato cambia y la implementación no, **no compila**; con
+code-first, el contrato es un reflejo de lo que el código haga, y una ruta olvidada no da error, da un
+documento silenciosamente equivocado. El motivo circunstancial es que B **regeneraría el documento desde
+anotaciones** y se llevaría por delante toda la prosa de arriba.
+
+**Lo que el generador *no* hace.** Es lo que de verdad hay que saber antes de escribir la primera línea. La
+[tabla de features soportadas][soar-features] es explícita: **todas las palabras clave de validación de JSON
+Schema están sin soportar**, y `readOnly` también. Medido sobre el *spec* de hoy:
+
+| Lo que el *spec* declara | Ocurrencias | ¿Lo aplica el código generado? | Dónde se aplica entonces |
+|---|---:|---|---|
+| `readOnly` | 143 | **No** | Ausencia del esquema de alta (abajo) |
+| `pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `maxItems` | 84 | **No** | **Value Objects del Dominio** (§4.1) |
+| `minProperties: 1` de los `PATCH` (§5.5) | 12 | **No** | Comprobación explícita en el adaptador primario |
+| `default` de parámetro (`page`, `pageSize`, `sort`, `includeArchived`, `cascade`) | 9 | **No** | El *handler* aplica el valor por defecto |
+| `security` / `securitySchemes` | 2 | **No** | Middleware de Vapor (§7.1) |
+| `tags` | 20 | **No** | Documentación publicada (Redocly), no el generador |
+| `additionalProperties: false` | 22 | **Sí** | `ensureNoAdditionalProperties` al decodificar |
+| `required`, `enum`, `oneOf`/`allOf`/`anyOf`, `format: date-time`, `$ref` | — | **Sí** | Tipos generados |
+
+**Corrección que esto obliga en §5.5.** El LLD afirmaba que un campo `readOnly` "no aparece en los *stubs* de
+escritura: la regla deja de depender de que alguien recuerde aplicarla". **Con este generador es falso**: los
+143 `readOnly` se ignoran y el campo *sí* aparece en el tipo de escritura. De los **dos** mecanismos con que
+[D-21] expresaba la frontera de propiedad, sobrevive el **estructural** —no existe `CreateTeamRequest`, así
+que no hay tipo generado que rellenar— y no el declarativo. `readOnly` sigue valiendo para el *linter* y para
+la documentación publicada; no para el compilador.
+
+**Por qué eso no revierte la decisión.** Por tres razones, y conviene el orden:
+
+1. **La validación en el Dominio no es un premio de consolación: es [D-01].** Un `SeasonLabel` que se valida
+   a sí mismo es donde el `pattern` tenía que estar de todas formas; un adaptador que validara por su cuenta
+   duplicaría la regla y abriría la puerta a que el job de ingesta (§2.3-b), que no pasa por HTTP, se saltara
+   la única copia. Lo que el generador no hace, lo hace un tipo que ya estaba en el diseño.
+2. **La frontera que importa se sostiene sola.** La que evita el daño real ([D-21]: una fila creada a mano
+   que la ingesta duplicaría) es la ausencia del esquema de alta, y esa es estructural.
+3. **La alternativa tampoco valida.** Code-first no aporta validación de contrato: la pierde antes, porque
+   ni siquiera hay un contrato previo del que derivarla.
+
+**Qué se asume a cambio.**
+
+- **Los *handlers* dejan de ser rutas libres.** Pasan a ser la implementación de un protocolo generado, con
+  firma fija. Lo que **no** se pierde es el middleware: el transporte se registra sobre un `RoutesBuilder`,
+  así que la cadena de auth y tenancy (§6.2, §7.1) se cuelga de un grupo ya decorado, como en Vapor normal.
+- **Hay que remedir el *build*.** El plugin corre en tiempo de compilación y genera Swift para 19 entidades.
+  El **1,54 GiB** de pico y los ~175 s de §8.2 son de un spike **sin generador y con una entidad**: son un
+  suelo, y este es exactamente el tipo de cambio que lo levanta.
+- **El *spec* se muda.** El plugin lo espera dentro del *target* que lo consume, junto a un
+  `openapi-generator-config.yaml`. `backend/openapi/openapi.yaml` sigue siendo la ruta canónica y de
+  referencia en el resto de la documentación; el mecanismo concreto (mover o enlazar) se fija al montar el
+  esqueleto.
+- **La documentación publicada se genera aparte.** Sin soporte de `tags`, el agrupado de Swagger UI/Redoc no
+  sale del generador: sale del *spec* directamente, que es de donde tiene que salir.
+
+[soar-features]: https://swiftpackageindex.com/apple/swift-openapi-generator/documentation/swift-openapi-generator/supported-openapi-features
+
+---
+
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · Evidencia → [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)*
 
 <!-- Definiciones de enlace -->
@@ -2181,6 +2252,7 @@ limpio.
 [D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de la Federación]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

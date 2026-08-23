@@ -247,8 +247,9 @@ Estrategia y detalle → **Anexo A.6**.
 - **Migraciones:** versionadas y en CI; **automatizar la aplicación por *schema*/proyecto** (recorrer todos los tenants).
 - **Enrutado por tenant:** resolver club → `SET search_path`; **resetear `search_path`** al devolver la
   conexión al *pool* (evitar fugas de contexto).
-- **Contrato de la API (OpenAPI):** elegir entre **swift-openapi-generator + `vapor/swift-openapi-vapor`**
-  (*design-first*, oficial) o **VaporToOpenAPI** (*code-first*, anota rutas → Swagger UI). Ver Anexo D.3.
+- ~~**Contrato de la API (OpenAPI):** elegir entre las dos vías.~~ **Resuelto: *design-first*** con
+  **swift-openapi-generator + `vapor/swift-openapi-vapor`**. Ver Anexo D.3 y, para el razonamiento y sus
+  consecuencias, [D-65].
 - **Despliegue/CI:** Dockerfile multi-stage de Vapor; compilar en **CI/builder remoto** (no en el host);
   GitHub Action `fly deploy` (o build+push de imagen en Railway/Render). Ver Anexo D.2.
 - **Provisión de tenants:** automatizar alta (crear *schema*/proyecto) vía Management API + IaC/CI.
@@ -260,7 +261,7 @@ Estrategia y detalle → **Anexo A.6**.
 
 1. **Afinar el PaaS** (Fly.io preferente para Vapor; Railway/Render alternativas) y el flujo de *build*
    (`fly deploy` con builder remoto vs build en CI + push de imagen). → Anexo D.2 / A.4.
-2. **Elegir el enfoque OpenAPI** de Vapor (design-first oficial vs VaporToOpenAPI). → Anexo D.4.
+2. ~~**Elegir el enfoque OpenAPI** de Vapor.~~ **Cerrado: *design-first*** (LLD §5.5, [D-65]). → Anexo D.3.
 3. **Tier dedicado:** ¿proyecto Supabase por club (Management API) o despliegue completo? ¿quién posee/factura?
 4. **Automatización de migraciones/provisión por tenant** (Fluent `AsyncMigration` recorriendo *schemas*/proyectos).
 5. **Actualizar HLD-001** (naturaleza SaaS/multi-tenant) y valorar un **ADR dedicado a tenancy/auth**.
@@ -447,9 +448,11 @@ vs despliegue completo); propiedad/facturación del silo; automatización de mig
   hasta 8 GB/servicio. **Build en CI ≈ 0 $** (Actions, *runners* ~16 GB). Todos con **región UE**.
 
 ### D.3 · OpenAPI / Swagger en Vapor
-Sí, con dos enfoques (elegir uno — ver §10):
-- **Design-first (oficial):** **`swift-openapi-generator`** (Apple) + **`vapor/swift-openapi-vapor`**
-  (bindings del propio Vapor). Escribes el *spec* OpenAPI → genera **stubs de servidor con tipos**.
+Sí, con dos enfoques. **Elegido el primero** ([D-65]):
+- **Design-first (oficial) — ELEGIDO:** **`swift-openapi-generator`** (Apple) + **`vapor/swift-openapi-vapor`**
+  (bindings del propio Vapor). Escribes el *spec* OpenAPI → genera **tipos y un `APIProtocol`** que el
+  servidor conforma. **Matiz medido al decidir:** genera tipos, **no validación** — ninguna palabra clave de
+  validación de JSON Schema está soportada, ni `readOnly`. Reparto de responsabilidades en LLD §5.5.
 - **Code-first (comunidad):** **VaporToOpenAPI** — anotas las rutas → genera el documento OpenAPI + **Swagger UI**.
 - **Matiz:** ninguno es tan **automático** como FastAPI (OpenAPI gratis desde los *type hints*); requieren
   elegir y cablear uno. NestJS quedaría en medio (`@nestjs/swagger`).
@@ -476,3 +479,5 @@ Sí, con dos enfoques (elegir uno — ver §10):
 [swift-openapi-vapor (Vapor org)](https://github.com/vapor/swift-openapi-vapor) ·
 [VaporToOpenAPI](https://swiftpackageindex.com/dankinsoid/VaporToOpenAPI) ·
 [Introducing Swift OpenAPI Generator](https://www.swift.org/blog/introducing-swift-openapi-generator/)
+
+[D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

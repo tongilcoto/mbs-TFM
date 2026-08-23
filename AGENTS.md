@@ -67,6 +67,11 @@ LLD (`D-25`).
 
 - **Base de datos:** PostgreSQL gestionado en **Supabase** (BD + Auth + Storage), **región UE** (RGPD; datos de menores).
 - **API backend:** **Swift — Vapor + Fluent** (ORM oficial), estilo **REST** con **OpenAPI**. API *tenant-aware*.
+- **Contrato de la API: *design-first*** (`D-65`). El *spec* es la **fuente de verdad** y de él se generan los tipos
+  y el `APIProtocol` con `swift-openapi-generator` + `vapor/swift-openapi-vapor`. **Al tocar el *spec*, tenerlo
+  presente: el generador emite tipos, no validación** — ignora `readOnly`, `pattern`, longitudes, rangos,
+  `minProperties`, `default`, `tags` y `security`. Esas reglas las hace cumplir el **Dominio** (Value Objects) o el
+  *handler*, según la tabla de reparto del LLD §5.5. No dar por hecho que declararlo en el YAML lo hace cumplir.
 - **Autenticación:** **Supabase Auth** (`auth.users`), *pool* compartido; *claims* de tenant (`club_id`, `role`) hechos cumplir por la API/RLS.
 - **Multi-tenancy:** **una sola base de código**; aislamiento por **_schema_ por club** (tier gestionado) o **proyecto por club** (tier dedicado). Modelo *pooled* (`club_id` en tablas compartidas) descartado.
 - **Despliegue:** **PaaS con Docker**, **Fly.io** preferente para Vapor (compilación de Swift en *builder* remoto/CI, no en el host); Railway/Render como alternativas. Tope de coste **20 $/mes** en el tier gestionado.
@@ -97,7 +102,8 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
 
-Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). **El contrato queda completo: las 14 entidades del §3.2 tienen sus endpoints**). Validación:
+Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
+`StaffAssignment`). **El contrato queda completo: las 19 entidades del §3.2 tienen sus endpoints**). Validación:
 
 ```sh
 npx @redocly/cli lint backend/openapi/openapi.yaml
@@ -105,7 +111,12 @@ npx @redocly/cli lint backend/openapi/openapi.yaml
 
 Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
 
-Próximos pasos de diseño pendientes (futuros ADRs/propuestas): modelo de datos detallado, contrato de la API, detalle fino de tenancy/auth (roles, provisión y automatización de migraciones por tenant) y estimación de costes cloud por *tier*.
+Próximos pasos: el diseño de API/BD está cerrado en lo esencial (modelo de datos, contrato, tenancy —**medida**
+contra Postgres real— y roles). Lo inmediato es el **esqueleto del backend**: un *target* SwiftPM por capa (LLD
+§2.2) para que la regla de dependencia la imponga el compilador, la fontanería de tenancy levantada del
+[spike](./spikes/tenancy/README.md), el plugin de generación del *spec*, y los *targets* de test por nivel (§8.1).
+Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
+tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes cloud por *tier*.
 
 ## Equipo
 

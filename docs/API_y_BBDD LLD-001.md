@@ -1,6 +1,6 @@
 # LLD-001 · Diseño de bajo nivel — API backend y Base de datos
 
-- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 18 entidades de §3.2, contrato completo**), §6 (multi-tenancy, **medida** contra Postgres y PgBouncer reales), §7 (auth y autorización) y §8.1 (testing) redactadas; **siguen siendo esqueleto §1 y §8.2**
+- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 19 entidades de §3.2, contrato completo**), §6 (multi-tenancy, **medida** contra Postgres y PgBouncer reales), §7 (auth y autorización) y §8.1 (testing) redactadas; **siguen siendo esqueleto §1 y §8.2**
 - **Fecha:** 2026-08-20 (revisión: el género es de la competición, no una inferencia por equipo — [D-58])
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [HLD-001](./Project%20HLD-001.md) · [ADR-API_y_BBDD-001](./ADR-API_y_BBDD-001.md)
@@ -895,7 +895,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 
 *Superficie REST que consumen backoffice (escritura) y apps móviles (lectura). Cada endpoint es un
 **adaptador primario** (Controller) que mapea DTO ↔ dominio, invoca un **caso de uso** y usa el
-**repositorio** (§4.3). **El contrato está completo: las 18 entidades de §3.2 tienen sus endpoints**, y cada
+**repositorio** (§4.3). **El contrato está completo: las 19 entidades de §3.2 tienen sus endpoints**, y cada
 una fija una plantilla que reutilizan las siguientes:*
 
 | Plantilla | Recurso que la fija | Rasgos |
@@ -1752,27 +1752,44 @@ struct SeasonResponse: Content {
 ### 5.5 OpenAPI
 
 - **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
-  (OpenAPI **3.1**). Cubre **las 18 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
+  (OpenAPI **3.1**). Cubre **las 19 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
   valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
 - **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
   queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
   *harness* del diseño mientras aún no hay código.
-- Enfoque a elegir (§9.1): **design-first** con `swift-openapi-generator` + `vapor/swift-openapi-vapor`
-  (genera *stubs* tipados desde el *spec*) vs **code-first** con `VaporToOpenAPI`; publicación de Swagger UI.
-  El fichero vale en ambos casos (contrato documentado); si se confirma **design-first**, pasa a ser la
-  **fuente de verdad** y el Swift se genera de él — y entonces convendrá moverlo/enlazarlo dentro del
-  *target* SwiftPM que lo consuma, según espera el generador.
-- El **`pattern` de `SeasonLabel`** y los enums (§3.3) viven en el *spec* como validación de contrato, además
-  de en el dominio (5.2).
+- **Enfoque: *design-first*** ([D-65], §9.1 cerrada). El *spec* es la **fuente de verdad**: un plugin de
+  build de `swift-openapi-generator` + `vapor/swift-openapi-vapor` genera los tipos y un **`APIProtocol` con
+  un método por `operationId`** que el servidor conforma, de modo que **el compilador detecta la divergencia**
+  entre contrato e implementación. Consecuencias operativas: el fichero se mueve o enlaza dentro del *target*
+  SwiftPM que lo consuma (junto a `openapi-generator-config.yaml`), y las cifras de *build* de §8.2 hay que
+  **remedirlas** con el plugin dentro.
+- **El generador emite tipos, no validación.** Ninguna palabra clave de validación de JSON Schema está
+  soportada — `pattern`, `minLength`/`maxLength`, `minimum`/`maximum`, `maxItems`, `minProperties` — ni
+  tampoco `readOnly`, `default`, `tags` ni `security`. Lo que **sí** aplica: `required`, `enum`, `$ref`,
+  `oneOf`/`allOf`/`anyOf`, `format: date-time` y `additionalProperties: false`. Reparto que se deriva de ahí,
+  y que es **normativo**:
+
+  | Lo que el *spec* declara | Quién lo hace cumplir |
+  |---|---|
+  | `pattern`, longitudes y rangos (`SeasonLabel`, dorsal, minuto…) | **Value Objects del Dominio** (§4.1) — no el adaptador, para que el job de ingesta (§2.3-b) pase por la misma regla |
+  | `minProperties: 1` de los `PATCH` | Comprobación explícita en el adaptador primario |
+  | `default` de los parámetros de consulta (`page`, `pageSize`, `sort`, `includeArchived`, `cascade`) | El *handler*, al leer el parámetro opcional |
+  | Autenticación y tenant | Middleware de Vapor (§6.2, §7.1), colgado del `RoutesBuilder` sobre el que se registra el transporte |
+  | Tipos, obligatoriedad, enums, rechazo de campos desconocidos | **Código generado** |
+
+  El *spec* conserva esas palabras clave: siguen siendo **contrato documentado** y las comprueba el *linter*
+  y los tests de contrato (§8.1). Lo que no son es código.
 - **Convención de `PATCH` fijada al escribir el *spec*:** cuerpo con `minProperties: 1` y
   `additionalProperties: false`; **campo ausente = no se modifica**, y en los campos anulables un `null`
   explícito **borra** el valor. Distinción relevante hoy solo en `Club.crestUrl`.
-- **La frontera de propiedad (§5.1) se expresa en el *spec*, no solo en prosa**, con dos mecanismos que el
-  generador y el *linter* sí entienden:
+- **La frontera de propiedad (§5.1) se expresa en el *spec*, no solo en prosa**, con tres mecanismos —de los
+  que **solo el segundo lo hace cumplir el compilador**:
   - **`readOnly: true`** en todo campo cuyo dueño sea la ingesta (`federationTeamId`, `federationClubId`,
-    `crestUrl`, `slug`, `modality`, `lastSyncedAt`) y en los derivados. Un campo `readOnly` no aparece en los
-    *stubs* de escritura: la regla deja de depender de que alguien recuerde aplicarla.
+    `crestUrl`, `slug`, `modality`, `lastSyncedAt`) y en los derivados. **El generador lo ignora**, así que el
+    campo *sí* aparece en el tipo de escritura: vale para el *linter* y la documentación publicada, no para
+    quitar la tentación de escribirlo ([D-65]).
   - **Ausencia del esquema de alta** en las entidades de salida — no hay `CreateTeamRequest` que rellenar.
+    Este es **estructural**: no hay tipo generado, así que la regla no depende de que nadie la recuerde.
   - Cada `tag` declara en su descripción **quién escribe** el recurso, para que la frontera se lea también
     desde la documentación publicada.
 
@@ -2189,6 +2206,9 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
   - **Ojo al extrapolar la cifra de RAM:** `swift build` paraleliza por núcleos, así que **más CPUs = más
     pico**. La medida se tomó en 10 núcleos; un *runner* con menos pedirá menos. Y es un **suelo**: el spike
     compila una entidad y cero capas (§2.2), así que conviene repetirla cuando el backend tenga forma.
+  - **Y hay un motivo concreto para repetirla:** *design-first* ([D-65]) mete un **plugin de generación en
+    tiempo de compilación** que produce Swift para las 19 entidades del *spec*. Es exactamente el tipo de
+    cambio que levanta el suelo, así que la medición se rehace **con el plugin dentro**, no antes.
 
 > Resto pendiente.
 
@@ -2196,7 +2216,11 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 
 ## 9. Cuestiones abiertas
 
-1. Enfoque OpenAPI definitivo (design-first vs code-first).
+1. ~~Enfoque OpenAPI definitivo (design-first vs code-first).~~ **Resuelta: *design-first*** con
+   `swift-openapi-generator` + `vapor/swift-openapi-vapor` ([D-65], §5.5). Se conserva el número para no
+   romper las referencias `§9.n`. Lo que la decisión **deja** abierto no es una cuestión de diseño sino
+   de montaje: dónde vive físicamente el *spec* dentro del *target* SwiftPM y cuánto sube el *build*
+   con el plugin dentro (§8.2).
 2. Forma exacta del tier dedicado (proyecto Supabase vs despliegue completo) y su provisión.
 3. Estrategia de automatización de migraciones por tenant — **estrechada**. El mecanismo y la idempotencia
    por club están resueltos y comprobados (§4.7, §6.4): registro dinámico de `DatabaseID`, `_fluent_migrations`
@@ -2296,6 +2320,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de Decisiones]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

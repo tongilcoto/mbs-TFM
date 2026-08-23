@@ -1,11 +1,16 @@
 openapi: 3.1.0
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Contrato REST de la API backend. Fuente de verdad del contrato si se confirma
-# el enfoque *design-first* (§9.1 del LLD-001); documentación de contrato en
-# cualquier caso.
+# Contrato REST de la API backend. **Fuente de verdad**: el enfoque es *design-first*
+# (§9.1 del LLD-001, cerrada en D-65) con swift-openapi-generator + swift-openapi-vapor,
+# así que de este fichero se generan los tipos y el APIProtocol que el servidor conforma.
 #
-# Estado: **completo** — las 18 entidades de §3.2 del LLD tienen contrato.
+# OJO al editar: el generador emite **tipos, no validación**. `readOnly`, `pattern`,
+# `minLength`/`maxLength`, `minimum`/`maximum`, `maxItems`, `minProperties`, `default`,
+# `tags` y `security` los **ignora** — se conservan aquí como contrato documentado y los
+# comprueba el linter. Quién hace cumplir cada cosa: LLD §5.5 (tabla) y D-65.
+#
+# Estado: **completo** — las 19 entidades de §3.2 del LLD tienen contrato.
 #
 # Referencias `§x` → docs/API_y_BBDD LLD-001.md
 # Referencias `D-nn` → docs/API_y_BBDD LLD-Anexo-Decisiones-Disenho-001.md (bitácora de decisiones)
