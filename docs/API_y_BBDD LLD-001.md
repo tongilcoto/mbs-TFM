@@ -1,6 +1,6 @@
 # LLD-001 · Diseño de bajo nivel — API backend y Base de datos
 
-- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 19 entidades de §3.2, contrato completo**), §6 (multi-tenancy, **medida** contra Postgres y PgBouncer reales), §7 (auth y autorización) y §8.1 (testing) redactadas; **siguen siendo esqueleto §1 y §8.2**
+- **Estado:** Borrador — §2 (arquitectura Clean/Hexagonal/DDD), §3 (modelo de datos), §4 (Dominio, puertos y persistencia), §5 (contrato API — **las 20 entidades de §3.2, contrato completo**), §6 (multi-tenancy, **medida** contra Postgres y PgBouncer reales), §7 (auth y autorización) y §8.1 (testing) redactadas; **siguen siendo esqueleto §1 y §8.2**
 - **Fecha:** 2026-08-20 (revisión: el género es de la competición, no una inferencia por equipo — [D-58])
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [HLD-001](./Project%20HLD-001.md) · [ADR-API_y_BBDD-001](./ADR-API_y_BBDD-001.md)
@@ -212,8 +212,11 @@ Federación) con los identificadores de federación (`federation_season_id`, `fe
 **repositorio**). **Distinto adaptador primario, misma capa de acceso** (caso de uso → repositorio → Fluent →
 *schema*), por lo que reutiliza el enrutado por tenant de §6.
 
-**(c) Verificación de la configuración de ingesta** (`POST /v1/competitions/preview`, §5.1) — el **único**
-caso en que una petición HTTP del BFF llama a la API externa **en línea**: el administrador pega la URL del
+**(c) Verificación de la configuración de ingesta** (`POST /v1/teams/{id}/federation-link/preview` y su
+gemelo `POST /v1/competitions/preview`, §5.1) — el **único** caso en que una petición HTTP del BFF llama a la
+API externa **en línea y en la propia respuesta**. Su confirmación (`POST …/federation-link`) también llama a
+la federación, pero **fuera de la petición**: devuelve **202** y encola la primera ingesta, precisamente para
+no meter ~34 peticiones de la FCF (§5.6) dentro de una llamada HTTP ([D-67]): el administrador pega la URL del
 calendario de la federación y el caso de uso la resuelve por el **puerto `FederationClient`** (el mismo que
 usa el job) **sin persistir nada**, para devolverle qué hay ahí antes de confirmar. Es un adaptador primario
 del BFF invocando un puerto de salida del módulo de Federación: no rompe ninguna frontera —los puertos son
@@ -250,6 +253,8 @@ erDiagram
   TEAM ||--o{ STANDING_ROW : posicion
   TEAM ||--o{ PLAYER : "plantilla (propia)"
   SEASON ||--o{ PLAYER : "temporada (registro)"
+  TEAM ||--o{ TEAM_REGISTRATION : "inscripcion (propia)"
+  SEASON ||--o{ TEAM_REGISTRATION : "temporada inscrita"
   MATCH ||--o{ GOAL : registra
   TEAM ||--o{ GOAL : marca
   TEAM ||--o{ GOAL : encaja
@@ -276,7 +281,8 @@ opcional (§3.5).
 | **Club** (raíz del tenant)                        | `name`, `short_name`, `slug`, `crest_key?`, **`federation`**, `settings`                                                                                                        | Un registro por club/schema. **`name`** = nombre oficial largo; **`short_name`** = nombre corto para mostrar (cabeceras); **`slug`** = identificador **interno** para rutas y nombres de fichero — **inmutable, se fija al aprovisionar** y no se edita por API (§5.1). `crest_key` = clave del objeto en Storage, no una URL (§3.7). **`federation`** = valor del **catálogo de federaciones**, que vive **en código, no en BD** (§3.6): la federación es propiedad **del tenant** (un club de Madrid está en la RFFM, uno catalán en la FCF), y de ella salen la URL base, la numeración de temporada y el mapa de códigos de modalidad. Se fija al aprovisionar                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Season** (Temporada)                            | `label` ("2024/25"), `start_date`, `end_date`, **`federation_season_id`**, `archived_at?`                                                                                       | `federation_season_id` = identificador de la temporada en la **API de la federación/liga**, distinto del `id` UUID interno; parámetro de entrada para llamar a la API externa (`temporada=21`). **Obligatorio** (toda temporada tiene contrapartida en la federación) y **tecleado por el administrador**, que lo copia de la URL del calendario (§3.7). Es un **secuencial de la federación** —`21` no guarda relación con "2024/25"—, propio de **cada** federación, y **cambia cada temporada**: es la única pieza de configuración que hay que actualizar cada año. `start_date`/`end_date` **fijas y derivadas de `label`** (01/07/AAAA → 30/06/AABB), **no overridables**. **`is_current` derivado en lectura, no se almacena**: es la temporada con el `end_date` **más próximo que aún es ≥ hoy** (el tiempo no retrocede → una sola current, sin invariante que gestionar). **`archived_at`** = archivado reversible (soft): oculta la temporada y, de facto, su subárbol (§5)                                                                                                                                                                                                                                                                                                                                                                                      |
 | **OpponentClub** (Club rival)                     | `name`, `short_name`, `slug`, **`federation_club_id`**, `crest_key?`                                                                                                            | **Identidad del club rival**, separada de sus equipos (§3.6). La crea la **ingesta** y la corrige el administrador. Un club rival suele tener equipo en **varias categorías** → varias filas `Team` apuntan a esta misma. **`federation_club_id`** = segmento numérico de la ruta del escudo en la API de la federación (§3.7); es la clave de emparejamiento de la ingesta                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **Team** (Equipo)                                 | `opponent_club_id?`, `category`, `letter?`, `gender`, **`modality`**, **`federation_team_id?`**                                                                                 | **`modality`** (§3.3) forma parte de la **identidad** del equipo: el "Infantil A" de fútbol-11 y el de fútbol-sala son **equipos distintos**, con distinta competición y distinto `codigo_equipo` (§3.6) — por eso entra en la clave única (§3.5). **No es campo de entrada del contrato**: la fija la ingesta al crear el equipo, tomándola de la competición (§5.1). **`gender` se comporta exactamente igual** ([D-58]): también es identidad, también entra en la clave única (§3.5) y también lo **hereda de la competición** —la federación no lo publica por equipo ([Anexo RFFM §F.14])—, así que tampoco es campo de escritura del contrato. **`opponent_club_id` nulo ⇒ equipo propio** (del `Club` del tenant); no nulo ⇒ equipo rival → **`is_own` no se almacena: es derivado** (§3.6). **No lleva nombre ni escudo**: son del club. Nombre mostrado (derivado en lectura, §5) = nombre del club + `category` + `letter` → "CD Ejemplo Infantil A". **`federation_team_id`** = `codigo_equipo` de la API de la federación (§3.7): identifica al **equipo**, no al club — el mismo club tiene código distinto en cada categoría. **Anulable**: los equipos creados a mano que no están en competición federada no lo tienen. "Primer Equipo" = `category=senior` + `letter="A"` (o sin letra); filial = `category=senior` + `letter="B"`                                                                                                                                                                                                                                                                                                        |
+| **Team** (Equipo)                                 | `opponent_club_id?`, `category`, `letter?`, `gender`, **`modality`**, **`federation_team_id?`**                                                                                 | **`modality`** (§3.3) forma parte de la **identidad** del equipo: el "Infantil A" de fútbol-11 y el de fútbol-sala son **equipos distintos**, con distinta competición y distinto `codigo_equipo` (§3.6) — por eso entra en la clave única (§3.5). **Es campo de entrada solo en el alta** ([D-66]): lo fija el club al crear el equipo y queda congelado; para los equipos que crea la ingesta lo toma de la competición (§5.1). **Nunca es campo del `PATCH`**. **`gender` se comporta exactamente igual** ([D-58]): también es identidad, también entra en la clave única (§3.5) y también lo **hereda de la competición** cuando es la ingesta quien crea el equipo —la federación no lo publica por equipo ([Anexo RFFM §F.14])—, y también es **campo de alta y no de `PATCH`** cuando lo crea el club ([D-66]). **`opponent_club_id` nulo ⇒ equipo propio** (del `Club` del tenant); no nulo ⇒ equipo rival → **`is_own` no se almacena: es derivado** (§3.6). **No lleva nombre ni escudo**: son del club. Nombre mostrado (derivado en lectura, §5) = nombre del club + `category` + `letter` → "CD Ejemplo Infantil A". **`federation_team_id`** = `codigo_equipo` de la API de la federación (§3.7): identifica al **equipo**, no al club — el mismo club tiene código distinto en cada categoría. **Anulable**: un equipo vive sin él desde que el club lo crea hasta que se engancha con la federación ([D-66], [D-67]); es también el discriminante de qué puede hacer el BFF con la fila (§5.1). "Primer Equipo" = `category=senior` + `letter="A"` (o sin letra); filial = `category=senior` + `letter="B"`                                                                                                                                                                                                                                                                                                        |
+| **TeamRegistration** (Inscripción)                 | `team_id`, `season_id`                                                                                                                                                          | **Qué equipos del club juegan en qué temporada, afirmado por el club** ([D-68]). **Solo equipos propios** (`Team.opponent_club_id IS NULL`): un rival no se inscribe, aparece porque juega. Existe porque `Team` **no lleva temporada** a propósito ([D-28]) y la participación se **deriva de `Match`** ([D-27]) — pero entre junio (el club forma el equipo) y septiembre (la federación publica calendario) **no hay `Match` del que derivar**, y §9.8/§9.9 ocurren justo en ese tramo. **Sin atributos propios, y es deliberado**: la fuente es el club, que no tiene ni fecha ni estado federativo; una retirada es **borrar la fila**. **No es la vuelta de `Participation`**: aquella era un índice de `Match` mantenido a mano; esta contiene lo que `Match` todavía no puede implicar. La escribe el `POST /v1/teams` (`seasonId` **obligatorio**, §5.1) y la añade también la cascada del enganche ([D-67]) |
 | **Competition** (Competición)                     | `season_id`, **`modality`**, **`gender`**, **`federation_competition_id`**, **`federation_group_id`**, `name`, **`age_category`**, **`division_label`**, `group_label`, `last_synced_at?`     | Instancia de liga por temporada ("Infantil · Primera · Grupo 1"). **`last_synced_at`** = última sincronización con éxito; nulo ⇒ nunca sincronizada, que es la condición bajo la cual las coordenadas externas siguen siendo editables (§5.1). `season_id` = FK al **UUID interno** de `Season` (no es el `federation_season_id`). **Los dos identificadores externos son los parámetros de la llamada al calendario** (§3.7) y **no son intercambiables**: `federation_competition_id` (`competicion=24037548`) designa **categoría de edad + división**, y `federation_group_id` (`grupo=24037549`) **solo el grupo**. Ambos **obligatorios** y **tecleados por el administrador** (pegando la URL, §5.1). **`modality`** (§3.3) es la contrapartida de dominio del parámetro `tipojuego`, que **no se almacena**: se codifica al llamar con el mapa de la federación (§3.6). **`age_category`** = mismo enumerado que `Team.category` (§3.3) → permite **validar** que un equipo solo participe en una competición de su edad, **de su modalidad y de su género**. **`gender`** (§3.3) es la tercera pieza de esa terna y llega por la misma vía que las otras dos: la federación **no publica campo de género** en ninguna entidad —lo embebe en el **nombre de la competición** ([Anexo RFFM §F.14])—, así que el `/preview` lo **infiere y lo propone**, el administrador lo **confirma** en el alta, y de aquí lo **hereda `Team`** ([D-58]). Es literalmente el tratamiento de `modality` ([D-07]) aplicado por segunda vez. **Editable solo mientras `last_synced_at` sea nulo**, con la guarda de [D-22]: después, cambiarlo desalinearía la competición de los equipos ya creados desde ella. **`division_label`** = nivel competitivo ("Primera", "Preferente", "Honor"…), **texto libre**: varía por federación y por categoría (§3.6). **`group_label`** = rótulo del grupo ("Grupo 1", "Grupo Único"), **texto libre y no deducible de `federation_group_id`**: se muestra, mientras que el id se llama (§3.7) |
 | **Round** (Jornada)                               | `competition_id`, `number`, `start_date`, `end_date`                                                                                                                            | Único(competición, número)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | **Match** (Partido)                               | `competition_id`, `round_id`, **`match_date`**, **`kickoff_time?`**, `home_team_id`, `away_team_id`, `home_score`, `away_score`, `status`, `venue?`, **`federation_match_id?`** | *scores* nullables hasta jugado; `venue?` opcional (no siempre conocido). **La fecha y la hora se separan porque el calendario nace provisional** ([D-30]): al publicarse la temporada, la federación reparte los partidos con una fecha por defecto (sábado) y **sin hora**, y solo el **domingo anterior a la semana del partido** fija la franja definitiva —que puede pasar a domingo—. `match_date` **siempre** tiene valor; `kickoff_time` es nulo mientras no se haya confirmado. Un `timestamptz` único obligaría a inventar un `00:00` indistinguible de la medianoche real. `is_kickoff_confirmed` **derivado en lectura, no se almacena** (= `kickoff_time` no nulo). Ambos campos son **volátiles** ([D-18]): confirmado **no** es inmutable —una suspensión por causa mayor los mueve— y la sincronización los pisa siempre. **`federation_match_id`** = `codacta` de la RFFM ([Anexo RFFM §F.5]); **anulable y no exigible**: es clave de emparejamiento *si* el proveedor la da, con degradación a coordenadas ([D-31])                                                                                                                                                                                                                                                                                                                           |
@@ -320,7 +326,7 @@ opcional (§3.5).
 ### 3.4 Vistas derivadas (agregaciones, no tablas base)
 
 Calculadas por consulta o vistas materializadas:
-- **Composición de la competición** (qué equipos la forman) — `DISTINCT` de `home_team_id` ∪ `away_team_id` en los `Match` de esa competición. **No es tabla** ([D-27]): la ingesta descubre los equipos *desde* el calendario, así que `Match` ya los contiene todos. `StandingRow` ofrece una segunda derivación equivalente cuando la clasificación está disponible. De aquí sale también el filtro `?seasonId=` de `GET /v1/teams` (§5).
+- **Composición de la competición** (qué equipos la forman) — `DISTINCT` de `home_team_id` ∪ `away_team_id` en los `Match` de esa competición. **No es tabla** ([D-27]): la ingesta descubre los equipos *desde* el calendario, así que `Match` ya los contiene todos. `StandingRow` ofrece una segunda derivación equivalente cuando la clasificación está disponible. De aquí sale el filtro `?seasonId=` de `GET /v1/teams` (§5) **para los equipos rivales**; los **propios** salen de `TeamRegistration`, porque en junio todavía no hay `Match` del que derivarlos ([D-68]). La derivación **no se sustituye**: se le añade un segundo sumando, y los dos conjuntos son disjuntos por construcción.
 - **Rendimiento de equipo por temporada** (Total/Local/Visitante): J, G, E, P, GF, GC, PTS — desde `Match`.
 - **Desglose de goles del equipo** (marcados/recibidos por dimensión) — desde `Goal`, filtrando directamente por `scoring_team_id = :id_del_equipo` (marcados) o `conceding_team_id = :id_del_equipo` (recibidos); **sin join** a `Match`.
 - **Estadísticas de jugador por temporada** — goles, asistencias, participaciones por estado, tarjetas — desde eventos.
@@ -333,7 +339,7 @@ Calculadas por consulta o vistas materializadas:
 - Tablas en `snake_case` plural; enums como tipos Postgres o `text` + `CHECK`.
 - Índices en FKs y en columnas de filtro frecuente (temporada, competición, jornada, equipo) **y en las usadas por RLS**. En particular, índice en `Goal.scoring_team_id` y en `Goal.conceding_team_id` (consultas de desglose de goles marcados/recibidos, §3.4).
 - *Soft delete* (`deleted_at`) opcional para entidades de edición manual (auditoría/recuperación). Caso aparte: `Season` lleva **`archived_at`** (archivado reversible, no borrado), con filtro por defecto en las lecturas (§5).
-- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), **`Card`(jugador, partido, tipo)** ([D-45]) y `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
+- Unicidades: `Season`(`label`), `Season`(`federation_season_id`), `Club`(`slug`), `OpponentClub`(`slug`), `OpponentClub`(`name`), `OpponentClub`(**`federation_club_id`**), `Team`(**`federation_team_id`**), `Team`(`opponent_club_id`, `category`, `letter`, `gender`, **`modality`**), **`TeamRegistration`(`team_id`, `season_id`)**, `Competition`(`season_id`, **`federation_group_id`**), `Round`(competición, número), **`Match`(`round_id`, `home_team_id`, `away_team_id`)**, **`Match`(**`federation_match_id`**)**, `StandingRow`(jornada, equipo), `Appearance`(jugador, partido), **`Card`(jugador, partido, tipo)** ([D-45]) y `Player`(equipo, temporada, dorsal) **entre los no borrados** — todas **dentro del *schema* del club** (§6); el dorsal se valida dentro del mismo equipo y temporada.
 - **`StaffAssignment` vuelve a caer en la trampa de los `NULL`, y con la misma salida.** Lo único a impedir es ocupar el mismo puesto sobre el mismo ámbito dos veces en la misma temporada: `(staff_member_id, staff_position_id, season_id, team_id, modality, category, gender)`. Pero las cuatro columnas de ámbito son anulables y un puesto de `scope_kind = club` las lleva **todas** nulas — así que un `UNIQUE` normal **no protegería nada**: dos filas idénticas de "Director Técnico, temporada 2024/25" no comparan iguales. Es literalmente el caso de `Team` de más abajo, y se resuelve igual: **`UNIQUE NULLS NOT DISTINCT`** (Postgres 15+, disponible en Supabase). Aquí **no** sirve el índice parcial: no hay una condición que separe los casos, hay cinco combinaciones de ámbito ([D-62]).
 - **La coherencia ámbito↔puesto es estructural, no de aplicación.** `StaffAssignment` duplica `scope_kind` desde `StaffPosition` con **FK compuesta** (`staff_position_id`, `scope_kind`) —lo que exige un `UNIQUE (id, scope_kind)` en `staff_positions`, redundante pero necesario para poder referenciarlo—, más un `CHECK` que ata `scope_kind` a qué columna de ámbito va informada. Es el **único** caso del modelo donde [D-28] autoriza copiar un campo, y precisamente por el motivo que esa decisión exige ([D-62]).
 - **Que esas unicidades sean *por tenant* no necesita nada especial: comprobado.** Al vivir cada tabla en el *schema* de su club, un índice único normal ya es único **por club** — dos clubes pueden tener a la vez la temporada `2024/25` con el mismo `federation_season_id` sin colisionar, que es el comportamiento que se quiere y el que un `UNIQUE` global impediría. No hacen falta claves compuestas con `tenant_id` ni índices parciales por club: eso sería la solución del modelo *una tabla compartida con columna discriminadora*, que no es el elegido (§6). Ejecutado contra Postgres real en el [spike de tenancy](../spikes/tenancy/README.md).
@@ -351,6 +357,12 @@ Calculadas por consulta o vistas materializadas:
   de índice parcial del punto siguiente, pero por un motivo distinto: allí para **añadir** filas que un
   `UNIQUE` normal dejaría colar, aquí para **retirar** de la comprobación las que ya no cuentan.
 - **Cuidado con los `NULL` en la unicidad de `Team`.** En Postgres los `NULL` **no comparan iguales**, así que un `UNIQUE` normal sobre (`opponent_club_id`, `category`, `letter`, `gender`, `modality`) **no protegería a los equipos propios** (todos con `opponent_club_id` nulo) — se podrían crear dos "Infantil A" propios. Dos formas de resolverlo: `UNIQUE NULLS NOT DISTINCT` (Postgres **15+**, disponible en Supabase) o un **índice único parcial** `WHERE opponent_club_id IS NULL` que complemente al normal. Lo mismo aplica a `letter`, que también es opcional.
+- **En `TeamRegistration`, un `UNIQUE` normal basta** (`team_id`, `season_id`) ([D-68]): las dos columnas son
+  **FK obligatorias**, así que no hay `NULL` que comparar y no aplica la trampa del punto anterior. Tampoco es
+  parcial: no lleva `deleted_at` —una retirada es **borrado real**, no hay historial que auditar—. Y `ON DELETE
+  CASCADE` **desde las dos**: borrar el equipo o purgar la temporada (§5.4) se lleva la inscripción por delante,
+  **nunca al revés**. Es la cascada que hay que declarar explícitamente, o la purga de [D-24] se llevaría los
+  equipos del club.
 - **La unicidad de `Competition` se queda en (`season_id`, `federation_group_id`).** Añadir `federation_competition_id` no aportaría nada: el id de grupo ya es único dentro de la temporada (identifica **un** grupo de **una** categoría+división). El de competición se guarda porque **hace falta para llamar**, no para identificar.
 - **`Competition` se identifica por (`season_id`, `federation_group_id`), no por el grupo a secas.** El identificador de grupo envuelve categoría + división + grupo (§3.7), pero **no la temporada**: la llamada a la API externa se construye con `federation_season_id` **y** `federation_group_id`. Restringir solo por el grupo impediría tener la misma competición en dos temporadas — que es el caso normal.
 - **`season_id` no se propaga por el árbol** ([D-28]). Solo lo llevan `Competition` (FK estructural) y
@@ -595,6 +607,7 @@ través de su **raíz**; las referencias **entre** agregados son **por identidad
 | **Season** | Raíz | `SeasonRecord` | `seasons` |
 | **OpponentClub** | Raíz | `OpponentClubRecord` | `opponent_clubs` |
 | **Team** | Raíz | `TeamRecord` | `teams` |
+| TeamRegistration | Interna de **Team** | `TeamRegistrationRecord` | `team_registrations` |
 | **Player** | Raíz | `PlayerRecord` | `players` |
 | Absence | Interna de **Player** | `AbsenceRecord` | `absences` |
 | **Competition** | Raíz | `CompetitionRecord` | `competitions` |
@@ -616,6 +629,10 @@ través de su **raíz**; las referencias **entre** agregados son **por identidad
   club, `Team` es referenciado **por id** desde `Match` y `StandingRow` —agregados
   distintos—, y los equipos **propios** ni siquiera tienen `OpponentClub`. Meterlo dentro obligaría a cargar
   el club para tocar un equipo y dejaría a los propios sin raíz. Se referencian **por identidad**.
+- **`TeamRegistration` interna de `Team`, no raíz** ([D-68]): no tiene ciclo de vida propio —se escribe y se
+  borra desde la página del equipo— y su consistencia es la del equipo. Referencia a `Season` **por identidad**,
+  como el resto del modelo. **No es un agregado nuevo disfrazado de pivote**: no hay `TeamRegistrationResponse`
+  ni ruta por `{registrationId}` (§5.1), que era exactamente el síntoma que delató a `Participation` ([D-27]).
 - **Tensión con la estadística (lectura) y su resolución.** Un diseño de agregados puro optimiza la
   **escritura/consistencia**, pero esta app es intensiva en **lectura** con `Goal` **denormalizado** para
   filtrar "sin *join*" (§3.6). No se fuerzan esas consultas a pasar por la raíz `Match`: las agregaciones de
@@ -686,10 +703,14 @@ siempre entrega **ids**, §4.1):
 - **`@OptionalParent`** para FK *nullable*: `GoalRecord` → `scorer_player_id`/`assist_player_id`.
 - **`PlayerRecord` con doble `@Parent`** (`team_id` **y** `season_id`): "un jugador en un equipo en una
   temporada" (§3.6).
+- **`TeamRegistrationRecord`, también con doble `@Parent`** (`team_id` **y** `season_id`) ([D-68]): misma
+  forma que `PlayerRecord` y por la misma razón — la fila *es* el par. Sin campos propios, sin `deleted_at`.
 - **Sin `@Siblings` ni pivote para la N:N `Competition`↔`Team`** ([D-27]): esa relación **no se materializa**.
   Los equipos de una competición se obtienen por **consulta de lectura** (§4.5) sobre `MatchRecord`
   (`DISTINCT` de `home_team_id` ∪ `away_team_id`), que es de donde la ingesta los saca (§3.7). Es coherente
-  con el resto del §4.5: lo derivado se sirve por puerto de lectura, no por relación del ORM.
+  con el resto del §4.5: lo derivado se sirve por puerto de lectura, no por relación del ORM. **`Team`↔`Season`
+  sí se materializa, y no es una excepción a esto** ([D-68]): aquella era derivable de `MatchRecord` y esta no
+  —en junio no hay partidos—, que es justo el criterio que separa la tabla de la consulta.
 
 **Mapeo Record ↔ Entidad** (lo hace la implementación del repositorio):
 
@@ -787,7 +808,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   (`schema(...).id().field(...).unique(on:).create()`) y `revert(on:)` simétrico.
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
   (`app.migrations.add(...)`), no el nombre de fichero:
-  `Club → Season → OpponentClub → Team → Competition → Round → Match → StandingRow → Player → Absence →
+  `Club → Season → OpponentClub → Team → TeamRegistration → Competition → Round → Match → StandingRow → Player → Absence →
   Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket →
   StaffMember → StaffPosition → PositionPermission → StaffAssignment`.
 - **Las cuatro de *staff* (§7.3) van al final** porque `StaffAssignment` depende de `StaffMember`,
@@ -895,7 +916,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 
 *Superficie REST que consumen backoffice (escritura) y apps móviles (lectura). Cada endpoint es un
 **adaptador primario** (Controller) que mapea DTO ↔ dominio, invoca un **caso de uso** y usa el
-**repositorio** (§4.3). **El contrato está completo: las 19 entidades de §3.2 tienen sus endpoints**, y cada
+**repositorio** (§4.3). **El contrato está completo: las 20 entidades de §3.2 tienen sus endpoints**, y cada
 una fija una plantilla que reutilizan las siguientes:*
 
 | Plantilla | Recurso que la fija | Rasgos |
@@ -903,7 +924,8 @@ una fija una plantilla que reutilizan las siguientes:*
 | *Singleton* del tenant | `Club` | sin plural, sin `{id}`, sin `POST`/`DELETE` |
 | Recurso gestionado | `Season` | CRUD completo + sub-recursos de estado (`/archive`) |
 | **Entrada** de la ingesta | `Competition` | `POST` en dos pasos (`/preview` + alta), `PATCH` con guarda |
-| Recurso ingerido **corregible** | `Team`, `OpponentClub` | solo `GET` + `PATCH` de corrección |
+| Recurso del club **emparejable** | `Team` | CRUD mientras no esté emparejado + enganche con la federación ([D-66], [D-67]) |
+| Recurso ingerido **corregible** | `OpponentClub` | solo `GET` + `PATCH` de corrección |
 | Recurso ingerido **de solo lectura** | `Round` | solo `GET`; ningún DTO de escritura |
 | Colección ingerida **grande** | `Match` | ámbito obligatorio + paginación + proyecciones embebidas |
 | **Modelo de lectura puro** | `StandingRow`, `LeagueScorer` | un solo endpoint, sin `{id}`, orden fijo |
@@ -922,37 +944,49 @@ de estado** para acciones (p. ej. `/archive`); mutaciones parciales con **PATCH*
 El modelo de datos (§3) es común a los dos módulos, pero **cada entidad tiene un solo dueño de escritura**
 (§2.1). De ahí la regla que gobierna toda esta sección:
 
-> **El BFF *corrige* lo que la ingesta trae; nunca lo *crea* ni lo *borra*.**
+> **El BFF *corrige* lo que la ingesta trae; no *crea* ni *borra* filas *emparejadas* con la federación.**
 
 Corregir es inocuo frente al emparejamiento; **crear y borrar bifurcan la identidad** — una fila creada a
 mano nace sin código de federación y la siguiente sincronización la duplica; una fila borrada que la
 federación sigue publicando reaparece. El razonamiento completo, y por qué caen las dos excepciones que
 tenía la versión anterior de este contrato, en [D-21].
 
+**La cláusula «emparejadas» no es un matiz, es lo que hace la regla verdadera** ([D-66]). Una fila con
+`federation_team_id` nulo **no tiene segundo escritor**: la federación no sabe que existe, así que ni puede
+duplicarla al sincronizar ni puede resucitarla tras borrarla. Eso es lo que permite a `Team` —y **solo** a
+`Team`, porque es la única entidad que el club forma **antes** de que la federación publique nada— tener
+`POST` y `DELETE` mientras esté sin emparejar. Su contrapartida es la mitad que sostiene la regla: **la
+ingesta no crea equipos propios**; todo lo que encuentra y no reconoce es, por construcción, de un
+`OpponentClub`.
+
 **Matriz de propiedad** (§2.1 da el reparto por papeles; aquí, operación a operación):
 
-| Entidad | Papel | POST | GET | PATCH | DELETE |
-|---------|-------|:----:|:---:|:-----:|:------:|
-| `Club` | tenant (provisión) | ✗ *(el alta es provisión, §6.3)* | ✓ | ✓ | ✗ *(la baja es del plano de control)* |
-| `Season` | **entrada de ingesta** | ✓ | ✓ | ✓ | ✓ |
-| `Competition` | **entrada de ingesta** | ✓ *(+ `/preview`)* | ✓ | ✓ *(con guarda)* | ✓ |
-| `OpponentClub` | salida de ingesta | ✗ | ✓ | ✓ *(corrección)* | ✗ *(→ fusión)* |
-| `Team` | salida de ingesta | ✗ | ✓ | ✓ *(corrección)* | ✗ *(→ `/ownership`)* |
-| `Round` | salida de ingesta | ✗ | ✓ | ✗ | ✗ |
-| `Match` | salida de ingesta | ✗ | ✓ | ✗ | ✗ |
-| `StandingRow`, `LeagueScorer` | salida de ingesta | ✗ | ✓ | ✗ | ✗ |
-| `Player`, `Absence` | dominio manual | ✓ | ✓ | ✓ | ✓ |
-| `Goal`, `Card`, `Appearance` | dominio manual | ✓ | ✓ | ✓ | ✓ |
-| `CompetitionSanctionBracket` | dominio manual (**configuración**) | ✗ | ✓ | ✗ | ✗ — **`PUT` del conjunto** ([D-50]) |
-| `StaffMember` | **control de acceso** | ✓ | ✓ | ✓ | ✓ *(lógico)* |
-| `StaffPosition` | **control de acceso** | ✓ | ✓ | ✓ | ✓ *(lógico)* |
-| `PositionPermission` | control de acceso (**configuración**) | ✗ | ✓ | ✗ | ✗ — **`PUT` del conjunto**, como [D-50] |
-| `StaffAssignment` | **control de acceso** | ✓ | ✓ | ✗ *(es identidad, [D-37])* | ✓ *(lógico)* |
+| Entidad                       | Papel                                 |               POST               | GET |           PATCH            |                 DELETE                  |
+| ----------------------------- | ------------------------------------- | :------------------------------: | :-: | :------------------------: | :-------------------------------------: |
+| `Club`                        | tenant (provisión)                    | ✗ *(el alta es provisión, §6.3)* |  ✓  |             ✓              |  ✗ *(la baja es del plano de control)*  |
+| `Season`                      | **entrada de ingesta**                |                ✓                 |  ✓  |             ✓              |                    ✓                    |
+| `Competition`                 | **entrada de ingesta**                |        ✓ *(+ `/preview`)*        |  ✓  |      ✓ *(con guarda)*      |                    ✓                    |
+| `OpponentClub`                | salida de ingesta                     |                ✗                 |  ✓  |      ✓ *(corrección)*      |             ✗ *(→ fusión)*              |
+| `Team`                        | **del club**, emparejable             |     ✓ *([D-66])*     |  ✓  |      ✓ *(corrección)*      | ✓ *sin emparejar* · ✗ *emparejado* (→ `/ownership`) |
+| `Round`                       | salida de ingesta                     |                ✗                 |  ✓  |             ✗              |                    ✗                    |
+| `Match`                       | salida de ingesta                     |                ✗                 |  ✓  |             ✗              |                    ✗                    |
+| `StandingRow`, `LeagueScorer` | salida de ingesta                     |                ✗                 |  ✓  |             ✗              |                    ✗                    |
+| `Player`, `Absence`           | dominio manual                        |                ✓                 |  ✓  |             ✓              |                    ✓                    |
+| `Goal`, `Card`, `Appearance`  | dominio manual                        |                ✓                 |  ✓  |             ✓              |                    ✓                    |
+| `CompetitionSanctionBracket`  | dominio manual (**configuración**)    |                ✗                 |  ✓  |             ✗              |   ✗ — **`PUT` del conjunto** ([D-50])   |
+| `StaffMember`                 | **control de acceso**                 |                ✓                 |  ✓  |             ✓              |              ✓ *(lógico)*               |
+| `StaffPosition`               | **control de acceso**                 |                ✓                 |  ✓  |             ✓              |              ✓ *(lógico)*               |
+| `PositionPermission`          | control de acceso (**configuración**) |                ✗                 |  ✓  |             ✗              | ✗ — **`PUT` del conjunto**, como [D-50] |
+| `StaffAssignment`             | **control de acceso**                 |                ✓                 |  ✓  | ✗ *(es identidad, [D-37])* |              ✓ *(lógico)*               |
 
 Tres lecturas que no son evidentes en la tabla:
 
 - **`Competition` es entrada, no salida** ([D-22]): es el parámetro que la ingesta necesita para arrancar,
   igual que `Season`. Sin `POST` no hay forma de empezar.
+- **`Team` no es salida de la ingesta: es del club** ([D-66]). El club forma el equipo, lo inscribe en la
+  federación y **solo entonces** la federación publica calendario. La federación es fuente de verdad del
+  **calendario**, no del **equipo**. Sin esto, el tramo junio-septiembre —donde ocurren §9.8 y §9.9— era
+  inexpresable: sin `Team` no hay `Player` ([D-05]) ni `StaffAssignment` ([D-60]).
 - **`Match` queda de solo lectura en el BFF**: el detalle manual son sus **hijos** (`Goal`, `Card`,
   `Appearance`), no sus campos. *Consecuencia asumida:* **no hay amistosos** — fuera de alcance ([D-21]).
 - **El *fallback* de clasificación es cálculo, no formulario** ([D-15]), para que `StandingRow` conserve un
@@ -1021,20 +1055,54 @@ Tres lecturas que no son evidentes en la tabla:
 
 | Método | Ruta | Caso de uso | Éxito | Errores |
 |--------|------|-------------|-------|---------|
+| **POST** | `/v1/teams` | `CreateTeam` | **201** + `TeamResponse` | 400, **403** (rol), **404** (temporada inexistente), 409 (ya existe ese equipo) |
 | **GET** | `/v1/teams` | `ListTeams` | **200** + `[TeamResponse]` | — |
 | **GET** | `/v1/teams/{id}` | `GetTeam` | **200** + `TeamResponse` | 404 |
 | **PATCH** | `/v1/teams/{id}` | `UpdateTeam` | **200** + `TeamResponse` | 400, 404, 409 |
+| **DELETE** | `/v1/teams/{id}` | `DeleteTeam` | **204** | 404, **403** (rol), **409** (emparejado, o con dependientes) |
+| **POST** | `/v1/teams/{id}/federation-link/preview` | `PreviewFederationLink` | **200** + `FederationLinkPreviewResponse` (no persiste) | 400 (URL no reconocible), **403** (rol), **502/504** (federación) |
+| **POST** | `/v1/teams/{id}/federation-link` | `LinkTeamToFederation` | **202** + `IngestJobResponse` | 400, **403** (rol), 404, **409** (ya emparejado a otro grupo / conflicto de identidad) |
 | **PUT** | `/v1/teams/{id}/ownership` | `ClaimTeam` | **204** (idempotente) | 404, **403** (rol), **409** (ya reclamado por otro) |
 | **DELETE** | `/v1/teams/{id}/ownership` | `ReleaseTeam` | **204** (idempotente) | 404, **403** (rol) |
+| **PUT** | `/v1/teams/{id}/registrations/{seasonId}` | `RegisterTeamInSeason` | **204** (idempotente) | 404, **403** (rol), **409** (equipo rival) |
+| **DELETE** | `/v1/teams/{id}/registrations/{seasonId}` | `UnregisterTeamFromSeason` | **204** (idempotente) | 404, **403** (rol) |
 
-- **Sin `POST` ni `DELETE`, ni siquiera para equipos propios** ([D-21]): el alta manual no solo duplicaba,
-  **bloqueaba el *onboarding*** con un 409 de unicidad sin salida. "Quitar" un equipo propio es
-  **liberarlo**, no borrarlo.
+- **`Team` tiene `POST` porque el equipo es del club, no de la federación** ([D-66]). Se crea con datos del
+  club —`category`, `letter`, `gender`, `modality`— y **sin un solo dato de federación**. Es lo que permite
+  dar de alta plantilla ([D-05]) y cargos ([D-60]) en junio, meses antes de que exista calendario.
+- **`gender` y `modality` son identidad de nacimiento**: van en el `POST`, entran en la clave única (§3.5) y
+  quedan **congelados** — el patrón de [D-37]. Siguen **fuera del `PATCH`** ([D-58]): crear no es corregir.
+- **`DELETE` solo mientras no esté emparejado.** Con `federation_team_id` ya escrito devuelve **409**: la
+  federación lo sigue publicando y reaparecería en la siguiente pasada ([D-21]). Para un equipo emparejado,
+  "quitarlo" es **liberarlo** con `DELETE /ownership`, no borrarlo.
+- **`/federation-link` es el enganche** ([D-67]) y el **único camino que lleva a sincronizar**. El
+  administrador pega en la página del equipo la URL del calendario; el `preview` devuelve la temporada, la
+  competición y la lista de equipos del grupo, y él señala cuál es el suyo (`ownTeamFederationId`,
+  **obligatorio** aquí). Al confirmar se escribe `Team.federation_team_id`, se crea o reutiliza la
+  `Competition` —y la `Season` si no existía, con la etiqueta leída de `seasons[]` ([Anexo RFFM §F.7])— y se
+  **encola** la primera ingesta.
+- **Devuelve 202, no 201, y no es un detalle de implementación:** la primera ingesta no puede ser síncrona.
+  En la RFFM el calendario es 1 petición; en la **FCF son ~34** (§5.6), contra HTML raspado y con el cuidado
+  campo a campo de [D-56]. En línea, el flujo funcionaría en Madrid y daría *timeout* en Cataluña.
+- **Es aditivo:** un equipo juega liga **y** copa ([D-12]), así que se engancha una vez por competición. Y si
+  dos equipos del club caen en el mismo grupo, el segundo enganche **reutiliza** la competición en vez de
+  crearla (`alreadyRegistered` en el `preview`).
 - **`/ownership` fija la propiedad** ([D-20]): pone `opponent_club_id` a nulo y, del `OpponentClub` que la
   ingesta le había asignado, toma el nombre y el escudo para rellenar `Club`. Es una **orquestación**, por
-  eso es sub-recurso de estado y no una relajación del `PATCH`. La ingesta **no la revierte** ([D-18]). Desde
-  que el alta de competición permite marcar el equipo propio, esto es el **mecanismo de corrección**, no el
-  camino feliz.
+  eso es sub-recurso de estado y no una relajación del `PATCH`. La ingesta **no la revierte** ([D-18]). Con
+  el enganche obligatorio de [D-67], esto queda como **corrección pura**: el camino feliz ya no pasa por
+  aquí.
+- **El `POST` lleva `seasonId`, y es obligatorio: un equipo nace inscrito** ([D-68]). No es un quinto campo de
+  identidad —no entra en la clave única (§3.5) y se puede cambiar después con `/registrations`—, es la
+  **inscripción con la que nace**. Sin él existiría el estado "equipo creado, inscrito en ninguna parte", que es
+  **invisible en todas las pantallas**: el mismo movimiento con el que [D-67] hizo obligatorio
+  `ownTeamFederationId`, dejar el caso malo fuera del camino en vez de gestionarlo.
+- **`/registrations` inscribe y retira, y es lo que hace contestable el `?seasonId=` de junio** ([D-68]).
+  Sub-recurso de estado como `/archive` y `/ownership`, con la temporada **en la ruta** y no en el cuerpo:
+  el par (equipo, temporada) **es** el recurso, así que `PUT` es idempotente por construcción y no hay
+  `{registrationId}` que exponer. **409 si el equipo es rival**: un `OpponentClub` no se inscribe, participa
+  (§3.4). El enganche de [D-67] la crea también en su cascada, así que **todo equipo propio con calendario
+  está inscrito por construcción** y las dos mitades del filtro no pueden contradecirse.
 - **`displayName` se compone en el servidor** y solo aparece en las **respuestas**: no se envía en el `POST`,
   no se almacena en BD. Se forma con el nombre del club (`Club.name` si es propio, `OpponentClub.name` si es
   rival) + `category` + `letter`. Mismo patrón que `isCurrent` en `Season`: **derivado en lectura**.
@@ -1049,10 +1117,14 @@ Tres lecturas que no son evidentes en la tabla:
   la fila del equipo **sin una segunda llamada** ni *join* propio.
 - **Filtros de `GET /v1/teams`:** `?isOwn=true|false`, `?category=`, `?gender=`, `?modality=`,
   `?opponentClubId=` y **`?seasonId=`**. Este último merece explicación: **`Team` no tiene temporada** (§3.2)
-  — "Infantil A" es la misma entidad año tras año. `?seasonId=` filtra **por participación**, que **no es una
-  tabla sino una derivación** ([D-27]): equipos con algún `Match` —como local o como visitante— en alguna
-  `Competition` de esa temporada (§3.4). Se apoya en los índices compuestos de `Match` (§4.6). Sin paginación,
-  como `Season` (colección pequeña por club).
+  — "Infantil A" es la misma entidad año tras año. `?seasonId=` responde con una **unión asimétrica** ([D-68]),
+  porque las dos mitades del club no llegan por la misma puerta: los equipos **propios** salen de
+  `TeamRegistration` —el club los inscribe en junio, cuando todavía no hay un solo `Match`—, y los **rivales**
+  de la **derivación por participación** de [D-27]: equipos con algún `Match`, como local o como visitante, en
+  alguna `Competition` de esa temporada (§3.4). Los dos conjuntos son **disjuntos** (un rival nunca se
+  inscribe), así que no hay contradicción posible, solo dos sumandos. Se apoya en la clave de
+  `TeamRegistration` y en los índices compuestos de `Match` (§4.6). Sin paginación, como `Season` (colección
+  pequeña por club). **Desde fuera el filtro no ha cambiado de significado**: cambió de dónde sale.
 
 **`Competition`:**
 
@@ -1072,13 +1144,16 @@ Tres lecturas que no son evidentes en la tabla:
   grupo, **género**, jornadas y **la lista de equipos**. `POST /v1/competitions` confirma. Es **verificación**,
   no descubrimiento: no expone la navegación de la federación (§5.6). El porqué —de esos cuatro números cuelga
   todo el árbol y un dígito mal no da error— en [D-16].
+- **Pero ese ya no es el camino del administrador** ([D-67]). Con `Team` creado por el club, la URL se pega
+  **en la página del equipo** (`POST /v1/teams/{id}/federation-link`), que es donde el emparejamiento con el
+  equipo local lo lleva la ruta en vez de haber que deducirlo. Estos dos endpoints se conservan como la
+  **vía estable para semillas, *scripts* y tests** —la Decisión 3 de [D-22]— y por eso ya **no llevan
+  `ownTeamFederationId`**: se mudó al enganche.
 - **El `gender` que devuelve el `/preview` es una *propuesta*, no un hecho** ([D-58]). Sale de buscar el
   marcador `FEMENINO` en el nombre de la competición ([Anexo RFFM §F.14]), así que el administrador tiene que
   poder cambiarlo antes de confirmar: `mixto` **no es expresable** en la fuente y el rótulo puede llegar
   truncado. Va en el cuerpo del `POST` como campo propio, no como derivado — es la diferencia entre lo que la
   máquina deduce y lo que el club afirma.
-- **Marcar ahí el equipo propio** (`ownTeamFederationId`) hace que la ingesta lo cree **directamente como
-  propio**, sin pasar por rival ([D-20]). Opcional.
 - **`POST` acepta también la forma descompuesta** (modalidad + los dos ids) además de la URL: aquella es la
   vía cómoda para un humano, esta la estable para semillas, *scripts* y tests. Se almacenan siempre los
   campos; **la URL no se guarda**, se reconstruye (§3.7).
@@ -1542,9 +1617,13 @@ struct SeasonResponse: Content {
 **Convenciones y decisiones de contrato:**
 
 - **Qué DTOs de alta NO existen, y por qué importa.** No hay `CreateClubRequest` (el alta es provisión,
-  [D-23]) ni `CreateTeamRequest`/`CreateOpponentClubRequest` (son entidades de **salida** de la ingesta,
-  [D-21]). Que el DTO **no exista** —en vez de existir con validaciones que lo impidan— es la forma más
-  barata de que la frontera no se salte por descuido: el generador ni siquiera produce el *stub*.
+  [D-23]) ni `CreateOpponentClubRequest`, `CreateRoundRequest` o `CreateMatchRequest` (son entidades de
+  **salida** de la ingesta, [D-21]). Que el DTO **no exista** —en vez de existir con validaciones que lo
+  impidan— es la forma más barata de que la frontera no se salte por descuido: el generador ni siquiera
+  produce el *stub*. **`CreateTeamRequest` sí existe** ([D-66]): `Team` no es salida de la ingesta sino del
+  club, y lleva `category`, `letter`, `gender` y `modality` —los cuatro de identidad, congelados tras el
+  alta—, más **`seasonId`** ([D-68]), que **no** es identidad sino la temporada en la que el equipo queda
+  inscrito al nacer, y **ningún** campo de federación.
 - **`Round` lleva el caso al extremo: un solo DTO.** No hay `CreateRoundRequest` **ni
   `UpdateRoundRequest`** — fue el primer recurso redactado con respuesta pero sin ningún DTO de escritura
   (§5.1). Es la plantilla del **recurso ingerido de solo lectura**, que siguieron `Match`, `StandingRow` y
@@ -1556,11 +1635,12 @@ struct SeasonResponse: Content {
   proyecciones sigue siendo el de [D-32] —**embeber lo que varía dentro de la página**—, y aquí lo que
   varía es la ausencia, no el jugador.
 - **`Player` completa el juego de tres DTOs, y es el primero en dejar campos fuera del `PATCH` por
-  *identidad* y no por *propiedad*.** En `Team`, `modality` y `gender` no son editables porque los escribe la
-  ingesta ([D-21], [D-58]) además de ser identidad; en `Player`, `teamId` y `seasonId` los escribe el mismo administrador
-  que hace el `PATCH` —nadie discute la propiedad— y aun así no están: cambiarlos no sería corregir un
-  dato, sería reasignar el historial a otro equipo ([D-37]). Que el DTO no los lleve es lo que hace la
-  regla verificable por el generador, igual que la ausencia de `CreateTeamRequest`.
+  *identidad* y no por *propiedad*.** En `Team`, `modality` y `gender` quedaron fuera del `PATCH` por las dos
+  razones a la vez ([D-58]) y hoy, con el alta del club ([D-66]), **solo** por identidad: se escriben al
+  crear y se congelan. En `Player`, `teamId` y `seasonId` los escribe el mismo administrador que hace el
+  `PATCH` —nadie discute la propiedad— y aun así no están: cambiarlos no sería corregir un dato, sería
+  reasignar el historial a otro equipo ([D-37]). Que el DTO no los lleve es lo que hace la regla verificable
+  por el generador.
 - **`PlayerResponse` no embebe el equipo** aunque `MatchResponse` y `StandingResponse` sí lo hagan: dentro
   de una plantilla el equipo es **constante** —lo acaba de pedir el cliente como ámbito—, así que un
   `TeamRef` por fila sería la columna repetida que [D-28] y [D-29] ya rechazaron en otro sitio. El criterio
@@ -1742,6 +1822,10 @@ struct SeasonResponse: Content {
     caducado, alterado o no corresponde a esta temporada. (`If-Match` se usa aquí como portador del token de
     confirmación —una cabecera dedicada sería equivalente, pero perdería la semántica de precondición.)
   - Se **audita** (quién, cuándo, impacto confirmado). Es la contrapartida al **409** de un DELETE normal.
+  - **La cascada alcanza `TeamRegistration`, y ahí se detiene** ([D-68]). Purgar una temporada borra las
+    inscripciones de esa temporada, **nunca los equipos**: `Team` es estable entre temporadas a propósito
+    (§3.2) y llevárselo por delante destruiría la plantilla y los cargos de todos los demás años. Es una
+    cascada que hay que **declarar** en la migración (§3.5), no una que salga sola.
   - **La purga debe sacar la temporada del alcance de sincronización**, o parte de lo borrado **vuelve**. Los
     datos personales (`Player`, `Goal`, `Card`, `Appearance`, `Absence`) son de entrada manual y no
     reaparecen —el propósito RGPD se cumple—, pero `Match` y `StandingRow` los sigue publicando la
@@ -1752,7 +1836,7 @@ struct SeasonResponse: Content {
 ### 5.5 OpenAPI
 
 - **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
-  (OpenAPI **3.1**). Cubre **las 19 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
+  (OpenAPI **3.1**). Cubre **las 20 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
   valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
 - **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
   queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
@@ -1788,8 +1872,11 @@ struct SeasonResponse: Content {
     `crestUrl`, `slug`, `modality`, `lastSyncedAt`) y en los derivados. **El generador lo ignora**, así que el
     campo *sí* aparece en el tipo de escritura: vale para el *linter* y la documentación publicada, no para
     quitar la tentación de escribirlo ([D-65]).
-  - **Ausencia del esquema de alta** en las entidades de salida — no hay `CreateTeamRequest` que rellenar.
-    Este es **estructural**: no hay tipo generado, así que la regla no depende de que nadie la recuerde.
+  - **Ausencia del esquema de alta** en las entidades de salida — no hay `CreateOpponentClubRequest`,
+    `CreateRoundRequest` ni `CreateMatchRequest` que rellenar. Este es **estructural**: no hay tipo generado,
+    así que la regla no depende de que nadie la recuerde. **`Team` es la excepción declarada** ([D-66]):
+    `CreateTeamRequest` sí existe, porque el equipo es del club y no de la ingesta; ahí lo que sostiene la
+    frontera no es la ausencia del tipo sino que la **ingesta no crea propios** (§5.1).
   - Cada `tag` declara en su descripción **quién escribe** el recurso, para que la frontera se lea también
     desde la documentación publicada.
 
@@ -2207,7 +2294,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     pico**. La medida se tomó en 10 núcleos; un *runner* con menos pedirá menos. Y es un **suelo**: el spike
     compila una entidad y cero capas (§2.2), así que conviene repetirla cuando el backend tenga forma.
   - **Y hay un motivo concreto para repetirla:** *design-first* ([D-65]) mete un **plugin de generación en
-    tiempo de compilación** que produce Swift para las 19 entidades del *spec*. Es exactamente el tipo de
+    tiempo de compilación** que produce Swift para las 20 entidades del *spec*. Es exactamente el tipo de
     cambio que levanta el suelo, así que la medición se rehace **con el plugin dentro**, no antes.
 
 > Resto pendiente.
@@ -2228,7 +2315,12 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    **fallo a mitad de recorrido** (qué pasa con los clubes ya migrados cuando el número 30 revienta) y el
    **paralelismo** entre clubes, que a 50 clubes deja de ser una cuestión estética.
 4. Estrategia de retención (RGPD, datos de menores): política de **archivado** (`Season.archived_at`, reversible, §5) frente a **erasure** físico (`DELETE ?cascade=true`) — plazos de conservación y "derecho al olvido" por decidir. El *mecanismo* ya está ([D-24]); falta la **política**.
-5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado.
+5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el
+   `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado. **Sigue abierta,
+   pero fuera del camino feliz** ([D-67]): al hacer obligatorio el enganche del equipo propio, el caso que la
+   habría convertido en bloqueante —la ingesta creando como rival un equipo que el club ya tenía— no llega a
+   producirse. Queda para los duplicados que nazcan de un cambio de escudo o de un fallo de emparejamiento
+   del proveedor ([Anexo RFFM §F.4]).
 6. **Política de refresco de escudos** ([D-19]).
 7. **Caducidad de la URL firmada** de fotos y escudos ([D-35], [D-19]): la ruta de subida y el saneado ya
    están fijados (§5.1), pero el plazo concreto de la firma —y si se renueva en cada lectura o se cachea—
@@ -2237,7 +2329,9 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    ([D-05]), cada verano hay que teclear ~25 fichas por equipo que en su mayoría son las del año anterior.
    El remedio natural es un alta en bloque o un "clonar plantilla de", pero **no se diseña todavía**:
    depende de si la promoción de categoría se resuelve por copia o por otra vía, y el CRUD de §5.1 no lo
-   prejuzga.
+   prejuzga. **Lo que sí tiene ya es dónde colgarse**: inscribir el equipo en la temporada nueva
+   (`PUT /v1/teams/{id}/registrations/{seasonId}`, [D-68]) es el gancho natural del "clonar de la anterior",
+   que es lo que faltaba cuando esta cuestión se abrió.
 9. **Arrastrar las *asignaciones de staff* entre temporadas.** `StaffAssignment` lleva `season_id` por
    identidad (§3.2), así que hereda literalmente el problema de §9.8: cada verano hay que rehacer los
    cargos. Lo que se decida allí aplica aquí, y conviene resolverlas **juntas** — son la misma pregunta
@@ -2321,6 +2415,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo de Decisiones]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

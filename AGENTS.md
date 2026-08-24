@@ -29,11 +29,23 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - **El backend son tres módulos sobre un modelo de datos común** (§2.1): **BFF** (REST para backoffice y
   apps), **ingesta** de la API de la federación, y **gestión de usuarios** (transversal).
 - **Cada entidad tiene un solo dueño de escritura** (§5.1), en tres papeles: *entrada de la ingesta*
-  (`Season`, `Competition` — las crea el administrador), *salida de la ingesta* (`Team`, `OpponentClub`,
-  `Match`, `Round`… — solo corregibles) y *dominio manual* (`Player`, `Goal`, `Card`…). Regla:
-  **el BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra.** Al tocar el spec o el LLD, respetar
-  esta frontera: no añadir `POST`/`DELETE` a entidades de salida.
-- **`modality` y `gender` los hereda `Team` de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
+  (`Season`, `Competition` — las crea el administrador), *salida de la ingesta* (`OpponentClub`, `Match`,
+  `Round`… — solo corregibles) y *dominio manual* (`Player`, `Goal`, `Card`…). Regla:
+  **el BFF corrige lo que la ingesta trae; no crea ni borra filas *emparejadas* con la federación.**
+  Al tocar el spec o el LLD, respetar esta frontera: no añadir `POST`/`DELETE` a entidades de salida.
+- **`Team` es la excepción, y es deliberada** (`D-66`): el club forma el equipo, lo inscribe en la
+  federación y **solo entonces** la federación publica calendario — es fuente de verdad del *calendario*,
+  no del *equipo*. Así que `Team` tiene `POST` (sin ningún dato de federación) y `DELETE` **mientras no
+  esté emparejado**; una fila con `federationTeamId` nulo no tiene segundo escritor. La otra mitad de la
+  regla, sin la cual esto no se sostiene: **la ingesta no crea equipos propios**, así que todo lo que
+  encuentra y no reconoce es de un `OpponentClub`. `gender` y `modality` pasan a ser identidad de alta:
+  van en `CreateTeamRequest`, nunca en el `PATCH`.
+- **El copia-pega de la URL de la federación vive en el equipo, no en la competición** (`D-67`):
+  `POST /v1/teams/{id}/federation-link` (+ su `/preview`) engancha, crea en cascada `Season` y
+  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. Es 202 porque la FCF
+  cuesta ~34 peticiones (§5.6) y en línea daría *timeout*. `POST /v1/competitions` se conserva solo como
+  vía para semillas, *scripts* y tests.
+- **`modality` y `gender`, cuando el equipo lo crea la ingesta, los hereda de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
   clave única de `Team` y **ninguno es campo de escritura de `Team`**. La federación no publica género por
   equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
   en el alta. No devolver `gender` a `UpdateTeamRequest`: una inferencia mal puesta ahí no da un dato feo, da
@@ -103,7 +115,7 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
 
 Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
-`StaffAssignment`). **El contrato queda completo: las 19 entidades del §3.2 tienen sus endpoints**). Validación:
+`StaffAssignment`), más `TeamRegistration`, la inscripción del equipo en la temporada (`D-68`). **El contrato queda completo: las 20 entidades del §3.2 tienen sus endpoints**). Validación:
 
 ```sh
 npx @redocly/cli lint backend/openapi/openapi.yaml

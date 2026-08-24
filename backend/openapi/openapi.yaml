@@ -10,7 +10,7 @@ openapi: 3.1.0
 # `tags` y `security` los **ignora** — se conservan aquí como contrato documentado y los
 # comprueba el linter. Quién hace cumplir cada cosa: LLD §5.5 (tabla) y D-65.
 #
-# Estado: **completo** — las 19 entidades de §3.2 del LLD tienen contrato.
+# Estado: **completo** — las 20 entidades de §3.2 del LLD tienen contrato.
 #
 # Referencias `§x` → docs/API_y_BBDD LLD-001.md
 # Referencias `D-nn` → docs/API_y_BBDD LLD-Anexo-Decisiones-Disenho-001.md (bitácora de decisiones)
@@ -31,13 +31,22 @@ info:
     Cada entidad tiene **un solo dueño de escritura**, y de ahí la regla que gobierna
     todo este contrato:
 
-    > El BFF **corrige** lo que la ingesta trae; nunca lo **crea** ni lo **borra**.
+    > El BFF **corrige** lo que la ingesta trae; no **crea** ni **borra** filas
+    > **emparejadas** con la federación.
 
-    Por eso `Team` y `OpponentClub` **no tienen `POST` ni `DELETE`**: una fila creada a
-    mano nacería sin identificador de federación, la ingesta no la reconocería y la
-    duplicaría; y una fila borrada reaparecería en la siguiente sincronización.
+    Por eso `OpponentClub`, `Round` y `Match` **no tienen `POST` ni `DELETE`**: una fila
+    creada a mano nacería sin identificador de federación, la ingesta no la reconocería y
+    la duplicaría; y una fila borrada reaparecería en la siguiente sincronización.
     `Season` y `Competition` sí los tienen, porque no son *salida* de la ingesta sino
     su **entrada**: la coordenada que le dice qué sincronizar.
+
+    **`Team` es distinto y tiene `POST`** (D-66): el club forma el equipo, lo inscribe en
+    la federación y **solo entonces** la federación publica calendario. La federación es
+    fuente de verdad del *calendario*, no del *equipo*. Un equipo vive **sin emparejar**
+    desde que el club lo crea hasta que se engancha (`POST /teams/{teamId}/federation-link`,
+    D-67), y mientras tanto no tiene segundo escritor: por eso admite también `DELETE`.
+    La otra mitad de la regla es que **la ingesta no crea equipos propios** — todo lo que
+    encuentra y no reconoce es, por construcción, de un `OpponentClub`.
 
     **Multi-tenancy (§6).** Ningún recurso lleva `clubId` en la ruta ni en el cuerpo:
     el club se resuelve a partir del *claim* `club_id` del JWT (y/o del subdominio) y
@@ -94,9 +103,10 @@ tags:
     description: |
       Equipos, propios y rivales.
 
-      **Escribe:** la **ingesta** — también los propios, que aparecen en la competición como cualquier
-      otro. Esta API permite **corregir** (`PATCH`) y **reclamar la propiedad** (`/ownership`), nunca
-      crear ni borrar (§5.1).
+      **Escribe:** los **propios, el club** (`POST`, y `DELETE` mientras no estén emparejados) — el club
+      forma el equipo antes de que exista calendario (D-66). Los **rivales, la ingesta**, que nunca crea
+      propios. Sobre unos y otros, esta API permite **corregir** (`PATCH`), **enganchar con la
+      federación** (`/federation-link`) y **reclamar la propiedad** (`/ownership`) (§5.1).
   - name: Rounds
     description: |
       Jornadas de una competición. **Eje de navegación** de la app: resultados y clasificación por jornada
@@ -633,14 +643,15 @@ paths:
       description: |
         **Paso 2 del alta**: confirma lo que devolvió el `preview` y lo persiste.
 
-        `Competition` **sí tiene `POST`** —a diferencia de `Team` u `OpponentClub`— porque no es *salida*
-        de la ingesta sino su **entrada** (§5.1): es la coordenada que le dice *qué* sincronizar. Sin
-        ella no hay nada que ingerir, y nadie puede descubrirla por nosotros.
+        `Competition` **sí tiene `POST`** —a diferencia de `OpponentClub`— porque no es *salida* de la
+        ingesta sino su **entrada** (§5.1): es la coordenada que le dice *qué* sincronizar. Sin ella no
+        hay nada que ingerir, y nadie puede descubrirla por nosotros.
 
-        **Marcar el equipo propio aquí ahorra la reclamación posterior.** Con
-        `ownTeamFederationId` —tomado de la lista que devolvió el `preview`— la ingesta crea ese equipo
-        **directamente como propio** en vez de como rival, y de su club salen el nombre y el escudo del
-        `Club` (§3.6). Es opcional; si se omite, queda el camino de `PUT /teams/{teamId}/ownership`.
+        **Pero este no es el camino del administrador** (D-67). Con los equipos creados por el club
+        (D-66), la URL se pega **en la página del equipo** —`POST /teams/{teamId}/federation-link`—,
+        donde el emparejamiento con el equipo local lo lleva la ruta en vez de haber que deducirlo. Este
+        endpoint y su `preview` se conservan como la **vía estable para semillas, *scripts* y tests**
+        (Decisión 3 de D-22), y por eso ya **no llevan `ownTeamFederationId`**: se mudó al enganche.
 
         Requiere **rol elevado** (§7.3): es configuración de integración, no dato del día a día.
       requestBody:
@@ -858,8 +869,17 @@ paths:
         Colección pequeña por club → **sin paginación** (§5.3).
 
         Sobre `seasonId`: **`Team` no tiene temporada** (§3.2) — "Infantil A" es la misma entidad año tras
-        año. El filtro actúa **por participación**, que no es una tabla sino una **derivación** (§3.4):
-        equipos con algún partido —como local o como visitante— en alguna `Competition` de esa temporada.
+        año. El filtro responde con una **unión asimétrica** (D-68), porque las dos mitades no llegan por
+        la misma puerta:
+
+        - **propios** → de `TeamRegistration`, la inscripción que afirma el club (`PUT
+          /teams/{teamId}/registrations/{seasonId}`). En junio el equipo ya existe y **todavía no hay un
+          solo partido** del que derivar nada;
+        - **rivales** → de la **derivación por participación** de D-27: equipos con algún partido, como
+          local o como visitante, en alguna `Competition` de esa temporada (§3.4).
+
+        Los dos conjuntos son **disjuntos** —un rival no se inscribe— así que no hay contradicción posible.
+        El significado del filtro **no ha cambiado**; cambió de dónde sale la respuesta.
       parameters:
         - name: isOwn
           in: query
@@ -907,8 +927,53 @@ paths:
                   $ref: '#/components/schemas/TeamResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
 
-    # Sin POST, tampoco para equipos propios: el alta manual no duplicaba, bloqueaba el onboarding
-    # con un 409 de unicidad sin salida (D-21).
+    post:
+      tags: [Teams]
+      operationId: createTeam
+      summary: Crea un equipo del club
+      description: |
+        **El equipo es del club, no de la federación** (D-66). El club lo forma, lo inscribe en la
+        federación y **solo entonces** la federación publica calendario: la federación es fuente de verdad
+        del *calendario*, no del *equipo*. Por eso este alta no pide **ningún** dato de federación.
+
+        Es lo que permite dar de alta plantilla (D-05) y cargos (D-60) en junio, meses antes de que exista
+        competición — el tramo donde ocurren §9.8 y §9.9 y que hasta ahora era inexpresable.
+
+        El equipo nace **sin emparejar** (`federationTeamId` nulo), **propio** (`opponentClubId` nulo) e
+        **inscrito** en la temporada que indica `seasonId` (D-68) — sin esa inscripción no aparecería bajo
+        ninguna temporada hasta tener calendario, que es justo lo que este alta adelanta. Para engancharlo
+        con la federación, `POST /teams/{teamId}/federation-link`.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeamRequest'
+      responses:
+        '201':
+          description: Equipo creado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: La temporada de `seasonId` no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: |
+            Ya existe un equipo del club con esa categoría, letra, género y modalidad (§3.5).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /teams/{teamId}:
     parameters:
@@ -933,9 +998,9 @@ paths:
       operationId: updateTeam
       summary: Corrige un equipo
       description: |
-        Actualización parcial, y **única** escritura ordinaria que esta API ofrece sobre un equipo
-        (§5.1): sirve para corregir lo que la ingesta dedujo mal, típicamente la letra separada del
-        nombre con la letra embebida ("C.D. RIVAL 'B'", §3.7).
+        Actualización parcial: sirve para corregir lo que la ingesta dedujo mal, típicamente la letra
+        separada del nombre con la letra embebida ("C.D. RIVAL 'B'", §3.7). Vale igual para los equipos
+        propios que crea el club (D-66) y para los rivales que trae la ingesta.
 
         **No permite cambiar de club**: `opponentClubId` no es modificable — un equipo propio no se
         convierte en rival ni al revés; para eso está `/ownership`.
@@ -966,7 +1031,158 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
-    # Sin DELETE: "quitar" un equipo propio es liberarlo (DELETE /ownership), no borrarlo.
+    delete:
+      tags: [Teams]
+      operationId: deleteTeam
+      summary: Borra un equipo sin emparejar
+      description: |
+        **Solo mientras el equipo no esté emparejado con la federación** (D-66). Con `federationTeamId`
+        ya escrito devuelve **409**: la federación lo sigue publicando y reaparecería en la siguiente
+        sincronización (D-21). Para un equipo emparejado, "quitarlo" es **liberarlo** con
+        `DELETE /teams/{teamId}/ownership`, no borrarlo.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Equipo borrado.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            El equipo está **emparejado** con la federación, o tiene dependientes (jugadores, cargos).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /teams/{teamId}/federation-link/preview:
+    parameters:
+      - $ref: '#/components/parameters/TeamId'
+
+    post:
+      tags: [Teams]
+      operationId: previewFederationLink
+      summary: Verifica el calendario antes de engancharlo al equipo
+      description: |
+        Primer paso del enganche (D-67). Recibe **la URL del calendario pegada del navegador**, la
+        descompone, llama a la federación y devuelve lo que hay ahí. **No persiste nada.**
+
+        Es **verificación, no descubrimiento**: no expone la navegación de la federación (§5.6). De esos
+        cuatro números cuelga todo el árbol y un dígito mal no da error —devuelve otra cosa, o vacío— así
+        que un humano tiene que reconocer su club en `teams[]` antes de confirmar (D-16).
+
+        Única ruta síncrona con latencia de terceros junto a su gemela de competiciones: *timeout* corto y
+        **502/504** explícitos (§5.4).
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationLinkPreviewRequest'
+      responses:
+        '200':
+          description: Lo que hay en la coordenada. Nada persistido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederationLinkPreviewResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502':
+          description: La federación respondió con un error o con un cuerpo no interpretable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '504':
+          description: La federación no respondió dentro del *timeout*.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /teams/{teamId}/federation-link:
+    parameters:
+      - $ref: '#/components/parameters/TeamId'
+
+    post:
+      tags: [Teams]
+      operationId: linkTeamToFederation
+      summary: Engancha el equipo con su competición en la federación
+      description: |
+        Segundo paso del enganche (D-67), y **el único camino que lleva a sincronizar**.
+
+        **Por qué se pega aquí y no en el alta de competición.** `ownTeamFederationId` dice *qué código de
+        federación es del club*, no *a cuál de sus equipos corresponde*. Con doce equipos creados a mano,
+        deducirlo en silencio recrearía el duplicado que D-66 evita. Pegando desde la página del equipo,
+        **el emparejamiento lo lleva la ruta**.
+
+        **Qué crea, en cascada:**
+
+        1. **`Season`** — si el `temporada=…` de la URL no corresponde a ninguna del club. La etiqueta
+           ("2024/25") no es deducible del código (`21`), pero el `preview` la lee de `seasons[]`, que va
+           incrustado en la propia página del calendario (§F.7 del anexo RFFM).
+        2. **`Competition`** — creada, o **reutilizada** si ya existía: dos equipos del club pueden caer en
+           el mismo grupo, y el segundo enganche no puede volver a crearla (`alreadyRegistered`).
+        3. **`TeamRegistration`** — la inscripción del equipo en esa temporada, si no la tenía ya (D-68).
+           Es lo que hace que **todo equipo propio con calendario esté inscrito por construcción**, y por
+           tanto que las dos mitades del filtro `?seasonId=` no puedan contradecirse.
+        4. **`Team.federationTeamId`** — el enganche propiamente dicho.
+        5. **`Round`, `Match`, `OpponentClub`** y sus equipos — los trae la primera ingesta.
+
+        **Devuelve 202, no 201, y no es un detalle de implementación:** la primera ingesta no puede ser
+        síncrona. En la RFFM el calendario es 1 petición; en la **FCF son ~34** (§5.6), contra HTML
+        raspado y con el cuidado campo a campo de D-56. En línea, esto funcionaría en Madrid y daría
+        *timeout* en Cataluña. Se **encola** y se devuelve algo que consultar.
+
+        **Es aditivo**: un equipo juega liga *y* copa (D-12), así que se engancha una vez por competición.
+
+        Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FederationLinkRequest'
+      responses:
+        '202':
+          description: |
+            Enganche escrito y primera ingesta **encolada**. El cuerpo trae con qué seguirla.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestJobResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            El equipo ya está emparejado con otro grupo, ese `federationTeamId` ya pertenece a otro
+            equipo, o la identidad no cuadra: la competición dice un `gender`/`modality` distinto del
+            que el equipo tiene congelado desde su alta (D-66). A diferencia del 409 de D-21, **este
+            tiene salida**: se engancha otro equipo, o se corrige antes de confirmar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: La federación respondió con un error o con un cuerpo no interpretable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '504':
+          description: La federación no respondió dentro del *timeout*.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /teams/{teamId}/ownership:
     parameters:
@@ -977,9 +1193,10 @@ paths:
       operationId: claimTeam
       summary: Reclama un equipo como propio
       description: |
-        **Mecanismo de corrección del *onboarding*** (D-20), no el camino feliz: lo normal es marcar el
-        equipo propio en el `preview` del alta de competición y que la ingesta lo cree ya como propio.
-        Esto cubre que no se marcara o se marcara mal.
+        **Corrección pura** (D-20, D-67), nunca el camino feliz: el club crea sus equipos (D-66) y los
+        engancha con `POST /teams/{teamId}/federation-link`, y la ingesta **no crea equipos propios**.
+        Esto cubre el caso en que un equipo del club acabó igualmente creado como rival — típicamente
+        porque nadie lo enganchó antes de la primera sincronización.
 
         **No es un cambio de campo, es una orquestación:** pone `opponentClubId` a `null` y toma del
         `OpponentClub` asignado el nombre y el escudo para rellenar el `Club`. De ahí que sea sub-recurso
@@ -1013,6 +1230,69 @@ paths:
       responses:
         '204':
           description: Reclamación deshecha.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /teams/{teamId}/registrations/{seasonId}:
+    parameters:
+      - $ref: '#/components/parameters/TeamId'
+      - $ref: '#/components/parameters/SeasonId'
+
+    put:
+      tags: [Teams]
+      operationId: registerTeamInSeason
+      summary: Inscribe el equipo en una temporada
+      description: |
+        **Lo que el club afirma antes de que haya calendario** (D-68). `Team` no tiene temporada a
+        propósito (§3.2) y la participación se deriva de los partidos (D-27) — pero entre junio, cuando el
+        club forma el equipo, y septiembre, cuando la federación publica, **no hay partidos de los que
+        derivar nada**. Esta inscripción es la que hace contestable el `?seasonId=` de junio, que es el
+        tramo donde ocurren §9.8 y §9.9.
+
+        **La temporada va en la ruta, no en el cuerpo**: el par (equipo, temporada) **es** el recurso. De
+        ahí que el `PUT` sea idempotente por construcción y que no exista un `{registrationId}` que
+        exponer — el síntoma que delató a `Participation` en su día.
+
+        **Solo equipos propios.** Un rival no se inscribe: aparece porque juega (§3.4) → **409**.
+
+        No hace falta llamarlo en el camino feliz: `POST /teams` inscribe al crear, y la cascada de
+        `/federation-link` inscribe al enganchar. Esto cubre el alta en una temporada **adicional** —el
+        arrastre de cada verano— y la corrección.
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: |
+            Equipo inscrito en la temporada. **Idempotente**: inscribirlo dos veces devuelve 204.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            El equipo es **rival** (`opponentClubId` no nulo): su participación se deriva de los partidos,
+            no se afirma (D-27, D-68).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    delete:
+      tags: [Teams]
+      operationId: unregisterTeamFromSeason
+      summary: Retira la inscripción del equipo en una temporada
+      description: |
+        Deshace la inscripción. **Una retirada es borrar la fila**: no hay columna de estado, porque la
+        fuente es el club y el club no tiene estado federativo que registrar (D-68).
+
+        **No borra el equipo** ni sus jugadores: `Team` es estable entre temporadas (§3.2) y `Player` lleva
+        su propia `seasonId` (D-05). Retirar la inscripción solo lo saca de `GET /teams?seasonId=` para
+        **esa** temporada.
+
+        **Idempotente**. Requiere **rol elevado** (§7.3).
+      responses:
+        '204':
+          description: Inscripción retirada, o no existía.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -3734,7 +4014,7 @@ components:
       properties:
         federationTeamId:
           type: string
-          description: '`codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al confirmar.'
+          description: '`codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al enganchar (D-67).'
           examples: ['3349086']
         rawName:
           type: string
@@ -3791,7 +4071,7 @@ components:
           type: array
           description: |
             **La razón de ser de este endpoint**: el administrador debe reconocer aquí su propio club
-            antes de confirmar. Es también de donde sale `ownTeamFederationId`.
+            antes de confirmar. Es de donde sale el `ownTeamFederationId` del enganche (D-67).
           items:
             $ref: '#/components/schemas/PreviewTeam'
         alreadyRegistered:
@@ -3855,16 +4135,6 @@ components:
             Rótulo del grupo. **No es deducible de `federationGroupId`** — uno se muestra, el otro se
             llama (§3.7). Texto libre, porque hay grupos sin número ("Grupo Único").
           examples: ['Grupo 1']
-        ownTeamFederationId:
-          type: [string, 'null']
-          description: |
-            `federationTeamId` del equipo **propio** dentro de este grupo, tomado de la lista del
-            `preview`. Si se envía, la ingesta lo crea directamente como propio en vez de como rival, y
-            de su club salen el nombre y el escudo del `Club` (§3.6) — el arranque en frío deja de
-            necesitar una reclamación posterior.
-
-            Opcional: si se omite, todos los equipos nacen como rivales y el propio se reclama después
-            con `PUT /teams/{teamId}/ownership`.
 
     CreateCompetitionFromIdsRequest:
       type: object
@@ -3902,8 +4172,6 @@ components:
         groupLabel:
           type: string
           minLength: 1
-        ownTeamFederationId:
-          type: [string, 'null']
 
     UpdateCompetitionRequest:
       type: object
@@ -4111,17 +4379,18 @@ components:
             - $ref: '#/components/schemas/Gender'
           readOnly: true
           description: |
-            **Lo hereda de la competición**, igual que `modality` (D-58). La federación no publica género
-            por equipo —lo embebe en el nombre de la competición— así que el valor bueno es el que un
-            humano confirmó allí. No es campo de escritura de este recurso: para cambiarlo, `PATCH` de la
-            competición (y solo antes de la primera sincronización).
+            **Identidad, fijada al crear el equipo y congelada después** (D-66): va en `CreateTeamRequest`
+            y **nunca** en `UpdateTeamRequest` (D-58). Para los equipos que crea la ingesta lo hereda de
+            la competición —la federación no publica género por equipo, lo embebe en el nombre de la
+            competición—, así que ahí el valor bueno es el que un humano confirmó al dar de alta el grupo.
         modality:
           allOf:
             - $ref: '#/components/schemas/Modality'
           readOnly: true
           description: |
-            **La fija la ingesta**, tomándola de la competición en la que aparece el equipo; no es campo
-            de entrada de este contrato. Es identidad, no atributo: entra en la clave única de §3.5.
+            **Identidad, no atributo**: entra en la clave única de §3.5. La fija el club al crear el
+            equipo (D-66) o la ingesta desde la competición, y en ambos casos queda **congelada**: va en
+            `CreateTeamRequest` y nunca en `UpdateTeamRequest`.
         opponentClubId:
           type: [string, 'null']
           format: uuid
@@ -4140,8 +4409,12 @@ components:
             dos equipos distintos en uno. **Estable entre temporadas** (verificado: el mismo `3349086` en
             las temporadas 25/26 y 26/27), por eso vive en `Team`, que es independiente de la temporada.
 
-            **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno. Nulo solo si la
-            ingesta no pudo extraerlo y tuvo que degradar a emparejamiento por nombre + categoría (§3.7).
+            **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno.
+
+            **Nulo = equipo sin emparejar**, y eso decide qué puede hacer esta API con la fila (D-66):
+            sin emparejar admite `DELETE`; emparejado, no. Es nulo desde que el club crea el equipo hasta
+            que lo engancha (D-67), y también si la ingesta no pudo extraerlo y degradó a emparejamiento
+            por nombre + categoría (§3.7).
           examples: ['3349086']
         isOwn:
           type: boolean
@@ -4175,7 +4448,162 @@ components:
           format: date-time
           readOnly: true
 
-    # No existe CreateTeamRequest: TODOS los equipos los crea la ingesta, propios incluidos (§5.1).
+    CreateTeamRequest:
+      type: object
+      description: |
+        Alta de un equipo **del club** (D-66). No lleva **ningún** dato de federación: el equipo nace sin
+        emparejar y se engancha después con `POST /teams/{teamId}/federation-link` (D-67).
+
+        `category`, `letter`, `gender` y `modality` son **identidad**: forman la clave única del equipo
+        dentro del club (§3.5) y quedan **congelados** tras el alta — `UpdateTeamRequest` solo admite
+        `category` y `letter`, y ni `gender` ni `modality` vuelven a ser escribibles nunca (D-58, patrón de
+        identidad inmutable de D-37). Crear no es corregir.
+
+        **`seasonId` no es identidad**, y por eso no entra en la clave única: es la temporada en la que el
+        equipo queda **inscrito al nacer** (D-68), y se cambia después con `/registrations`. Es obligatorio
+        porque sin él existiría el estado "equipo creado, inscrito en ninguna parte", **invisible en todas
+        las pantallas** que filtran por temporada.
+      required: [category, gender, modality, seasonId]
+      additionalProperties: false
+      properties:
+        category:
+          $ref: '#/components/schemas/TeamCategory'
+        letter:
+          type: [string, 'null']
+          minLength: 1
+          description: |
+            Letra que distingue equipos de la misma categoría ("A", "B"…). Opcional: un club con un solo
+            equipo por categoría no la necesita.
+          examples: ['A']
+        gender:
+          $ref: '#/components/schemas/Gender'
+        modality:
+          $ref: '#/components/schemas/Modality'
+        seasonId:
+          type: string
+          format: uuid
+          description: |
+            Temporada en la que el equipo nace **inscrito** (D-68). UUID **interno**, no el
+            `federationSeasonId`. **404** si no existe.
+
+    FederationLinkPreviewRequest:
+      type: object
+      description: |
+        La URL del calendario del grupo, copiada de la web de la federación. El servidor extrae de ella
+        los cuatro parámetros (`temporada`, `tipojuego`, `competicion`, `grupo`) y comprueba que el *host*
+        corresponde a la federación del club.
+      required: [federationCalendarUrl]
+      additionalProperties: false
+      properties:
+        federationCalendarUrl:
+          type: string
+          format: uri
+          examples:
+            - 'https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549'
+
+    FederationLinkPreviewResponse:
+      type: object
+      description: |
+        Lo que hay en la coordenada, **sin persistir nada**. Es un dato de pantalla para que un humano
+        reconozca su club en `competition.teams[]` antes de confirmar.
+      required: [season, competition, identityMatches]
+      properties:
+        season:
+          $ref: '#/components/schemas/PreviewSeason'
+        competition:
+          $ref: '#/components/schemas/CompetitionPreviewResponse'
+        identityMatches:
+          type: boolean
+          description: |
+            `true` si el `gender` y la `modality` que propone la competición coinciden con los que el
+            equipo tiene congelados desde su alta (D-66). En `false`, confirmar devolverá **409**: se
+            muestra antes para que el administrador enganche otro equipo en vez de chocar.
+
+    PreviewSeason:
+      type: object
+      description: |
+        Temporada leída de `seasons[]`, que va **incrustado en la propia página del calendario** — la RFFM
+        no tiene endpoint de temporadas (§F.7 del anexo RFFM). Sin esto, la etiqueta no sería deducible
+        del código.
+      required: [federationSeasonId, label, exists]
+      properties:
+        federationSeasonId:
+          type: string
+          description: 'El `temporada=…` de la URL.'
+          examples: ['21']
+        label:
+          type: string
+          description: Etiqueta legible, leída de la página. **No** es deducible del código.
+          examples: ['2024/25']
+        exists:
+          type: boolean
+          description: |
+            `false` ⇒ al confirmar se **creará** la temporada en cascada. El administrador la ve antes,
+            que es lo que hace aceptable que una URL pegada dé de alta una `Season`.
+
+    FederationLinkRequest:
+      type: object
+      description: |
+        Confirmación del enganche. La URL vuelve a enviarse —el `preview` no persistió nada— junto con el
+        equipo del grupo que el administrador ha reconocido como suyo.
+      required: [federationCalendarUrl, ownTeamFederationId, gender]
+      additionalProperties: false
+      properties:
+        federationCalendarUrl:
+          type: string
+          format: uri
+        ownTeamFederationId:
+          type: string
+          minLength: 1
+          description: |
+            `federationTeamId` del equipo propio dentro de este grupo, tomado de
+            `competition.teams[]` del `preview`. **Obligatorio** (D-67): en D-22 era opcional porque
+            omitirlo tenía camino de vuelta —todo nacía rival y se reclamaba con `/ownership`—, pero con
+            D-66 ese camino ya no repara sino que **fusiona** (§9.5, sin diseñar). Exigirlo aquí hace que
+            el caso no llegue a existir.
+          examples: ['3349086']
+        gender:
+          allOf:
+            - $ref: '#/components/schemas/Gender'
+          description: |
+            Confirmación del género **propuesto** por el `preview` (D-58): sale de buscar `FEMENINO` en el
+            nombre de la competición, así que el administrador puede —y a veces debe— cambiarlo. Se
+            almacena en la `Competition`; el equipo ya lo tiene congelado desde su alta y **no** se pisa.
+        seasonLabel:
+          type: string
+          description: |
+            Etiqueta de la temporada, solo si el `preview` devolvió `season.exists = false` y hay que
+            crearla. Se envía la que propuso el `preview` salvo corrección.
+          examples: ['2024/25']
+
+    IngestJobResponse:
+      type: object
+      description: Trabajo de primera ingesta encolado (D-67). El enganche ya está escrito.
+      required: [jobId, status, teamId, competitionId, seasonId]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          type: string
+          enum: [encolado, en_curso, completado, fallido]
+          readOnly: true
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Competición creada o **reutilizada** si ya existía (`alreadyRegistered`).
+        seasonId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: Temporada existente o creada en cascada.
+
 
     UpdateTeamRequest:
       type: object
@@ -4184,9 +4612,9 @@ components:
         no se convierte en rival ni al revés — para eso está `/ownership`.
 
         **Tampoco incluye `modality` ni `gender`**: son identidad del equipo, parte de su clave única
-        (§3.5), y **los dos se heredan de la competición** (D-07, D-58). Corregir el género de un equipo
-        es corregir el de **su competición**, donde se arregla una vez para todos sus equipos — el mismo
-        movimiento que llevó el nombre del club de `Team` a `OpponentClub` (D-03).
+        (§3.5), y se fijan **una sola vez** — al crearlo el club (`CreateTeamRequest`, D-66) o al crearlo
+        la ingesta desde la competición (D-07, D-58). Crear no es corregir: el patrón es el de D-37. Un
+        equipo de fútbol-sala no *pasa a ser* uno de fútbol-11, es otro equipo.
       additionalProperties: false
       minProperties: 1
       properties:
