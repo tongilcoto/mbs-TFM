@@ -51,11 +51,11 @@ contestarlas con veinte entidades encima.
 
 Lo que el compilador exige es que los *targets* por capa existan antes de la primera rebanada — la Regla de
 dependencia la impone él (§2.2), y no puede imponerla sobre carpetas que aún no hay. Eso es **andamiaje**, se
-hace una vez, y es la Fase 0.
+hace una vez, y es la **rebanada R0**.
 
 ---
 
-## 3. Fase 0 · El esqueleto que camina
+## 3. R0 · El esqueleto que camina
 
 Lo más fino que atraviesa **todo** el stack: **`GET /v1/club`**. Recurso *singleton*, sin paginación, sin
 ámbito, DTO mínimo — y `ClubRecord` es la migración nº 1 del orden de §4.6 de todas formas.
@@ -72,7 +72,7 @@ Lo más fino que atraviesa **todo** el stack: **`GET /v1/club`**. Recurso *singl
 
 **Qué trae aunque todavía no sirva de nada.** El **contexto de actor atravesando la frontera de los casos de
 uso**. §7.4 lo pide con todas las letras: *"añadir después un parámetro a todas las firmas es el refactor caro
-que esta decisión existe para evitar"*. En Fase 0 solo llevará el club dentro. Da igual: la firma nace con él.
+que esta decisión existe para evitar"*. En R0 solo llevará el club dentro. Da igual: la firma nace con él.
 
 **Qué NO trae.** Ninguna regla de negocio, y ningún JWT: el tenant se resuelve por cabecera, como el spike.
 Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha ejecutado**.
@@ -81,7 +81,7 @@ Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha e
 
 ## 4. Por dónde se sigue: la ingesta
 
-Terminada la Fase 0, el bloque de trabajo es el **módulo de ingesta** (§2.1, módulo 2). Tres razones, en este
+Terminada R0, el bloque de trabajo es el **módulo de ingesta** (§2.1, módulo 2). Tres razones, en este
 orden:
 
 1. **Es donde vive el riesgo técnico.** Dos proveedores no intercambiables, uno de ellos *scraping*, y una
@@ -102,6 +102,7 @@ dependen de eso.
 
 | # | Rebanada | Nivel de test dominante | Referencias |
 |---|----------|-------------------------|-------------|
+| **R0** | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
 | **R1** | `Season` + `Competition` — dominio y persistencia. **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
 | **R2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
 | **R3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
@@ -113,7 +114,11 @@ dependen de eso.
 | **R9** | Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo) | unit + integración | [D-17], [D-55], Anexo FCF |
 | **R10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition` | E2E de contrato | [D-67], §2.3-c |
 
-**Dos observaciones sobre este orden, que no son casuales:**
+**R0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
+de un tirón, no porque sea una rebanada como las demás. Es la excepción de §2 — el andamiaje que el
+compilador exige antes de la primera rebanada de verdad.
+
+**Dos observaciones sobre el orden de R1–R10, que no son casuales:**
 
 - **R3 y R4 son las dos reglas más delicadas del diseño y se testean con cero infraestructura.** Ese es el
   dividendo de [D-01]: separar el Dominio de Fluent es lo que permite que la política de *upsert* se pruebe en
@@ -153,7 +158,7 @@ leyendo los tests en vez del código.
 | Toolchain | **Swift 6.3**, SwiftPM, un *target* por capa | lo que ya exige §2.2 |
 | Framework de test | **`swift-testing` + `VaporTesting`** | **desvía de §8.1**, que dice XCTest/XCTVapor. Requiere `D-nn` y actualizar §8.1 |
 | Modo de lenguaje | **Swift 6 en todos los *targets***, sin excepción | sin válvula de escape a `.v5`. Si Fluent pelea con la concurrencia estricta, se resuelve con aislamiento correcto (actores, `sending`), **no bajando el modo** |
-| Concurrencia | *upcoming features* modernas activadas en todos los *targets* | **con una salvedad de servidor**: `defaultIsolation: MainActor` es recomendación **de apps**, no de un backend concurrente — no se adopta. La lista exacta se fija al montar la Fase 0 |
+| Concurrencia | *upcoming features* modernas activadas en todos los *targets* | **con una salvedad de servidor**: `defaultIsolation: MainActor` es recomendación **de apps**, no de un backend concurrente — no se adopta. La lista exacta se fija al montar R0 |
 | Dónde vive el *spec* | **se mueve** a `Sources/…/openapi.yaml`, junto a `openapi-generator-config.yaml` | SwiftPM no referencia bien ficheros fuera del *target*, y los enlaces simbólicos son frágiles. **Cierra §9.1** y obliga a actualizar la ruta canónica en `AGENTS.md`, el LLD y el ADR |
 | Base de datos de test | Postgres 16 efímero en Docker, reutilizando el `docker-compose.yml` del spike | §8.1: la integración no se prueba contra SQLite |
 
@@ -249,7 +254,7 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 
 1. **La representación de la coordenada de la FCF** en `federation_competition_id` / `federation_group_id`
    (§7.2, punto 1). Se resuelve en R2 y genera `D-nn`.
-2. **La lista exacta de *upcoming features* de concurrencia** que se activan (§6). Se fija al montar la Fase 0,
+2. **La lista exacta de *upcoming features* de concurrencia** que se activan (§6). Se fija al montar R0,
    cuando se sepa con qué pelea Fluent.
 3. **Orden de ataque tras la ingesta.** Este plan cubre hasta R10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.
