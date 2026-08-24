@@ -129,6 +129,7 @@ let package = Package(
         .target(
             name: "App",
             dependencies: [
+                "APIContract",
                 "Application",
                 "Domain",
                 "HTTPAdapter",

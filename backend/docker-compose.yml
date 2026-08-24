@@ -1,0 +1,23 @@
+# Postgres efímero para los niveles 3 y 4 de la pirámide (§8.1): la integración
+# no se prueba contra SQLite, porque *schema*-por-tenant y RLS son exclusivos de
+# Postgres y son justo lo que hay que probar (D-01).
+#
+#   docker compose up -d      # levanta
+#   swift test                # los cuatro niveles
+#   docker compose down -v    # -v borra el volumen: la BD es desechable
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tfm
+      POSTGRES_PASSWORD: tfm
+      POSTGRES_DB: tfm
+    ports:
+      # 5434 para no chocar con el 5433 del spike de tenancy ni con un Postgres
+      # local en el 5432.
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tfm -d tfm"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
