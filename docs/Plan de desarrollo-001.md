@@ -60,7 +60,7 @@ hace una vez, y es **F0**.
 
 ---
 
-## 3. F0 · El esqueleto que camina
+## 3. F0 · El esqueleto que camina — **entregada**
 
 Lo más fino que atraviesa **todo** el stack: **`GET /v1/club`**. Recurso *singleton*, sin paginación, sin
 ámbito, DTO mínimo — y `ClubRecord` es la migración nº 1 del orden de §4.6 de todas formas.
@@ -81,6 +81,25 @@ que esta decisión existe para evitar"*. En F0 solo llevará el club dentro. Da 
 
 **Qué NO trae.** Ninguna regla de negocio, y ningún JWT: el tenant se resuelve por cabecera, como el spike.
 Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha ejecutado**.
+
+### 3.1 Qué contestó
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Digiere el plugin este *spec* de 6.167 líneas? | **Sí.** Y §9.1 queda cerrada: el fichero vive en `backend/Sources/APIContract/` |
+| ¿Impone el compilador la Regla de dependencia? | **Sí.** `import Vapor` desde `Domain` o `Application` → *no such module* |
+| ¿Cuánto sube el *build* con el plugin dentro? | Pico `anon` **1,54 → 1,76 GiB** (+14 %), compilación ~175 → 185 s. Sigue por debajo del suelo de 2–4 GB del ADR |
+| ¿Aguanta el `search_path` con un `Record` de verdad? | **Sí.** `clubs` y `_fluent_migrations` en cada *schema* de club; `tenants` solo en `public` |
+
+**Y trajo dos decisiones que el plan no anticipaba**, las dos por la misma causa —que `APIProtocol` obliga a
+implementar *todas* las operaciones generadas—: **[D-69]** (el *spec* se genera **filtrado**, y esa lista es
+el alcance entregado) y, de paso, **[D-70]** (`swift-testing` en lugar de XCTest, que §8.1 daba por sentado).
+
+**Tres hallazgos de montaje** que costaron tiempo y conviene no volver a descubrir: SwiftPM **descarta en
+silencio** un *target* sin ningún `.swift` (los YAML son recursos), **omite del grafo de *build*** un *target*
+que nadie consume, y `registerHandlers` monta **una sola instancia** del *handler* para todo el transporte —
+así que el tenant no puede viajar en su `init` y va por `@TaskLocal`, con el middleware el **último** de la
+cadena.
 
 ---
 
@@ -107,7 +126,7 @@ dependen de eso.
 
 | # | Fase | Nivel de test dominante | Referencias |
 |---|----------|-------------------------|-------------|
-| **F0** | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
+| **F0** ✅ | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
 | **F1** | `Season` + `Competition` — dominio y persistencia. **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
 | **F2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
 | **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
@@ -259,7 +278,10 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 
 1. **La representación de la coordenada de la FCF** en `federation_competition_id` / `federation_group_id`
    (§7.2, punto 1). Se resuelve en F2 y genera `D-nn`.
-2. **La lista exacta de *upcoming features* de concurrencia** que se activan (§6). Se fija al montar F0,
-   cuando se sepa con qué pelea Fluent.
+2. ~~La lista exacta de *upcoming features* de concurrencia.~~ **Resuelta en F0**: `ExistentialAny`,
+   `MemberImportVisibility`, `InferIsolatedConformances` y `NonisolatedNonsendingByDefault`, en modo de
+   lenguaje `.v6` y en **todos** los *targets*. **Fluent no peleó**: no hizo falta bajar el modo en ninguno,
+   así que la válvula de escape que §6 descartaba tampoco se ha echado en falta. `MemberImportVisibility` se
+   ganó el sitio de inmediato — cazó tres *imports* transitivos implícitos que habrían compilado en silencio.
 3. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.

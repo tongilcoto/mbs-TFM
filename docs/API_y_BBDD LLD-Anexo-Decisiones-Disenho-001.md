@@ -2359,7 +2359,7 @@ cuestión de tiempo.
 
 **Decisión.** §5.2 conserva las **convenciones y decisiones** de DTOs (que cruzan la frontera, `PATCH`
 parcial, qué es derivado, por qué no existe `CreateTeamRequest`) y **un ejemplo ilustrativo**; el detalle
-campo a campo vive en `backend/openapi/openapi.yaml`.
+campo a campo vive en `backend/Sources/APIContract/openapi.yaml`.
 
 **Refuerzo:** la frontera de propiedad ([D-21]) se expresa en el spec de forma **comprobable por máquina** —
 `readOnly: true` en los campos de la ingesta y **ausencia del esquema de alta** en las entidades de salida—,
@@ -2458,9 +2458,10 @@ la documentación publicada; no para el compilador.
   El **1,54 GiB** de pico y los ~175 s de §8.2 son de un spike **sin generador y con una entidad**: son un
   suelo, y este es exactamente el tipo de cambio que lo levanta.
 - **El *spec* se muda.** El plugin lo espera dentro del *target* que lo consume, junto a un
-  `openapi-generator-config.yaml`. `backend/openapi/openapi.yaml` sigue siendo la ruta canónica y de
-  referencia en el resto de la documentación; el mecanismo concreto (mover o enlazar) se fija al montar el
-  esqueleto.
+  `openapi-generator-config.yaml`. *(Posterior, al montar F0: **se movió**, no se enlazó — SwiftPM no
+  referencia bien ficheros fuera del *target* y un enlace simbólico es frágil. La ruta canónica pasa a ser
+  `backend/Sources/APIContract/openapi.yaml` en toda la documentación. Y apareció una consecuencia que esta
+  decisión no había mirado: `APIProtocol` obliga a implementar **todas** las operaciones generadas → [D-69].)*
 - **La documentación publicada se genera aparte.** Sin soporte de `tags`, el agrupado de Swagger UI/Redoc no
   sale del generador: sale del *spec* directamente, que es de donde tiene que salir.
 
@@ -2471,6 +2472,66 @@ la documentación publicada; no para el compilador.
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · Evidencia → [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)*
 
 <!-- Definiciones de enlace -->
+### D-69 · El *spec* se genera filtrado: la lista de operaciones **es** el alcance entregado
+
+**Contexto.** [D-65] eligió *design-first* con `swift-openapi-generator`, y su garantía es que
+**`APIProtocol` obliga al compilador a detectar la divergencia** entre contrato e implementación. Al montar
+F0 apareció la contrapartida que esa decisión no había mirado: `APIProtocol` declara **un método por
+operación generada**, y conformarlo obliga a implementarlas **todas**. El *spec* tiene ~100 operaciones y F0
+implementa **una**.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Generar todo y rellenar con *stubs*** | 99 métodos que lanzan "no implementado" | **Descartada** |
+| **B — `filter` en `openapi-generator-config.yaml`** | Se genera solo lo implementado; cada fase amplía la lista | **Elegida** |
+| C — Trocear el *spec* en varios ficheros | Rompe D-25 (fuente de verdad única) y las referencias `§x` | Descartada |
+
+**Decisión: B.** La razón de fondo es que **A apaga precisamente la garantía por la que se eligió
+*design-first***: un *stub* compila exactamente igual de bien que un *handler*, así que con 99 de ellos el
+compilador deja de distinguir "implementado" de "pendiente" — que era la única pregunta que sabía contestar.
+Con el filtro, la lista de `operations` del config **es**, literalmente, el alcance entregado, y ampliarla
+vuelve a poner al compilador a exigir que estén todas.
+
+**Efecto medido en F0:** 543 líneas generadas frente a las ~20.000 del *spec* completo. El coste de
+compilación del plugin deja de ser una función del tamaño del contrato y pasa a serlo del **alcance**.
+
+**Qué se asume a cambio.**
+
+- **El compilador ya no avisa de una operación del *spec* que nadie ha implementado**, porque no existe como
+  tipo. Es una pérdida real, pero de una alarma que en la práctica sonaría 99 veces desde el primer día. Lo
+  que la sustituye es explícito: para que una operación entre en el código hay que **escribirla en el
+  filtro**, que es un acto deliberado y revisable en el diff.
+- **El *spec* no se toca y sigue completo** — el filtro elige qué parte se traduce a Swift hoy, no qué parte
+  existe. [D-25] intacta.
+- Al cerrar el contrato de un módulo, el filtro debe quedar **igual a la lista de operaciones de ese
+  módulo**; si sobra alguna, es que se generó código que nadie conforma.
+
+---
+
+### D-70 · Los tests se escriben con `swift-testing`, no con XCTest
+
+**Contexto.** §8.1 fijó la pirámide citando **XCTest y XCTVapor**, que era lo disponible cuando se escribió.
+Swift 6 trae `swift-testing` en la *toolchain* y Vapor publica `VaporTesting` como su equivalente de
+`XCTVapor`.
+
+**Decisión: `swift-testing` + `VaporTesting`.** Tres razones, en orden de peso para **este** proyecto:
+
+1. **Tests parametrizados de primera clase.** El nivel 1 de §8.1 es un muro de invariantes de *Value
+   Objects*: los nueve casos que debe rechazar `Slug` son **un** test con nueve argumentos, y cada uno
+   reporta por separado al fallar. En XCTest serían nueve métodos o un bucle que oculta cuál falló.
+2. **El nombre del test es una cadena libre**, no un identificador Swift. El Plan de desarrollo §5 exige que
+   cada test cite su `§x` o su `D-nn` para que el desarrollador —que no lee Swift— pueda revisar por los
+   tests. `@Test("las capacidades salen del catálogo, no de la fila (D-17)")` hace eso;
+   `func testCapabilitiesComeFromCatalogueD17()` no.
+3. **`.serialized` como anotación**, que es lo que necesitan los niveles 3 y 4: comparten un Postgres real y
+   no pueden pisarse.
+
+**Qué se asume a cambio.** Que §8.1 del LLD queda desactualizado en la columna "Herramienta" y hay que
+corregirlo — hecho. Y que si algún día hiciera falta XCTest para algo concreto, los dos conviven en el mismo
+paquete sin problema.
+
+---
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -2565,3 +2626,5 @@ la documentación publicada; no para el compilador.
 [Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-69]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-70]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

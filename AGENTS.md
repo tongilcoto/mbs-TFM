@@ -21,7 +21,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
-| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/openapi/openapi.yaml) |
+| **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/Sources/APIContract/openapi.yaml) |
 | **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
@@ -117,23 +117,80 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 ## Estado actual
 
-El repositorio está en fase inicial: las **decisiones tecnológicas de BD/API y despliegue ya están tomadas** (ver ADR y resumen arriba), pero **todavía no existe código**, esquema de base de datos, ni estructura de proyecto para ninguno de los artefactos.
+Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
+**backend ya tiene esqueleto y camina**: la fase **F0** del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md)
+está entregada — `GET /v1/club` responde de HTTP a Postgres contra tenants aislados. **Web backoffice, app iOS
+y app Android siguen sin empezar.**
 
-Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/openapi/openapi.yaml`](./backend/openapi/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
+Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/Sources/APIContract/openapi.yaml`](./backend/Sources/APIContract/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
 `StaffAssignment`), más `TeamRegistration`, la inscripción del equipo en la temporada (`D-68`). **El contrato queda completo: las 20 entidades del §3.2 tienen sus endpoints**). Validación:
 
 ```sh
-npx @redocly/cli lint backend/openapi/openapi.yaml
+npx @redocly/cli lint backend/Sources/APIContract/openapi.yaml
 ```
 
-Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
+### El backend: cómo está montado y cómo se trabaja
+
+Paquete SwiftPM en `backend/`, **Swift 6** en todos los *targets* (modo de lenguaje `.v6` + *upcoming
+features*; **sin** `defaultIsolation: MainActor`, que es recomendación de apps, no de un backend).
+
+**Un *target* por capa, y el grafo de `Package.swift` ES la Regla de dependencia de §2.2** — no una
+convención de carpetas. Comprobado: `import Vapor` desde `Domain` o `Application` **no compila**.
+
+```
+Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos generados del spec)
+            │                └─► Application
+            ├─► Persistence ────► Application
+            ├─► Tenancy
+            └─► Application ────► Domain        (Domain no depende de nada)
+```
+
+| Target | Capa (§2.2) | Qué contiene |
+|---|---|---|
+| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones. **Sin** `import Vapor/Fluent` |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`) |
+| `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
+| `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
+| `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
+| `Tenancy` | Infraestructura | Plano de control, `SET LOCAL search_path`, middleware |
+| `App` | — | **Raíz de composición**: el único sitio que cablea las capas |
+
+```sh
+cd backend
+docker compose up -d                      # Postgres 16 efímero en :5434
+swift build
+swift test                                # 4 niveles (§8.1); los 2 primeros sin I/O
+swift run Run migrate --yes               # plano de control (public.tenants)
+swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
+swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
+swift run Run serve
+curl -H 'X-Club: atleti' localhost:8080/v1/club
+docker compose down -v
+```
+
+**Tres cosas que hay que saber antes de tocar este código:**
+
+- **El *spec* se genera *filtrado*** (`D-69`). `APIProtocol` obliga a implementar **todas** las operaciones
+  generadas, así que el `filter` de `openapi-generator-config.yaml` lista solo las implementadas — esa lista
+  **es** el alcance entregado. Al añadir un endpoint, **se añade ahí primero**. El *spec* no se toca: sigue
+  completo.
+- **Todo acceso a datos de tenant entra por `TenantUnitOfWork`** (§6.2). No se pasan `Database` por ahí: el
+  aislamiento depende de que haya **un** punto de paso.
+- **El contexto de actor (`ActorContext`) ya cruza la frontera de los casos de uso** (§7.4), aunque hoy solo
+  lleve el club. Un caso de uso nuevo lo recibe **desde el principio**, no cuando llegue §7.
+- **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
+  leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
+
+**Deuda declarada de F0**, para que nadie la confunda con diseño: el tenant se resuelve por `Host` y por la
+cabecera `X-Club`, **no** por *claim* firmado. §6.1 dice que el *claim* es autoritativo y el subdominio solo
+enrutado; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
 
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; después, **F1–F10**, la ingesta).
-El diseño de API/BD está cerrado en lo esencial (modelo de datos, contrato, tenancy —**medida**
-contra Postgres real— y roles). Lo inmediato es el **esqueleto del backend**: un *target* SwiftPM por capa (LLD
-§2.2) para que la regla de dependencia la imponga el compilador, la fontanería de tenancy levantada del
-[spike](./spikes/tenancy/README.md), el plugin de generación del *spec*, y los *targets* de test por nivel (§8.1).
+Con F0 entregada, lo inmediato es **F1–F10: el módulo de ingesta**, empezando por `Season` y `Competition`
+(su *entrada*) y el puerto `FederationClient`. Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+`rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
+llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
 tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes cloud por *tier*.
 
