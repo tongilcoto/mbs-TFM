@@ -21,7 +21,7 @@ El desarrollo se organiza en dos bucles anidados:
 
 | Bucle | Unidad | Qué cierra el ciclo |
 |-------|--------|---------------------|
-| **Exterior · alcance** | una **rebanada**: un caso de uso completo, de la invariante de dominio al dato en Postgres | comportamiento demostrable **y** documentación al día |
+| **Exterior · alcance** | una **fase**: una *rebanada vertical* — un caso de uso completo, de la invariante de dominio al dato en Postgres | comportamiento demostrable **y** documentación al día |
 | **Interior · TDD** | una regla | rojo → verde → refactor |
 
 El bucle exterior no cierra con el test en verde. Cierra cuando `AGENTS.md`, las cifras de §8.2 del LLD y —si
@@ -49,13 +49,18 @@ contestarlas con veinte entidades encima.
 
 > **La regla, en una frase: horizontal solo cuando el compilador lo exija. Todo lo demás, vertical.**
 
-Lo que el compilador exige es que los *targets* por capa existan antes de la primera rebanada — la Regla de
+**Cuidado con la palabra "fase".** Las unidades de trabajo se numeran `F0…F10` porque son **secuenciales**,
+no porque sean etapas de una cascada. Una fase clásica de proyecto (*análisis → diseño → implementación →
+pruebas*) es precisamente el corte **horizontal** que este apartado descarta. Aquí cada fase es una
+**rebanada vertical**: atraviesa las cuatro capas y termina en algo que funciona.
+
+Lo que el compilador exige es que los *targets* por capa existan antes de la primera fase — la Regla de
 dependencia la impone él (§2.2), y no puede imponerla sobre carpetas que aún no hay. Eso es **andamiaje**, se
-hace una vez, y es la **rebanada R0**.
+hace una vez, y es **F0**.
 
 ---
 
-## 3. R0 · El esqueleto que camina
+## 3. F0 · El esqueleto que camina
 
 Lo más fino que atraviesa **todo** el stack: **`GET /v1/club`**. Recurso *singleton*, sin paginación, sin
 ámbito, DTO mínimo — y `ClubRecord` es la migración nº 1 del orden de §4.6 de todas formas.
@@ -72,7 +77,7 @@ Lo más fino que atraviesa **todo** el stack: **`GET /v1/club`**. Recurso *singl
 
 **Qué trae aunque todavía no sirva de nada.** El **contexto de actor atravesando la frontera de los casos de
 uso**. §7.4 lo pide con todas las letras: *"añadir después un parámetro a todas las firmas es el refactor caro
-que esta decisión existe para evitar"*. En R0 solo llevará el club dentro. Da igual: la firma nace con él.
+que esta decisión existe para evitar"*. En F0 solo llevará el club dentro. Da igual: la firma nace con él.
 
 **Qué NO trae.** Ninguna regla de negocio, y ningún JWT: el tenant se resuelve por cabecera, como el spike.
 Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha ejecutado**.
@@ -81,7 +86,7 @@ Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha e
 
 ## 4. Por dónde se sigue: la ingesta
 
-Terminada R0, el bloque de trabajo es el **módulo de ingesta** (§2.1, módulo 2). Tres razones, en este
+Terminada F0, el bloque de trabajo es el **módulo de ingesta** (§2.1, módulo 2). Tres razones, en este
 orden:
 
 1. **Es donde vive el riesgo técnico.** Dos proveedores no intercambiables, uno de ellos *scraping*, y una
@@ -98,32 +103,32 @@ códigos de `tipo_gol` y `codigo_tipo_amonestacion`, y de ellos depende si el de
 `Card` llegan del acta o siguen siendo entrada manual. Calendario, resultados, clasificación y goleadores no
 dependen de eso.
 
-### 4.1 Las rebanadas
+### 4.1 Las fases
 
-| # | Rebanada | Nivel de test dominante | Referencias |
+| # | Fase | Nivel de test dominante | Referencias |
 |---|----------|-------------------------|-------------|
-| **R0** | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
-| **R1** | `Season` + `Competition` — dominio y persistencia. **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
-| **R2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
-| **R3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
-| **R4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
-| **R5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match` | integración, Postgres real | §3.7, §4.4 |
-| **R6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
-| **R7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
-| **R8** | `LeagueScorer` | integración | [D-09] |
-| **R9** | Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo) | unit + integración | [D-17], [D-55], Anexo FCF |
-| **R10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition` | E2E de contrato | [D-67], §2.3-c |
+| **F0** | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
+| **F1** | `Season` + `Competition` — dominio y persistencia. **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
+| **F2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
+| **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
+| **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
+| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match` | integración, Postgres real | §3.7, §4.4 |
+| **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
+| **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
+| **F8** | `LeagueScorer` | integración | [D-09] |
+| **F9** | Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo) | unit + integración | [D-17], [D-55], Anexo FCF |
+| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition` | E2E de contrato | [D-67], §2.3-c |
 
-**R0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
-de un tirón, no porque sea una rebanada como las demás. Es la excepción de §2 — el andamiaje que el
-compilador exige antes de la primera rebanada de verdad.
+**F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
+de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
+compilador exige antes de la primera *rebanada vertical* de verdad.
 
-**Dos observaciones sobre el orden de R1–R10, que no son casuales:**
+**Dos observaciones sobre el orden de F1–F10, que no son casuales:**
 
-- **R3 y R4 son las dos reglas más delicadas del diseño y se testean con cero infraestructura.** Ese es el
+- **F3 y F4 son las dos reglas más delicadas del diseño y se testean con cero infraestructura.** Ese es el
   dividendo de [D-01]: separar el Dominio de Fluent es lo que permite que la política de *upsert* se pruebe en
   milisegundos y sin contenedor.
-- **R10 va al final aunque sea por donde entra el usuario.** Es el único punto que necesita el
+- **F10 va al final aunque sea por donde entra el usuario.** Es el único punto que necesita el
   `FederationClient` ya construido y probado, porque `/preview` lo llama **en línea y dentro de la respuesta**
   (§2.3-c). Construirlo antes obligaría a falsearlo dos veces.
 
@@ -131,13 +136,13 @@ compilador exige antes de la primera rebanada de verdad.
 
 ## 5. El bucle interior · TDD sobre esta arquitectura
 
-Por rebanada, en este orden:
+Por fase, en este orden:
 
 1. **Rojo en Dominio** — la invariante o el *Value Object*. Milisegundos, sin I/O (§8.1, nivel 1).
 2. **Rojo en caso de uso** — orquestación con los puertos falseados: `FederationClient` en memoria, `Clock` y
    `UUIDProvider` fijos (§4.3). Sin I/O (nivel 2).
 3. Solo cuando eso está verde: **integración** — Postgres 16 real en contenedor efímero (nivel 3).
-4. **E2E de contrato** solo en rebanadas con superficie HTTP, y pocas (nivel 4).
+4. **E2E de contrato** solo en fases con superficie HTTP, y pocas (nivel 4).
 
 > **La disciplina que sostiene la pirámide de §8.1: cada regla se testea una sola vez, en el nivel más barato
 > donde vive.** Si el `pattern` de `SeasonLabel` está en un *Value Object*, no se re-testea por HTTP.
@@ -146,7 +151,7 @@ Por rebanada, en este orden:
 **consulta** (`Record` ↔ Entidad, `search_path`, migraciones), no la lógica que ya cubrió el nivel 1.
 
 **Los tests citan el diseño.** Cada test lleva en su nombre la referencia `§x` o `D-nn` que lo exige, de modo
-que se pueda trazar del test a la línea del LLD que lo justifica. Es lo que permite revisar una rebanada
+que se pueda trazar del test a la línea del LLD que lo justifica. Es lo que permite revisar una fase
 leyendo los tests en vez del código.
 
 ---
@@ -158,7 +163,7 @@ leyendo los tests en vez del código.
 | Toolchain | **Swift 6.3**, SwiftPM, un *target* por capa | lo que ya exige §2.2 |
 | Framework de test | **`swift-testing` + `VaporTesting`** | **desvía de §8.1**, que dice XCTest/XCTVapor. Requiere `D-nn` y actualizar §8.1 |
 | Modo de lenguaje | **Swift 6 en todos los *targets***, sin excepción | sin válvula de escape a `.v5`. Si Fluent pelea con la concurrencia estricta, se resuelve con aislamiento correcto (actores, `sending`), **no bajando el modo** |
-| Concurrencia | *upcoming features* modernas activadas en todos los *targets* | **con una salvedad de servidor**: `defaultIsolation: MainActor` es recomendación **de apps**, no de un backend concurrente — no se adopta. La lista exacta se fija al montar R0 |
+| Concurrencia | *upcoming features* modernas activadas en todos los *targets* | **con una salvedad de servidor**: `defaultIsolation: MainActor` es recomendación **de apps**, no de un backend concurrente — no se adopta. La lista exacta se fija al montar F0 |
 | Dónde vive el *spec* | **se mueve** a `Sources/…/openapi.yaml`, junto a `openapi-generator-config.yaml` | SwiftPM no referencia bien ficheros fuera del *target*, y los enlaces simbólicos son frágiles. **Cierra §9.1** y obliga a actualizar la ruta canónica en `AGENTS.md`, el LLD y el ADR |
 | Base de datos de test | Postgres 16 efímero en Docker, reutilizando el `docker-compose.yml` del spike | §8.1: la integración no se prueba contra SQLite |
 
@@ -188,7 +193,7 @@ cosas no se portan tal cual.**
    `CalendarParams`, `grupo` es un **código** en la RFFM (`grupo=…`) y una **URL completa** en la FCF
    (`…/resultats/2526/futbol-11/tercera-catalana/grup-8`). Nuestro modelo tiene dos columnas tipadas
    —`federation_competition_id` y `federation_group_id` (§3.7)— y hay que decidir cómo encaja la FCF en ellas.
-   **Es una cuestión de diseño abierta y merece su `D-nn`**; se resuelve en R2, antes de escribir el segundo
+   **Es una cuestión de diseño abierta y merece su `D-nn`**; se resuelve en F2, antes de escribir el segundo
    adaptador.
 2. **El adaptador de la FCF guarda estado mutable entre llamadas.** Su `FCFContext` es una clase
    `@unchecked Sendable` que recuerda la temporada y la categoría de `fetchCompetitions` para usarlas en
@@ -225,7 +230,7 @@ de este proyecto quiere el mapa.
 ## 8. Ritmo de entrega y git
 
 - **Se trabaja en rama**, nunca directamente sobre `main`.
-- ***Commits* pequeños y por rebanada**, para que los diffs se puedan leer sin saber Swift.
+- ***Commits* pequeños y por fase**, para que los diffs se puedan leer sin saber Swift.
 - **El `push` es libre; el `merge` no.** Cuando una rama esté lista para integrarse, el trabajo se detiene y
   se avisa al desarrollador. La integración a `main` es siempre decisión humana.
 
@@ -238,13 +243,13 @@ consecuencia práctica:
 
 > **Los tests son la especificación revisable, no el código.**
 
-Revisar una rebanada es leer sus tests y comprobar que dicen lo que el LLD dice. Por eso §5 exige que cada test
+Revisar una fase es leer sus tests y comprobar que dicen lo que el LLD dice. Por eso §5 exige que cada test
 cite su `§x` o su `D-nn`: sin esa trazabilidad, la revisión no es posible y el control se pierde.
 
 Lo que sí hace falta del desarrollador, y no puede delegarse:
 
-- **Coordenadas reales de la RFFM** para R5 en adelante — una URL de calendario de la web de la federación,
-  del tipo que el administrador pegaría en `/federation-link`. Hasta R4 bastan los *fixtures* de
+- **Coordenadas reales de la RFFM** para F5 en adelante — una URL de calendario de la web de la federación,
+  del tipo que el administrador pegaría en `/federation-link`. Hasta F4 bastan los *fixtures* de
   `docs/Federation APIs examples/`.
 - Las **muestras de acta** que [D-57] necesita, si algún día se quiere el desglose de `Goal` automático.
 
@@ -253,8 +258,8 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 ## 10. Cuestiones abiertas de este plan
 
 1. **La representación de la coordenada de la FCF** en `federation_competition_id` / `federation_group_id`
-   (§7.2, punto 1). Se resuelve en R2 y genera `D-nn`.
-2. **La lista exacta de *upcoming features* de concurrencia** que se activan (§6). Se fija al montar R0,
+   (§7.2, punto 1). Se resuelve en F2 y genera `D-nn`.
+2. **La lista exacta de *upcoming features* de concurrencia** que se activan (§6). Se fija al montar F0,
    cuando se sepa con qué pelea Fluent.
-3. **Orden de ataque tras la ingesta.** Este plan cubre hasta R10. Lo siguiente —dominio manual, roles, auth
+3. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.

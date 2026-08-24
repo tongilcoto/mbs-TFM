@@ -15,7 +15,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - [docs/Project Seed.md](./docs/Project%20Seed.md) — origen y reglas del proyecto.
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
 - [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
-  bucles (alcance y TDD) y las rebanadas **R0–R10**: andamiaje primero, después la ingesta.
+  bucles (alcance y TDD) y las fases **F0–F10**: andamiaje primero, después la ingesta.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -129,7 +129,7 @@ npx @redocly/cli lint backend/openapi/openapi.yaml
 Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
 
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
-(**R0** = esqueleto que camina con `GET /v1/club`; después, **R1–R10**, la ingesta).
+(**F0** = esqueleto que camina con `GET /v1/club`; después, **F1–F10**, la ingesta).
 El diseño de API/BD está cerrado en lo esencial (modelo de datos, contrato, tenancy —**medida**
 contra Postgres real— y roles). Lo inmediato es el **esqueleto del backend**: un *target* SwiftPM por capa (LLD
 §2.2) para que la regla de dependencia la imponga el compilador, la fontanería de tenancy levantada del
