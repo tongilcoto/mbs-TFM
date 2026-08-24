@@ -14,6 +14,8 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 - [docs/Project Seed.md](./docs/Project%20Seed.md) — origen y reglas del proyecto.
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
+- [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
+  bucles (alcance y TDD), la Fase 0, las rebanadas de la ingesta y las decisiones de arranque de Swift.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -53,9 +55,12 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
-- **Los dos proveedores no son intercambiables** y sus diferencias están medidas: la RFFM es JSON y sirve
-  clasificación por jornada; la **FCF es *scraping* de HTML**, cuesta una petición por jornada, no tiene
-  identificador de partido y **borra la fecha del partido al jugarse**. De ahí que en la ingesta un campo
+- **Los dos proveedores no son intercambiables** y sus diferencias están medidas: la RFFM sirve
+  clasificación por **cualquier** jornada y el calendario entero en **una** petición; la **FCF** cuesta una
+  petición **por jornada**, solo da la clasificación **vigente**, no tiene identificador de partido y
+  **borra la fecha del partido al jugarse**. Ojo con el atajo "RFFM = JSON, FCF = *scraping*": **los dos
+  devuelven HTML en el calendario** — la RFFM lo trae en un `__NEXT_DATA__` embebido ([Anexo RFFM §F.7]) y
+  solo sus rutas `/api/…` (clasificación, competiciones, grupos) son JSON puro. De ahí que en la ingesta un campo
   **ausente o vacío nunca sobrescriba** (`D-56`) y que la cadencia semanal sea un requisito, no una
   recomendación (§5.6). Evidencia campo a campo en los anexos de federación; no deducir nada de memoria.
 
@@ -123,7 +128,9 @@ npx @redocly/cli lint backend/openapi/openapi.yaml
 
 Cuando se incorpore código a alguno de los artefactos, este fichero debe actualizarse con los comandos y la arquitectura correspondientes.
 
-Próximos pasos: el diseño de API/BD está cerrado en lo esencial (modelo de datos, contrato, tenancy —**medida**
+Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
+(Fase 0 = esqueleto que camina con `GET /v1/club`; después, las rebanadas R1–R10 de la ingesta).
+El diseño de API/BD está cerrado en lo esencial (modelo de datos, contrato, tenancy —**medida**
 contra Postgres real— y roles). Lo inmediato es el **esqueleto del backend**: un *target* SwiftPM por capa (LLD
 §2.2) para que la regla de dependencia la imponga el compilador, la fontanería de tenancy levantada del
 [spike](./spikes/tenancy/README.md), el plugin de generación del *spec*, y los *targets* de test por nivel (§8.1).
