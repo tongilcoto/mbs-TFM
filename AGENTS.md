@@ -131,6 +131,10 @@ npx @redocly/cli lint backend/Sources/APIContract/openapi.yaml
 
 ### El backend: cómo está montado y cómo se trabaja
 
+> **Para levantarlo, hablarle con `curl`, mirar la BD con TablePlus o ver los cuerpos que cruzan la frontera
+> en los tests: [`backend/README.md`](./backend/README.md)** — el manual de a bordo, verificado comando a
+> comando. Lo de aquí abajo es el mapa; ése es el manual.
+
 Paquete SwiftPM en `backend/`, **Swift 6** en todos los *targets* (modo de lenguaje `.v6` + *upcoming
 features*; **sin** `defaultIsolation: MainActor`, que es recomendación de apps, no de un backend).
 
@@ -165,6 +169,7 @@ swift run Run provision-tenant atleti     # alta de club: schema + registro + mi
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
 swift run Run serve
 curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
+HTTP_TRACE=1 swift test --filter APITests --no-parallel   # ver los cuerpos HTTP
 docker compose down -v
 ```
 

@@ -28,3 +28,4 @@ accessModifier: public
 filter:
   operations:
     - getClub     # F0 — el esqueleto que camina
+    - updateClub  # F0 — el camino de escritura, para tener con qué practicar

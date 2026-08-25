@@ -24,6 +24,18 @@ public struct FluentClubRepository: ClubRepository {
         }
         return try record.toDomain()
     }
+
+    public func save(_ club: Club) async throws {
+        guard let record = try await ClubRecord.query(on: database).first() else {
+            throw PersistenceError.notFound(table: ClubRecord.schema)
+        }
+        // Solo los campos que el contrato deja escribir (§5.2). `slug`,
+        // `federation` y `crest_key` no se tocan ni aunque la entidad los traiga:
+        // el dueño de esas columnas es la provisión y la ingesta, no este camino.
+        record.name = club.name
+        record.shortName = club.shortName
+        try await record.save(on: database)
+    }
 }
 
 extension ClubRecord {
@@ -61,4 +73,6 @@ public enum PersistenceError: Error, Equatable, Sendable {
     case corruptEnumeration(table: String, column: String, value: String)
     /// `created_at`/`updated_at` nulos: la fila no pasó por Fluent.
     case missingTimestamp(table: String, id: String)
+    /// No hay fila que actualizar. En `clubs` significa *schema* sin aprovisionar.
+    case notFound(table: String)
 }

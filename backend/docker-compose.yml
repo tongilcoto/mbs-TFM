@@ -1,10 +1,16 @@
-# Postgres efímero para los niveles 3 y 4 de la pirámide (§8.1): la integración
-# no se prueba contra SQLite, porque *schema*-por-tenant y RLS son exclusivos de
-# Postgres y son justo lo que hay que probar (D-01).
+# Dos formas de levantar esto, y la diferencia importa al depurar:
 #
-#   docker compose up -d      # levanta
-#   swift test                # los cuatro niveles
-#   docker compose down -v    # -v borra el volumen: la BD es desechable
+#   docker compose up -d db          → SOLO Postgres. La API la corres tú con
+#                                      `swift run Run serve`, en el Mac, con
+#                                      breakpoints de Xcode y recompilación en
+#                                      segundos. **Es el modo de trabajo normal.**
+#
+#   docker compose --profile full up → Postgres + la API dentro de un contenedor
+#                                      Linux, como en producción. Compila en
+#                                      release (~3 min) y sirve para comprobar
+#                                      que el Dockerfile sigue funcionando.
+#
+# La BD vive siempre en Docker en los dos casos.
 services:
   db:
     image: postgres:16-alpine
@@ -14,10 +20,37 @@ services:
       POSTGRES_DB: tfm
     ports:
       # 5434 para no chocar con el 5433 del spike de tenancy ni con un Postgres
-      # local en el 5432.
+      # local en el 5432. Es también el puerto que se pone en TablePlus.
       - "5434:5432"
+    volumes:
+      # Nombrado, así que `docker compose down` conserva los datos y
+      # `down -v` los borra. La BD es desechable a propósito (§8.1).
+      - db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tfm -d tfm"]
       interval: 2s
       timeout: 3s
       retries: 20
+
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+    environment:
+      # `db` es el nombre del servicio: dentro de la red de compose se resuelve
+      # solo. Y el puerto es el **interno** (5432), no el publicado (5434).
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: tfm
+      DB_PASSWORD: tfm
+      DB_NAME: tfm
+      DOMAIN_SUFFIX: localhost
+      LOG_LEVEL: debug
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

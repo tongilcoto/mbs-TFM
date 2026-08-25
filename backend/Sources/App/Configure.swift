@@ -61,6 +61,9 @@ public func configure(_ app: Application, config: DatabaseConfig = .fromEnvironm
     // el problema conocido entre `@TaskLocal` y la implementación interna de
     // Vapor que documenta `swift-openapi-vapor`.
     let routes = app.grouped(
+        // **Primero de la cadena**: envuelve a todos los de dentro, así que
+        // traduce también lo que lance el de tenancy (§5.4).
+        ProblemMiddleware(exposesInternalDetail: app.environment != .production),
         TenantResolutionMiddleware(
             extractor: HostSlugExtractor(domainSuffix: config.domainSuffix),
             controlDatabaseID: .control,

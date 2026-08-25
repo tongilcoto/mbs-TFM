@@ -2464,6 +2464,18 @@ la documentación publicada; no para el compilador.
   decisión no había mirado: `APIProtocol` obliga a implementar **todas** las operaciones generadas → [D-69].)*
 - **La documentación publicada se genera aparte.** Sin soporte de `tags`, el agrupado de Swagger UI/Redoc no
   sale del generador: sale del *spec* directamente, que es de donde tiene que salir.
+- **Los errores se devuelven, no se lanzan.** *(Descubierto al implementar `updateClub`.)* El transporte
+  generado **atrapa** cualquier error que salga de un *handler* y lo convierte en **500** antes de que ningún
+  middleware de Vapor lo vea. Dentro de un *handler* hay que devolver el caso del `Output` que toque. La
+  consecuencia es **buena**: un código de error que el *spec* no declara **no se puede devolver**, porque no
+  existe como caso del enum generado — el contrato deja de ser una promesa y pasa a ser el juego completo de
+  respuestas posibles. El middleware de RFC 7807 sigue haciendo falta, pero solo para lo de **fuera** del
+  transporte (resolución de tenant, 404 de ruta).
+- **Implementar una operación audita su contrato.** `updateClub` declaraba 400/401/403 pero **no 422**, pese a
+  que `UpdateClubRequest.name` lleva `minLength: 1` y §5.5 asigna esa regla al Dominio. El hueco no se vio al
+  escribir el *spec*; se vio al no haber caso del `Output` que devolver. Es el efecto que esta decisión
+  buscaba, en la dirección contraria a la prevista: no solo el código se ata al contrato, también el contrato
+  se completa al escribir el código.
 
 [soar-features]: https://swiftpackageindex.com/apple/swift-openapi-generator/documentation/swift-openapi-generator/supported-openapi-features
 

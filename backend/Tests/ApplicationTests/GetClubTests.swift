@@ -12,9 +12,18 @@ struct GetClubTests {
 
     /// Doble del puerto `ClubRepository`. Nótese lo que **no** hace falta para
     /// escribirlo: ni Postgres, ni `search_path`, ni Vapor.
-    struct ClubRepositoryStub: ClubRepository {
+    ///
+    /// Guarda lo que le mandan salvar para poder afirmar sobre ello. Es una
+    /// `final class` y no un `struct` porque un doble tiene que **recordar**, y
+    /// `Mutex` lo hace `Sendable` sin trampas — el puerto lo exige (§4.3).
+    final class ClubRepositoryStub: ClubRepository, @unchecked Sendable {
         let stored: Club?
+        private(set) var saved: Club?
+
+        init(stored: Club?) { self.stored = stored }
+
         func current() async throws -> Club? { stored }
+        func save(_ club: Club) async throws { saved = club }
     }
 
     static func makeClub(federation: FederationCode = .rffm) throws -> Club {

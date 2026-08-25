@@ -54,17 +54,16 @@ public struct TenantResolutionMiddleware: AsyncMiddleware {
         guard let slug = resolveSlug(from: request) else {
             // Petición sin club → 400 (§6.1, "cierre por arriba"). Medido: no se
             // llega a tocar ningún *schema* de tenant.
-            throw Abort(.badRequest, reason: "La petición no identifica ningún club")
+            //
+            // Se lanza el error de **dominio de tenancy**, no un `Abort`: quien
+            // decide el código HTTP y el cuerpo RFC 7807 es `ProblemMiddleware`
+            // (§5.4). Este middleware no sabe de códigos.
+            throw TenancyError.tenantNotResolved
         }
 
+        // Club desconocido → 404 literal, y lo traduce `ProblemMiddleware`.
         let resolver = TenantResolver(database: request.db(controlDatabaseID))
-        let tenant: Tenant
-        do {
-            tenant = try await resolver.resolve(slug: slug)
-        } catch TenancyError.unknownTenant {
-            // Club desconocido → 404, y literalmente: no existe.
-            throw Abort(.notFound, reason: "Club desconocido: \(slug)")
-        }
+        let tenant = try await resolver.resolve(slug: slug)
 
         return try await TenantContext.$current.withValue(tenant) {
             try await next.respond(to: request)

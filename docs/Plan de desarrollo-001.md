@@ -95,6 +95,21 @@ Provisional y declarado como tal — §7.7 ya avisa de que **nada de §7 se ha e
 implementar *todas* las operaciones generadas—: **[D-69]** (el *spec* se genera **filtrado**, y esa lista es
 el alcance entregado) y, de paso, **[D-70]** (`swift-testing` en lugar de XCTest, que §8.1 daba por sentado).
 
+### 3.2 Lo que se le añadió después, y por qué
+
+F0 se cerró con `GET /v1/club`. Se le sumaron luego tres cosas, **a petición de aprender a operar el sistema
+a mano**, y las tres resultaron ser deuda de F0 más que alcance nuevo:
+
+| Añadido | Por qué no era opcional |
+|---|---|
+| `PATCH /v1/club` | F0 no tenía **ningún** camino de escritura, así que la plantilla que F1–F10 iban a copiar no existía ni estaba probada |
+| `ProblemMiddleware` (RFC 7807) | §5.4 exige `application/problem+json` en **todo** error del contrato. Se servía el formato propio de Vapor, que un cliente generado del *spec* no sabe leer |
+| `HTTP_TRACE=1` en los tests | Sin ver los cuerpos que cruzan la frontera no se puede revisar un adaptador primario leyendo tests, que es lo que §9 exige del desarrollador |
+
+Y de implementar la escritura salió un **hueco del contrato**: `updateClub` declaraba 400/401/403 pero no
+**422**, pese a que `UpdateClubRequest.name` lleva `minLength: 1`. Corregido en el *spec* — el detalle, en
+[D-65].
+
 **Tres hallazgos de montaje** que costaron tiempo y conviene no volver a descubrir: SwiftPM **descarta en
 silencio** un *target* sin ningún `.swift` (los YAML son recursos), **omite del grafo de *build*** un *target*
 que nadie consume, y `registerHandlers` monta **una sola instancia** del *handler* para todo el transporte —

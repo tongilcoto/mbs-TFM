@@ -68,3 +68,26 @@ extension String {
         return String(characters)
     }
 }
+
+extension Club {
+    /// Aplica una modificación **parcial** (§5.5): un campo ausente (`nil`) no
+    /// se toca. La convención del `PATCH` la fija el contrato y la hace cumplir
+    /// esta función, no el código generado (D-65).
+    ///
+    /// Devuelve un `Club` nuevo en vez de mutar: la entidad es un `struct` y sus
+    /// invariantes se validan en el `init`, así que **el resultado de un cambio
+    /// pasa por la misma puerta que un alta**. Si `name` llegara vacío, el `init`
+    /// lanza, y da igual por dónde haya venido.
+    public func applying(name: String?, shortName: String?) throws -> Club {
+        try Club(
+            id: id,
+            name: name ?? self.name,
+            shortName: shortName ?? self.shortName,
+            slug: slug,            // inmutable (§3.2): no se acepta ni se ignora, no existe
+            crestKey: crestKey,    // el escudo no viaja en un PATCH JSON (§5.2)
+            federation: federation, // se fija al aprovisionar; ninguna operación la cambia
+            createdAt: createdAt,
+            updatedAt: updatedAt   // lo pone la BD (@Timestamp on: .update)
+        )
+    }
+}
