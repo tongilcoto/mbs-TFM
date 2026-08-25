@@ -160,6 +160,14 @@ let package = Package(
             dependencies: ["Application", "Domain"],
             swiftSettings: commonSwiftSettings
         ),
+        // `HostSlugExtractor` es lógica **pura** aunque viva en infraestructura:
+        // la extracción del slug de §6.1 no toca red ni BD, así que se prueba en
+        // el nivel barato y **corre sin Docker**.
+        .testTarget(
+            name: "TenancyTests",
+            dependencies: ["Tenancy"],
+            swiftSettings: commonSwiftSettings
+        ),
         // Niveles 3 y 4: Postgres real en contenedor efímero, nunca SQLite (§8.1).
         .testTarget(
             name: "PersistenceTests",

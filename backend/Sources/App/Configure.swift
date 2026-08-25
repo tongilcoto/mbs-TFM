@@ -63,7 +63,12 @@ public func configure(_ app: Application, config: DatabaseConfig = .fromEnvironm
     let routes = app.grouped(
         TenantResolutionMiddleware(
             extractor: HostSlugExtractor(domainSuffix: config.domainSuffix),
-            controlDatabaseID: .control
+            controlDatabaseID: .control,
+            // Fuera de desarrollo y test, la cabecera `X-Club` deja de existir:
+            // es un dato que controla el cliente y aceptarla en producción sería
+            // dejar abierto un conmutador de tenant (§6.1).
+            allowsDevelopmentHeader: TenantResolutionMiddleware
+                .allowsDevelopmentHeader(in: app.environment)
         )
     )
     try handler.registerHandlers(

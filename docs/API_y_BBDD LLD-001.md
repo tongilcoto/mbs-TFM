@@ -2361,7 +2361,15 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    identidad (§3.2), así que hereda literalmente el problema de §9.8: cada verano hay que rehacer los
    cargos. Lo que se decida allí aplica aquí, y conviene resolverlas **juntas** — son la misma pregunta
    sobre dos tablas.
-10. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
+10. **Qué sirve el ápice del dominio, y cómo llega un usuario a *su* subdominio.** §6.1 fija que
+    `myapp.com` **no es un tenant** —hay que recortarlo del `Host` y añadirlo como SAN aparte—, pero no dice
+    qué hay ahí. Y de ello depende una pregunta de producto sin responder: si el club se resuelve por
+    subdominio y el backoffice comparte origen con la API, **el usuario tiene que aterrizar ya en
+    `atleti.myapp.com`**. Las salidas son un marcador guardado, un enlace del correo de invitación
+    (`POST /staff-members/{id}/invite`, §5.1) o un descubridor en el ápice que pregunte el club y redirija —
+    y esa tercera opción es una superficie no autenticada que enumera tenants, así que no es gratis.
+    Bloqueará al empezar el backoffice, no antes.
+11. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
     lectura y que basta con pertenecer al club. Un jugador —o el tutor de un menor— viendo la ficha, las
     ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
     RGPD que no se han diseñado. Hoy no bloquea porque las cuentas son de *staff* (ADR, Anexo C.4).

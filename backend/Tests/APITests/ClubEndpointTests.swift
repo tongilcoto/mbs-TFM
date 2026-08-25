@@ -1,4 +1,5 @@
 import APIContract
+import Domain
 import Fluent
 import Foundation
 import SQLKit
@@ -39,14 +40,14 @@ struct ClubEndpointTests {
         try await app.asyncShutdown()
     }
 
-    static func seed(_ slug: String, federation: String, on app: Application) async throws {
+    static func seed(_ slug: String, federation: FederationCode, on app: Application) async throws {
         try await ProvisionTenantCommand.provision(slug: slug, schemaName: "e2e_\(slug)", on: app)
         try await TenantRouting.withSearchPath("e2e_\(slug)", on: app.db(.control)) { database in
             let record = ClubRecord()
             record.name = "Club \(slug)"
             record.shortName = slug.uppercased()
             record.slug = slug
-            record.federation = federation
+            record.federation = federation.rawValue
             try await record.save(on: database)
         }
     }
@@ -66,8 +67,8 @@ struct ClubEndpointTests {
     func capabilitiesComeFromTheCatalogue() async throws {
         try await Self.withApp { app in
             try await Self.cleanUp(["madrid", "catalan"], on: app)
-            try await Self.seed("madrid", federation: "rffm", on: app)
-            try await Self.seed("catalan", federation: "fcf", on: app)
+            try await Self.seed("madrid", federation: .rffm, on: app)
+            try await Self.seed("catalan", federation: .fcf, on: app)
 
             try await app.testing().test(
                 .GET, "/v1/club",
@@ -123,8 +124,8 @@ struct ClubEndpointTests {
     func sameRouteDifferentTenants() async throws {
         try await Self.withApp { app in
             try await Self.cleanUp(["uno", "dos"], on: app)
-            try await Self.seed("uno", federation: "rffm", on: app)
-            try await Self.seed("dos", federation: "rffm", on: app)
+            try await Self.seed("uno", federation: .rffm, on: app)
+            try await Self.seed("dos", federation: .rffm, on: app)
 
             var names: [String] = []
             for slug in ["uno", "dos"] {

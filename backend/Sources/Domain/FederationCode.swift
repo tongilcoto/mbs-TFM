@@ -3,6 +3,33 @@
 /// haría funcionar.
 ///
 /// Es propiedad **del tenant**: hay una por *schema* (`Club.federation`).
+///
+/// # Éste es el sitio donde se añade una federación
+///
+/// **Ningún literal `"rffm"` / `"fcf"` debe existir en el proyecto fuera de este
+/// fichero.** Todo lo demás se deriva:
+///
+/// | Qué | Cómo se mantiene al día |
+/// |---|---|
+/// | `capabilities` | `switch` **exhaustivo** → un caso nuevo no compila hasta declararlas |
+/// | `CHECK` de la tabla `clubs` (§4.6) | se genera de `sqlValueList`, no se teclea |
+/// | Enum del contrato (`Components.Schemas.FederationCode`) | `toContract()` es un `switch` **exhaustivo** |
+/// | *Fixtures* de test | tipadas con este `enum`, nunca con `String` |
+///
+/// ## Los dos pasos que sí hay que dar a mano
+///
+/// 1. **Añadir el caso aquí**, con sus `capabilities` — y **citando la evidencia
+///    de su anexo**, nunca de memoria (AGENTS.md).
+/// 2. **Añadir el valor al `enum` de `FederationCode` en el *spec* OpenAPI.**
+///    Esto **no puede** derivarse de Swift: el *spec* es la fuente de verdad del
+///    contrato ([D-25], [D-65]) y la generación va en esa dirección, no al revés.
+///
+/// El paso 2 **no depende de que nadie se acuerde**: `toContract()` no compila
+/// hasta que el caso exista también en el contrato. Es el criterio de [D-61] —
+/// la integridad en el sistema de tipos, no en la disciplina.
+///
+/// Y después, el trabajo de verdad: **el adaptador** de su API (D-17), sin el
+/// cual el caso nuevo es un rótulo sin ingesta detrás.
 public enum FederationCode: String, CaseIterable, Sendable {
     /// Real Federación de Fútbol de Madrid.
     case rffm
@@ -46,5 +73,16 @@ extension FederationCode {
             // prometer una pantalla vacía es peor que ocultarla (D-48).
             FederationCapabilities(providesRoundStandings: false, providesScorers: false)
         }
+    }
+}
+
+extension FederationCode {
+    /// Los valores del enumerado listados para un `IN (…)` de SQL.
+    ///
+    /// Vive en el Dominio, y no en la migración que lo usa, porque la lista de
+    /// federaciones **es** este `enum`: el `CHECK` de la tabla (§4.6) tiene que
+    /// derivarse de él, no repetirlo.
+    public static var sqlValueList: String {
+        allCases.map { "'\($0.rawValue)'" }.joined(separator: ", ")
     }
 }

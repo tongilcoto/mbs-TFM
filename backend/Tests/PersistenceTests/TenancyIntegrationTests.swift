@@ -26,7 +26,7 @@ struct TenancyIntegrationTests {
         return app
     }
 
-    static func provision(_ slug: String, federation: String, on app: Application) async throws {
+    static func provision(_ slug: String, federation: FederationCode, on app: Application) async throws {
         try await ProvisionTenantCommand.provision(
             slug: slug, schemaName: "test_\(slug)", on: app
         )
@@ -35,7 +35,7 @@ struct TenancyIntegrationTests {
             record.name = "Club \(slug)"
             record.shortName = slug
             record.slug = slug
-            record.federation = federation
+            record.federation = federation.rawValue
             try await record.save(on: database)
         }
     }
@@ -59,8 +59,8 @@ struct TenancyIntegrationTests {
         try await Self.cleanUp(["uniq-a", "uniq-b"], on: app)
 
         // El mismo slug en los dos clubes. Que no reviente **es** el resultado.
-        try await Self.provision("uniq-a", federation: "rffm", on: app)
-        try await Self.provision("uniq-b", federation: "fcf", on: app)
+        try await Self.provision("uniq-a", federation: .rffm, on: app)
+        try await Self.provision("uniq-b", federation: .fcf, on: app)
 
         let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
         let a = try await unitOfWork.withRepositories(
@@ -87,7 +87,7 @@ struct TenancyIntegrationTests {
         let app = try await Self.makeApp()
         defer { Task { try? await app.asyncShutdown() } }
         try await Self.cleanUp(["leak"], on: app)
-        try await Self.provision("leak", federation: "rffm", on: app)
+        try await Self.provision("leak", federation: .rffm, on: app)
 
         try await TenantRouting.withSearchPath("test_leak", on: app.db(.control)) { database in
             let sql = database as! any SQLDatabase
@@ -110,7 +110,7 @@ struct TenancyIntegrationTests {
         let app = try await Self.makeApp()
         defer { Task { try? await app.asyncShutdown() } }
         try await Self.cleanUp(["ddl"], on: app)
-        try await Self.provision("ddl", federation: "rffm", on: app)
+        try await Self.provision("ddl", federation: .rffm, on: app)
 
         let sql = app.db(.control) as! any SQLDatabase
         func exists(_ table: String, in schema: String) async throws -> Bool {

@@ -1,3 +1,4 @@
+import Domain
 public import Fluent
 import Foundation
 
@@ -51,12 +52,19 @@ public struct CreateClub: AsyncMigration {
             .create()
 
         // El `CHECK` del enumerado va junto a la columna (§4.6). Es lo que
-        // permite que el repositorio haga `FederationCode(rawValue:)!` al mapear
-        // sin mentir: el dominio de la columna está garantizado por la BD.
+        // permite que el repositorio confíe al mapear: el dominio de la columna
+        // está garantizado por la BD.
+        //
+        // **Se deriva de `FederationCode.allCases`, no se teclea.** Una lista de
+        // valores escrita a mano aquí es una segunda fuente de verdad que nadie
+        // recuerda actualizar, y su forma de fallar es fea: añadir una federación
+        // al Dominio compilaría, y el `INSERT` reventaría en producción contra un
+        // `CHECK` que se quedó atrás. Interpolar es seguro por construcción: los
+        // valores salen de un `enum` de Swift, no de entrada de usuario.
         try await database.checkConstraint(
             table: ClubRecord.schema,
             name: "chk_clubs_federation",
-            expression: "federation IN ('rffm', 'fcf')"
+            expression: "federation IN (\(FederationCode.sqlValueList))"
         )
     }
 

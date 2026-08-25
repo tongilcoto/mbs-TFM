@@ -164,7 +164,7 @@ swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
 swift run Run serve
-curl -H 'X-Club: atleti' localhost:8080/v1/club
+curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
 docker compose down -v
 ```
 
@@ -189,9 +189,15 @@ va. Orden: aceptar el aviso → ⌘B → si persiste, *File ▸ Packages ▸ Res
 **La CLI es la fuente de verdad**, no el índice de Xcode: si `swift build` pasa, el código está bien.
 *(Comprobado con Swift 6.3.2 y con la 6.4 de Xcode 27 Beta: el paquete compila con las dos.)*
 
-**Deuda declarada de F0**, para que nadie la confunda con diseño: el tenant se resuelve por `Host` y por la
-cabecera `X-Club`, **no** por *claim* firmado. §6.1 dice que el *claim* es autoritativo y el subdominio solo
-enrutado; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
+**El club viaja en el subdominio, nunca en una cabecera que ponga el cliente.** `*.localhost` resuelve a
+127.0.0.1 sin configurar nada, así que **desarrollo usa la misma vía que producción**:
+`http://atleti.localhost:8080/v1/club`. La cabecera `X-Club` existe solo como andamiaje y está **restringida
+por lista blanca a `.development` y `.testing`** — aceptarla en producción sería dejar abierto un conmutador
+de tenant, porque es un dato que controla el cliente por completo.
+
+**Deuda declarada de F0**, para que nadie la confunda con diseño: el tenant se resuelve por `Host`, **no** por
+*claim* firmado. §6.1 dice que el *claim* es autoritativo, el subdominio solo enrutado, y que una discrepancia
+**se rechaza**; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
 
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; después, **F1–F10**, la ingesta).

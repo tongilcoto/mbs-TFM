@@ -3,8 +3,7 @@ public import Vapor
 
 /// Resuelve el club de la petición y lo deja en `TenantContext` (§6.1).
 ///
-/// **Hoy resuelve por `Host` y por cabecera, no por *claim* firmado**, y eso es
-/// deuda declarada: §6.1 dice que **el *claim* `club_id` del JWT es
+/// **Hoy resuelve por `Host`, no por *claim* firmado**, y eso es deuda declarada: §6.1 dice que **el *claim* `club_id` del JWT es
 /// autoritativo y el subdominio es solo enrutado**, porque cualquiera puede
 /// enviar el `Host` que quiera. §7.7 lo confirma como el hueco más grande del
 /// diseño ("nada de §7 se ha ejecutado"). Cuando llegue la validación JWKS,
@@ -18,13 +17,34 @@ public struct TenantResolutionMiddleware: AsyncMiddleware {
     private let extractor: HostSlugExtractor
     private let controlDatabaseID: DatabaseID
 
-    /// Cabecera de desarrollo, equivalente a la del spike. Deja probar sin
-    /// montar DNS *wildcard* en local.
+    /// Cabecera de desarrollo, equivalente a la del spike.
     public static let developmentHeader = "X-Club"
 
-    public init(extractor: HostSlugExtractor, controlDatabaseID: DatabaseID) {
+    /// **Si esto fuese `true` en producción, sería un conmutador de tenant
+    /// abierto**: cualquiera podría mandar `X-Club: otro-club` y leer los datos
+    /// de otro. La cabecera la controla el cliente por completo, que es
+    /// exactamente la razón por la que §6.1 dice que el `Host` es *enrutado* y
+    /// solo el *claim* firmado es autoritativo.
+    ///
+    /// Se decide **por lista blanca de entornos** (`.development`, `.testing`),
+    /// no descartando `.production`: así un entorno nuevo nace con la cabecera
+    /// **apagada** en vez de encendida.
+    private let allowsDevelopmentHeader: Bool
+
+    public init(
+        extractor: HostSlugExtractor,
+        controlDatabaseID: DatabaseID,
+        allowsDevelopmentHeader: Bool
+    ) {
         self.extractor = extractor
         self.controlDatabaseID = controlDatabaseID
+        self.allowsDevelopmentHeader = allowsDevelopmentHeader
+    }
+
+    /// Lista blanca: cualquier entorno que no sea de desarrollo o test rechaza
+    /// la cabecera.
+    public static func allowsDevelopmentHeader(in environment: Environment) -> Bool {
+        environment == .development || environment == .testing
     }
 
     public func respond(
@@ -52,7 +72,8 @@ public struct TenantResolutionMiddleware: AsyncMiddleware {
     }
 
     private func resolveSlug(from request: Request) -> String? {
-        if let header = request.headers.first(name: Self.developmentHeader),
+        if allowsDevelopmentHeader,
+           let header = request.headers.first(name: Self.developmentHeader),
            !header.isEmpty {
             return header
         }
