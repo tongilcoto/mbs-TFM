@@ -181,6 +181,14 @@ docker compose down -v
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 
+**Si abres el proyecto en Xcode y ves `Cannot find type 'Components' in scope`, no está roto.** `Components`
+y el resto del contrato **no existen en disco hasta que el plugin corre** (`D-69`), así que el índice de Xcode
+no los conoce **antes de la primera compilación exitosa**. Además, Xcode pide **confiar y habilitar** los
+plugins de *build* de paquetes externos: si ese aviso no se acepta, el plugin no corre nunca y el error no se
+va. Orden: aceptar el aviso → ⌘B → si persiste, *File ▸ Packages ▸ Reset Package Caches* y volver a compilar.
+**La CLI es la fuente de verdad**, no el índice de Xcode: si `swift build` pasa, el código está bien.
+*(Comprobado con Swift 6.3.2 y con la 6.4 de Xcode 27 Beta: el paquete compila con las dos.)*
+
 **Deuda declarada de F0**, para que nadie la confunda con diseño: el tenant se resuelve por `Host` y por la
 cabecera `X-Club`, **no** por *claim* firmado. §6.1 dice que el *claim* es autoritativo y el subdominio solo
 enrutado; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
