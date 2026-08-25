@@ -2361,14 +2361,24 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    identidad (§3.2), así que hereda literalmente el problema de §9.8: cada verano hay que rehacer los
    cargos. Lo que se decida allí aplica aquí, y conviene resolverlas **juntas** — son la misma pregunta
    sobre dos tablas.
-10. **Qué sirve el ápice del dominio, y cómo llega un usuario a *su* subdominio.** §6.1 fija que
-    `myapp.com` **no es un tenant** —hay que recortarlo del `Host` y añadirlo como SAN aparte—, pero no dice
-    qué hay ahí. Y de ello depende una pregunta de producto sin responder: si el club se resuelve por
-    subdominio y el backoffice comparte origen con la API, **el usuario tiene que aterrizar ya en
-    `atleti.myapp.com`**. Las salidas son un marcador guardado, un enlace del correo de invitación
-    (`POST /staff-members/{id}/invite`, §5.1) o un descubridor en el ápice que pregunte el club y redirija —
-    y esa tercera opción es una superficie no autenticada que enumera tenants, así que no es gratis.
-    Bloqueará al empezar el backoffice, no antes.
+10. ~~Cómo llega un usuario a *su* subdominio.~~ **Resuelta: la URL se entrega al club a la firma del
+    contrato**, como parte de la relación con el proveedor. No hace falta descubridor en el ápice, y con él
+    **desaparece la única superficie no autenticada que habría enumerado tenants** — que era el motivo por el
+    que esta cuestión no era gratis.
+
+    Encaja con [D-23] y §6.3: el alta de un club **es provisión**, no una operación de esta API. La URL es un
+    entregable de esa provisión, igual que el *schema*.
+
+    Tres consecuencias que sí hay que respetar:
+
+    - **El `slug` pasa a ser contractual.** §6.1 ya lo daba por "público y, en la práctica, inmutable";
+      ahora está escrito en un contrato. Lo elige el proveedor al aprovisionar —contrastándolo con la lista
+      de nombres reservados (§6.1)—, y **cambiarlo es renegociar**, no un `PATCH`.
+    - **El correo de invitación tiene que llevar URL absoluta y cualificada por tenant**
+      (`POST /v1/staff-members/{id}/invite`, §5.1). Es el único camino por el que entra alguien que **no**
+      estuvo en la firma: un enlace relativo, o al ápice, lo dejaría sin saber a qué subdominio ir.
+    - **El ápice sigue necesitando existir** como SAN del certificado *wildcard* (§6.1), pero ya no tiene
+      que servir lógica de producto. Lo que ponga ahí el proveedor es indiferente al diseño.
 11. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
     lectura y que basta con pertenecer al club. Un jugador —o el tutor de un menor— viendo la ficha, las
     ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
