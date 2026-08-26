@@ -304,6 +304,7 @@ swift test --filter DomainTests             # nivel 1
 swift test --filter ApplicationTests        # nivel 2
 swift test --filter PersistenceTests        # nivel 3 — necesita Docker
 swift test --filter APITests                # nivel 4 — necesita Docker
+swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
@@ -356,13 +357,18 @@ docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tes
 **Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
 Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
 
-| Nivel | *Target* | Qué prueba | I/O |
-|---|---|---|---|
-| 1 | `DomainTests` | Invariantes y *Value Objects* | **cero** |
-| 2 | `ApplicationTests` | Casos de uso con puertos **falseados** | **cero** |
-| — | `TenancyTests` | Extracción del slug del `Host` (lógica pura) | **cero** |
-| 3 | `PersistenceTests` | Mapeo, migraciones, `search_path` | Postgres real |
-| 4 | `APITests` | Rutas, DTOs, códigos de error | Postgres real |
+`TenancyTests` lleva asterisco porque es el único que rompe la correspondencia nivel↔capa de §8.1:
+`HostSlugExtractor` vive en infraestructura pero **no hace I/O**, así que se prueba en el nivel barato. La
+regla que se deriva, y que aplica a lo que venga: **si un componente no hace I/O, se prueba sin él, esté en
+la capa que esté.** Mandarlo a integración por estar "fuera" solo lo haría más lento sin probar nada más.
+
+| Nivel | *Target*           | Qué prueba                                   | I/O           |
+| ----- | ------------------ | -------------------------------------------- | ------------- |
+| 1     | `DomainTests`      | Invariantes y *Value Objects*                | **cero**      |
+| 2     | `ApplicationTests` | Casos de uso con puertos **falseados**       | **cero**      |
+| 1\*    | `TenancyTests`     | Slug del `Host` — **pura, pero en infraestructura** | **cero**      |
+| 3     | `PersistenceTests` | Mapeo, migraciones, `search_path`            | Postgres real |
+| 4     | `APITests`         | Rutas, DTOs, códigos de error                | Postgres real |
 
 ### 5.1 Ver los cuerpos que cruzan la frontera
 

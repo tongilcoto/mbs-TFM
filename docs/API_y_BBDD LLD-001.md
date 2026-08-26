@@ -2270,6 +2270,15 @@ habilita una **pirámide** con base ancha y barata:
 | **Integración de adaptadores** | Mapeo `Record ↔ Entidad`, consultas, migraciones, enrutado `search_path`, **RLS** | `VaporTesting` + **Postgres real** (contenedor efímero) | Adaptador secundario (§4.4) + §6/§7.4 | real |
 | **E2E / contrato** | Rutas HTTP, DTOs, auth, códigos de error | `VaporTesting` `app.testing().test(...)` | Adaptador primario (§5) | real |
 
+> **El nivel lo fija la columna de I/O, no la de capa.** La correspondencia entre las dos es la consecuencia
+> normal de §2.2 —el Dominio no hace I/O y los adaptadores sí—, pero no es la definición, y al implementar F0
+> apareció el primer caso que las separa: `HostSlugExtractor` (§6.1) es **lógica pura viviendo en
+> infraestructura**. Recortar un sufijo de un `Host` no toca red ni BD, así que su test pertenece al **nivel
+> rápido** aunque su código esté en la capa de fuera.
+>
+> Es la regla general para lo que venga: **si un componente no hace I/O, se prueba sin él, esté donde esté**.
+> Meterlo en integración porque "es infraestructura" solo lo haría más lento sin probar nada más.
+
 Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos `Clock`/`UUIDProvider` de
 §4.3 hacen el tiempo y los ids inyectables); los dos superiores, **pocos y selectivos**.
 
