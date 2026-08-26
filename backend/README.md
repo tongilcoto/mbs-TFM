@@ -92,6 +92,7 @@ Todo por variables, para que CI apunte a lo suyo sin tocar código:
 ```sh
 LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
 HTTP_TRACE=1  swift run Run serve        # verás los cuerpos que entran y salen
+LOG_LEVEL=debug HTTP_TRACE=1 swift run Run serve  # verás ambas cosas
 ```
 
 ### 2.4 Ver lo que cruza la frontera
