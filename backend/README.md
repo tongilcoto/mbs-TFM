@@ -96,8 +96,14 @@ HTTP_TRACE=1  swift run Run serve        # verás los cuerpos que entran y salen
 
 ### 2.4 Ver lo que cruza la frontera
 
-`LOG_LEVEL=debug` **no enseña los cuerpos**: Vapor registra la línea de petición y las cabeceras, nunca el
-`PATCH` que entra ni el JSON que sale. Para eso está `HTTP_TRACE=1`:
+**`--log debug` no enseña los cuerpos, y ninguna combinación de niveles lo hará**: Vapor registra la línea de
+petición, las cabeceras y el SQL de Fluent, pero nunca el cuerpo — ni el que entra ni el que sale. Hace falta
+**`HTTP_TRACE=1`**, que es una variable aparte y **no** un nivel de log:
+
+```sh
+swift run Run serve --log debug                 # SQL sí, cuerpos no
+HTTP_TRACE=1 swift run Run serve --log debug    # las dos cosas
+```
 
 ```
 ┌─ → PATCH /v1/club

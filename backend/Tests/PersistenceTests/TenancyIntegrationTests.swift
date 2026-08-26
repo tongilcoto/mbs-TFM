@@ -117,3 +117,61 @@ struct TenancyIntegrationTests {
         }
     }
 }
+
+/// El ámbito de tenant reutiliza el que ya resolvió el middleware, en lugar de
+/// volver a consultarlo (§6.1). Eso ahorra un `SELECT` por petición, pero abre
+/// una pregunta que hay que contestar: **¿y si el ambiente y el actor no son el
+/// mismo club?**
+@Suite("TenantUnitOfWork · §6.1 · el ambiente y el actor tienen que coincidir", .serialized)
+struct TenantScopeTests {
+
+    /// Sin tenant ambiental —el caso del **job de ingesta** (§2.3-b), que no pasa
+    /// por HTTP— se resuelve contra el plano de control, como siempre.
+    @Test("sin tenant ambiental, se resuelve: es el camino de la ingesta")
+    func resolvesWhenNoAmbientTenant() async throws {
+        try await TenancyIntegrationTests.withApp { app in
+            try await TenancyIntegrationTests.cleanUp(["scope-a"], on: app)
+            try await TenancyIntegrationTests.provision("scope-a", federation: .rffm, on: app)
+
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let club = try await unitOfWork.withRepositories(
+                actor: .init(clubSlug: try Slug("scope-a"))
+            ) { try await $0.clubs.current() }
+
+            #expect(club?.slug.value == "scope-a")
+            try await TenancyIntegrationTests.cleanUp(["scope-a"], on: app)
+        }
+    }
+
+    /// **La discrepancia se rechaza, no se resuelve a favor de ninguno.** Es el
+    /// mismo criterio con que §6.1 trata el desacuerdo entre el `Host` y el
+    /// *claim* del JWT: elegir uno sería confiar una decisión de aislamiento a un
+    /// desempate implícito.
+    ///
+    /// Hoy no puede ocurrir —el `ActorContext` se construye **del** tenant
+    /// ambiental—, y precisamente por eso el test importa: el día que el actor
+    /// venga del *claim* firmado (§7.2) y el ambiente del `Host`, esta guarda es
+    /// la que separa un 403 de una fuga entre clubes.
+    @Test("si el ambiente dice un club y el actor otro, se rechaza (§6.1)")
+    func rejectsMismatch() async throws {
+        try await TenancyIntegrationTests.withApp { app in
+            try await TenancyIntegrationTests.cleanUp(["scope-b", "scope-c"], on: app)
+            try await TenancyIntegrationTests.provision("scope-b", federation: .rffm, on: app)
+            try await TenancyIntegrationTests.provision("scope-c", federation: .fcf, on: app)
+
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let ambient = Tenant(slug: "scope-b", schemaName: "\(TenancyIntegrationTests.prefix)scope-b")
+
+            await #expect(throws: TenancyError.self) {
+                try await TenantContext.$current.withValue(ambient) {
+                    // El actor dice `scope-c`; el ambiente, `scope-b`.
+                    try await unitOfWork.withRepositories(
+                        actor: .init(clubSlug: try Slug("scope-c"))
+                    ) { try await $0.clubs.current() }
+                }
+            }
+
+            try await TenancyIntegrationTests.cleanUp(["scope-b", "scope-c"], on: app)
+        }
+    }
+}

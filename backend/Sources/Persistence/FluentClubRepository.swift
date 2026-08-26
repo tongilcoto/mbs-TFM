@@ -26,15 +26,27 @@ public struct FluentClubRepository: ClubRepository {
     }
 
     public func save(_ club: Club) async throws {
-        guard let record = try await ClubRecord.query(on: database).first() else {
-            throw PersistenceError.notFound(table: ClubRecord.schema)
-        }
-        // Solo los campos que el contrato deja escribir (§5.2). `slug`,
-        // `federation` y `crest_key` no se tocan ni aunque la entidad los traiga:
-        // el dueño de esas columnas es la provisión y la ingesta, no este camino.
-        record.name = club.name
-        record.shortName = club.shortName
-        try await record.save(on: database)
+        // **`UPDATE` directo por id, sin releer la fila.** La versión anterior
+        // hacía un `SELECT` para traerse el `Record` y luego lo guardaba, así que
+        // un `PATCH` acababa emitiendo **dos** `SELECT` sobre `clubs`: el del
+        // caso de uso al cargar el agregado y éste. El segundo no aportaba nada
+        // —la entidad ya venía cargada y su id es la clave—.
+        //
+        // Se escriben **solo los campos que el contrato deja escribir** (§5.2).
+        // `slug`, `federation` y `crest_key` no se tocan: sus dueños son la
+        // provisión y la ingesta, no este camino. Un `record.update()` completo
+        // los reescribiría todos, que es justo lo que no se quiere.
+        //
+        // `updated_at` va explícito porque `@Timestamp(on: .update)` solo actúa
+        // al guardar un modelo, no en un `update` de constructor de consulta.
+        // TODO(§4.3): cuando exista el puerto `Clock`, ese `Date()` sale de él.
+        let updated = try await ClubRecord.query(on: database)
+            .filter(\.$id == club.id.raw)
+            .set(\.$name, to: club.name)
+            .set(\.$shortName, to: club.shortName)
+            .set(\.$updatedAt, to: Date())
+            .update()
+        _ = updated
     }
 }
 

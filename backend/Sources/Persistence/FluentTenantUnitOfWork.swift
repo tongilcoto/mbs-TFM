@@ -23,12 +23,7 @@ public struct FluentTenantUnitOfWork: TenantUnitOfWork {
         actor: ActorContext,
         _ work: @escaping @Sendable (any Repositories) async throws -> T
     ) async throws -> T {
-        // TODO(F-posterior): esto es una consulta al plano de control **por
-        // petición**. Cachear slug→schema es la optimización obvia, pero también
-        // es una caché de una decisión de aislamiento: no se añade sin medir ni
-        // sin decidir su invalidación. Anotado, no hecho.
-        let resolver = TenantResolver(database: controlDatabase)
-        let tenant = try await resolver.resolve(slug: actor.clubSlug.value)
+        let tenant = try await resolveTenant(for: actor)
 
         return try await TenantRouting.withSearchPath(
             tenant.schemaName,
@@ -36,6 +31,33 @@ public struct FluentTenantUnitOfWork: TenantUnitOfWork {
         ) { scopedDatabase in
             try await work(FluentRepositories(database: scopedDatabase))
         }
+    }
+}
+
+extension FluentTenantUnitOfWork {
+    /// Reutiliza el tenant que **ya resolvió el middleware** (§6.1) en lugar de
+    /// volver a consultarlo.
+    ///
+    /// Sin esto, un `PATCH` emitía **dos** `SELECT` idénticos sobre
+    /// `public.tenants`: uno del middleware y otro de aquí. No era una caché que
+    /// faltara —eso sí habría que medirlo antes de añadirlo—, era la **misma
+    /// consulta hecha dos veces en la misma petición**.
+    ///
+    /// Se conserva la resolución para quien llega **sin** tenant ambiental, que
+    /// es el caso real del job de ingesta (§2.3-b): no pasa por HTTP, así que no
+    /// hay middleware que se lo haya resuelto.
+    private func resolveTenant(for actor: ActorContext) async throws -> Tenant {
+        if let ambient = TenantContext.current {
+            // Si el actor y el ambiente discrepan, algo se ha cruzado. Se
+            // rechaza en vez de elegir uno, que es el criterio de §6.1.
+            guard ambient.slug == actor.clubSlug.value else {
+                throw TenancyError.tenantMismatch(
+                    host: ambient.slug, claim: actor.clubSlug.value)
+            }
+            return ambient
+        }
+        return try await TenantResolver(database: controlDatabase)
+            .resolve(slug: actor.clubSlug.value)
     }
 }
 
