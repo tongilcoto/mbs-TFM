@@ -308,6 +308,20 @@ swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
 
+**Para estudiar, usa `--no-parallel --disable-xctest`.** Por defecto `swift-testing` ejecuta en paralelo
+—también los tests **dentro** de una misma suite— y escribe en **orden de finalización**, así que la salida
+sale entrelazada y cambia entre pasadas. En serie el orden es **exactamente el del código fuente**, con cada
+suite agrupada y cerrada antes de la siguiente:
+
+```sh
+swift test --no-parallel --disable-xctest
+```
+
+Comprobado que es determinista: tres pasadas, la misma salida byte a byte.
+
+El paralelo no sobra —los 31 tests bajan de 0,85 s a 0,25 s, y correrlos concurrentes **es** lo que destapa
+las carreras que un orden fijo esconde (§5.0)—. Pero para leer, en serie.
+
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
 > ni un `import XCTest` en el proyecto (`D-70`). Lo que pasa es que SwiftPM ejecuta **las dos** bibliotecas
 > de test por defecto: la mitad de XCTest arranca, no encuentra nada y lo dice, y luego corre
