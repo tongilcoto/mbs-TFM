@@ -7,6 +7,7 @@ import Testing
 import Vapor
 import VaporTesting
 @testable import App
+import TestSupport
 @testable import Persistence
 @testable import Tenancy
 
@@ -27,35 +28,18 @@ struct ClubEndpointTests {
         )
     }
 
+    static let prefix = "e2e_"
+
     static func withApp(_ body: (Application) async throws -> Void) async throws {
-        let app = try await Application.make(.testing)
-        do {
-            try await configure(app)
-            try await app.autoMigrate()
-            try await body(app)
-        } catch {
-            try? await app.asyncShutdown()
-            throw error
-        }
-        try await app.asyncShutdown()
+        try await TestEnvironment.withApp(body)
     }
 
     static func seed(_ slug: String, federation: FederationCode, on app: Application) async throws {
-        // La provisión ya siembra la fila del club (§6.3): es su cuarto paso,
-        // no algo que el que llama tenga que recordar.
-        try await ProvisionTenantCommand.provision(
-            slug: slug, schemaName: "e2e_\(slug)",
-            name: "Club \(slug)", shortName: slug.uppercased(),
-            federation: federation, on: app
-        )
+        try await TestEnvironment.provisionClub(slug, federation: federation, schemaPrefix: prefix, on: app)
     }
 
     static func cleanUp(_ slugs: [String], on app: Application) async throws {
-        guard let sql = app.db(.control) as? any SQLDatabase else { return }
-        for slug in slugs {
-            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: "e2e_\(slug)") CASCADE").run()
-            try await TenantRecord.query(on: app.db(.control)).filter(\.$slug == slug).delete()
-        }
+        try await TestEnvironment.dropClubs(slugs, schemaPrefix: prefix, on: app)
     }
 
     /// D-17/D-29/D-48: las dos banderas de capacidad **no salen de la fila**, se

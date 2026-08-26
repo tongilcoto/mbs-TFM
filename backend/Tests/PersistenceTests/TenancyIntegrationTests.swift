@@ -6,6 +6,7 @@ import SQLKit
 import Testing
 import Vapor
 @testable import App
+import TestSupport
 @testable import Persistence
 @testable import Tenancy
 
@@ -19,44 +20,20 @@ import Vapor
 @Suite("Tenancy · §6.2 · el search_path aísla de verdad", .serialized)
 struct TenancyIntegrationTests {
 
-    /// Presta una `Application` y **espera a su cierre**.
-    ///
-    /// El `defer { Task { try? await app.asyncShutdown() } }` que había antes
-    /// aquí no esperaba a nada: la `Application` podía destruirse con el cierre
-    /// aún en vuelo, y Vapor tiene un `fatalError` para justo eso. Pasaba
-    /// desapercibido al correr este *target* solo, y **mataba la batería entera
-    /// con señal 5** al correrlo junto al de API, cuando hay más concurrencia.
-    /// Un cierre que no se espera no es un cierre.
+    /// Prefijo de *schema* propio de este target, para que los dos targets de
+    /// integración no se pisen entre ellos.
+    static let prefix = "test_"
+
     static func withApp(_ body: (Application) async throws -> Void) async throws {
-        let app = try await Application.make(.testing)
-        do {
-            try await configure(app)
-            try await app.autoMigrate()
-            try await body(app)
-        } catch {
-            try? await app.asyncShutdown()
-            throw error
-        }
-        try await app.asyncShutdown()
+        try await TestEnvironment.withApp(body)
     }
 
     static func provision(_ slug: String, federation: FederationCode, on app: Application) async throws {
-        // La provisión ya siembra la fila del club (§6.3): es su cuarto paso,
-        // no algo que el que llama tenga que recordar.
-        try await ProvisionTenantCommand.provision(
-            slug: slug, schemaName: "test_\(slug)",
-            name: "Club \(slug)", shortName: slug.uppercased(),
-            federation: federation, on: app
-        )
+        try await TestEnvironment.provisionClub(slug, federation: federation, schemaPrefix: prefix, on: app)
     }
 
     static func cleanUp(_ slugs: [String], on app: Application) async throws {
-        guard let sql = app.db(.control) as? any SQLDatabase else { return }
-        for slug in slugs {
-            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: "test_\(slug)") CASCADE").run()
-            try await TenantRecord.query(on: app.db(.control))
-                .filter(\.$slug == slug).delete()
-        }
+        try await TestEnvironment.dropClubs(slugs, schemaPrefix: prefix, on: app)
     }
 
     /// **La prueba no es que cada club vea sus filas**: es que el mismo `slug`
@@ -98,16 +75,16 @@ struct TenancyIntegrationTests {
             try await Self.cleanUp(["leak"], on: app)
             try await Self.provision("leak", federation: .rffm, on: app)
 
-            try await TenantRouting.withSearchPath("test_leak", on: app.db(.control)) { database in
+            try await TenantRouting.withSearchPath("\(Self.prefix)leak", on: app.db(.control)) { database in
                 let sql = database as! any SQLDatabase
                 let inside = try await sql.raw("SHOW search_path").first(decodingColumn: "search_path", as: String.self)
-                #expect(inside == "test_leak", "dentro de la transacción manda el schema del club")
+                #expect(inside == "\(Self.prefix)leak", "dentro de la transacción manda el schema del club")
             }
 
             // Fuera del ámbito, sobre el **mismo pool**: la conexión no arrastra nada.
             let sql = app.db(.control) as! any SQLDatabase
             let after = try await sql.raw("SHOW search_path").first(decodingColumn: "search_path", as: String.self)
-            #expect(after != "test_leak", "la conexión volvió al pool contaminada — §6.2 ya no se sostiene")
+            #expect(after != "\(Self.prefix)leak", "la conexión volvió al pool contaminada — §6.2 ya no se sostiene")
 
             try await Self.cleanUp(["leak"], on: app)
         }
@@ -129,8 +106,8 @@ struct TenancyIntegrationTests {
                     """).first(decodingColumn: "present", as: Bool.self) ?? false
             }
 
-            #expect(try await exists("clubs", in: "test_ddl"))
-            #expect(try await exists("_fluent_migrations", in: "test_ddl"),
+            #expect(try await exists("clubs", in: "\(Self.prefix)ddl"))
+            #expect(try await exists("_fluent_migrations", in: "\(Self.prefix)ddl"),
                     "el progreso se rastrea por club, no globalmente (§4.7)")
             #expect(try await exists("tenants", in: "public"))
             #expect(!(try await exists("clubs", in: "public")),

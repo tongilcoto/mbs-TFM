@@ -160,6 +160,14 @@ let package = Package(
             dependencies: ["Application", "Domain"],
             swiftSettings: commonSwiftSettings
         ),
+        // Andamiaje de test. **No entra en ningún `product`**: solo lo consumen
+        // los targets de test, así que no viaja al binario de producción.
+        .target(
+            name: "TestSupport",
+            dependencies: ["App", "Domain", "Persistence", "Tenancy"],
+            swiftSettings: commonSwiftSettings
+        ),
+
         // `HostSlugExtractor` es lógica **pura** aunque viva en infraestructura:
         // la extracción del slug de §6.1 no toca red ni BD, así que se prueba en
         // el nivel barato y **corre sin Docker**.
@@ -171,7 +179,7 @@ let package = Package(
         // Niveles 3 y 4: Postgres real en contenedor efímero, nunca SQLite (§8.1).
         .testTarget(
             name: "PersistenceTests",
-            dependencies: ["Persistence", "Tenancy", "App"],
+            dependencies: ["Persistence", "Tenancy", "App", "TestSupport"],
             swiftSettings: commonSwiftSettings
         ),
         .testTarget(
@@ -179,6 +187,7 @@ let package = Package(
             dependencies: [
                 "App",
                 "APIContract",
+                "TestSupport",
                 .product(name: "VaporTesting", package: "vapor"),
             ],
             swiftSettings: commonSwiftSettings

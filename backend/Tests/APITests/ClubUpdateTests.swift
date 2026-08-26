@@ -7,6 +7,7 @@ import Testing
 import Vapor
 import VaporTesting
 @testable import App
+import TestSupport
 @testable import Persistence
 @testable import Tenancy
 
@@ -64,6 +65,8 @@ struct ClubUpdateTests {
             // Y lo que el contrato no deja escribir sigue intacto.
             #expect(club.slug == "patch1")
             #expect(club.federation.value1 == .rffm)
+
+            try await ClubEndpointTests.cleanUp(["patch1"], on: app)
         }
     }
 
@@ -80,6 +83,8 @@ struct ClubUpdateTests {
             #expect(response.status == .badRequest)
             #expect(response.headers.contentType?.subType == "problem+json",
                     "todo error del contrato es RFC 7807 (§5.4)")
+
+            try await ClubEndpointTests.cleanUp(["patch2"], on: app)
         }
     }
 
@@ -100,6 +105,8 @@ struct ClubUpdateTests {
             #expect(problem?["code"] as? String == "INVALID_VALUE")
             #expect((problem?["detail"] as? String)?.contains("name") == true,
                     "el problema dice qué campo falla, para que la UI lo señale")
+
+            try await ClubEndpointTests.cleanUp(["patch3"], on: app)
         }
     }
 
@@ -115,6 +122,8 @@ struct ClubUpdateTests {
             let reread = try await Self.send(app, .GET, "/v1/club", club: "patch4")
 
             #expect(try ClubEndpointTests.decode(reread).shortName == "CDR")
+
+            try await ClubEndpointTests.cleanUp(["patch4"], on: app)
         }
     }
 }

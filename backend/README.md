@@ -250,6 +250,25 @@ swift test --filter APITests                # nivel 4 — necesita Docker
 swift test --no-parallel                    # en serie, útil al depurar
 ```
 
+### 5.0 Tus datos no se tocan
+
+**Los tests corren contra una base distinta, `tfm_test`.** La crean solos la primera vez; no hay que hacer
+nada. Tu trabajo manual vive en `tfm` y `swift test` no lo mira siquiera.
+
+No siempre fue así, y el fallo merece contarse porque es del tipo que no avisa. Compartían base, y el plano
+de control (`public.tenants`) es **una sola tabla para todas**. Un test que use el *slug* `madrid`
+—perfectamente plausible como club real— borraba al terminar el registro del `madrid` que tuvieras dado de
+alta: los datos seguían en su *schema*, intactos, pero **el club dejaba de ser alcanzable**, porque la fila
+que lo enruta ya no estaba. Un `404` sobre datos que están ahí.
+
+Aislar por prefijo de *slug* habría hecho la colisión improbable en vez de imposible, y una colisión
+improbable que corrompe datos es **peor** que una frecuente: aparece el día menos oportuno y nadie la
+relaciona con haber corrido los tests.
+
+```sh
+docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
+```
+
 **Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
 Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
 
@@ -451,7 +470,9 @@ distintas (§2.1).
 | `400` con `TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404` con `UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
 | `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Vuelve a lanzar `provision-tenant <slug> -f <federación>`: es idempotente y siembra la fila |
-| Los tests petan con **señal 5** | Una `Application` destruida sin esperar a su cierre. Usa el `withApp` prestado |
+| Los tests petan con **señal 5** | Una `Application` destruida sin esperar a su cierre. Usa `TestEnvironment.withApp` |
+| Los tests fallan **la primera vez** y pasan a la segunda | Algo de arranque compartido en carrera entre suites paralelas. Va en `TestEnvironment.bootstrap()`, que se ejecuta una sola vez por proceso |
+| `PSQLError – Generic description…` en un test | Es a propósito, para no filtrar datos en producción. `TestEnvironment` lo reexpone con `String(reflecting:)` |
 | Docker no arranca | Suele ser disco lleno. Mira el log de `~/Library/Containers/com.docker.docker/Data/log/host/` |
 
 ```sh
