@@ -41,15 +41,13 @@ struct ClubEndpointTests {
     }
 
     static func seed(_ slug: String, federation: FederationCode, on app: Application) async throws {
-        try await ProvisionTenantCommand.provision(slug: slug, schemaName: "e2e_\(slug)", on: app)
-        try await TenantRouting.withSearchPath("e2e_\(slug)", on: app.db(.control)) { database in
-            let record = ClubRecord()
-            record.name = "Club \(slug)"
-            record.shortName = slug.uppercased()
-            record.slug = slug
-            record.federation = federation.rawValue
-            try await record.save(on: database)
-        }
+        // La provisión ya siembra la fila del club (§6.3): es su cuarto paso,
+        // no algo que el que llama tenga que recordar.
+        try await ProvisionTenantCommand.provision(
+            slug: slug, schemaName: "e2e_\(slug)",
+            name: "Club \(slug)", shortName: slug.uppercased(),
+            federation: federation, on: app
+        )
     }
 
     static func cleanUp(_ slugs: [String], on app: Application) async throws {

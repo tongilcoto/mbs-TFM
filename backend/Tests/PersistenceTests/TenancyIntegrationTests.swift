@@ -41,17 +41,13 @@ struct TenancyIntegrationTests {
     }
 
     static func provision(_ slug: String, federation: FederationCode, on app: Application) async throws {
+        // La provisión ya siembra la fila del club (§6.3): es su cuarto paso,
+        // no algo que el que llama tenga que recordar.
         try await ProvisionTenantCommand.provision(
-            slug: slug, schemaName: "test_\(slug)", on: app
+            slug: slug, schemaName: "test_\(slug)",
+            name: "Club \(slug)", shortName: slug.uppercased(),
+            federation: federation, on: app
         )
-        try await TenantRouting.withSearchPath("test_\(slug)", on: app.db(.control)) { database in
-            let record = ClubRecord()
-            record.name = "Club \(slug)"
-            record.shortName = slug
-            record.slug = slug
-            record.federation = federation.rawValue
-            try await record.save(on: database)
-        }
     }
 
     static func cleanUp(_ slugs: [String], on app: Application) async throws {

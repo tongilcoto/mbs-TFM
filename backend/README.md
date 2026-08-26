@@ -29,7 +29,13 @@ cd backend
 docker compose up -d db            # Postgres 16 en localhost:5434
 
 swift run Run migrate --yes        # crea public.tenants (plano de control)
-swift run Run provision-tenant atleti   # crea el schema del club + sus tablas
+
+# Alta del club: schema + registro + migraciones + la fila del club (§6.3).
+# `--federation` es obligatoria: determina a qué API se sincroniza el tenant
+# entero (§3.6) y no hay valor por defecto que no sea inventárselo.
+swift run Run provision-tenant atleti \
+  --federation rffm --name "Club Atlético de Ejemplo" --short-name "CD Atleti"
+
 swift run Run serve                # la API en :8080
 ```
 
@@ -159,10 +165,7 @@ curl -s http://atleti.localhost:8080/v1/club | jq
 **El experimento que más enseña:** provisiona un segundo club con otra federación y pide **la misma URL**.
 
 ```sh
-swift run Run provision-tenant celtic
-docker compose exec -T db psql -U tfm -d tfm -c \
-  "INSERT INTO club_celtic.clubs (id,name,short_name,slug,federation,created_at,updated_at)
-   VALUES (gen_random_uuid(),'Celtic de Ejemplo','Celtic','celtic','fcf',now(),now());"
+swift run Run provision-tenant celtic -f fcf --name "Celtic de Ejemplo" --short-name Celtic
 
 curl -s http://celtic.localhost:8080/v1/club | jq '{slug, federation, federationProvidesScorers}'
 ```
@@ -304,8 +307,17 @@ generador **no** la aplica, y que por tanto alguien tiene que aplicarla a mano.
 
 ```sh
 swift run Run migrate --yes                 # plano de control (public.tenants)
-swift run Run provision-tenant atleti       # alta de club: schema + registro + migraciones
-swift run Run provision-tenant atleti -s mi_schema   # con nombre de schema propio
+
+# Alta de club. Los cuatro pasos de §6.3, y es idempotente: repetirla no duplica.
+swift run Run provision-tenant atleti -f rffm
+swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name "Corto"
+swift run Run provision-tenant atleti -f rffm -s mi_schema     # schema propio
+```
+
+> `--name` **no tiene forma corta**: `-n` lo reserva ConsoleKit y, si se declara, aparece en el `--help`
+> pero el valor acaba en `.unknownInput`. `-f` y `-s` sí funcionan.
+
+```sh
 swift run Run migrate-tenants               # aplica migraciones nuevas a TODOS los clubes
 swift run Run migrate-tenants -t atleti     # solo a uno
 swift run Run migrate-tenants --revert      # revierte
@@ -313,8 +325,18 @@ swift run Run --help
 ```
 
 **El alta de un club es un comando, no un endpoint** (`D-23`, §6.3). Por eso `/club` no tiene `POST` ni
-`DELETE`: crear un club es *provisión* —crear el *schema* y correr el migrador—, y eso vive en el plano de
-control. La URL del club se le entrega al firmar el contrato (§9.10).
+`DELETE`. Y por eso el comando hace **cuatro** cosas, no tres:
+
+1. crea el *schema*,
+2. registra el club en `public.tenants`,
+3. le pasa el juego **completo** de migraciones,
+4. **siembra la fila de `clubs`**, que es la raíz del tenant (§4.2).
+
+El cuarto es el que se olvida, y su síntoma es un `500 TENANT_NOT_PROVISIONED` en la primera lectura: el
+*schema* existe, las tablas existen, pero el club no está dado de alta. Si el alta de un club **es**
+provisión, la provisión tiene que dejarlo dado de alta.
+
+La URL del club se le entrega al firmar el contrato (§9.10).
 
 > ⚠️ **`migrate-tenants` va siempre por conexión directa, nunca por un *pooler*** (§6.4). Se apoya en un
 > `SET` de sesión, que detrás de un *pooler* en modo transacción deja de significar lo que parece. El precio
@@ -428,7 +450,7 @@ distintas (§2.1).
 | `connection refused` al 5434 | `docker compose up -d db` |
 | `400` con `TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404` con `UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
-| `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero no tiene fila en `clubs` |
+| `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Vuelve a lanzar `provision-tenant <slug> -f <federación>`: es idempotente y siembra la fila |
 | Los tests petan con **señal 5** | Una `Application` destruida sin esperar a su cierre. Usa el `withApp` prestado |
 | Docker no arranca | Suele ser disco lleno. Mira el log de `~/Library/Containers/com.docker.docker/Data/log/host/` |
 
