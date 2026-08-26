@@ -81,17 +81,55 @@ puerto **interno** `5432`. Desde el Mac es `localhost:5434`. Es la misma base de
 
 Todo por variables, para que CI apunte a lo suyo sin tocar código:
 
-| Variable | Por defecto | Para qué |
-|---|---|---|
-| `DB_HOST` | `localhost` | `db` dentro de compose |
-| `DB_PORT` | `5434` | `5432` dentro de compose |
-| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm` | |
-| `DOMAIN_SUFFIX` | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
-| `LOG_LEVEL` | `info` | `debug` para ver cada petición y cada SQL |
+| Variable                              | Por defecto | Para qué                                   |
+| ------------------------------------- | ----------- | ------------------------------------------ |
+| `DB_HOST`                             | `localhost` | `db` dentro de compose                     |
+| `DB_PORT`                             | `5434`      | `5432` dentro de compose                   |
+| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm`       |                                            |
+| `DOMAIN_SUFFIX`                       | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
+| `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL  |
 
 ```sh
 LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
+HTTP_TRACE=1  swift run Run serve        # verás los cuerpos que entran y salen
 ```
+
+### 2.4 Ver lo que cruza la frontera
+
+`LOG_LEVEL=debug` **no enseña los cuerpos**: Vapor registra la línea de petición y las cabeceras, nunca el
+`PATCH` que entra ni el JSON que sale. Para eso está `HTTP_TRACE=1`:
+
+```
+┌─ → PATCH /v1/club
+│  Host: atleti.localhost:8080
+│  Content-Type: application/json
+│
+│  {
+│    "name" : "   "
+│  }
+├─ ← 422 Unprocessable Entity
+│  Content-Type: application/problem+json; charset=utf-8
+│
+│  {
+│    "code" : "INVALID_VALUE",
+│    "detail" : "name: no puede estar vacío",
+│    "status" : 422,
+│    "title" : "Valor no válido",
+│    "type" : "https://api.example.com/problems/invalid-value"
+│  }
+└─
+```
+
+Los parámetros de consulta salen aparte, uno por línea (`?page=2`), que es donde se ve qué recibió de verdad
+el *handler* — importante porque sus valores por defecto los aplica él a mano, ya que el generador ignora
+`default` (`D-65`).
+
+> **Solo funciona en `.development` y `.testing`**, y el candado no es celo: los cuerpos de esta API llevan
+> nombres, fechas y fotos **de menores** (§3.2). Un volcado completo en un log de producción es una fuga de
+> datos personales, no un log verboso. Misma lista **blanca** que `X-Club`: un entorno nuevo nace con la
+> traza apagada.
+
+El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.1).
 
 ---
 
