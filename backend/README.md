@@ -104,7 +104,19 @@ LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
 | Host | `127.0.0.1` |
 | Port | **5434** |
 | User / Password | `tfm` / `tfm` |
-| Database | `tfm` |
+| Database | **`tfm`** ← tu trabajo manual |
+| SSL | desactivado |
+
+**Hay una segunda base, `tfm_test`**, con las mismas credenciales y el mismo puerto: solo cambia el nombre.
+Ahí es donde corren los tests (§5.0), y por eso `swift test` no puede tocar nada de `tfm`. Merece su propia
+conexión en TablePlus si quieres ver qué dejan los tests — pero **no hace falta para trabajar**: se crea sola
+y se puede borrar entera sin consecuencias.
+
+| | `tfm` | `tfm_test` |
+|---|---|---|
+| Quién escribe | tú, a mano, y `swift run Run …` | `swift test` |
+| *Schemas* de club | `club_<slug>` | `test_<slug>` y `e2e_<slug>` |
+| Si la borras | pierdes tu trabajo | nada: se recrea en la siguiente pasada |
 
 **Lo que verás, y es el diseño entero en una captura** (§6.2):
 
