@@ -305,7 +305,15 @@ swift test --filter ApplicationTests        # nivel 2
 swift test --filter PersistenceTests        # nivel 3 — necesita Docker
 swift test --filter APITests                # nivel 4 — necesita Docker
 swift test --no-parallel                    # en serie, útil al depurar
+swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
+
+> **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
+> ni un `import XCTest` en el proyecto (`D-70`). Lo que pasa es que SwiftPM ejecuta **las dos** bibliotecas
+> de test por defecto: la mitad de XCTest arranca, no encuentra nada y lo dice, y luego corre
+> `swift-testing`. El nombre `.xctest` tampoco delata nada: es el **formato de empaquetado** de Apple, y
+> todos los *targets* acaban en un único *bundle* con ese nombre usen el framework que usen.
+> `--disable-xctest` lo quita.
 
 ### 5.0 Tus datos no se tocan
 
