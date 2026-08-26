@@ -308,49 +308,24 @@ swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
 
-### 5.0-bis Ver los tests agrupados por suite
-
-`swift-testing` imprime el nombre del test pero **no el de su suite**, así que con diez suites en marcha la
-salida es una lista plana en la que no se sabe qué está pasando. Para eso:
-
-```sh
-./scripts/test-report.sh                       # todo
-./scripts/test-report.sh --filter DomainTests  # los argumentos se pasan tal cual
-```
-
-```
-Slug · §4.1 · el pattern del spec lo hace cumplir el Dominio (D-65)
-  ✔ "acepta minúsculas, dígitos y guiones simples" with 6 test cases passed
-  ✔ "rechaza lo que el pattern del spec no admite" with 9 test cases passed
-
-31 tests en 10 suites · 31 ✔ · 0 ✘
-```
-
-Y al fallar, con motivo y ubicación:
-
-```
-Fallos:
-  ✘ Suite de prueba › este falla
-      Caught error: .invalidValue(field: "slug", reason: "debe ser minúsculas…")
-      en DomainTests/_TempFail.swift:5
-```
-
-Lee el flujo de eventos JSON de `swift-testing` (`--experimental-event-stream-output`), que **sí** trae la
-jerarquía completa, y lo reimprime agrupado. **Devuelve código 1 si algo falla**, así que sirve igual en CI.
-
-**Para estudiar, usa `--no-parallel --disable-xctest`.** Por defecto `swift-testing` ejecuta en paralelo
-—también los tests **dentro** de una misma suite— y escribe en **orden de finalización**, así que la salida
-sale entrelazada y cambia entre pasadas. En serie el orden es **exactamente el del código fuente**, con cada
-suite agrupada y cerrada antes de la siguiente:
+**Para estudiar, usa `--no-parallel --disable-xctest`.**
 
 ```sh
 swift test --no-parallel --disable-xctest
 ```
 
-Comprobado que es determinista: tres pasadas, la misma salida byte a byte.
+Por defecto `swift-testing` ejecuta en paralelo —también los tests **dentro** de una misma suite— y escribe
+en **orden de finalización**, así que la salida sale entrelazada y cambia entre pasadas. En serie da todo lo
+que hace falta para leerla:
 
-El paralelo no sobra —los 31 tests bajan de 0,85 s a 0,25 s, y correrlos concurrentes **es** lo que destapa
-las carreras que un orden fijo esconde (§5.0)—. Pero para leer, en serie.
+- **Orden exacto del código fuente**, y determinista: tres pasadas, la misma salida byte a byte.
+- **Agrupada por suite**, abriendo y cerrando cada una antes de la siguiente.
+- **Un renglón por caso** en los tests parametrizados, con el argumento concreto
+  (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
+  falla uno de nueve.
+
+El paralelo no sobra —los 31 tests bajan de 0,85 s a 0,25 s, y correrlos concurrentes **es** lo que destapó
+las dos carreras de §5.0, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
 > ni un `import XCTest` en el proyecto (`D-70`). Lo que pasa es que SwiftPM ejecuta **las dos** bibliotecas
