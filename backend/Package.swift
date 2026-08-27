@@ -13,6 +13,15 @@ import PackageDescription
 //               ├─► Tenancy
 //               └─► Application ────► Domain
 //
+// **Cada target declara lo que importa, aunque le llegue de gratis.** SwiftPM
+// pone en la ruta de búsqueda todo el grafo transitivo, así que un `import
+// Domain` compila sin declararlo si algún vecino ya lo arrastra. Funciona hasta
+// que ese vecino deja de arrastrarlo, y entonces rompe **aquí** con un "no such
+// module" que no señala la causa. Es dependencia real, se declara.
+//
+// Para reauditarlo: comparar los `import` de cada target con sus
+// `target_dependencies` en `swift package describe --type json`.
+//
 // Referencias `§x` → docs/API_y_BBDD LLD-001.md
 // Referencias `D-nn` → docs/API_y_BBDD LLD-Anexo-Decisiones-Disenho-001.md
 // ─────────────────────────────────────────────────────────────────────────────
@@ -91,6 +100,7 @@ let package = Package(
             dependencies: [
                 "APIContract",
                 "Application",
+                "Domain",
                 "Tenancy",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIVapor", package: "swift-openapi-vapor"),
@@ -179,7 +189,7 @@ let package = Package(
         // Niveles 3 y 4: Postgres real en contenedor efímero, nunca SQLite (§8.1).
         .testTarget(
             name: "PersistenceTests",
-            dependencies: ["Persistence", "Tenancy", "App", "TestSupport"],
+            dependencies: ["Application", "Domain", "Persistence", "Tenancy", "App", "TestSupport"],
             swiftSettings: commonSwiftSettings
         ),
         .testTarget(
@@ -187,7 +197,10 @@ let package = Package(
             dependencies: [
                 "App",
                 "APIContract",
+                "Domain",
+                "Persistence",
                 "TestSupport",
+                "Tenancy",
                 .product(name: "VaporTesting", package: "vapor"),
             ],
             swiftSettings: commonSwiftSettings
