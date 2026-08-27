@@ -130,6 +130,7 @@ public enum TestEnvironment {
     public static func withApp(_ body: (Application) async throws -> Void) async throws {
         try await bootstrap()
         let app = try await Application.make(.testing)
+        applyLogLevel(to: app)
         do {
             try await configure(app, config: config)
             // Sin `autoMigrate()`: el plano de control ya lo migró `bootstrap()`,
@@ -140,6 +141,24 @@ public enum TestEnvironment {
             throw TestSetupError(underlying: String(reflecting: error))
         }
         try await app.asyncShutdown()
+    }
+
+    /// Hace que `LOG_LEVEL` funcione también en los tests.
+    ///
+    /// En el servidor lo aplica `LoggingSystem.bootstrap(from:)`, que lee la
+    /// variable y el flag `--log`. Los tests no pasan por ahí —montan la
+    /// `Application` directamente—, así que sin esto `LOG_LEVEL=debug swift test`
+    /// no hacía nada y el SQL de Fluent quedaba invisible justo donde más se
+    /// quiere ver: en los tests de integración.
+    ///
+    /// Se fija el nivel **del logger de la app**, no por `LoggingSystem.bootstrap`,
+    /// porque ése solo puede llamarse **una vez por proceso** y aquí se montan
+    /// muchas `Application` seguidas.
+    static func applyLogLevel(to app: Application) {
+        guard let raw = ProcessInfo.processInfo.environment["LOG_LEVEL"],
+              let level = Logger.Level(rawValue: raw.lowercased())
+        else { return }
+        app.logger.logLevel = level
     }
 
     /// Da de alta un club por **el mismo camino que producción** (§6.3), para que

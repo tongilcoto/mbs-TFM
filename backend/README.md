@@ -136,7 +136,7 @@ el *handler* — importante porque sus valores por defecto los aplica él a mano
 > datos personales, no un log verboso. Misma lista **blanca** que `X-Club`: un entorno nuevo nace con la
 > traza apagada.
 
-El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.1).
+El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.3).
 
 ---
 
@@ -153,7 +153,7 @@ El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.1).
 | SSL | desactivado |
 
 **Hay una segunda base, `tfm_test`**, con las mismas credenciales y el mismo puerto: solo cambia el nombre.
-Ahí es donde corren los tests (§5.0), y por eso `swift test` no puede tocar nada de `tfm`. Merece su propia
+Ahí es donde corren los tests (§5.1), y por eso `swift test` no puede tocar nada de `tfm`. Merece su propia
 conexión en TablePlus si quieres ver qué dejan los tests — pero **no hace falta para trabajar**: se crea sola
 y se puede borrar entera sin consecuencias.
 
@@ -327,7 +327,7 @@ que hace falta para leerla:
   falla uno de nueve.
 
 El paralelo no sobra —los 31 tests bajan de 0,85 s a 0,25 s, y correrlos concurrentes **es** lo que destapó
-las dos carreras de §5.0, que un orden fijo habría escondido—. Pero para leer, en serie.
+las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
 > ni un `import XCTest` en el proyecto (`D-70`). Lo que pasa es que SwiftPM ejecuta **las dos** bibliotecas
@@ -336,7 +336,7 @@ las dos carreras de §5.0, que un orden fijo habría escondido—. Pero para lee
 > todos los *targets* acaban en un único *bundle* con ese nombre usen el framework que usen.
 > `--disable-xctest` lo quita.
 
-### 5.0 Tus datos no se tocan
+### 5.1 Tus datos no se tocan
 
 **Los tests corren contra una base distinta, `tfm_test`.** La crean solos la primera vez; no hay que hacer
 nada. Tu trabajo manual vive en `tfm` y `swift test` no lo mira siquiera.
@@ -358,7 +358,7 @@ docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tes
 **Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
 Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
 
-### 5.0-ter Si Postgres no está levantado
+### 5.2 Si Postgres no está levantado
 
 **Los tests que necesitan base de datos se omiten**, y te dicen el comando que falta:
 
@@ -398,10 +398,11 @@ la capa que esté.** Mandarlo a integración por estar "fuera" solo lo haría m�
 | 3     | `PersistenceTests` | Mapeo, migraciones, `search_path`            | Postgres real |
 | 4     | `APITests`         | Rutas, DTOs, códigos de error                | Postgres real |
 
-### 5.1 Ver los cuerpos que cruzan la frontera
+### 5.3 Ver los cuerpos que cruzan la frontera
 
 ```sh
-HTTP_TRACE=1 swift test --filter APITests --no-parallel
+HTTP_TRACE=1  swift test --filter APITests --no-parallel   # los cuerpos HTTP
+LOG_LEVEL=debug swift test --filter PersistenceTests       # el SQL que emite Fluent
 ```
 
 ```
@@ -426,7 +427,18 @@ HTTP_TRACE=1 swift test --filter APITests --no-parallel
 
 Apagado por defecto, para no ensuciar CI. `--no-parallel` porque si no las trazas se entrelazan.
 
-### 5.2 Cómo leer un test
+**`LOG_LEVEL` también funciona en los tests**, y enseña el SQL que emite Fluent — que en los niveles 3 y 4 es
+justo lo que quieres ver:
+
+```
+debug codes.vapor.application: sql=SET LOCAL search_path TO "test_scope-a"
+debug codes.vapor.application: sql=UPDATE "clubs" SET "name" = $1, …
+```
+
+Las dos se combinan: `LOG_LEVEL=debug HTTP_TRACE=1 swift test --no-parallel` da el cuerpo HTTP **y** las
+consultas que provoca.
+
+### 5.4 Cómo leer un test
 
 Cada `@Test` cita en su nombre la sección del LLD o la decisión que lo exige. Es deliberado: **revisar una
 fase es leer sus tests y comprobar que dicen lo que el diseño dice**, sin necesidad de leer el código.
@@ -584,7 +596,7 @@ distintas (§2.1).
 | Síntoma | Causa casi segura |
 |---|---|
 | `Cannot find type 'Components' in scope` en Xcode | Los tipos del contrato no existen hasta que corre el plugin. Acepta el aviso de confianza y ⌘B. **La CLI es la fuente de verdad**, no el índice |
-| `connection refused` al 5434 | `docker compose up -d db`. Los tests ya lo detectan y se omiten con ese aviso (§5.0-ter) |
+| `connection refused` al 5434 | `docker compose up -d db`. Los tests ya lo detectan y se omiten con ese aviso (§5.2) |
 | `400` con `TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404` con `UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
 | `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Vuelve a lanzar `provision-tenant <slug> -f <federación>`: es idempotente y siembra la fila |
