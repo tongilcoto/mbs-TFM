@@ -32,6 +32,12 @@ import TestSupport
         .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
 struct ClubUpdateTests {
 
+    /// La traza de petición y respuesta **no se hace aquí**: la pone
+    /// `RequestTraceMiddleware` con `HTTP_TRACE=1`, que es el mismo que usa el
+    /// servidor. Duplicarla en el test imprimía cada petición dos veces, y la
+    /// del middleware es además la buena: ve la petición **tal como llega** y la
+    /// respuesta ya serializada, incluidos los cuerpos que el transporte generado
+    /// devuelve como flujo.
     static func send(
         _ app: Application, _ method: HTTPMethod, _ path: String,
         club: String, json: String? = nil
@@ -43,9 +49,7 @@ struct ClubUpdateTests {
                 request.headers.contentType = .json
                 request.body = ByteBuffer(string: json)
             }
-            HTTPTrace.request(method, path, headers: request.headers, body: json)
         }, afterResponse: { response async in
-            HTTPTrace.response(response)
             captured = response
         })
         return captured

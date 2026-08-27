@@ -427,6 +427,9 @@ LOG_LEVEL=debug swift test --filter PersistenceTests       # el SQL que emite Fl
 
 Apagado por defecto, para no ensuciar CI. `--no-parallel` porque si no las trazas se entrelazan.
 
+Es **el mismo middleware** que usa el servidor (§2.4), no un trazador aparte: lo que ves en un test es
+exactamente lo que verías en `swift run Run serve`.
+
 **`LOG_LEVEL` también funciona en los tests**, y enseña el SQL que emite Fluent — que en los niveles 3 y 4 es
 justo lo que quieres ver:
 
