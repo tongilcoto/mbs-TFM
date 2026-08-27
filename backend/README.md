@@ -304,6 +304,7 @@ swift test --filter DomainTests             # nivel 1
 swift test --filter ApplicationTests        # nivel 2
 swift test --filter PersistenceTests        # nivel 3 — necesita Docker
 swift test --filter APITests                # nivel 4 — necesita Docker
+REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omitir
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
@@ -356,6 +357,33 @@ docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tes
 
 **Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
 Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
+
+### 5.0-ter Si Postgres no está levantado
+
+**Los tests que necesitan base de datos se omiten**, y te dicen el comando que falta:
+
+```
+➜ Suite "Tenancy · §6.2 · el search_path aísla de verdad" skipped: "Postgres no responde en
+  localhost:5434 … Levántalo con `docker compose up -d db` desde `backend/`. Para que fallen
+  en vez de omitirse —lo que hace CI— define REQUIRE_DB=1."
+```
+
+Así el bucle rápido no se te bloquea por tener Docker parado. Pero omitir tiene un riesgo evidente
+—**verde no puede significar "no probado"**— y por eso hay guarda:
+
+| Situación | Resultado |
+|---|---|
+| BD arriba | Todo corre |
+| BD abajo, en local | Los tests de BD **se omiten**, `exit 0` |
+| BD abajo, con `CI` o `REQUIRE_DB` | **Falla**, `exit 1`, diciendo por qué en una línea |
+
+`CI` la exportan GitHub Actions, GitLab y la mayoría por defecto, así que en integración continua la guarda
+se activa sola. En local decides tú, viendo el motivo.
+
+**Lo que deliberadamente NO hace es arrancar Docker por su cuenta.** Una batería que levanta contenedores
+muta tu máquina, se acopla a que Docker esté instalado y no tiene respuesta buena a *"¿y quién lo para?"* —
+te tumbaría el contenedor que estabas usando, o te lo dejaría vivo. En CI además sobra, porque allí la BD la
+da el *runner* como servicio.
 
 `TenancyTests` lleva asterisco porque es el único que rompe la correspondencia nivel↔capa de §8.1:
 `HostSlugExtractor` vive en infraestructura pero **no hace I/O**, así que se prueba en el nivel barato. La
@@ -556,7 +584,7 @@ distintas (§2.1).
 | Síntoma | Causa casi segura |
 |---|---|
 | `Cannot find type 'Components' in scope` en Xcode | Los tipos del contrato no existen hasta que corre el plugin. Acepta el aviso de confianza y ⌘B. **La CLI es la fuente de verdad**, no el índice |
-| `connection refused` al 5434 | `docker compose up -d db` |
+| `connection refused` al 5434 | `docker compose up -d db`. Los tests ya lo detectan y se omiten con ese aviso (§5.0-ter) |
 | `400` con `TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404` con `UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
 | `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Vuelve a lanzar `provision-tenant <slug> -f <federación>`: es idempotente y siembra la fila |
