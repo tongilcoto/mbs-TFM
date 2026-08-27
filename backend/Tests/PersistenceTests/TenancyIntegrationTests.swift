@@ -17,7 +17,11 @@ import TestSupport
 /// no las reglas — ésas ya las cubrieron los niveles 1 y 2 (Plan §5).
 ///
 /// - Note: `docker compose up -d` antes de correrlos.
-@Suite("Tenancy · §6.2 · el search_path aísla de verdad", .serialized)
+@Suite("Tenancy · §6.2 · el search_path aísla de verdad",
+        .serialized,
+        // Nivel 3/4: necesita Postgres. Sin él se omite en local y **falla**
+        // en CI (`REQUIRE_DB`), para que verde nunca signifique "no probado".
+        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
 struct TenancyIntegrationTests {
 
     /// Prefijo de *schema* propio de este target, para que los dos targets de
@@ -122,7 +126,11 @@ struct TenancyIntegrationTests {
 /// volver a consultarlo (§6.1). Eso ahorra un `SELECT` por petición, pero abre
 /// una pregunta que hay que contestar: **¿y si el ambiente y el actor no son el
 /// mismo club?**
-@Suite("TenantUnitOfWork · §6.1 · el ambiente y el actor tienen que coincidir", .serialized)
+@Suite("TenantUnitOfWork · §6.1 · el ambiente y el actor tienen que coincidir",
+        .serialized,
+        // Nivel 3/4: necesita Postgres. Sin él se omite en local y **falla**
+        // en CI (`REQUIRE_DB`), para que verde nunca signifique "no probado".
+        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
 struct TenantScopeTests {
 
     /// Sin tenant ambiental —el caso del **job de ingesta** (§2.3-b), que no pasa

@@ -62,6 +62,13 @@ public enum TestEnvironment {
     /// plano de control es trabajo de arranque —se hace una vez, no una por
     /// `Application`—, así que su sitio es éste.
     public static func bootstrap() async throws {
+        // Con `REQUIRE_DB`/`CI` las suites **no** se omiten, así que si la BD no
+        // está el fallo llega aquí. Se dice en una línea en vez de dejar que
+        // aflore un `PSQLError` que hay que descifrar: en CI nadie tiene el
+        // contexto delante.
+        if DatabaseAvailability.isForced, !DatabaseAvailability.isProbeSuccessful {
+            throw TestSetupError(underlying: DatabaseAvailability.forcedFailureReason)
+        }
         try await DatabaseBootstrap.shared.once {
             let base = DatabaseConfig.fromEnvironment()
             let app = try await Application.make(.testing)

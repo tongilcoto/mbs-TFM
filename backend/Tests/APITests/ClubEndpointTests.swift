@@ -13,7 +13,11 @@ import TestSupport
 
 /// Nivel 4 de la pirámide (§8.1): rutas, DTOs y códigos de error. **Pocos y
 /// selectivos** — las reglas ya se probaron abajo, aquí solo se prueba el borde.
-@Suite("GET /v1/club · §5.1 · el contrato generado, extremo a extremo", .serialized)
+@Suite("GET /v1/club · §5.1 · el contrato generado, extremo a extremo",
+        .serialized,
+        // Nivel 3/4: necesita Postgres. Sin él se omite en local y **falla**
+        // en CI (`REQUIRE_DB`), para que verde nunca signifique "no probado".
+        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
 struct ClubEndpointTests {
 
     /// Decodifica con el **tipo generado del spec**, no comparando *substrings*.

@@ -25,7 +25,11 @@ import TestSupport
 /// Ese 400 contra 422 no es cosmética: el JSON de `{}` está perfectamente
 /// formado, así que rechazarlo es una regla del contrato; `{"name":""}` también
 /// está bien formado **y bien tipado**, y lo que incumple es una regla de negocio.
-@Suite("PATCH /v1/club · §5.1 · el camino de escritura", .serialized)
+@Suite("PATCH /v1/club · §5.1 · el camino de escritura",
+        .serialized,
+        // Nivel 3/4: necesita Postgres. Sin él se omite en local y **falla**
+        // en CI (`REQUIRE_DB`), para que verde nunca signifique "no probado".
+        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
 struct ClubUpdateTests {
 
     static func send(
