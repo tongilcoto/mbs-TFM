@@ -87,7 +87,10 @@ Todo por variables, para que CI apunte a lo suyo sin tocar código:
 | `DB_PORT`                             | `5434`      | `5432` dentro de compose                   |
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm`       |                                            |
 | `DOMAIN_SUFFIX`                       | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
-| `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL  |
+| `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL. Vale también en `swift test` |
+| `HTTP_TRACE`                          | apagado     | `1` vuelca los cuerpos HTTP (§2.4). Solo en `.development`/`.testing` |
+| `REQUIRE_DB`                          | apagado     | `1` hace que los tests de BD **fallen** en vez de omitirse (§5.2). `CI` la activa sola |
+| `KEEP_TEST_DATA`                      | apagado     | `1` conserva los *schemas* de test para inspeccionarlos (§5.2) |
 
 ```sh
 LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
