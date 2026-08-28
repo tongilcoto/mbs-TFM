@@ -187,6 +187,8 @@ docker compose up -d                      # Postgres 16 efímero en :5434
 swift build
 swift test                                # 4 niveles (§8.1); los 2 primeros sin I/O
 swift test --filter FederationTests       # los adaptadores de federación: sin red y sin Docker
+                                          # (sus volcados: Tests/FederationTests/Fixtures/README.md —
+                                          #  son copias de docs/, y en Xcode no se leen: una sola línea)
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
