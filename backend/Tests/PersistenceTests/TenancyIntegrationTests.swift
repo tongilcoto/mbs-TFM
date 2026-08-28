@@ -110,12 +110,17 @@ struct TenancyIntegrationTests {
                     """).first(decodingColumn: "present", as: Bool.self) ?? false
             }
 
-            #expect(try await exists("clubs", in: "\(Self.prefix)ddl"))
+            // Las tres tablas de dominio que hay hoy (F0 + F1). Cada fase suma
+            // aquí las suyas: es el sitio donde se comprueba que una migración
+            // nueva no se ha colado en `public` por olvidar el `space` (§4.7).
+            for table in ["clubs", "seasons", "competitions"] {
+                #expect(try await exists(table, in: "\(Self.prefix)ddl"), "falta \(table)")
+                #expect(!(try await exists(table, in: "public")),
+                        "`\(table)` se coló en public: revisa el `space` de su Record")
+            }
             #expect(try await exists("_fluent_migrations", in: "\(Self.prefix)ddl"),
                     "el progreso se rastrea por club, no globalmente (§4.7)")
             #expect(try await exists("tenants", in: "public"))
-            #expect(!(try await exists("clubs", in: "public")),
-                    "el DDL de dominio se coló en public: revisa el `space` de los Record")
 
             try await Self.cleanUp(["ddl"], on: app)
         }

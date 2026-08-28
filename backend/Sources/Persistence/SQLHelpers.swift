@@ -14,3 +14,23 @@ extension Database {
         ).run()
     }
 }
+
+extension Database {
+    /// Crea un índice **no único** con SQL crudo.
+    ///
+    /// Fluent expresa `.unique(on:)` en el constructor de esquema, pero no un
+    /// índice normal sobre columnas ya creadas, así que la vía vuelve a ser
+    /// `SQLKit` (§4.6). Lo usarán también los índices explícitos que el modelo
+    /// tiene previstos: `Goal.scoring_team_id`, `Goal.conceding_team_id` y los
+    /// compuestos de `Match` (§3.5).
+    ///
+    /// `IF NOT EXISTS` para que la migración sea reejecutable sobre un *schema*
+    /// que ya la tuviera a medias.
+    func index(table: String, name: String, columns: [String]) async throws {
+        guard let sql = self as? any SQLDatabase else { return }
+        let columnList = columns.map { "\"\($0)\"" }.joined(separator: ", ")
+        try await sql.raw(
+            "CREATE INDEX IF NOT EXISTS \(ident: name) ON \(ident: table) (\(unsafeRaw: columnList))"
+        ).run()
+    }
+}

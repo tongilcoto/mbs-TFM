@@ -51,6 +51,18 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return Problem(status: .unprocessableEntity, code: "INVALID_VALUE",
                                title: "Valor no válido", detail: "\(field): \(reason)",
                                base: typeBaseURI, slug: "invalid-value")
+
+            case .notEditableAfterSync(let field):
+                // **409 y no 422** (§5.4, D-22): el valor puede ser
+                // perfectamente válido — lo que no lo es, es el *momento*. La
+                // competición ya se sincronizó, así que cambiar la coordenada
+                // sería repuntar a otro calendario con datos ya colgando, y
+                // cambiar `gender` desalinearía los equipos que la ingesta creó
+                // desde ella (D-58).
+                return Problem(status: .conflict, code: "NOT_EDITABLE_AFTER_SYNC",
+                               title: "El campo ya no es editable",
+                               detail: "\(field): la competición ya se ha sincronizado",
+                               base: typeBaseURI, slug: "not-editable-after-sync")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────
