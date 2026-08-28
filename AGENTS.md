@@ -129,8 +129,10 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
 **backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**
-—`GET /v1/club` responde de HTTP a Postgres contra tenants aislados— y **F1**, que añade `Season` y
-`Competition` en dominio y persistencia. **Web backoffice, app iOS y app Android siguen sin empezar.**
+—`GET /v1/club` responde de HTTP a Postgres contra tenants aislados—, **F1**, que añade `Season` y
+`Competition` en dominio y persistencia, y **F2**, el puerto `FederationClient` con el adaptador del
+calendario de la RFFM contra volcados reales (Plan §4.3). **102 tests.** **Web backoffice, app iOS y app
+Android siguen sin empezar.**
 
 **F1 no tiene superficie HTTP, y es deliberado** (Plan §4.1): entrega entidades, *Value Objects*, puertos,
 `Record`s y migraciones, y **ningún caso de uso** — su llamante es la cascada de `D-67`, que es F10. La lista
@@ -161,7 +163,12 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
             ├─► Persistence ────► Application
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de nada)
+
+            Federation ────────► Application    (adaptadores RFFM / FCF)
 ```
+
+`Federation` **todavía no cuelga de `App`**, y no es un olvido: su primer llamante es el job de ingesta (F6)
+y el `/preview` (F10). Hoy lo mantiene en el grafo de *build* su *target* de tests.
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
@@ -170,6 +177,7 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
+| `Federation` | Adaptador secundario | Adaptadores de las APIs de federación. **Sin Vapor ni Fluent**: lo que hace es parsear texto ajeno |
 | `Tenancy` | Infraestructura | Plano de control, `SET LOCAL search_path`, middleware |
 | `App` | — | **Raíz de composición**: el único sitio que cablea las capas |
 
@@ -178,6 +186,7 @@ cd backend
 docker compose up -d                      # Postgres 16 efímero en :5434
 swift build
 swift test                                # 4 niveles (§8.1); los 2 primeros sin I/O
+swift test --filter FederationTests       # los adaptadores de federación: sin red y sin Docker
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
@@ -231,10 +240,15 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0 y F1 entregadas, lo inmediato es **F2: el puerto `FederationClient` y el adaptador RFFM del
-calendario contra *fixtures***, sin persistir nada. La **cuestión abierta nº 1 del plan** —la coordenada de
-la FCF— **ya no está**: se cerró por desaparición al reobservar la fuente (`D-74`). Queda el **reformateo de
-`"2026-2027"` a `"2026/27"`**, que es trabajo del adaptador y no del dominio (`D-71`). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+Con F0, F1 y F2 entregadas, lo inmediato es **F3: la política de *upsert*** —descriptivo, volátil, propiedad
+y emparejamiento (§3.7, `D-56`)—, que es **unit puro y cero I/O**. Llega con un deber apuntado: **la
+justificación de `D-56` hay que rehacerla**, porque su ejemplo estrella —que la FCF borra la fecha al jugarse
+el partido— es falso desde el rediseño de esa web (`D-74`). La regla puede seguir siendo buena; su argumento
+no se da por bueno.
+
+Y un aviso para **F5**: el volcado de calendario que tenemos es de una **temporada sin arrancar**, así que la
+rama de "partido jugado" no la ejercita ningún dato real. Hace falta **un volcado de temporada en curso**
+antes de estrenar la ingesta de resultados (Plan §4.3). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
 `rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
 llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por

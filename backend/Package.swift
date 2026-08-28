@@ -10,6 +10,7 @@ import PackageDescription
 //   Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos generados del spec)
 //               │                └─► Application
 //               ├─► Persistence ────► Application
+//               ├─► Federation ─────► Application   (adaptadores RFFM / FCF)
 //               ├─► Tenancy
 //               └─► Application ────► Domain
 //
@@ -122,6 +123,20 @@ let package = Package(
             swiftSettings: commonSwiftSettings
         ),
 
+        // Secundario (driven): el puerto `FederationClient` (§4.3) contra las APIs
+        // de las federaciones. **Un target para las dos**, igual que `Persistence`
+        // es uno para todos los repositorios: la capa es la misma.
+        //
+        // No depende de Vapor ni de Fluent, y es a propósito: lo que hace es
+        // parsear texto ajeno (Anexo RFFM §F.15). El transporte HTTP entra por
+        // un protocolo, así que los tests corren **sin red** (Plan §4.1: F2 es
+        // «unit puro»).
+        .target(
+            name: "Federation",
+            dependencies: ["Application", "Domain"],
+            swiftSettings: commonSwiftSettings
+        ),
+
         // ── Infraestructura ───────────────────────────────────────────────────
         // Plano de control de tenancy (§6). No es dominio: `public.tenants` es
         // infraestructura y no debe confundirse con la entidad `Club` (§4.7).
@@ -175,6 +190,16 @@ let package = Package(
         .target(
             name: "TestSupport",
             dependencies: ["App", "Domain", "Persistence", "Tenancy"],
+            swiftSettings: commonSwiftSettings
+        ),
+
+        // Nivel 1 sobre el adaptador de federación: parseo puro contra los
+        // volcados reales de `docs/Federation APIs examples/`, **sin red y sin
+        // Docker**. Los *fixtures* viajan como recurso del target.
+        .testTarget(
+            name: "FederationTests",
+            dependencies: ["Federation", "Application", "Domain"],
+            resources: [.copy("Fixtures")],
             swiftSettings: commonSwiftSettings
         ),
 

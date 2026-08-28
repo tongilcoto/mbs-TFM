@@ -143,7 +143,7 @@ dependen de eso.
 |---|----------|-------------------------|-------------|
 | **F0** ✅ | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
 | **F1** ✅ | `Season` + `Competition` — dominio y persistencia (detalle abajo). **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
-| **F2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
+| **F2** ✅ | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** (detalle en §4.3) | unit puro | §5.6, Anexo RFFM |
 | **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
 | **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match` | integración, Postgres real | §3.7, §4.4 |
@@ -232,6 +232,76 @@ test escrito después se limitaría a bendecir el error.
 **Lo que se llevó por delante de F0**, sin planearlo: el `sqlValueList` de `FederationCode` se generalizó a
 `CaseIterable where RawValue == String`, así que los tres enumerados nuevos de §3.3 derivan sus `CHECK` sin
 copiar nada.
+
+
+### 4.3 F2 · El puerto de federación y el calendario de la RFFM — **entregada**
+
+La primera rebanada que habla con el mundo exterior, y la primera **sin base de datos**: 11 ficheros de
+código y **36 tests**, todos de nivel 1, con la batería completa en **102**. Corre en 70 ms y **sin Docker**.
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Cómo encaja la coordenada de la FCF en las dos columnas? (cuestión abierta nº 1) | **No encaja: ya no hace falta.** La FCF rehízo su web y su coordenada es ahora la de Madrid → [D-74] |
+| ¿Describe bien el anexo el calendario de la RFFM? | **No del todo.** `jornada` es un rótulo y no un número; existe `(HB)`; el *host* del escudo lo publica la fuente → [Anexo RFFM §F.15] |
+| ¿Basta el *fixture* para probar el adaptador entero? | **A medias.** Ver *"lo que no demuestra"*, abajo |
+| ¿Dónde vive el reformateo de la etiqueta de temporada? | En el adaptador, **delegando** en `SeasonLabel` en vez de componer la cadena — que es lo que cierra [D-71] por los dos lados |
+
+**Lo que trae, y por qué está partido así.** Tres piezas, no una, siguiendo §7.3 de este plan:
+
+| Pieza | Responsabilidad | Se prueba… |
+|---|---|---|
+| `FederationTransport` | traer bytes | **no se prueba**: no hay implementación real hasta F5 |
+| `RFFMCalendarParser` (+ `RFFMValue`, `NextDataExtractor`) | interpretar el texto | contra el volcado real, sin red |
+| `RFFMFederationClient` | qué se pide y en qué orden | con un transporte espía |
+
+Esa separación es lo que hace que **toda F2 sea nivel 1**. Si el parser viviera dentro del cliente HTTP —como
+en la app heredada— probar el mapeo de un campo exigiría levantar un servidor.
+
+**Lo que no trae, y es deliberado.**
+
+- **El transporte HTTP de verdad.** Llega en **F5**, que es donde hay integración que lo ejercite. Escribirlo
+  ahora sería código sin un test que lo toque, y además tendría que resolver cosas que F2 no sabe: validar el
+  `2xx` explícitamente ([Anexo RFFM §F.7]), concurrencia y *backoff*.
+- **El cableado en la raíz de composición.** `App` no conoce a `Federation` todavía porque **no hay llamante**:
+  el job es F6 y el `/preview` es F10. Hoy lo consume el *target* de tests, que es lo que lo mantiene en el
+  grafo de *build*.
+- **Clasificación, goleadores y acta** (F7, F8, [D-57]): el puerto tiene **una** operación. Una firma inventada
+  hoy se escribiría contra un anexo en vez de contra un volcado.
+- **Nada de emparejar ni de escribir.** El adaptador devuelve lo que la fuente dijo, con sus huecos intactos —
+  que es la materia prima sobre la que F3 y F4 deciden.
+
+**Lo que el *fixture* NO demuestra, y hay que decirlo.** El volcado es de una temporada **sin arrancar**: los
+306 partidos llegan sin marcador y sin hora, y las 34 fechas son el sábado por defecto. Es [Anexo RFFM §F.5]
+al pie de la letra, pero **la rama de "partido jugado" no la ejercita ningún dato real de calendario** — las
+únicas muestras con marcador son las 3 y 4 de §F.2, que están en el anexo y no en un volcado completo. La
+consecuencia práctica: **F5 necesita un volcado de temporada en curso** para que la ingesta de resultados no
+se estrene en producción.
+
+**F2 sí se escribió en TDD**, al contrario que F1, y se nota en una cosa concreta: los cuatro *suites*
+empezaron sin compilar. Pero conviene ser honesto sobre el límite de la técnica aquí — **las aserciones del
+parser salen de haber leído el volcado**, así que son *tests de caracterización*: fijan lo que la fuente hace
+hoy, no lo que debería hacer. Es lo correcto para código contra un sistema de terceros, y es justo por eso que
+el anexo fechado y la marca `[C]` son parte del método y no decoración.
+
+**La comprobación de mutación encontró algo que los tests verdes no podían.** Once mutaciones, **once
+detectadas** —y con especificidad: cambiar `codjornada` por `jornada` tumba el test de la numeración y ningún
+otro—. Pero la interesante fue la **duodécima, que no se detectó**: romper el descarte del `?nova=1` de la
+ruta del escudo no tumbó nada. No era un hueco de test: era **código defensivo que no defendía nada** —la
+consulta va detrás de la extensión y nunca toca al segmento del id—. Se borró la línea.
+
+> **Ése es un uso de la técnica que F1 no había visto.** Una mutación no detectada tiene **dos** lecturas, y
+> conviene mirarlas en este orden: falta un test, **o sobra el código**. Asumir la primera es como se acaba
+> escribiendo un test para justificar una línea inútil.
+
+**Dos hallazgos de montaje**, los dos ya anunciados en `AGENTS.md` y los dos volvieron a morder:
+`MemberImportVisibility` cazó un `import Foundation` que llegaba de gratis, y SwiftPM **descartó en silencio**
+el *target* nuevo hasta que tuvo su primer `.swift` — el primer rojo de la fase fue un `no such module`.
+
+**Lo que se llevó por delante sin planearlo:** dos tests de F0 (`GetClubTests`, `ClubEndpointTests`) afirmaban
+que la FCF no publica goleadores. Era cierto cuando se escribieron; el saneamiento previo a esta fase lo
+corrigió en el catálogo y estos dos se quedaron atrás hasta que la batería completa los cazó.
 
 
 ---
