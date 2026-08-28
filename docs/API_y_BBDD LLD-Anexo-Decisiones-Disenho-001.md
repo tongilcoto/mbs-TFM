@@ -66,6 +66,7 @@
 | **D-55**               | La capacidad de clasificación es «¿por jornada?», no «¿publica?»                           | §3.6, §3.7, §5.1, §5.2             |
 | **D-56**               | «Volátil» no es «pisar siempre»: la fuente solo gana cuando dice algo                      | §3.7, §5.6                         |
 | **D-57**               | El acta entra como fuente de estado, y solo para los partidos del club                     | §3.3, §3.7, §5.6                   |
+| **D-74**               | La coordenada de la FCF deja de ser un problema: su web nueva tiene la forma de la RFFM    | §3.7, §5.6                         |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -1308,6 +1309,68 @@ decide cuando existan los dos datos que faltan.
 que devuelve. Es deliberado: el alcance ampliado depende de una observación pendiente, y ampliarlo a ciegas
 —mapeando `"100"` a «gol normal» por conjetura— metería datos mal clasificados en las tablas que sostienen
 toda la estadística.
+
+### D-74 · La coordenada de la FCF deja de ser un problema: su web nueva tiene la forma de la RFFM
+
+**Contexto.** El [Plan de desarrollo](./Plan%20de%20desarrollo-001.md) §7.2 y §10 dejaron abierta una
+cuestión que había que resolver en **F2**, antes de escribir el segundo adaptador: **cómo encaja la
+coordenada de la FCF en `federation_competition_id` y `federation_group_id`**, dos columnas cuya forma se
+diseñó mirando a Madrid, donde la URL del calendario son cuatro parámetros sueltos ([Anexo RFFM §F.1]).
+
+El problema era real y estaba bien planteado. Según el [Anexo FCF §C.2–§C.3], allí la coordenada era una
+**ruta de *slugs*** —`/resultats/2526/futbol-11/tercera-catalana/grup-8`— en la que **el grupo no tenía
+identificador propio**: solo el *slug* `grup-8`, que se repite en todas las competiciones. Guardarlo suelto
+habría roto la unicidad `(season_id, federation_group_id)` que §3.5 da por supuesta, y las opciones sobre la
+mesa eran las tres feas de siempre: meter la URL entera en una columna, guardar una ruta relativa que el
+adaptador recompusiera, o cambiar el modelo.
+
+**Lo que pasó: la pregunta se evaporó.** Al buscar una URL actual con la que fijar la decisión, resultó que
+**la FCF ha rehecho su web y ahora publica una API JSON**. La reobservación está en [Anexo FCF §C.10], con
+los volcados guardados. Su coordenada es hoy:
+
+```
+https://www.fcf.cat/es/competicio?temporadaId=22&disciplinaId=19308233&competicioId=58161860&grupId=58161861
+```
+
+| Columna del modelo (§3.7) | RFFM | FCF |
+|---|---|---|
+| `Season.federation_season_id` | `22` | `22` — **el mismo código y la misma etiqueta** |
+| `Competition.federation_competition_id` | `26737701` | `58161860` |
+| `Competition.federation_group_id` | `26737702` | `58161861` |
+
+**Decisión: no se hace nada.** Tres códigos numéricos, tres columnas, uno a uno. No hay *slugs* que guardar,
+no hay URL que componer, no hay columna que añadir y no hay nada que tocar en el *spec* —los tres campos son
+`type: string, minLength: 1`, sin `pattern` ni `maxLength`—. **La unicidad `(season_id, federation_group_id)`
+se sostiene en las dos federaciones por el mismo motivo**, que es el que §3.5 escribió pensando solo en una.
+
+Esta entrada existe porque **una cuestión abierta que se cierra sin cambiar nada tiene que quedar cerrada por
+escrito**, o el siguiente que lea el §7.2 del plan volverá a diseñar la solución de un problema que ya no
+está.
+
+**Lo que sí se lleva por delante, y no es poco.** El motivo por el que la coordenada era rara —*"esto no es
+una API, es una web"*, [Anexo FCF §C.1]— ha dejado de ser cierto, y con él media docena de premisas que
+sostenían otras decisiones. El inventario, decisión a decisión, está en [Anexo FCF §C.10.8]. Dos merecen
+citarse aquí porque **su razón declarada ha caducado**:
+
+- **[D-67]** justifica el `202` del alta en cascada con que *"la FCF cuesta ~34 peticiones y en línea daría
+  timeout"*. Ahora cuesta **una**: `partidos?grupId=…` trae el calendario entero.
+- **[D-56]** y §5.6 apoyan la regla de escritura y la cadencia semanal en que *"la FCF borra la fecha y la
+  hora al jugarse el partido"*. Un volcado de una temporada **entera ya jugada** las conserva en **240 de
+  240**.
+
+**Ninguna de las dos se cambia aquí**, y es deliberado: las dos pueden seguir siendo correctas por otros
+motivos —el `202` desacopla igual, y "vacío no sobrescribe" sigue siendo buena higiene con lo que la RFFM
+hace con `hora`—. Lo que no pueden es seguir apoyándose en una evidencia falsa. **Se revisan al entrar en
+F3**, que es la fase que implementa [D-56], y no antes: adelantarlo sería rediseñar la ingesta de Cataluña
+—que es **F9**— con el trabajo de Madrid a medias.
+
+**La lección, que es más general que este caso.** El proyecto documenta su ingeniería inversa en anexos
+fechados y marca cada afirmación con **[C]**, **[I]** o **[N]** ([Anexo RFFM], convención de fiabilidad).
+Esto demuestra para qué sirve: la marca **[C]** dice *"comprobado"*, no *"permanente"*. Un anexo de un
+sistema de terceros tiene fecha de caducidad que nadie anuncia, y lo que la delata es ir a mirar. **Antes de
+escribir un adaptador, revalidar su anexo** — cuesta media hora y aquí ha evitado escribir un
+`FederationCoordinate` con dos representaciones para un problema inexistente.
+
 
 ---
 
@@ -2757,3 +2820,4 @@ paquete sin problema.
 [D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

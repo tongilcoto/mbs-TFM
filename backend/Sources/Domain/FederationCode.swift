@@ -68,10 +68,16 @@ extension FederationCode {
             // con endpoint JSON propio (Anexo RFFM §F.13).
             FederationCapabilities(providesRoundStandings: true, providesScorers: true)
         case .fcf:
-            // Solo la clasificación vigente (D-55). Goleadores **no observados**
-            // (Anexo FCF §C.9): se declara `false` hasta tener evidencia, porque
-            // prometer una pantalla vacía es peor que ocultarla (D-48).
-            FederationCapabilities(providesRoundStandings: false, providesScorers: false)
+            // Clasificación **solo vigente** (D-55), reverificado el 2026-08-28
+            // contra la web nueva: `classificacio?grupId=…` devuelve el mismo
+            // cuerpo con `jornada`, `round` o `jornadaId`, así que sigue sin
+            // haber histórico y las jornadas anteriores al alta se calculan (D-15).
+            //
+            // Goleadores **sí**, desde el 2026-08-28. El `false` anterior citaba
+            // el §C.9 del anexo —"ni endpoint, ni parser"—, que describía el sitio
+            // *antiguo*; el nuevo publica `/api/competition/goleadores`. Corregido
+            // con el volcado, no de memoria (AGENTS.md).
+            FederationCapabilities(providesRoundStandings: false, providesScorers: true)
         }
     }
 }

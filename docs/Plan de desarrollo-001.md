@@ -359,16 +359,30 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 
 ## 10. Cuestiones abiertas de este plan
 
-1. **La representación de la coordenada de la FCF** en `federation_competition_id` / `federation_group_id`
-   (§7.2, punto 1). Se resuelve en F2 y genera `D-nn`.
+1. ~~**La representación de la coordenada de la FCF**~~ (§7.2, punto 1). **RESUELTA en F2 — por
+   desaparición**, [D-74]. Al buscar una URL actual con la que fijarla se descubrió que **la FCF ha rehecho
+   su web y ahora tiene API JSON**, con una coordenada de tres códigos numéricos que encaja uno a uno en las
+   columnas del modelo. No hay nada que decidir ni que cambiar. La reobservación está en el
+   [Anexo FCF §C.10](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md); **§C.1–§C.9 de ese anexo quedan
+   obsoletas**.
+
+   > **Y deja dos deberes para F3, que es la fase siguiente.** [D-56] y §5.6 del LLD apoyan la regla de
+   > escritura y la cadencia semanal en que *"la FCF borra la fecha y la hora al jugarse el partido"*; una
+   > temporada entera ya jugada las conserva en **240 de 240**. [D-67] justifica su `202` con las *"~34
+   > peticiones"* de la FCF, que ahora es **1**. Las dos decisiones pueden seguir siendo correctas por otros
+   > motivos — pero **hay que rehacerles la justificación al implementarlas**, no darlas por buenas.
 2. ~~La lista exacta de *upcoming features* de concurrencia.~~ **Resuelta en F0**: `ExistentialAny`,
    `MemberImportVisibility`, `InferIsolatedConformances` y `NonisolatedNonsendingByDefault`, en modo de
    lenguaje `.v6` y en **todos** los *targets*. **Fluent no peleó**: no hizo falta bajar el modo en ninguno,
    así que la válvula de escape que §6 descartaba tampoco se ha echado en falta. `MemberImportVisibility` se
    ganó el sitio de inmediato — cazó tres *imports* transitivos implícitos que habrían compilado en silencio.
 3. **Cuánto vale la evidencia de `federation_name`.** [D-72] guarda el nombre literal de la competición para
-   cerrar el `[I]` de [Anexo RFFM §F.14] —que la inferencia de género descansa sobre **una** muestra—. La
-   columna nace en F1 y **no se llena hasta F10**: hasta entonces la pregunta sigue sin datos.
+   cerrar el `[I]` de [Anexo RFFM §F.14] —que la inferencia de género descansaba sobre **una** muestra—.
+   **Parcialmente resuelta en F2**: el volcado de las 30 competiciones de una temporada dice que el marcador
+   `FEMENINO` **no siempre va al final** (2 de 6) y que **no hay truncado** en ese endpoint, y aporta una
+   segunda señal de contraste (`nombre_grupo_categoria`). La inferencia acierta más de lo que se temía; la
+   columna sigue sin llenarse **hasta F10**, que es cuando la pregunta de fondo —cuánto vale como evidencia
+   forense— tendrá datos de verdad.
 4. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.
 
@@ -378,3 +392,6 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

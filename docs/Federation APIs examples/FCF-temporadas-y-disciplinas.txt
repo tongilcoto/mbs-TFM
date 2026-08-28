@@ -1,0 +1,114 @@
+Volcado capturado el 2026-08-28 de la web NUEVA de la FCF (www.fcf.cat), que sustituye
+al sitio de raspado HTML sobre el que se escribio el Anexo FCF. Ver el aviso de
+obsolescencia en la cabecera de ese anexo.
+
+
+Request URL
+https://www.fcf.cat/api/competition/temporadas
+
+Response
+[
+    {
+        "value": "22",
+        "label": "2026-2027"
+    },
+    {
+        "value": "21",
+        "label": "2025-2026"
+    },
+    {
+        "value": "20",
+        "label": "2024-2025"
+    },
+    {
+        "value": "19",
+        "label": "2023-2024"
+    },
+    {
+        "value": "18",
+        "label": "2022-2023"
+    },
+    {
+        "value": "17",
+        "label": "2021-2022"
+    },
+    {
+        "value": "16",
+        "label": "2020-2021"
+    },
+    {
+        "value": "15",
+        "label": "2019-2020"
+    },
+    {
+        "value": "14",
+        "label": "2018-2019"
+    },
+    {
+        "value": "13",
+        "label": "2017-2018"
+    },
+    {
+        "value": "12",
+        "label": "2016-2017"
+    },
+    {
+        "value": "11",
+        "label": "2015-2016"
+    },
+    {
+        "value": "10",
+        "label": "2014-2015"
+    },
+    {
+        "value": "9",
+        "label": "2013-2014"
+    },
+    {
+        "value": "8",
+        "label": "2012-2013"
+    },
+    {
+        "value": "7",
+        "label": "2011-2012"
+    },
+    {
+        "value": "6",
+        "label": "2010-2011"
+    }
+]
+
+Request URL
+https://www.fcf.cat/api/competition/disciplines?temporadaId=22
+
+Response
+[
+    {
+        "value": "19308233",
+        "label": "Futbol 11"
+    },
+    {
+        "value": "19308235",
+        "label": "Futbol 7"
+    },
+    {
+        "value": "24885364",
+        "label": "Futbol 5"
+    },
+    {
+        "value": "19308236",
+        "label": "Futbol Sala"
+    },
+    {
+        "value": "19308237",
+        "label": "Futbol Femení"
+    },
+    {
+        "value": "24694879",
+        "label": "Futbol Sala Femení"
+    },
+    {
+        "value": "19308239",
+        "label": "Futbol Platja"
+    }
+]

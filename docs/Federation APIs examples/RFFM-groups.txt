@@ -1,0 +1,178 @@
+[
+    {
+        "codigo": "26737752",
+        "nombre": "Grupo 1",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "1",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737753",
+        "nombre": "Grupo 2",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "2",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737754",
+        "nombre": "Grupo 3",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "3",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737755",
+        "nombre": "Grupo 4",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "4",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737757",
+        "nombre": "Grupo 5",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "5",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737758",
+        "nombre": "Grupo 6",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "6",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737759",
+        "nombre": "Grupo 7",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "7",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737760",
+        "nombre": "Grupo 8",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "8",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737761",
+        "nombre": "Grupo 9",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "9",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737762",
+        "nombre": "Grupo 10",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "10",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737763",
+        "nombre": "Grupo 11",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "11",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737764",
+        "nombre": "Grupo 12",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "12",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737765",
+        "nombre": "Grupo 13",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "13",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737766",
+        "nombre": "Grupo 14",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "14",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737767",
+        "nombre": "Grupo 15",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "15",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    },
+    {
+        "codigo": "26737756",
+        "nombre": "Grupo 16",
+        "total_jornadas": "30",
+        "total_equipos": "16",
+        "clasificacion_porteros": "0",
+        "ver_clasificacion": "1",
+        "clasificacion_goleadores": "1",
+        "orden": "16",
+        "nombre_delegacion": "CENTRAL R.F.F.M."
+    }
+]

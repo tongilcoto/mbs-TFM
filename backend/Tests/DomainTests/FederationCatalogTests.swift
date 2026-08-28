@@ -17,11 +17,15 @@ struct FederationCatalogTests {
 
     /// D-48: aquí no hay *fallback* posible —calcular el ranking exigiría la
     /// plantilla de los rivales (D-09)—, así que `false` significa que la
-    /// pantalla se oculta, no que se pinte vacía.
-    @Test("los goleadores de la FCF siguen sin observarse (Anexo FCF §C.9, D-48)")
+    /// pantalla se oculta, no que se pinte vacía. Por eso el valor se cambia
+    /// **solo con un volcado delante**, que es lo que pasó el 2026-08-28.
+    @Test("las dos federaciones publican goleadores (Anexo RFFM §F.13, Anexo FCF §C.10, D-48)")
     func scorers() {
         #expect(FederationCode.rffm.capabilities.providesScorers)
-        #expect(!FederationCode.fcf.capabilities.providesScorers)
+        // Era `false` citando el §C.9 del sitio antiguo. La web nueva de la FCF
+        // publica `/api/competition/goleadores` — evidencia en
+        // `docs/Federation APIs examples/FCF-goleadores.txt`.
+        #expect(FederationCode.fcf.capabilities.providesScorers)
     }
 
     /// Si alguien añade una federación al enum, este test la obliga a declarar

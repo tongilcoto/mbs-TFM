@@ -44,9 +44,10 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   van en `CreateTeamRequest`, nunca en el `PATCH`.
 - **El copia-pega de la URL de la federación vive en el equipo, no en la competición** (`D-67`):
   `POST /v1/teams/{id}/federation-link` (+ su `/preview`) engancha, crea en cascada `Season` y
-  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. Es 202 porque la FCF
-  cuesta ~34 peticiones (§5.6) y en línea daría *timeout*. `POST /v1/competitions` se conserva solo como
-  vía para semillas, *scripts* y tests.
+  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. ⚠️ **La razón escrita de ese
+  202 —que la FCF costaba ~34 peticiones— ha caducado**: hoy cuesta una (ver más abajo y `D-74`). El `202`
+  puede seguir siendo lo correcto por desacoplamiento, pero **no se da por bueno sin rehacerle el
+  argumento**. `POST /v1/competitions` se conserva solo como vía para semillas, *scripts* y tests.
 - **`modality` y `gender`, cuando el equipo lo crea la ingesta, los hereda de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
   clave única de `Team` y **ninguno es campo de escritura de `Team`**. La federación no publica género por
   equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
@@ -55,14 +56,23 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
-- **Los dos proveedores no son intercambiables** y sus diferencias están medidas: la RFFM sirve
-  clasificación por **cualquier** jornada y el calendario entero en **una** petición; la **FCF** cuesta una
-  petición **por jornada**, solo da la clasificación **vigente**, no tiene identificador de partido y
-  **borra la fecha del partido al jugarse**. Ojo con el atajo "RFFM = JSON, FCF = *scraping*": **los dos
-  devuelven HTML en el calendario** — la RFFM lo trae en un `__NEXT_DATA__` embebido ([Anexo RFFM §F.7]) y
-  solo sus rutas `/api/…` (clasificación, competiciones, grupos) son JSON puro. De ahí que en la ingesta un campo
-  **ausente o vacío nunca sobrescriba** (`D-56`) y que la cadencia semanal sea un requisito, no una
-  recomendación (§5.6). Evidencia campo a campo en los anexos de federación; no deducir nada de memoria.
+- **Los dos proveedores se parecen mucho más de lo que dicen los documentos antiguos, y eso es reciente.**
+  El 2026-08-28 se descubrió que **la FCF ha rehecho su web y ahora publica una API JSON** ([D-74],
+  [Anexo FCF §C.10]): coordenada de tres códigos numéricos como la de Madrid, calendario entero en **una**
+  petición, identificador de partido (`CODACTA`) e identificador de club como campo propio. **§C.1–§C.9 del
+  anexo FCF están obsoletas** — describen el sitio de raspado anterior. De las diferencias que ese anexo daba
+  por medidas, **solo sobrevive una**: la FCF publica **únicamente la clasificación vigente** (`D-55`,
+  reverificado), así que las jornadas anteriores al alta se calculan (`D-15`).
+- **Dos consecuencias de eso que están sin resolver, y tocan en F3.** `D-56` (*ausente o vacío nunca
+  sobrescribe*) y la cadencia semanal de §5.6 se apoyan en que *"la FCF borra la fecha al jugarse el
+  partido"* — una temporada entera ya jugada las **conserva en 240 de 240**. Y `D-67` justifica su `202` con
+  las *"~34 peticiones"* de la FCF, que ahora es **1**. Las reglas pueden seguir siendo buenas; **sus razones
+  escritas han caducado**, y hay que rehacerlas al implementarlas, no darlas por buenas.
+- **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
+  en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
+  ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
+  anexos y en `docs/Federation APIs examples/`; **no deducir nada de memoria, y revalidar el anexo antes de
+  escribir su adaptador** — es la lección de `D-74`.
 
 ## Dónde va cada cosa al documentar
 
@@ -222,10 +232,9 @@ Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-0
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
 Con F0 y F1 entregadas, lo inmediato es **F2: el puerto `FederationClient` y el adaptador RFFM del
-calendario contra *fixtures***, sin persistir nada. Dos cosas le esperan ahí ya escritas: la **cuestión
-abierta nº 1 del plan** —cómo encaja la coordenada de la FCF en `federation_competition_id` /
-`federation_group_id`— y el **reformateo de `"2025-2026"` a `"2025/26"`**, que es trabajo del adaptador y no
-del dominio (`D-71`). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+calendario contra *fixtures***, sin persistir nada. La **cuestión abierta nº 1 del plan** —la coordenada de
+la FCF— **ya no está**: se cerró por desaparición al reobservar la fuente (`D-74`). Queda el **reformateo de
+`"2026-2027"` a `"2026/27"`**, que es trabajo del adaptador y no del dominio (`D-71`). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
 `rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
 llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
@@ -234,3 +243,6 @@ tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes clo
 ## Equipo
 
 El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude Code.
+
+[Anexo FCF §C.10]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

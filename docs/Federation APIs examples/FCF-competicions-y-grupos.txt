@@ -1,0 +1,466 @@
+Volcado capturado el 2026-08-28 de la web NUEVA de la FCF (www.fcf.cat), que sustituye
+al sitio de raspado HTML sobre el que se escribio el Anexo FCF. Ver el aviso de
+obsolescencia en la cabecera de ese anexo.
+
+
+Request URL
+https://www.fcf.cat/api/competition/competicions?disciplinaId=19308233&temporada=21
+
+Response
+[
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322936",
+        "label": "LLIGA ELIT"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54469307",
+        "label": "COPA CATALUNYA MASCULINA 24/25"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54979299",
+        "label": "COPA CATALUNYA MASCULINA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54819589",
+        "label": "COPA LLEIDA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322932",
+        "label": "PRIMERA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54820981",
+        "label": "COPA PIRINEUS"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322938",
+        "label": "SEGONA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322945",
+        "label": "TERCERA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322946",
+        "label": "QUARTA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57943878",
+        "label": "QUARTA CATALANA - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57957147",
+        "label": "QUARTA CATALANA - FASE ASCENS TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322949",
+        "label": "LLIGA NACIONAL JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322950",
+        "label": "PREFERENT JUVENILS"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54721956",
+        "label": "PREFERENT CADET S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722086",
+        "label": "PREFERENT CADET S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323004",
+        "label": "PREFERENT INFANTIL S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323005",
+        "label": "PREFERENT INFANTIL S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322992",
+        "label": "PRIMERA FEDERACIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322991",
+        "label": "SEGONA FEDERACIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322947",
+        "label": "TERCERA FEDERACIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323054",
+        "label": "COPA FEDERACIÓ - Fase Autonòmica"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323111",
+        "label": "PROMOCIÓ ASCENS A TERCERA FEDERACIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323112",
+        "label": "PROMOCIÓ ASCENS A LLIGA ELIT"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323113",
+        "label": "PROMOCIÓ ASCENS A PRIMERA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58096712",
+        "label": "MEMORIAL PEPITO ESTEVE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323114",
+        "label": "PROMOCIÓ ASCENS A SEGONA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58058684",
+        "label": "PROMOCIÓ ASCENS A TERCERA CATALANA TARRAGONA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323115",
+        "label": "PROMOCIÓ ASCENS A TERCERA CATALANA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58096024",
+        "label": "QUARTA CATALANA - FASE FINAL COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58096067",
+        "label": "QUARTA CATALANA - FASE FINAL - ASCENS TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58127963",
+        "label": "QUARTA CATALANA - FINAL COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322993",
+        "label": "DIVISIÓ HONOR JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323116",
+        "label": "CAMPIONAT DE CATALUNYA JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57980054",
+        "label": "JUVENIL PRIMERA DIVISIÓ - FASE ASCENS TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57982740",
+        "label": "JUVENIL PRIMERA DIVISIÓ - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322951",
+        "label": "JUVENIL PRIMERA DIVISIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58096794",
+        "label": "JUVENIL PRIMERA DIVISIÓ - FASE FINAL COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58112819",
+        "label": "JUVENIL PRIMERA DIVISIÓ - FASE FINAL  - SEMIFINALS/FINAL - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322952",
+        "label": "JUVENIL SEGONA DIVISIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58058214",
+        "label": "Torneig - JUVENIL SEGONA DIVISIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58095579",
+        "label": "CAMPIONAT DE CATALUNYA CADET S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54721944",
+        "label": "DIVISIÓ HONOR CADET S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722000",
+        "label": "CADET PRIMERA DIVISIÓ S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58138904",
+        "label": "CADET PRIMERA DIVISIÓ S16 - FASE FINAL - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58047895",
+        "label": "CADET PRIMERA DIVISIÓ S16 - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58047706",
+        "label": "CADET PRIMERA DIVISIÓ S16 - FASE ASCENS TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722016",
+        "label": "CADET SEGONA DIVISIÓ S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57984880",
+        "label": "Torneig - CADET SEGONA DIVISIÓ S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "57984590",
+        "label": "Promoció ascens - CADET SEGONA DIVISIÓ S16"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722023",
+        "label": "DIVISIÓ HONOR CADET S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58095580",
+        "label": "CAMPIONAT DE CATALUNYA CADET S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722089",
+        "label": "CADET PRIMERA DIVISIÓ S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57984881",
+        "label": "Torneig - CADET SEGONA DIVISIÓ S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "57984606",
+        "label": "Promoció ascens - CADET SEGONA DIVISIÓ S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54722098",
+        "label": "CADET SEGONA DIVISIÓ S15"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323002",
+        "label": "DIVISIÓ HONOR INFANTIL S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323117",
+        "label": "CAMPIONAT DE CATALUNYA INFANTIL S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323118",
+        "label": "CAMPIONAT DE CATALUNYA INFANTIL S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323006",
+        "label": "INFANTIL PRIMERA DIVISIÓ S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323008",
+        "label": "INFANTIL SEGONA DIVISIÓ S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323104",
+        "label": "Promoció ascens - INFANTIL SEGONA DIVISIÓ S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323003",
+        "label": "DIVISIÓ HONOR INFANTIL S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "58138916",
+        "label": "INFANTIL PRIMERA DIVISIÓ S14 - FINAL -COPA  TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58058682",
+        "label": "INFANTIL PRIMERA DIVISIÓ S14 - COPA TERRES EBRE"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323007",
+        "label": "INFANTIL PRIMERA DIVISIÓ S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57989214",
+        "label": "Torneig-INFANTIL SEGONA DIVISIÓ S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57984882",
+        "label": "Torneig - INFANTIL SEGONA DIVISIÓ S14"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323009",
+        "label": "INFANTIL SEGONA DIVISIÓ S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57861584",
+        "label": "Torneig - INFANTIL SEGONA DIVISIÓ S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323088",
+        "label": "Promoció ascens - INFANTIL SEGONA DIVISIÓ S13"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322995",
+        "label": "LÚDICA CADET"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323083",
+        "label": "Segona Fase - LÚDICA CADET"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323086",
+        "label": "Segona Fase - LÚDICA INFANTIL F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323071",
+        "label": "LÚDICA INFANTIL F11"
+    }
+]
+
+Request URL
+https://www.fcf.cat/api/competition/grupos?competicioId=54322936
+
+Response
+[
+    {
+        "value": "54322937",
+        "label": "GRUP 1"
+    }
+]

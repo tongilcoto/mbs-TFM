@@ -268,11 +268,9 @@ resuelto** con los volcados: cuatro en §F.12, y los dos grandes —acta y golea
   ejercitado `1` y `2` (§F.9).
 - **`puntos_sancion`** (§F.8): la fuente lo publica y el modelo no lo recoge. **Aplazado a propósito** — se
   revisará al final del diseño, no ahora.
-- **El array completo de `/api/competitions` para una temporada** (§F.14). Se ha observado **un** `nombre`.
-  Falta contar las variantes del marcador de género —¿siempre `FEMENINO`, siempre al final?— y comprobar si
-  este campo sufre el **truncado a 40 caracteres** que §F.11 vio en `NombreCategoria`. No bloquea el diseño
-  ([D-58] no depende de que la inferencia acierte), pero decide cuánto acierta el valor propuesto en el
-  `/preview`.
+- ~~**El array completo de `/api/competitions` para una temporada**~~ (§F.14). **RESUELTO** con el volcado de
+  30 competiciones: ver §F.14, *"Lo que dijo el array completo"*. El marcador **no siempre va al final** y
+  **no hay truncado** en este endpoint.
 
 > Lo pendiente de la **FCF** no se lista aquí: vive en su [propio anexo](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md).
 
@@ -512,10 +510,11 @@ Complementan las de §F.5, que siguen siendo válidas. **[C]** salvo indicación
 | **Dos formatos de fecha en el mismo proveedor**: `dd-MM-yyyy` en datos operativos (`fecha`, `fecha_jornada`), **`yyyy-MM-dd` ISO** en catálogos (`seasons[].fecha_inicio`, `competitions[].FechaInicio`) | Parseo explícito **según el campo** |
 | **Sin huso horario en ningún payload** | Fijar `Europe/Madrid` explícitamente **[I]**; cuidado con los cambios de hora |
 | `"" ` y `"0"` **no son intercambiables**, y el mismo objeto usa ambos: `puntos_sancion` llega `"0"`, `coeficiente` llega `""` | Distinguir vacío de cero |
-| El sufijo `(HA)` aparece en **240 de 240** nombres de campo, con variantes `(HA)(HA)`, `(HA) (HA)` y `(H.A.)(HA)` | La limpieza literal de la app **falla** en dos de las tres. Regex: `\s*\((?:HA\|H\.A\.)\)\s*`, aplicada repetidamente |
-| **Acentos inconsistentes por campo**: equipos y campos **sin** acentos (`ANGELES`, `CHAMBERI`); personas y catálogos **con** acentos (`GARCÍA`, `Fútbol Sala`) | Comparar nombres con *folding* de diacríticos |
+| El sufijo `(HA)` aparece en **240 de 240** nombres de campo, con variantes `(HA)(HA)`, `(HA) (HA)` y `(H.A.)(HA)` | La limpieza literal de la app **falla** en dos de las tres |
+| **Y no es solo `(HA)`, ni siempre sufijo** (§F.15): existe `(HB)` —`'C.D.M. SANTA ANA - MARTIN TEMIÑO (HB)(HB)'`— y aparece **en medio** del nombre —`'S.S. REYES - GABRIEL PEDREGAL 2 (HA) ANT. DEHESA VIEJA'` | La regex `\((?:HA\|H\.A\.)\)` que esta tabla proponía **no basta**. Marca de dos letras en cualquier posición: `\s*\(H[AB]\|H\.[AB]\.\)\s*`, aplicada repetidamente y **sin anclar al final** |
+| **Acentos inconsistentes, y ni siquiera por campo**: hay equipos y campos **sin** acentos (`ANGELES`, `CHAMBERI`) y **con** ellos (`C.D. VILLANUEVA DE LA CAÑADA 'A'`, `MARTIN TEMIÑO`) en el **mismo** volcado; y en `/api/competitions` conviven `TERCERA FEDERACION DE FÚTBOL FEMENINO` y `PRIMERA DIVISION AUTONÓMICA FEMENINO` | Comparar nombres con *folding* de diacríticos **siempre**. No hay ningún campo del que fiarse |
 | `calendar.rounds[].`**`equipos[]`** es la lista de **partidos**, no de equipos | Nombre engañoso del proveedor |
-| El calendario asigna la jornada por **índice de array** en la app, ignorando `jornada` y `codjornada` | **Usar `jornada`**, no la posición |
+| El calendario asigna la jornada por **índice de array** en la app | **Usar `codjornada`.** Ojo: una versión anterior de esta fila decía *"usar `jornada`"* y **se equivocaba** — `jornada` es un **rótulo**, `"1 (13-09-2026)"`, no un número (§F.15) |
 | `NombreCategoria` viene **truncado a 40 caracteres** (`"PRIMERA DIVISION AUTONOMICA FEMENINO CAD"`) | El rótulo de división puede llegar cortado |
 | El nombre de grupo **no tiene formato estable**: `"Grupo 1"` en un endpoint, `"GRUPO 17"` en otro | Normalizar |
 | **No hay campo de género** en ninguna entidad; solo se infiere del texto (`FÚTBOL FEMENINO`) | Resuelto en **§F.14**: el género va en el **nombre de la competición**, y de ahí lo toma el modelo ([D-58]). No hay campo propio en ninguna entidad |
@@ -639,9 +638,99 @@ buena** (§5.1 del LLD):
 3. **Un error aquí no da un dato feo, da un 409.** Como `gender` entra en la clave única de `Team`, una
    inferencia equivocada colisiona con el equipo ya existente en vez de degradarse en silencio.
 
-> **Alcance de la muestra.** Un único `nombre` observado, aportado por el desarrollador. Que el marcador sea
-> **siempre** `FEMENINO` y **siempre** al final del rótulo es **[I]**: convendría volcar el array completo de
-> `/api/competitions` para una temporada y contar las variantes.
+### Lo que dijo el array completo — **2026-08-28**
+
+El `[I]` de arriba ya está resuelto: se volcaron las **30 competiciones** de
+`/api/competitions?temporada=22&tipojuego=1`. **[C]**
+
+| Lo que se suponía | Lo que hay |
+|---|---|
+| El marcador va **al final** del rótulo | **Falso en 2 de 6.** `PRIMERA DIVISIÓN AUTONÓMICA FEMENINO JUVENIL` y `PREFERENTE FEMENINO JUVENIL` lo llevan **en medio** → la regla es `contains`, nunca sufijo |
+| El `nombre` puede sufrir el **truncado a 40** de `NombreCategoria` (§F.11) | **No se observa.** El rótulo más largo son **44 caracteres** y llega entero, igual que su `NombreCategoria`. El truncado de §F.11 es de **otro endpoint** |
+| ¿Aparece `FEMENINA`, en femenino? | **Nunca.** Las 6 dicen `FEMENINO` |
+| ¿Y `MASCULINO` explícito, o `MIXTO`? | **Ninguno de los dos aparece.** Se confirma que la ausencia de marcador **es** el masculino, y que `mixto` es inalcanzable |
+
+**Y aparece una segunda señal, independiente:** `nombre_grupo_categoria` agrupa las competiciones por bloque
+(`AFICIONADOS`, `JUVENILES`, `CADETES`, `INFANTILES`, `ALEVINES`) y **las seis femeninas caen todas en
+`FÚTBOL FEMENINO`**. Coincide con la inferencia del rótulo en las 30, así que sirve de **contraste**.
+
+> **No convierte la inferencia en certeza, y el `/preview` sigue proponiendo.** Las dos señales salen del
+> mismo sitio, así que se equivocan juntas; y las razones 1 y 3 de arriba —`mixto` inalcanzable, y que un
+> error da un 409 y no un dato feo— no dependen de cuántas muestras haya. Lo que sí baja es la probabilidad
+> de fallar, que era lo que la muestra única dejaba en el aire.
+>
+> **Ojo al usar `nombre_grupo_categoria` para otra cosa:** es un buen indicio de género, pero un **mal**
+> indicio de edad. `PREFERENTE FEMENINO JUVENIL` es juvenil y su bloque dice `FÚTBOL FEMENINO`, no
+> `JUVENILES` — el eje femenino **se come** la categoría de edad. Para `age_category`, `NombreCategoria`.
+
+---
+
+## F.15 El calendario, sobre el terreno — **volcado real**
+
+§F.1 daba los parámetros y §F.2 el objeto de partido, pero **el sobre que los envuelve no estaba descrito**, y
+es lo que necesita quien escriba el parser. Volcado completo del 2026-08-28 en
+[`docs/Federation APIs examples/RFFM-calendario-next_data.txt`](./Federation%20APIs%20examples/). **[C]**
+
+```
+GET https://www.rffm.es/competicion/calendario?temporada=22&tipojuego=1&competicion=26737701&grupo=26737702
+```
+
+**34 jornadas × 9 partidos = 306**, 18 equipos. Confirma §F.7: el HTML trae un
+`<script id="__NEXT_DATA__" type="application/json">…</script>`, y el JSON va **seguido del cierre
+`</script>`** — el *decoder* tiene que parar donde acaba el objeto, no consumir hasta el final del fichero.
+
+### La estructura
+
+```
+props.pageProps
+├── seasons[]        {cod_temporada:"22", nombre:"2026-2027", fecha_inicio:"2026-07-01", fecha_fin:"2027-09-01"}
+├── gameTypes[]      {codigo_tipo_juego:"1", nombre:"Futbol-11"}      ← §F.9, incrustado aquí
+├── query            {temporada, tipojuego, competicion, grupo}       ← eco de lo pedido
+├── currentRound     "1"
+└── calendar
+    ├── estado "1" · sesion_ok "1"
+    ├── competicion  "PREFERENTE AFICIONADO"    ← el NOMBRE, no el código
+    ├── grupo        "Grupo 1"
+    ├── temporada    "2026-2027"
+    ├── tipo_competicion "2"
+    ├── host         "https://appweb.rffm.es/"
+    └── rounds[]     {codjornada:"1", jornada:"1 (13-09-2026)", equipos:[…]}
+```
+
+### Cuatro cosas que corrigen o completan lo que ya había
+
+**1. `jornada` NO es el número de jornada.** Es un **rótulo**: `"1 (13-09-2026)"`, con la fecha nominal
+dentro. El número limpio está en **`codjornada`** (`"1"`…`"34"`). §F.11 decía *"usar `jornada`"* y **estaba
+mal**; ya está corregido allí. Es el error más caro de esta sección: `Int("1 (13-09-2026)")` da `nil`, y un
+parser tolerante lo convertiría en jornada 0 o lo descartaría en silencio.
+
+**2. El *host* del escudo viene en el payload** (`calendar.host`). §F.4 lo daba por constante nuestra. Es
+dato, y se usa tal cual: `host` + la ruta relativa del `escudo_*`.
+
+**3. Los rótulos del alta llegan en el propio calendario.** `calendar.competicion`, `calendar.grupo` y
+`calendar.temporada` son, respectivamente, el `federation_name` ([D-72]), el `group_label` y la etiqueta a
+reformatear a `"2026/27"` ([D-71]). En esta muestra `calendar.competicion` coincide **exactamente** con el
+`nombre` de `/api/competitions` para el código `26737701` — si es siempre ese campo y no `NombreCategoria`
+(que aquí también coincide) es **[I]** con una sola muestra. Si se confirma, el `/preview` de [D-67] puede
+inferir el género **sin una segunda llamada**.
+
+**4. Dos campos que §F.2 no recogía**, presentes en los 306 partidos y **vacíos en los 306**:
+`codigo_equipo_local_externo` y `codigo_equipo_visitante_externo`. Propósito **[N]**.
+
+### Lo que esta muestra confirma y lo que no ejercita
+
+Las 15 claves del objeto de partido están **en los 306, sin ausencias** — así que la muestra 2 de §F.2, sin
+`hora`, sigue siendo la única evidencia de que un campo puede **faltar**. El *decoder* debe tolerarlo igual.
+
+**Es una temporada sin arrancar, y eso limita lo que demuestra:** `goles_casa`, `goles_visitante` y `hora`
+llegan **vacíos en 306 de 306**, y las 34 fechas son un sábado, una por jornada. Es §F.5 al pie de la letra
+—el calendario se publica en dos tiempos— pero **no ejercita la rama de partido jugado**: para eso siguen
+haciendo falta las muestras 3 y 4 de §F.2.
+
+Del resto de §F.11, esta muestra confirma: todo llega como **cadena**; las fechas en `dd-MM-yyyy` en los datos
+y **`yyyy-MM-dd` en `seasons[]`**; la letra entre comillas simples (`'A'`, `'B'`) y ausente en los clubes sin
+filial (`C.D. EL ESCORIAL`); la etiqueta de temporada como `"2026-2027"`; y las extensiones de escudo
+variables — con **`.JPG` en mayúsculas**, que una comparación sensible a caja se comería.
 
 ---
 

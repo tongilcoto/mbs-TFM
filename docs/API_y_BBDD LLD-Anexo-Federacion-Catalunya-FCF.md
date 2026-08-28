@@ -1,7 +1,21 @@
 # Anexo de la Federación · Ingeniería inversa de la fuente (FCF, Cataluña)
 
-- **Estado:** vivo — se amplía cada vez que se observa una llamada nueva
-- **Fecha:** 2026-08-20
+- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10**
+- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28
+
+> # ⚠️ Aviso de obsolescencia (2026-08-28)
+>
+> **La FCF ha rehecho su web y ahora publica una API JSON.** Todo lo que va de §C.1 a §C.9 se escribió por
+> ingeniería inversa de una app iOS que consumía el sitio **anterior**, de raspado HTML. Ese sitio ya no
+> está.
+>
+> **No leer §C.1–§C.9 como descripción del presente.** Siguen aquí por dos motivos —dejan constancia de
+> *por qué* el modelo tiene la forma que tiene, y varias decisiones (`D-17`, `D-55`, `D-56`, `D-67`) las
+> citan— pero **§C.10 dice qué sobrevive y qué no, punto por punto**. Ante cualquier contradicción, manda
+> §C.10, que es lo único verificado contra el servidor real.
+>
+> La reobservación **no es exhaustiva**: se hizo para responder una pregunta concreta (la coordenada, ver
+> `D-74`) y se paró al confirmar el alcance del cambio. El trabajo completo es **F9** del plan.
 - **Documento principal:** [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · **Decisiones:** [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · **Federación hermana:** [RFFM (Madrid)](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)
 
 > **Qué es este anexo.** El material de **observación** sobre la fuente de datos de la FCF: llamadas, muestras
@@ -352,12 +366,20 @@ compartida que ninguna de las dos apps explora. **[I]** — merece una comprobac
 
 ## C.9 Pendiente de observar
 
+> ⚠️ **Sección afectada por §C.10.** Varios puntos estaban formulados sobre el sitio antiguo y **han quedado
+> resueltos o sin objeto** con la web nueva; van marcados abajo uno a uno. Lo que sigue sin marca sigue
+> pendiente, pero **reformularlo contra la fuente nueva es trabajo de F9**.
+
 > **Prioridad.** El diseño se está cerrando **primero contra la RFFM**. Lo de aquí queda **aparcado a
 > propósito** hasta que Madrid esté terminado; se anota para no perderlo, no para resolverlo ahora.
 
 **Dos que afectan al modelo, no solo al adaptador** — son los que habrá que decidir al abrir la FCF:
 
-- **Qué se guarda en `Competition.federation_group_id`.** §3.5 del LLD justifica la unicidad
+- ~~**Qué se guarda en `Competition.federation_group_id`.**~~ **RESUELTA por desaparición** (§C.10.2,
+  [D-74]): la coordenada de la web nueva son tres códigos numéricos que encajan uno a uno en las tres
+  columnas, así que el problema del *slug* repetido ya no existe. Se conserva el enunciado original porque
+  explica por qué el asunto llegó a plantearse:
+  §3.5 del LLD justifica la unicidad
   `(season_id, federation_group_id)` diciendo que "el id de grupo ya es único dentro de la temporada". Eso es
   cierto en la RFFM (`grupo=24037549`), pero aquí **el grupo no tiene id**: solo el *slug* `grup-8` (§C.3),
   que **se repite en todas las competiciones**. La unicidad solo se sostiene si el adaptador guarda la
@@ -370,17 +392,216 @@ compartida que ninguna de las dos apps explora. **[I]** — merece una comprobac
 
 **Y el resto, que es observación:**
 
-- **Goleadores.** No hay ni rastro: ni endpoint, ni parser, ni bandera de capacidad. Hay que explorar la web
-  de la FCF directamente. Es lo que decide si `LeagueScorer` existe para este proveedor o queda vacío
-  siempre.
-- **Cómo se representa un aplazamiento**, un no presentado o un resultado administrativo. El parser solo
-  conoce «jugado» y «pendiente».
-- **Fútbol sala y fútbol playa**: si viven bajo `fcf.cat` o bajo la federación catalana de sala.
+- ~~**Goleadores.**~~ **RESUELTO: existen** (§C.10.7). `LeagueScorer` se llena también en Cataluña, y la
+  bandera de capacidad ya está corregida.
+- **Cómo se representa un aplazamiento**, un no presentado o un resultado administrativo. **Sigue pendiente**,
+  pero la pregunta cambia: ya no es qué clase CSS lo señala, sino qué valores toman `ESTADO` y `CERRADA`
+  fuera de `"0"`/`"1"` (§C.10.5).
+- ~~**Fútbol sala y fútbol playa**: si viven bajo `fcf.cat`.~~ **RESUELTO: sí** (§C.10.3), y con código
+  propio, junto con fútbol-5 y las dos disciplinas femeninas.
 - **El nombre del parámetro de paginación** en la clasificación, si lo hay.
 - **La página `/camp/{código}`**: qué contiene, y si trae dirección y localidad como en Madrid.
-- **Estabilidad interanual de los *slugs*** de competición y grupo. Se asume, no está verificada.
+- ~~**Estabilidad interanual de los *slugs***.~~ **Sin objeto**: la coordenada ya no usa *slugs* (§C.10.2).
+  Lo que sí sigue en pie de §C.3 es que **el código numérico de competición no sobrevive a la temporada** —
+  el volcado nuevo lo confirma: `COPA CATALUNYA MASCULINA 24/25` y `COPA CATALUNYA MASCULINA` conviven con
+  códigos distintos en la misma llamada. No importa, porque `Competition` ya cuelga de una `Season`.
 - **El id numérico de acta del widget de racha**: si es el mismo espacio de identificadores que usa la FCF
   internamente y si hay forma de obtenerlo para todos los partidos, no solo para los cinco últimos.
+
+---
+
+## C.10 La web nueva: hay API JSON — **reobservación del 2026-08-28**
+
+Todo lo de esta sección es **[C]**: peticiones reales al servidor, con los volcados guardados en
+[`docs/Federation APIs examples/`](./Federation%20APIs%20examples/) (`FCF-*.txt`). Nada se deduce de la app
+antigua, que ya no describe esta fuente.
+
+El punto de partida fue una URL de la web de hoy, aportada por el desarrollador:
+
+```
+https://www.fcf.cat/es/competicio?temporadaId=22&disciplinaId=19308233&competicioId=58161860&grupId=58161861
+```
+
+**Cuatro parámetros jerárquicos en el *query string*: es la forma de la RFFM** (§F.1), no la ruta de *slugs*
+de §C.2. La página es Next.js con *App Router* —no lleva `__NEXT_DATA__`, así que **tampoco sirve la técnica
+de Madrid**— y carga sus datos por `fetch` contra endpoints propios.
+
+### C.10.1 Catálogo de endpoints
+
+Extraídos del JavaScript de la página. Todos son **`GET`**, **mismo origen** (`https://www.fcf.cat`),
+respuesta `application/json`, **sin autenticación** y **sin las cabeceras de navegador** que exigía el sitio
+antiguo (§C.1).
+
+| Endpoint | Parámetros | Verificado |
+|---|---|---|
+| `/api/competition/temporadas` | — | ✅ |
+| `/api/competition/disciplines` | `temporadaId` | ✅ |
+| `/api/competition/competicions` | `disciplinaId`, **`temporada`** | ✅ |
+| `/api/competition/grupos` | `competicioId` | ✅ |
+| **`/api/competition/partidos`** | **`grupId`** | ✅ **el calendario entero** |
+| `/api/competition/classificacio` | `grupId` | ✅ |
+| `/api/competition/goleadores` | `grupId`, `temporada` | ✅ |
+| `/api/competition/equipos` | `grupId` | no probado |
+| `/api/competition/equipacions` | `grupId` | no probado |
+| `/api/competition/goles-favor` · `/goles-contra` | `grupId`, `equipId` | no probado |
+| `/api/competition/sanciones` | `grupId`, `temporada` | no probado |
+| `/api/search` | `q`, `locale` | no probado |
+
+**Ojo al nombre del parámetro de temporada: no es homogéneo.** `disciplines` lo llama `temporadaId`;
+`competicions` y `goleadores` lo llaman **`temporada`** a secas. Es la misma trampa que el `idGroup` en
+*camelCase* de la RFFM (§F.7): se copia del volcado, no se supone.
+
+Hay además rastro de un `actaId` en el JavaScript — existe ruta de acta, **no explorada**.
+
+### C.10.2 La coordenada es la de Madrid, y eso disuelve una cuestión abierta
+
+```json
+/api/competition/temporadas   →  [{"value":"22","label":"2026-2027"},{"value":"21","label":"2025-2026"}, …]
+```
+
+**Mismo código y misma etiqueta que la RFFM** (allí `temporada=22` → `"2026-2027"`, [Anexo RFFM §F.11]). El
+§C.8 daba los códigos de temporada como "la única coincidencia limpia" entre las dos federaciones; ahora la
+coincidencia es la estructura entera. Los tres identificadores encajan **uno a uno** en las tres columnas del
+modelo (§3.7), sin *slugs*, sin rutas y sin componer nada:
+
+| Columna del modelo | RFFM | FCF (web nueva) |
+|---|---|---|
+| `Season.federation_season_id` | `22` | `22` |
+| `Competition.federation_competition_id` | `26737701` | `58161860` |
+| `Competition.federation_group_id` | `26737702` | `58161861` |
+
+Es lo que deja **sin objeto** la primera cuestión abierta del plan de desarrollo y la primera viñeta de §C.9.
+Está escrito como [D-74].
+
+### C.10.3 `disciplinaId` no es la modalidad: lleva el género dentro
+
+```json
+/api/competition/disciplines?temporadaId=22 →
+[{"value":"19308233","label":"Futbol 11"},   {"value":"19308235","label":"Futbol 7"},
+ {"value":"24885364","label":"Futbol 5"},    {"value":"19308236","label":"Futbol Sala"},
+ {"value":"19308237","label":"Futbol Femení"},{"value":"24694879","label":"Futbol Sala Femení"},
+ {"value":"19308239","label":"Futbol Platja"}]
+```
+
+Dos cosas. La primera, que **los códigos de fútbol-11 y fútbol-7 son los mismos** que documentaba §C.7
+(`19308233`, `19308235`): el rediseño es de frontal, el *backend* es el de siempre. La segunda, y es la que
+tiene consecuencia de modelo:
+
+**En la FCF el género es un eje estructurado, no un texto dentro del nombre.** Es exactamente lo contrario de
+la RFFM, donde no hay campo de género en ninguna entidad y hay que inferirlo del rótulo de la competición
+([Anexo RFFM §F.14]). Consecuencias para cuando se abra F9:
+
+- `disciplinaId` **no casa uno a uno** con nuestro `Modality` (§3.3): es la pareja (modalidad, género)
+  colapsada en un código. `19308237 "Futbol Femení"` es, presumiblemente, fútbol-11 femenino — **[I]**, no
+  verificado.
+- El `/preview` de [D-58] tendrá **dos caminos**: en Madrid propone un género inferido de un texto; aquí lo
+  sabe con certeza desde la coordenada. La decisión de que el administrador **confirme** sigue siendo buena
+  —`mixto` sigue sin ser expresable en la fuente— pero el valor propuesto es mucho más fiable.
+
+### C.10.4 El calendario entero en **una** petición
+
+`/api/competition/partidos?grupId=54322937` devuelve un objeto **indexado por número de jornada**
+(`{"1":[…], "2":[…]}`), con los 240 partidos de la liga. **30 jornadas, una sola petición.**
+
+Esto tumba la diferencia operativa que §C.8 y §5.6 del LLD daban por la más importante entre las dos
+federaciones —*"~34 peticiones por grupo y sincronización"*—. Ver el efecto sobre [D-67] en §C.10.7.
+
+Objeto de partido, **volcado literal** (temporada 21, jornada 1, partido ya jugado):
+
+```json
+{
+  "CODGRUPO": "54322937", "JORNADA": "1", "CODACTA": "3784040",
+  "CODEQUIPO_CASA": "34413", "NOMBRE_CASA": "MANLLEU, A.E.C.",
+  "ESCUDO_CASA": "00100_0001223396_MANLLEU.png", "CODCLUB_CASA": "1023",
+  "CODEQUIPO_FUERA": "33439", "NOMBRE_FUERA": "VILAFRANCA, F.C.",
+  "ESCUDO_FUERA": "00100_0000636585_fcv200.png", "CODCLUB_FUERA": "1005",
+  "CAMPO": "CAMP D'ESPORTS MPAL. DE MANLLEU", "CODIGO_CAMPO": "327",
+  "LATITUD": "41.997565", "LONGITUD": "2.279191",
+  "GOLES_CASA": "3", "GOLES_FUERA": "0",
+  "COMIENZO1": "2025-09-20 16:05:00", "CERRADA": "1", "ESTADO": "1", "GRUPO": "GRUP 1"
+}
+```
+
+**Hay identificadores para todo, y era justo lo que faltaba.** La tabla de §C.3 decía "no hay id de partido",
+"no hay id numérico de equipo" y "el club se infiere del nombre del fichero del escudo". Las tres son falsas
+ahora:
+
+| Entidad | §C.3 (sitio antiguo) | Web nueva | Encaje en el modelo |
+|---|---|---|---|
+| Partido | **no existe** | `CODACTA`, en 240/240 y único | `Match.federation_match_id` ([D-31]) — **y se llama igual que en la RFFM** |
+| Equipo | no hay id numérico | `CODEQUIPO_CASA/FUERA` | `Team.federation_team_id` |
+| Club | inferido del escudo | **`CODCLUB_CASA/FUERA`, campo propio** | `OpponentClub.federation_club_id` |
+
+Nótese que en esto la FCF es ahora **mejor** que la RFFM: allí el identificador de club sigue habiendo que
+sacarlo del nombre del fichero del escudo ([Anexo RFFM §F.4]), con la fragilidad que eso arrastra. Aquí viene
+como campo. Y el escudo mantiene el patrón `00100_<10 dígitos>_<texto>` de las dos federaciones — junto con
+el enlace a `intranet.fcf.cat/nfg/` (el mismo `nfg` del `/pnfg/` de Madrid), confirma la **plataforma
+federativa común** que §C.8 dejaba como **[I]**.
+
+### C.10.5 Dos trampas nuevas, y una de ellas al revés que en Madrid
+
+**1. Un partido sin jugar trae `"0"`, no cadena vacía.** En el volcado de la temporada 22 (sin arrancar), los
+240 partidos llegan con `GOLES_CASA: "0"` y `GOLES_FUERA: "0"`. Lo que distingue jugado de pendiente es
+**`CERRADA`/`ESTADO`** (`"0"` sin jugar, `"1"` jugado; ambos `"1"` en los 240 de la temporada terminada).
+
+> **Es exactamente el criterio opuesto al de la RFFM**, donde el marcador ausente llega como `""`
+> ([Anexo RFFM §F.5]). Leer la FCF con la regla de Madrid escribiría **un 0-0 en todos los partidos futuros
+> de la liga**. Cada adaptador decide qué es "no hay marcador"; el puerto recibe `nil`.
+
+**2. `COMIENZO1` es un único `timestamp`,** `"2025-09-20 16:05:00"`, sin huso. No son dos campos como en
+Madrid, ni el `dd-MM-yyyy` de §C.6. El adaptador lo parte en `match_date` + `kickoff_time` ([D-30]). Si esta
+fuente sabe expresar "fecha puesta, hora por decidir" —el sábado por defecto de la RFFM— **no se ha
+observado**: en la temporada sin arrancar ya venían todas las horas puestas. **[N]**
+
+### C.10.6 Lo que sí sobrevive: la clasificación sigue siendo solo la de hoy
+
+`classificacio?grupId=…` **ignora la jornada**. Se probaron `jornada=5`, `round=5` y `jornadaId=5`: los
+cuatro cuerpos son **byte a byte idénticos** al de la llamada sin parámetro.
+
+**[D-55] se mantiene, y con ella [D-15]**: las jornadas anteriores al alta se calculan desde `Match`. Es la
+única de las diferencias de capacidad de §C.8 que ha sobrevivido al rediseño, y ahora está verificada contra
+el servidor en vez de inferida de un parser.
+
+La fila trae, eso sí, más de lo que la app antigua leía —y con **estructura anidada**, no plana:
+`{"position":"1","team":{"name":…,"logo":…,"clubId":"2810","teamId":…}}`.
+
+### C.10.7 Goleadores: existen — y traen un DNI
+
+§C.9 los daba por inexistentes (*"ni endpoint, ni parser, ni bandera"*). Existen:
+
+```json
+/api/competition/goleadores?grupId=54322937&temporada=21 →
+[{"nombre_jugador":"POZUELO RIERA, ELOI","codjugador":"40602472","codequipo":"33045",
+  "nombre_equipo":"CASTELLDEFELS, U.E.","goles":22,"penalti":2,"total":25,
+  "codtemporada":"21","codgrupo":"54322937","escudo":"…","licencia":"48211341Y"}]
+```
+
+Dos observaciones y una advertencia:
+
+- **`goles`, `penalti` y `total` son números JSON**, no cadenas. Rompe la regla de §C.6 y la de
+  [Anexo RFFM §F.11] (*"todo llega como cadena, sin excepción"*): en esta fuente **no**. Tipar por volcado.
+- Como en la RFFM, **no hay campo de puesto**: el orden de la lista es la única señal ([Anexo RFFM §F.13]).
+- ⚠️ **`licencia` es un DNI.** En fútbol base eso es dato personal de un menor. **No se ingiere**: no tiene
+  columna en el modelo (§3.2) y no debe tenerla. Anotado aquí porque el campo *viene solo* y lo fácil es
+  volcarlo sin mirar.
+
+Consecuencia inmediata, y está aplicada: `FederationCode.fcf.capabilities.providesScorers` pasa a **`true`**
+en el catálogo en código (§3.6, [D-48]).
+
+### C.10.8 Qué decisiones quedan tocadas
+
+Ninguna se cambia aquí —esto es un anexo de observación ([D-26])—, pero conviene que quien las lea sepa que
+su evidencia se movió:
+
+| Decisión | Qué decía | Estado tras la reobservación |
+|---|---|---|
+| [D-55] · clasificación solo vigente | *"la FCF solo da la vigente"* | ✅ **Confirmada** contra el servidor (§C.10.6) |
+| [D-31] · cadena de emparejamiento de partidos | el 2.º paso existe porque la FCF **no tiene** id de partido | El id **existe** (`CODACTA`). La cadena sigue siendo buena red de seguridad, pero su motivo era éste |
+| [D-48] · `providesScorers` | `false` para la FCF | ❌ **Corregida** a `true` (§C.10.7) |
+| [D-56] · vacío nunca sobrescribe | su ejemplo estrella es *"la FCF borra fecha y hora al jugarse"* | ❌ **El ejemplo es falso**: 240/240 partidos jugados conservan `COMIENZO1`. La regla puede seguir siendo buena; **su justificación hay que rehacerla**, y toca en **F3** |
+| [D-67] · alta en cascada devuelve **202** | *"es 202 porque la FCF cuesta ~34 peticiones y en línea daría timeout"* | ❌ **Razón caducada**: cuesta **1**. La decisión puede sostenerse por otros motivos; hay que revisarla, no darla por buena |
+| §5.6 · cadencia semanal como **requisito** | se apoya en la pérdida irrecuperable de la fecha en la FCF | ❌ Mismo caso que [D-56]. Como *recomendación* sigue en pie; como *requisito*, se quedó sin base |
+
 
 ---
 
@@ -445,6 +666,8 @@ compartida que ninguna de las dos apps explora. **[I]** — merece una comprobac
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
