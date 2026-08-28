@@ -76,13 +76,6 @@ extension FederationCode {
     }
 }
 
-extension FederationCode {
-    /// Los valores del enumerado listados para un `IN (…)` de SQL.
-    ///
-    /// Vive en el Dominio, y no en la migración que lo usa, porque la lista de
-    /// federaciones **es** este `enum`: el `CHECK` de la tabla (§4.6) tiene que
-    /// derivarse de él, no repetirlo.
-    public static var sqlValueList: String {
-        allCases.map { "'\($0.rawValue)'" }.joined(separator: ", ")
-    }
-}
+// El `sqlValueList` que este enumerado usaba en su `CHECK` (§4.6) ya no vive
+// aquí: se generalizó a `CaseIterable where RawValue == String`
+// (`Enumerations.swift`), para que los enumerados de §3.3 lo hereden sin copiarlo.

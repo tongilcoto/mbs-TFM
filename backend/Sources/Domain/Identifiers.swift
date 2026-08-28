@@ -10,3 +10,15 @@ public struct ClubID: Hashable, Sendable {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Temporada (§4.2, raíz de agregado).
+public struct SeasonID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
+/// Competición (§4.2, raíz de agregado).
+public struct CompetitionID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
