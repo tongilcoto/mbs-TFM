@@ -101,11 +101,13 @@ public enum TestEnvironment {
             }
             try await app.asyncShutdown()
 
-            // Ya con la base creada: migrar el plano de control contra ELLA.
+            // Ya con la base creada: migrar el plano de control contra ELLA y
+            // dejar pizarra limpia.
             let migrator = try await Application.make(.testing)
             do {
                 try await configure(migrator, config: config)
                 try await migrator.autoMigrate()
+                try await dropLeftovers(on: migrator)
             } catch {
                 try? await migrator.asyncShutdown()
                 throw TestSetupError(underlying: String(reflecting: error))
@@ -141,6 +143,47 @@ public enum TestEnvironment {
             throw TestSetupError(underlying: String(reflecting: error))
         }
         try await app.asyncShutdown()
+    }
+
+    /// Prefijos de *schema* que usan los targets de test. Todo lo que empiece
+    /// por uno de ellos es desechable por definición.
+    static let disposableSchemaPrefixes = ["e2e_", "test_"]
+
+    /// Barre lo que dejara una pasada anterior que no terminó bien.
+    ///
+    /// Cada test limpia lo suyo al empezar y al terminar, y con eso basta
+    /// **casi** siempre: un `#expect` que falla no interrumpe el test, así que
+    /// su limpieza final se ejecuta igual. Lo que sí lo interrumpe es un error
+    /// **lanzado**, y ahí el *schema* sobrevive.
+    ///
+    /// Se barre **al arrancar** y no con un `defer` por test, por el mismo
+    /// motivo que el `SET LOCAL` de §6.2: la corrección no debe depender del
+    /// camino de error ni de que cada test nuevo se acuerde. Y garantiza algo
+    /// más fuerte que limpiar al salir — **pizarra limpia al entrar**, sin
+    /// confiar en que la pasada anterior terminase bien.
+    ///
+    /// Solo toca `tfm_test`. La base de trabajo (`tfm`) no se abre siquiera.
+    static func dropLeftovers(on app: Application) async throws {
+        guard let sql = app.db(.control) as? any SQLDatabase else { return }
+
+        let condition = disposableSchemaPrefixes
+            .map { "nspname LIKE '\($0)%'" }
+            .joined(separator: " OR ")
+        let rows = try await sql.raw(
+            "SELECT nspname FROM pg_namespace WHERE \(unsafeRaw: condition)"
+        ).all()
+        let leftovers = rows.compactMap { try? $0.decode(column: "nspname", as: String.self) }
+
+        for schema in leftovers {
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+        // Y sus registros en el plano de control, que si no quedan apuntando a
+        // *schemas* que ya no existen.
+        if !leftovers.isEmpty {
+            try await TenantRecord.query(on: app.db(.control))
+                .filter(\.$schemaName ~~ leftovers)
+                .delete()
+        }
     }
 
     /// Hace que `LOG_LEVEL` funcione también en los tests.

@@ -355,6 +355,22 @@ relaciona con haber corrido los tests.
 docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
 ```
 
+**Y la dejan limpia.** Cada test borra su *schema* al terminar, y `swift test` **barre al arrancar** lo que
+hubiera quedado de una pasada anterior que no acabase bien:
+
+| Cómo terminó la pasada | Qué queda |
+|---|---|
+| Todo verde | Limpio |
+| Un `#expect` falla | Limpio — `#expect` **no lanza**, así que la limpieza final se ejecuta igual |
+| Algo **lanza** | Queda su *schema*… hasta el siguiente `swift test`, que lo barre |
+
+El barrido va al arrancar y no en un `defer` por test, por el mismo motivo que el `SET LOCAL` de §6.2: **la
+corrección no debe depender del camino de error** ni de que cada test nuevo se acuerde. Y garantiza algo más
+fuerte que limpiar al salir — pizarra limpia **al entrar**.
+
+Solo toca `tfm_test`, y no por el prefijo del *schema* sino porque **no abre `tfm` siquiera**. Comprobado
+creando un `e2e_trampa` dentro de `tfm`: sigue ahí después de correr los tests.
+
 **Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
 Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
 
