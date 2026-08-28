@@ -66,4 +66,6 @@ struct FluentRepositories: Repositories {
     let database: any Database
 
     var clubs: any ClubRepository { FluentClubRepository(database: database) }
+    var seasons: any SeasonRepository { FluentSeasonRepository(database: database) }
+    var competitions: any CompetitionRepository { FluentCompetitionRepository(database: database) }
 }

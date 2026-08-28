@@ -22,7 +22,9 @@ public protocol TenantUnitOfWork: Sendable {
 
 /// Los puertos de salida disponibles dentro de un ámbito de tenant.
 ///
-/// Crece con cada fase: F0 solo necesita `clubs`.
+/// Crece con cada fase: F0 trajo `clubs`; F1, la entrada de la ingesta (`D-16`).
 public protocol Repositories: Sendable {
     var clubs: any ClubRepository { get }
+    var seasons: any SeasonRepository { get }
+    var competitions: any CompetitionRepository { get }
 }
