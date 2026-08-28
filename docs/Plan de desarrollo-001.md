@@ -142,7 +142,7 @@ dependen de eso.
 | # | Fase | Nivel de test dominante | Referencias |
 |---|----------|-------------------------|-------------|
 | **F0** ✅ | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
-| **F1** | `Season` + `Competition` — dominio y persistencia. **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
+| **F1** ✅ | `Season` + `Competition` — dominio y persistencia (detalle abajo). **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
 | **F2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
 | **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
@@ -165,6 +165,74 @@ compilador exige antes de la primera *rebanada vertical* de verdad.
 - **F10 va al final aunque sea por donde entra el usuario.** Es el único punto que necesita el
   `FederationClient` ya construido y probado, porque `/preview` lo llama **en línea y dentro de la respuesta**
   (§2.3-c). Construirlo antes obligaría a falsearlo dos veces.
+
+### 4.2 F1 · `Season` y `Competition` — **entregada**
+
+La primera rebanada vertical de verdad, y la primera que **no toca HTTP**: dominio, puertos y persistencia.
+Entrega **16 ficheros nuevos** y **35 tests** (22 de dominio, 13 de integración), con la batería completa en
+**66**.
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Basta el `pattern` del *spec* para `SeasonLabel`? | **No.** No relaciona los dos años, y la ruta de ingesta no pasa por el contrato → [D-71] |
+| ¿Qué era el `name` de `Competition` en §3.2? | Un resto: no existe en el *spec* ni en los anexos. Pasa a `federation_name`, **procedencia y no rótulo** → [D-72] |
+| ¿`CASCADE` o `RESTRICT` bajo `Season`? | **`CASCADE`**, que es como §5.4 ejecuta la purga; el 409 del borrado normal queda en el caso de uso → [D-73] |
+| ¿Aguanta el `search_path` con FKs entre dos tablas de dominio? | **Sí**, y la cascada también: las dos viven dentro del *schema* del club |
+
+**Lo que no trae, y es deliberado.** **Ningún caso de uso** — el nivel 2 de la pirámide queda vacío en esta
+fase, tal como anticipa la tabla de §4.1. F1 no tiene llamante: el alta por HTTP es F10, y escribir
+`CreateSeason` ahora sería adivinar su forma. Tampoco **`delete` en los puertos**: con la FK en `CASCADE`
+([D-73]), el borrado y su guarda de 409 **nacen juntos** o no nacen.
+
+**Tres hallazgos de montaje**, los tres sobre la misma frontera y ninguno anticipado:
+
+1. **El ámbito de tenant *es* una transacción, y eso se nota al escribir tests.** Lo que se escribe dentro de
+   un `withRepositories` **no lo ve otra conexión** hasta que cierra, así que un `SELECT` en crudo para
+   comprobar una columna no encuentra nada. El andamiaje (`TenantFixture`) obliga ahora a declarar dónde
+   empieza y acaba cada ámbito, que es lo que hace que un test se parezca a una petición.
+2. **Una violación de restricción aborta la transacción entera** (`sqlState 25P02`). Encadenar dos intentos
+   que deben fallar dentro del mismo ámbito hace que el segundo pase **por el motivo equivocado** —"current
+   transaction is aborted"— en vez de por su `UNIQUE`. Cada intento va en su propio ámbito.
+3. **El `switch` exhaustivo sobre `DomainError` cobró su primera pieza.** Al añadir el caso de la guarda de
+   [D-22], el compilador paró el *build* en `ProblemMiddleware` exigiendo su traducción a RFC 7807 — que
+   además **no** es 422 sino **409**: el valor es válido, lo que no lo es es el momento.
+
+**F1 se escribió *code-first*, no en TDD, y hay que decirlo.** El orden real fue implementación →
+`swift build` → tests, en dominio y en persistencia. §5 pide lo contrario, y lo que ese desvío cuesta no es
+ortodoxia: **un test que nunca ha estado en rojo es un test sin probar**. Escrito después, un test se redacta
+contra la implementación que tiene delante, así que hereda sus errores en vez de cazarlos — y donde más
+duele es justo en la pieza que sostiene [D-71], que existe para demostrar que el *Value Object* atrapa lo que
+el `pattern` deja pasar.
+
+**Lo que se hizo para recuperar la garantía perdida: comprobación de mutación.** Se rompió a propósito una
+línea de implementación por regla y se exigió que cayeran los tests que dicen cubrirla. **Doce mutaciones,
+doce detectadas**, y con especificidad —quitar solo la guarda de `gender` tumba el test de [D-58] y **no** el
+de las coordenadas—:
+
+| Se rompe | Lo caza |
+|---|---|
+| la coherencia de años de `SeasonLabel` | `rechaza lo que el pattern deja pasar` ([D-71]) |
+| UTC → `Europe/Madrid` en las fechas derivadas | 4 tests, unidad e integración |
+| la guarda de sincronización, invertida | los 3 de [D-22]/[D-58] |
+| solo la guarda de `gender` | **solo** el de [D-58] |
+| `CASCADE` → `NO ACTION` en la FK | `borrar la temporada se lleva sus competiciones` ([D-73]) |
+| el `UNIQUE`, el `CHECK` de enumerado, el *scope* de archivadas | uno cada uno |
+
+El arnés dio **un verde falso** en la primera pasada, y conviene que quede escrito porque volverá a morder:
+en tests **parametrizados** `swift-testing` escribe `✘ Test "…" with 4 test cases failed`, así que buscar
+`" failed"` pegado al nombre se come precisamente los casos con argumentos. La regla, para cualquier script
+que lea esa salida: **fiarse del código de salida, no de raspar el nombre**.
+
+**Para F2 se vuelve al bucle de §5**, y ahí el orden importa más que aquí: el adaptador RFFM es *nuestro*
+código contra *sus* datos, y el reformateo de `"2025-2026"` a `"2025/26"` es exactamente el sitio donde un
+test escrito después se limitaría a bendecir el error.
+
+**Lo que se llevó por delante de F0**, sin planearlo: el `sqlValueList` de `FederationCode` se generalizó a
+`CaseIterable where RawValue == String`, así que los tres enumerados nuevos de §3.3 derivan sus `CHECK` sin
+copiar nada.
+
 
 ---
 
@@ -298,5 +366,15 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
    lenguaje `.v6` y en **todos** los *targets*. **Fluent no peleó**: no hizo falta bajar el modo en ninguno,
    así que la válvula de escape que §6 descartaba tampoco se ha echado en falta. `MemberImportVisibility` se
    ganó el sitio de inmediato — cazó tres *imports* transitivos implícitos que habrían compilado en silencio.
-3. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
+3. **Cuánto vale la evidencia de `federation_name`.** [D-72] guarda el nombre literal de la competición para
+   cerrar el `[I]` de [Anexo RFFM §F.14] —que la inferencia de género descansa sobre **una** muestra—. La
+   columna nace en F1 y **no se llena hasta F10**: hasta entonces la pregunta sigue sin datos.
+4. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.
+
+[D-22]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-69]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

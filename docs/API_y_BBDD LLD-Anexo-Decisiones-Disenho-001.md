@@ -32,6 +32,9 @@
 | **D-06**               | Doble identificador: UUID interno **y** id externo de federación                           | §3.2, §3.7                         |
 | **D-07**               | La modalidad es dominio, no integración — y entra en la clave de `Team`                    | §3.2, §3.3, §3.5                   |
 | **D-08**               | División: tres campos explícitos en vez de `category_label`                                | §3.2                               |
+| **D-71**               | `SeasonLabel` valida la coherencia de los dos años, que el `pattern` no puede               | §3.2, §4.1                         |
+| **D-72**               | `federation_name`: el prefijo `federation_` pasa a cubrir procedencia, no solo ids          | §3.2, §3.7                         |
+| **D-73**               | El subárbol de `Season` cuelga con `ON DELETE CASCADE`; la guarda del 409 es del caso de uso | §3.5, §4.6, §5.4                   |
 | **D-09**               | Goleadores de la liga: se ingieren, no se calculan                                         | §3.2, §3.4                         |
 | **D-10**               | Sanción por amarillas: tramos configurables por competición                                | §3.2, §3.4                         |
 | **D-11**               | Zona de gol: partición exclusiva de tres valores                                           | §3.3                               |
@@ -957,6 +960,117 @@ con el mismo equipo en competiciones de distinto género tendría **dos filas `T
 conviene decirlo. (3) La FCF también embebe el género en el nombre (`COPA CATALUNYA MASCULINA`,
 [Anexo FCF §C.8]); que la regla de parseo sea distinta allí **no afecta al modelo**, porque el punto de
 entrada es el mismo campo confirmado por un humano.
+
+---
+
+### D-71 · `SeasonLabel` valida la coherencia de los dos años, que el `pattern` no puede
+
+**Contexto.** El *spec* declara `SeasonLabel` como `^\d{4}/\d{2}$` y anota que el *Value Object* del
+dominio "garantiza la misma invariante en la ruta de ingesta". Al implementar F1 se vio que **no es la misma
+invariante**: el `pattern` no relaciona las dos mitades, así que `"2025/20"` lo cumple.
+
+**Por qué importa, y por qué no es pedantería.** `Season` entra por dos puertas y **solo una pasa por el
+contrato**:
+
+| Vía | Quién produce la etiqueta | Qué la valida antes del dominio |
+|---|---|---|
+| `POST /v1/seasons` | un administrador que la teclea | el `pattern` → 400 |
+| cascada de `/federation-link` ([D-67]) | **nuestro adaptador RFFM**, reformateando | **nada** |
+
+La RFFM publica la etiqueta como `"2025-2026"` ([Anexo RFFM §F.11]), de modo que en la ruta de ingesta hay un
+**reformateo** que escribimos nosotros. Su forma de fallar es tomar los dos caracteres equivocados:
+`"2025/20"` encaja con el `pattern`, deriva unas fechas **correctas** (2025-07-01 → 2026-06-30) y se guarda
+como una temporada bien fechada con la etiqueta mal — y es el `label` el que lleva el `UNIQUE` (§3.5) y el que
+ve el usuario. Un fallo así no da error: da un dato feo y permanente.
+
+**Decisión.** El VO exige que la segunda mitad sea `(año + 1) % 100`. Rechaza `2025/20`, `2024/99`, `2024/24`
+y `2024/26`; acepta el cambio de siglo (`2099/00`). Es **más estricto que el contrato**, y deliberadamente:
+la validación en dos capas que el *spec* anuncia solo tiene sentido si la segunda comprueba algo que la
+primera no.
+
+**Dónde queda la frontera.** El VO es dueño del formato **del modelo** (`"2025/26"`). Traducir `"2025-2026"`
+es trabajo del **adaptador** RFFM (F2), no del Dominio: cada federación rotula a su manera y el Dominio no
+debe conocer ninguna.
+
+**Qué se asume a cambio.** Que un cliente que envíe `"2024/99"` recibirá **422 del dominio** y no 400 del
+borde. Es correcto —el cuerpo estaba bien formado, la regla es la que falla (§5.4)— pero significa que el
+*spec* y el dominio no rechazan exactamente el mismo conjunto, y eso tiene que estar dicho.
+
+---
+
+### D-72 · `federation_name`: el prefijo `federation_` pasa a cubrir procedencia, no solo identificadores
+
+**Contexto.** §3.2 listaba un campo `name` en `Competition` que **no existe en ninguna otra parte**: ni en el
+*spec*, ni en los anexos, ni en la lista de unicidades. La columna de Notas de esa misma fila explica todos
+los demás campos uno a uno y de `name` no dice nada. Es un resto anterior a que `displayName` fuese derivado
+([D-08]).
+
+**Lo que sí publica la federación.** `GET /api/competitions` devuelve
+`{"nombre": "TERCERA FEDERACION DE FÚTBOL FEMENINO"}` ([Anexo RFFM §F.14]), y de ese texto sale la inferencia
+de `gender` — que el `/preview` propone y un humano confirma ([D-58]).
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Conservar `name` como rótulo** | Dos nombres para lo mismo, junto a `displayName` | **Descartada** |
+| **B — Borrarlo** | El texto que sostiene la inferencia no se guarda en ningún sitio | Descartada |
+| **C — `federation_name`, anulable, como procedencia** | Se guarda literal; se muestra `displayName` | **Elegida** |
+
+**Decisión: C.** Dos cosas lo pagan:
+
+- **Diagnóstico del 409.** `gender` entra en la clave única de `Team` (§3.5), y [Anexo RFFM §F.14] avisa de
+  que el truncado a 40 caracteres puede comerse el marcador `FEMENINO` **sin dar error**. Cuando el alta
+  reviente, el texto original es lo que hay que poder mirar.
+- **Cierra el `[I]` de §F.14**, que descansa sobre **una** muestra observada, con datos reales en lugar de
+  con un volcado manual.
+
+**Lo que la decisión cambia de verdad**, y es el motivo de que tenga entrada propia: hasta aquí,
+`federation_*` significaba **una** cosa —identificador con el que se llama o se empareja, nunca clave de
+unión ([D-06])—. `federation_name` es el primero que no se llama ni se empareja. El prefijo pasa a cubrir
+también **procedencia**.
+
+**La frontera que hay que enunciar, o el campo se convierte en un rótulo en seis meses:**
+
+> `federation_name` es **evidencia, no rótulo**: se guarda literal, no se corrige y **no se muestra**. Lo que
+> se muestra es `displayName`, compuesto de `age_category` + `division_label` + `group_label`, que sí son
+> nuestros y sí son corregibles.
+
+Es la diferencia con `OpponentClub.name`, que también nace de texto de la federación pero **es** el nombre de
+la entidad y **se corrige a mano** ([D-03]).
+
+**Qué se asume a cambio.**
+
+- **No entra en el contrato.** `CompetitionResponse` no lo expone y no se propone añadirlo: lo escribe la
+  ingesta y lo lee un humano contra la BD. Queda dicho aquí para que no parezca un olvido del *spec*.
+- **Anulable, y a menudo nulo**: el alta por ids (`CreateCompetitionFromIdsRequest` — semillas, *scripts*,
+  tests) no pasa por la federación y no tiene nombre que guardar.
+- **En sincronizaciones posteriores se refresca, sujeto a [D-56]**: un valor ausente o vacío nunca
+  sobrescribe.
+
+---
+
+### D-73 · El subárbol de `Season` cuelga con `ON DELETE CASCADE`; la guarda del 409 vive en el caso de uso
+
+**Contexto.** Al crear la FK `competitions.season_id` (F1) había que elegir su `ON DELETE`, y el *spec* pide
+**dos** comportamientos distintos sobre la misma tabla: `DELETE /v1/seasons/{id}` solo tiene éxito **sin
+dependientes** (409 si los hay), mientras que `?cascade=true` es **borrado físico del subárbol entero**,
+reservado a *erasure* RGPD (§5.4, [D-24]).
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — `RESTRICT`** | La BD blinda el borrado normal, pero la purga tiene que borrar hijos explícitamente, tabla a tabla y en orden | Descartada |
+| **B — `CASCADE`** | La purga es un `DELETE` y ya; el borrado normal lo protege el caso de uso | **Elegida** |
+
+**Decisión: B**, que además es lo que §3.5 ya elige explícitamente para `TeamRegistration` — con la misma
+advertencia de que la cascada hay que declararla a conciencia.
+
+**Qué se asume a cambio, y es lo importante.** Con `CASCADE`, **lo único que impide que un borrado ordinario
+se lleve el subárbol es la guarda de "cero dependientes → 409" del caso de uso**. El esquema ya no es la
+segunda línea de defensa. Consecuencia práctica, aplicada en F1:
+
+> **El repositorio no expone `delete`.** El borrado y su guarda **nacen juntos**, en la fase que traiga
+> `DELETE /v1/seasons/{id}`. Un `delete` suelto en el puerto, sin caso de uso que lo envuelva, sería un arma
+> cargada sin seguro — y el test de integración que fija la cascada (`deletingSeasonCascades`) existe justo
+> para que quien escriba esa fase se encuentre la advertencia por delante.
 
 ---
 
@@ -2640,3 +2754,6 @@ paquete sin problema.
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-69]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-70]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

@@ -118,9 +118,13 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 ## Estado actual
 
 Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
-**backend ya tiene esqueleto y camina**: la fase **F0** del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md)
-está entregada — `GET /v1/club` responde de HTTP a Postgres contra tenants aislados. **Web backoffice, app iOS
-y app Android siguen sin empezar.**
+**backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**
+—`GET /v1/club` responde de HTTP a Postgres contra tenants aislados— y **F1**, que añade `Season` y
+`Competition` en dominio y persistencia. **Web backoffice, app iOS y app Android siguen sin empezar.**
+
+**F1 no tiene superficie HTTP, y es deliberado** (Plan §4.1): entrega entidades, *Value Objects*, puertos,
+`Record`s y migraciones, y **ningún caso de uso** — su llamante es la cascada de `D-67`, que es F10. La lista
+de operaciones del `filter` sigue siendo la de F0, que es como se lee el alcance entregado (`D-69`).
 
 Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/Sources/APIContract/openapi.yaml`](./backend/Sources/APIContract/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
 `StaffAssignment`), más `TeamRegistration`, la inscripción del equipo en la temporada (`D-68`). **El contrato queda completo: las 20 entidades del §3.2 tienen sus endpoints**). Validación:
@@ -167,13 +171,14 @@ swift test                                # 4 niveles (§8.1); los 2 primeros si
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
+                                          # hoy: clubs -> seasons -> competitions
 swift run Run serve
 curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
 HTTP_TRACE=1 swift test --filter APITests --no-parallel   # ver los cuerpos HTTP
 docker compose down -v
 ```
 
-**Tres cosas que hay que saber antes de tocar este código:**
+**Cinco cosas que hay que saber antes de tocar este código:**
 
 - **El *spec* se genera *filtrado*** (`D-69`). `APIProtocol` obliga a implementar **todas** las operaciones
   generadas, así que el `filter` de `openapi-generator-config.yaml` lista solo las implementadas — esa lista
@@ -183,6 +188,15 @@ docker compose down -v
   aislamiento depende de que haya **un** punto de paso.
 - **El contexto de actor (`ActorContext`) ya cruza la frontera de los casos de uso** (§7.4), aunque hoy solo
   lleve el club. Un caso de uso nuevo lo recibe **desde el principio**, no cuando llegue §7.
+- **El ámbito de tenant *es* una transacción, y eso condiciona cómo se escribe un test** (§6.2). Lo que se
+  escriba dentro de un `withRepositories` **no lo ve otra conexión** hasta que cierra, así que un `SELECT` en
+  crudo para comprobar una columna no encuentra nada; y una violación de restricción **aborta la transacción
+  entera** (`25P02`), de modo que dos intentos que deban fallar en el mismo ámbito hacen que el segundo pase
+  por el motivo equivocado. `TenantFixture` (nivel 3) obliga a declarar cada ámbito justo por eso.
+- **El `CHECK` de un enumerado se deriva, nunca se teclea** (§4.6, `D-02`): `sqlValueList` es genérico sobre
+  `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
+  `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
+  que alguien decida su código HTTP.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 
@@ -205,9 +219,13 @@ de tenant, porque es un dato que controla el cliente por completo.
 **se rechaza**; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
 
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
-(**F0** = esqueleto que camina con `GET /v1/club`; después, **F1–F10**, la ingesta).
-Con F0 entregada, lo inmediato es **F1–F10: el módulo de ingesta**, empezando por `Season` y `Competition`
-(su *entrada*) y el puerto `FederationClient`. Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+(**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
+ingesta; **F2–F10** = la ingesta propiamente dicha).
+Con F0 y F1 entregadas, lo inmediato es **F2: el puerto `FederationClient` y el adaptador RFFM del
+calendario contra *fixtures***, sin persistir nada. Dos cosas le esperan ahí ya escritas: la **cuestión
+abierta nº 1 del plan** —cómo encaja la coordenada de la FCF en `federation_competition_id` /
+`federation_group_id`— y el **reformateo de `"2025-2026"` a `"2025/26"`**, que es trabajo del adaptador y no
+del dominio (`D-71`). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
 `rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
 llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
