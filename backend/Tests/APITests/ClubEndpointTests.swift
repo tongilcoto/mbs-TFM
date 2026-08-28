@@ -76,7 +76,9 @@ struct ClubEndpointTests {
                 let club = try Self.decode(response)
                 #expect(club.federation.value1 == .fcf)
                 #expect(!club.federationProvidesRoundStandings)
-                #expect(!club.federationProvidesScorers)
+                // Ver la nota de `GetClubTests`: la FCF sí publica goleadores desde
+                // el 2026-08-28 (Anexo FCF §C.10.7).
+                #expect(club.federationProvidesScorers)
             }
 
             try await Self.cleanUp(["madrid", "catalan"], on: app)

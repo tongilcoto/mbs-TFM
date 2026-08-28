@@ -44,9 +44,10 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   van en `CreateTeamRequest`, nunca en el `PATCH`.
 - **El copia-pega de la URL de la federación vive en el equipo, no en la competición** (`D-67`):
   `POST /v1/teams/{id}/federation-link` (+ su `/preview`) engancha, crea en cascada `Season` y
-  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. Es 202 porque la FCF
-  cuesta ~34 peticiones (§5.6) y en línea daría *timeout*. `POST /v1/competitions` se conserva solo como
-  vía para semillas, *scripts* y tests.
+  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. ⚠️ **La razón escrita de ese
+  202 —que la FCF costaba ~34 peticiones— ha caducado**: hoy cuesta una (ver más abajo y `D-74`). El `202`
+  puede seguir siendo lo correcto por desacoplamiento, pero **no se da por bueno sin rehacerle el
+  argumento**. `POST /v1/competitions` se conserva solo como vía para semillas, *scripts* y tests.
 - **`modality` y `gender`, cuando el equipo lo crea la ingesta, los hereda de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
   clave única de `Team` y **ninguno es campo de escritura de `Team`**. La federación no publica género por
   equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
@@ -55,14 +56,23 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
-- **Los dos proveedores no son intercambiables** y sus diferencias están medidas: la RFFM sirve
-  clasificación por **cualquier** jornada y el calendario entero en **una** petición; la **FCF** cuesta una
-  petición **por jornada**, solo da la clasificación **vigente**, no tiene identificador de partido y
-  **borra la fecha del partido al jugarse**. Ojo con el atajo "RFFM = JSON, FCF = *scraping*": **los dos
-  devuelven HTML en el calendario** — la RFFM lo trae en un `__NEXT_DATA__` embebido ([Anexo RFFM §F.7]) y
-  solo sus rutas `/api/…` (clasificación, competiciones, grupos) son JSON puro. De ahí que en la ingesta un campo
-  **ausente o vacío nunca sobrescriba** (`D-56`) y que la cadencia semanal sea un requisito, no una
-  recomendación (§5.6). Evidencia campo a campo en los anexos de federación; no deducir nada de memoria.
+- **Los dos proveedores se parecen mucho más de lo que dicen los documentos antiguos, y eso es reciente.**
+  El 2026-08-28 se descubrió que **la FCF ha rehecho su web y ahora publica una API JSON** ([D-74],
+  [Anexo FCF §C.10]): coordenada de tres códigos numéricos como la de Madrid, calendario entero en **una**
+  petición, identificador de partido (`CODACTA`) e identificador de club como campo propio. **§C.1–§C.9 del
+  anexo FCF están obsoletas** — describen el sitio de raspado anterior. De las diferencias que ese anexo daba
+  por medidas, **solo sobrevive una**: la FCF publica **únicamente la clasificación vigente** (`D-55`,
+  reverificado), así que las jornadas anteriores al alta se calculan (`D-15`).
+- **Dos consecuencias de eso que están sin resolver, y tocan en F3.** `D-56` (*ausente o vacío nunca
+  sobrescribe*) y la cadencia semanal de §5.6 se apoyan en que *"la FCF borra la fecha al jugarse el
+  partido"* — una temporada entera ya jugada las **conserva en 240 de 240**. Y `D-67` justifica su `202` con
+  las *"~34 peticiones"* de la FCF, que ahora es **1**. Las reglas pueden seguir siendo buenas; **sus razones
+  escritas han caducado**, y hay que rehacerlas al implementarlas, no darlas por buenas.
+- **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
+  en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
+  ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
+  anexos y en `docs/Federation APIs examples/`; **no deducir nada de memoria, y revalidar el anexo antes de
+  escribir su adaptador** — es la lección de `D-74`.
 
 ## Dónde va cada cosa al documentar
 
@@ -119,8 +129,10 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 
 Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
 **backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**
-—`GET /v1/club` responde de HTTP a Postgres contra tenants aislados— y **F1**, que añade `Season` y
-`Competition` en dominio y persistencia. **Web backoffice, app iOS y app Android siguen sin empezar.**
+—`GET /v1/club` responde de HTTP a Postgres contra tenants aislados—, **F1**, que añade `Season` y
+`Competition` en dominio y persistencia, y **F2**, el puerto `FederationClient` con el adaptador del
+calendario de la RFFM contra volcados reales (Plan §4.3). **102 tests.** **Web backoffice, app iOS y app
+Android siguen sin empezar.**
 
 **F1 no tiene superficie HTTP, y es deliberado** (Plan §4.1): entrega entidades, *Value Objects*, puertos,
 `Record`s y migraciones, y **ningún caso de uso** — su llamante es la cascada de `D-67`, que es F10. La lista
@@ -151,7 +163,12 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
             ├─► Persistence ────► Application
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de nada)
+
+            Federation ────────► Application    (adaptadores RFFM / FCF)
 ```
+
+`Federation` **todavía no cuelga de `App`**, y no es un olvido: su primer llamante es el job de ingesta (F6)
+y el `/preview` (F10). Hoy lo mantiene en el grafo de *build* su *target* de tests.
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
@@ -160,6 +177,7 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
+| `Federation` | Adaptador secundario | Adaptadores de las APIs de federación. **Sin Vapor ni Fluent**: lo que hace es parsear texto ajeno |
 | `Tenancy` | Infraestructura | Plano de control, `SET LOCAL search_path`, middleware |
 | `App` | — | **Raíz de composición**: el único sitio que cablea las capas |
 
@@ -168,6 +186,9 @@ cd backend
 docker compose up -d                      # Postgres 16 efímero en :5434
 swift build
 swift test                                # 4 niveles (§8.1); los 2 primeros sin I/O
+swift test --filter FederationTests       # los adaptadores de federación: sin red y sin Docker
+                                          # (sus volcados: Tests/FederationTests/Fixtures/README.md —
+                                          #  son copias de docs/, y en Xcode no se leen: una sola línea)
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
@@ -199,6 +220,12 @@ docker compose down -v
   que alguien decida su código HTTP.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
+- **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
+  el test primero compra la presión de diseño, pero un `cannot find 'X' in scope` **no** demuestra que la
+  aserción cace nada, porque no llegó a ejecutarse. Antes de implementar, la función existe con su firma
+  definitiva y **devuelve mal a propósito** — un valor válido pero equivocado, nunca `fatalError()`, que
+  trapea y se lleva la ejecución entera. Y una regla por ciclo: con un *suite* entero el esqueleto no dice
+  nada. Es lo que F2 se saltó (Plan §4.3).
 
 **Si abres el proyecto en Xcode y ves `Cannot find type 'Components' in scope`, no está roto.** `Components`
 y el resto del contrato **no existen en disco hasta que el plugin corre** (`D-69`), así que el índice de Xcode
@@ -221,11 +248,21 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0 y F1 entregadas, lo inmediato es **F2: el puerto `FederationClient` y el adaptador RFFM del
-calendario contra *fixtures***, sin persistir nada. Dos cosas le esperan ahí ya escritas: la **cuestión
-abierta nº 1 del plan** —cómo encaja la coordenada de la FCF en `federation_competition_id` /
-`federation_group_id`— y el **reformateo de `"2025-2026"` a `"2025/26"`**, que es trabajo del adaptador y no
-del dominio (`D-71`). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+Con F0, F1 y F2 entregadas, lo inmediato es **F3: la política de *upsert*** —descriptivo, volátil, propiedad
+y emparejamiento (§3.7, `D-56`)—, que es **unit puro y cero I/O**. Es además donde el bucle de Plan §5.1 se
+aplica en serio: si la función es `merge(existing:incoming:)`, el esqueleto es **devolver `incoming`** —pisar
+siempre, la implementación ingenua que `D-56` existe para prohibir—, y contra él cada test de la fase falla
+por su aserción y con el dato delante. Llega con un deber apuntado: **la
+justificación de `D-56` hay que rehacerla**, porque su ejemplo estrella —que la FCF borra la fecha al jugarse
+el partido— es falso desde el rediseño de esa web (`D-74`). La regla puede seguir siendo buena; su argumento
+no se da por bueno.
+
+**F5 lleva ya dos deberes apuntados** (Plan §4.3 y §4.4). Uno: el volcado de calendario que tenemos es de una
+**temporada sin arrancar**, así que la rama de "partido jugado" no la ejercita ningún dato real — hace falta
+**un volcado de temporada en curso** antes de estrenar la ingesta de resultados. Dos: F5 trae el transporte
+HTTP real, y con él el ***canario*** —la prueba, fuera de la suite normal, que pasa el parser por encima de la
+respuesta **viva** para detectar un rediseño como el de la FCF—. **No compara bytes**: el calendario cambia
+cada semana por diseño y un `diff` daría alarma cada lunes. Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
 `rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
 llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
@@ -234,3 +271,6 @@ tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes clo
 ## Equipo
 
 El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude Code.
+
+[Anexo FCF §C.10]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

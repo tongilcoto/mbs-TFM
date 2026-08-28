@@ -75,6 +75,10 @@ struct GetClubTests {
         let result = try await useCase.execute(actor: try Self.makeActor())
 
         #expect(!result.federationCapabilities.providesRoundStandings)
-        #expect(!result.federationCapabilities.providesScorers)
+        // `true` desde el 2026-08-28: la web nueva de la FCF publica goleadores
+        // (Anexo FCF §C.10.7). Lo que este test fija no es el valor, sino que sale
+        // del **catálogo** y no de la fila — por eso las dos capacidades del mismo
+        // tenant valen distinto.
+        #expect(result.federationCapabilities.providesScorers)
     }
 }

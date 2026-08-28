@@ -1,0 +1,1537 @@
+Volcado capturado el 2026-08-28 de la web NUEVA de la FCF (www.fcf.cat), que sustituye
+al sitio de raspado HTML sobre el que se escribio el Anexo FCF. Ver el aviso de
+obsolescencia en la cabecera de ese anexo.
+
+Se probaron ademas jornada=5, round=5 y jornadaId=5: los cuatro devuelven exactamente
+el mismo cuerpo. Confirma D-55: la FCF solo publica la clasificacion VIGENTE.
+
+
+Request URL
+https://www.fcf.cat/api/competition/classificacio?grupId=54322937
+
+Response
+{
+    "data": [
+        {
+            "position": "1",
+            "team": {
+                "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                "logo": "00100_0001161419_MontcadaPNG.png",
+                "clubId": "2810",
+                "teamId": "34383"
+            },
+            "points": "55.00",
+            "played": "1515",
+            "won": "107",
+            "drawn": "22",
+            "lost": "36",
+            "goalsFor": "55",
+            "goalsAgainst": "47",
+            "coefficient": "1.8333",
+            "form": [
+                {
+                    "actaId": "3784274",
+                    "result": "G",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784267",
+                    "result": "P",
+                    "home": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784259",
+                    "result": "G",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784252",
+                    "result": "G",
+                    "home": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784244",
+                    "result": "G",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "2",
+            "team": {
+                "name": "MARTINENC, F.C.",
+                "logo": "00100_0000577607_martinenc-200x200.png",
+                "clubId": "1032",
+                "teamId": "19609145"
+            },
+            "points": "53.00",
+            "played": "1515",
+            "won": "95",
+            "drawn": "47",
+            "lost": "23",
+            "goalsFor": "51",
+            "goalsAgainst": "36",
+            "coefficient": "1.7667",
+            "form": [
+                {
+                    "actaId": "3784271",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784263",
+                    "result": "P",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784255",
+                    "result": "G",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784248",
+                    "result": "G",
+                    "home": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784240",
+                    "result": "G",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "3",
+            "team": {
+                "name": "POBLA MAFUMET, C.F.",
+                "logo": "00100_0001090977_mafum.png",
+                "clubId": "3040",
+                "teamId": "33046"
+            },
+            "points": "52.00",
+            "played": "1515",
+            "won": "68",
+            "drawn": "64",
+            "lost": "33",
+            "goalsFor": "35",
+            "goalsAgainst": "21",
+            "coefficient": "1.7333",
+            "form": [
+                {
+                    "actaId": "3784278",
+                    "result": "G",
+                    "home": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784263",
+                    "result": "G",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784262",
+                    "result": "E",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-03T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784247",
+                    "result": "E",
+                    "home": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-04-25T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784246",
+                    "result": "G",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "4",
+            "team": {
+                "name": "PRAT, A.E.",
+                "logo": "00100_0000892062_aeprat_200.png",
+                "clubId": "1131",
+                "teamId": "34739"
+            },
+            "points": "43.00",
+            "played": "1515",
+            "won": "75",
+            "drawn": "52",
+            "lost": "38",
+            "goalsFor": "49",
+            "goalsAgainst": "44",
+            "coefficient": "1.4333",
+            "form": [
+                {
+                    "actaId": "3784274",
+                    "result": "P",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784266",
+                    "result": "P",
+                    "home": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "4"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784257",
+                    "result": "P",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-03T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784249",
+                    "result": "P",
+                    "home": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784240",
+                    "result": "P",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "5",
+            "team": {
+                "name": "SAN MAURO, U.D.",
+                "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                "clubId": "1395",
+                "teamId": "33957"
+            },
+            "points": "43.00",
+            "played": "1515",
+            "won": "65",
+            "drawn": "46",
+            "lost": "54",
+            "goalsFor": "47",
+            "goalsAgainst": "42",
+            "coefficient": "1.4333",
+            "form": [
+                {
+                    "actaId": "3938302",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784267",
+                    "result": "G",
+                    "home": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784258",
+                    "result": "G",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784250",
+                    "result": "G",
+                    "home": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784241",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "6",
+            "team": {
+                "name": "RUBI, U.E.",
+                "logo": "00100_0000672016_uerubi_200x200.png",
+                "clubId": "1003",
+                "teamId": "34102"
+            },
+            "points": "42.00",
+            "played": "1515",
+            "won": "84",
+            "drawn": "33",
+            "lost": "48",
+            "goalsFor": "45",
+            "goalsAgainst": "46",
+            "coefficient": "1.4000",
+            "form": [
+                {
+                    "actaId": "3784272",
+                    "result": "G",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784265",
+                    "result": "G",
+                    "home": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784257",
+                    "result": "G",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-03T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784250",
+                    "result": "P",
+                    "home": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784242",
+                    "result": "G",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-19T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "7",
+            "team": {
+                "name": "CASTELLDEFELS, U.E.",
+                "logo": "00100_0000654303_castelldefels_200x200.png",
+                "clubId": "1150",
+                "teamId": "33045"
+            },
+            "points": "40.00",
+            "played": "1515",
+            "won": "64",
+            "drawn": "46",
+            "lost": "55",
+            "goalsFor": "39",
+            "goalsAgainst": "34",
+            "coefficient": "1.3333",
+            "form": [
+                {
+                    "actaId": "3784273",
+                    "result": "P",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784266",
+                    "result": "G",
+                    "home": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "4"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784258",
+                    "result": "P",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784251",
+                    "result": "P",
+                    "home": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784243",
+                    "result": "P",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "8",
+            "team": {
+                "name": "MANLLEU, A.E.C.",
+                "logo": "00100_0001223396_MANLLEU.png",
+                "clubId": "1023",
+                "teamId": "34413"
+            },
+            "points": "38.00",
+            "played": "1515",
+            "won": "91",
+            "drawn": "45",
+            "lost": "29",
+            "goalsFor": "43",
+            "goalsAgainst": "44",
+            "coefficient": "1.2667",
+            "form": [
+                {
+                    "actaId": "3784277",
+                    "result": "G",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784270",
+                    "result": "P",
+                    "home": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784262",
+                    "result": "E",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-03T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784254",
+                    "result": "G",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938300",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "9",
+            "team": {
+                "name": "SABADELL F.C., C.E.",
+                "logo": "00100_0001025828_escut_CES__1_.png",
+                "clubId": "1004",
+                "teamId": "36389"
+            },
+            "points": "38.00",
+            "played": "1515",
+            "won": "64",
+            "drawn": "44",
+            "lost": "57",
+            "goalsFor": "38",
+            "goalsAgainst": "37",
+            "coefficient": "1.2667",
+            "form": [
+                {
+                    "actaId": "3784272",
+                    "result": "P",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784264",
+                    "result": "G",
+                    "home": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784255",
+                    "result": "P",
+                    "home": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784247",
+                    "result": "E",
+                    "home": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-04-25T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784239",
+                    "result": "E",
+                    "home": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-19T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "10",
+            "team": {
+                "name": "ATLETIC SANT JUST . F. C.",
+                "logo": "00100_0001163142_SantJust2PNG.png",
+                "clubId": "6380",
+                "teamId": "33459"
+            },
+            "points": "38.00",
+            "played": "1515",
+            "won": "63",
+            "drawn": "65",
+            "lost": "37",
+            "goalsFor": "35",
+            "goalsAgainst": "41",
+            "coefficient": "1.2667",
+            "form": [
+                {
+                    "actaId": "3784271",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784264",
+                    "result": "P",
+                    "home": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784256",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784249",
+                    "result": "G",
+                    "home": {
+                        "name": "PRAT, A.E.",
+                        "logo": "00100_0000892062_aeprat_200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784241",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "11",
+            "team": {
+                "name": "VALLS U.E.",
+                "logo": "00100_0000959056_3248_Vallsue_200.png",
+                "clubId": "3248",
+                "teamId": "33936"
+            },
+            "points": "38.00",
+            "played": "1515",
+            "won": "64",
+            "drawn": "53",
+            "lost": "48",
+            "goalsFor": "40",
+            "goalsAgainst": "42",
+            "coefficient": "1.2667",
+            "form": [
+                {
+                    "actaId": "3784277",
+                    "result": "P",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784269",
+                    "result": "G",
+                    "home": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938301",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784252",
+                    "result": "P",
+                    "home": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784243",
+                    "result": "G",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "12",
+            "team": {
+                "name": "HORTA, U.AT.",
+                "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                "clubId": "1049",
+                "teamId": "37124"
+            },
+            "points": "37.00",
+            "played": "1515",
+            "won": "64",
+            "drawn": "25",
+            "lost": "76",
+            "goalsFor": "40",
+            "goalsAgainst": "37",
+            "coefficient": "1.2333",
+            "form": [
+                {
+                    "actaId": "3784276",
+                    "result": "G",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784269",
+                    "result": "P",
+                    "home": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784261",
+                    "result": "G",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784254",
+                    "result": "P",
+                    "home": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784246",
+                    "result": "P",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "3"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "13",
+            "team": {
+                "name": "CIUDAD COOPERATIVA, C.F.",
+                "logo": "00100_0001162525_aaa.png",
+                "clubId": "2899",
+                "teamId": "33096"
+            },
+            "points": "36.00",
+            "played": "1515",
+            "won": "91",
+            "drawn": "33",
+            "lost": "311",
+            "goalsFor": "34",
+            "goalsAgainst": "48",
+            "coefficient": "1.2000",
+            "form": [
+                {
+                    "actaId": "3784278",
+                    "result": "P",
+                    "home": {
+                        "name": "POBLA MAFUMET, C.F.",
+                        "logo": "00100_0001090977_mafum.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784270",
+                    "result": "G",
+                    "home": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784261",
+                    "result": "P",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "4"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938316",
+                    "result": "G",
+                    "home": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-25T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784244",
+                    "result": "P",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "14",
+            "team": {
+                "name": "JÚPITER, C.E.",
+                "logo": "00100_0000672018_cejupiter_200x200.png",
+                "clubId": "1015",
+                "teamId": "15542122"
+            },
+            "points": "35.00",
+            "played": "1515",
+            "won": "35",
+            "drawn": "65",
+            "lost": "65",
+            "goalsFor": "33",
+            "goalsAgainst": "34",
+            "coefficient": "1.1667",
+            "form": [
+                {
+                    "actaId": "3784273",
+                    "result": "G",
+                    "home": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784265",
+                    "result": "P",
+                    "home": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784256",
+                    "result": "E",
+                    "home": {
+                        "name": "ATLETIC SANT JUST . F. C.",
+                        "logo": "00100_0001163142_SantJust2PNG.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784248",
+                    "result": "P",
+                    "home": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MARTINENC, F.C.",
+                        "logo": "00100_0000577607_martinenc-200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784239",
+                    "result": "E",
+                    "home": {
+                        "name": "SABADELL F.C., C.E.",
+                        "logo": "00100_0001025828_escut_CES__1_.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "JÚPITER, C.E.",
+                        "logo": "00100_0000672018_cejupiter_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-19T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "15",
+            "team": {
+                "name": "VILAFRANCA, F.C.",
+                "logo": "00100_0000636585_fcv200.png",
+                "clubId": "1005",
+                "teamId": "33439"
+            },
+            "points": "32.00",
+            "played": "1515",
+            "won": "71",
+            "drawn": "62",
+            "lost": "212",
+            "goalsFor": "35",
+            "goalsAgainst": "51",
+            "coefficient": "1.0667",
+            "form": [
+                {
+                    "actaId": "3784276",
+                    "result": "P",
+                    "home": {
+                        "name": "HORTA, U.AT.",
+                        "logo": "00100_0000959029_1049_HortaUAT_200.png",
+                        "goals": "3"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "2"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938317",
+                    "result": "E",
+                    "home": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784259",
+                    "result": "P",
+                    "home": {
+                        "name": "SAN JUAN AT. DE MONTCADA,U.E.",
+                        "logo": "00100_0001161419_MontcadaPNG.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784251",
+                    "result": "G",
+                    "home": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "CASTELLDEFELS, U.E.",
+                        "logo": "00100_0000654303_castelldefels_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-26T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3784242",
+                    "result": "P",
+                    "home": {
+                        "name": "RUBI, U.E.",
+                        "logo": "00100_0000672016_uerubi_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-19T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        },
+        {
+            "position": "16",
+            "team": {
+                "name": "SANTFELIUENC, F.C.",
+                "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                "clubId": "1033",
+                "teamId": "36505"
+            },
+            "points": "31.00",
+            "played": "1515",
+            "won": "52",
+            "drawn": "46",
+            "lost": "67",
+            "goalsFor": "23",
+            "goalsAgainst": "38",
+            "coefficient": "1.0333",
+            "form": [
+                {
+                    "actaId": "3938302",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SAN MAURO, U.D.",
+                        "logo": "00100_0001021772_ESCUDO_NUEVO_UD_SAN_MAURO_BUENO_camiseta_juego.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-16T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938317",
+                    "result": "E",
+                    "home": {
+                        "name": "VILAFRANCA, F.C.",
+                        "logo": "00100_0000636585_fcv200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-09T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938301",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "1"
+                    },
+                    "away": {
+                        "name": "VALLS U.E.",
+                        "logo": "00100_0000959056_3248_Vallsue_200.png",
+                        "goals": "1"
+                    },
+                    "date": "2026-05-02T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938316",
+                    "result": "P",
+                    "home": {
+                        "name": "CIUDAD COOPERATIVA, C.F.",
+                        "logo": "00100_0001162525_aaa.png",
+                        "goals": "2"
+                    },
+                    "away": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-25T00:00:00.000Z"
+                },
+                {
+                    "actaId": "3938300",
+                    "result": "E",
+                    "home": {
+                        "name": "SANTFELIUENC, F.C.",
+                        "logo": "00100_0000574621_stfeliuenc_200x200.png",
+                        "goals": "0"
+                    },
+                    "away": {
+                        "name": "MANLLEU, A.E.C.",
+                        "logo": "00100_0001223396_MANLLEU.png",
+                        "goals": "0"
+                    },
+                    "date": "2026-04-18T00:00:00.000Z"
+                }
+            ],
+            "sanction": 0
+        }
+    ],
+    "promociones": []
+}

@@ -143,10 +143,10 @@ dependen de eso.
 |---|----------|-------------------------|-------------|
 | **F0** ✅ | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
 | **F1** ✅ | `Season` + `Competition` — dominio y persistencia (detalle abajo). **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
-| **F2** | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** | unit puro | §5.6, Anexo RFFM |
+| **F2** ✅ | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** (detalle en §4.3) | unit puro | §5.6, Anexo RFFM |
 | **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
-| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match` | integración, Postgres real | §3.7, §4.4 |
+| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (§4.4 de este plan) | integración, Postgres real | §3.7, §4.4 |
 | **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
@@ -234,6 +234,140 @@ test escrito después se limitaría a bendecir el error.
 copiar nada.
 
 
+### 4.3 F2 · El puerto de federación y el calendario de la RFFM — **entregada**
+
+La primera rebanada que habla con el mundo exterior, y la primera **sin base de datos**: 11 ficheros de
+código y **36 tests**, todos de nivel 1, con la batería completa en **102**. Corre en 70 ms y **sin Docker**.
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Cómo encaja la coordenada de la FCF en las dos columnas? (cuestión abierta nº 1) | **No encaja: ya no hace falta.** La FCF rehízo su web y su coordenada es ahora la de Madrid → [D-74] |
+| ¿Describe bien el anexo el calendario de la RFFM? | **No del todo.** `jornada` es un rótulo y no un número; existe `(HB)`; el *host* del escudo lo publica la fuente → [Anexo RFFM §F.15] |
+| ¿Basta el *fixture* para probar el adaptador entero? | **A medias.** Ver *"lo que no demuestra"*, abajo |
+| ¿Dónde vive el reformateo de la etiqueta de temporada? | En el adaptador, **delegando** en `SeasonLabel` en vez de componer la cadena — que es lo que cierra [D-71] por los dos lados |
+
+**Lo que trae, y por qué está partido así.** Tres piezas, no una, siguiendo §7.3 de este plan:
+
+| Pieza | Responsabilidad | Se prueba… |
+|---|---|---|
+| `FederationTransport` | traer bytes | **no se prueba**: no hay implementación real hasta F5 |
+| `RFFMCalendarParser` (+ `RFFMValue`, `NextDataExtractor`) | interpretar el texto | contra el volcado real, sin red |
+| `RFFMFederationClient` | qué se pide y en qué orden | con un transporte espía |
+
+Esa separación es lo que hace que **toda F2 sea nivel 1**. Si el parser viviera dentro del cliente HTTP —como
+en la app heredada— probar el mapeo de un campo exigiría levantar un servidor.
+
+**Lo que no trae, y es deliberado.**
+
+- **El transporte HTTP de verdad.** Llega en **F5**, que es donde hay integración que lo ejercite. Escribirlo
+  ahora sería código sin un test que lo toque, y además tendría que resolver cosas que F2 no sabe: validar el
+  `2xx` explícitamente ([Anexo RFFM §F.7]), concurrencia y *backoff*.
+- **El cableado en la raíz de composición.** `App` no conoce a `Federation` todavía porque **no hay llamante**:
+  el job es F6 y el `/preview` es F10. Hoy lo consume el *target* de tests, que es lo que lo mantiene en el
+  grafo de *build*.
+- **Clasificación, goleadores y acta** (F7, F8, [D-57]): el puerto tiene **una** operación. Una firma inventada
+  hoy se escribiría contra un anexo en vez de contra un volcado.
+- **Nada de emparejar ni de escribir.** El adaptador devuelve lo que la fuente dijo, con sus huecos intactos —
+  que es la materia prima sobre la que F3 y F4 deciden.
+
+**Lo que el *fixture* NO demuestra, y hay que decirlo.** El volcado es de una temporada **sin arrancar**: los
+306 partidos llegan sin marcador y sin hora, y las 34 fechas son el sábado por defecto. Es [Anexo RFFM §F.5]
+al pie de la letra, pero **la rama de "partido jugado" no la ejercita ningún dato real de calendario** — las
+únicas muestras con marcador son las 3 y 4 de §F.2, que están en el anexo y no en un volcado completo. La
+consecuencia práctica: **F5 necesita un volcado de temporada en curso** para que la ingesta de resultados no
+se estrene en producción.
+
+**F2 sí se escribió en TDD**, al contrario que F1: los cuatro *suites* se escribieron antes que su
+implementación y los cuatro se vieron fallar. Pero **fue test-first, no el bucle de §5 entero**, y conviene
+decir en qué se quedó corto, que son tres cosas y ninguna es la misma:
+
+1. **El rojo fue de compilación, no de aserción.** `cannot find 'RFFMValue' in scope`, cuatro veces. Eso compra
+   la presión de diseño entera y **nada** de la garantía de que la aserción cace el fallo que dice cazar. Lo
+   que faltó —un minuto de trabajo— es el **esqueleto**: la implementación falsa que compila y devuelve mal, de
+   modo que el rojo traiga el valor delante. Está explicado en §5.1, que nació de aquí.
+2. **La granularidad fue de *suite*, no de regla.** §5 pide *"una regla: rojo → verde → refactor"* y aquí
+   fueron cuatro ciclos de suite entero → unidad entera. Es independiente de lo anterior, y además es lo que
+   habría hecho útil el esqueleto: fingiendo doce respuestas a la vez, un esqueleto no dice nada.
+3. **Las aserciones del parser salen de haber leído el volcado**, así que son *tests de caracterización*: fijan
+   lo que la fuente hace hoy, no lo que debería hacer. Esto **no** es un desvío del método —es lo correcto
+   contra un sistema de terceros, donde la alternativa sería inventarse la forma del JSON— y es justo por eso
+   que el anexo fechado y la marca `[C]` son parte del método y no decoración.
+
+Lo que tapó el hueco del punto 1 fue la comprobación de mutación, conseguida al final en vez de por el camino.
+Funcionó; pero es la red, no el procedimiento.
+
+**La comprobación de mutación encontró algo que los tests verdes no podían.** Once mutaciones, **once
+detectadas** —y con especificidad: cambiar `codjornada` por `jornada` tumba el test de la numeración y ningún
+otro—. Pero la interesante fue la **duodécima, que no se detectó**: romper el descarte del `?nova=1` de la
+ruta del escudo no tumbó nada. No era un hueco de test: era **código defensivo que no defendía nada** —la
+consulta va detrás de la extensión y nunca toca al segmento del id—. Se borró la línea.
+
+> **Ése es un uso de la técnica que F1 no había visto.** Una mutación no detectada tiene **dos** lecturas, y
+> conviene mirarlas en este orden: falta un test, **o sobra el código**. Asumir la primera es como se acaba
+> escribiendo un test para justificar una línea inútil.
+
+**Dos hallazgos de montaje**, los dos ya anunciados en `AGENTS.md` y los dos volvieron a morder:
+`MemberImportVisibility` cazó un `import Foundation` que llegaba de gratis, y SwiftPM **descartó en silencio**
+el *target* nuevo hasta que tuvo su primer `.swift` — el primer rojo de la fase fue un `no such module`.
+
+**Lo que se llevó por delante sin planearlo:** dos tests de F0 (`GetClubTests`, `ClubEndpointTests`) afirmaban
+que la FCF no publica goleadores. Era cierto cuando se escribieron; el saneamiento previo a esta fase lo
+corrigió en el catálogo y estos dos se quedaron atrás hasta que la batería completa los cazó.
+
+
+### 4.4 Lo que F5 tiene que traer además de la ingesta: el *canario*
+
+*Anotado tras F2, a propuesta del desarrollador, para que no se pierda.*
+
+`D-74` dejó escrita una lección — **revalidar el anexo de una federación antes de escribir su adaptador**— y
+la dejó dependiendo de que alguien se acuerde. No basta: la FCF rehízo su web entera y estuvimos meses con un
+anexo que describía un sitio inexistente, hasta que se descubrió **por casualidad**. F5 es la fase que puede
+automatizar ese aviso, porque es donde nace el **transporte HTTP real** — hoy `FederationTransport` es un
+protocolo sin implementación, así que antes de F5 no hay con qué hacer la petición.
+
+**El canario no sustituye al volcado guardado: son dos preguntas distintas.**
+
+| | Responde a | Determinista | Cuándo corre |
+|---|---|---|---|
+| **Volcado guardado** (F2) | *¿he roto yo el parser?* | sí | **siempre**, sin red, nivel 1 |
+| **Canario** (F5) | *¿han cambiado ellos?* | **no, por naturaleza** | a demanda |
+
+Fusionarlos las estropea las dos. El valor de la batería en verde es que un rojo significa *"mi cambio está
+mal"*; con una petición de red dentro, un rojo puede significar que la federación está caída o que no hay
+conexión. Y §4.1 fija que F2 es *unit puro*: el canario **vive fuera de la suite normal**, tras un
+interruptor —`FEDERATION_LIVE=1`— y no entra en el camino de `swift test`.
+
+#### La regla que decide si esto sirve de algo: **no es un `diff` de bytes**
+
+**El calendario cambia todas las semanas, y por diseño.** Los horarios se fijan el domingo al cierre y los
+marcadores entran el fin de semana ([Anexo RFFM §F.5]). Un canario que compare el fichero guardado contra una
+captura nueva daría alarma **cada lunes** — y una bandera que grita siempre es peor que ninguna, porque a las
+tres semanas nadie la mira.
+
+Lo que se afirma es **estructural**, y la herramienta ya existe: **pasar nuestro parser por encima de la
+respuesta viva y exigir que no falle.** Si el `__NEXT_DATA__` desaparece, si `codjornada` deja de ser un
+número, si cambian los nombres de las 15 claves del partido o se va `calendar.host`, el parser revienta — y
+ése **es** el aviso. Encima, unos pocos invariantes baratos: que haya jornadas, que los `codacta` sigan siendo
+únicos, que la etiqueta de temporada siga teniendo la forma `AAAA-BBBB`.
+
+En una frase: **el canario no comprueba que el fichero siga igual, sino que el parser siga tragando.**
+
+#### Y tiene que distinguir "cambió la fuente" de "caducó la coordenada"
+
+`temporada=22` cambia cada año, y `competicion`/`grupo` con ella ([Anexo RFFM §F.1]). Un canario cableado a
+una coordenada concreta empieza a dar falsos positivos en cuanto pase la temporada. **Un 404 tiene que decir
+una cosa y un parseo fallido otra**, o vuelve a ser la bandera que grita sin motivo.
+
+#### Y a largo plazo la bandera de verdad es otra
+
+El **job de ingesta de F6**, con su pasada semanal, detecta el cambio aunque nadie mire — y encima sobre las
+coordenadas reales de los clubes, que no caducan porque las mantiene el administrador. El canario de F5 es la
+versión **preventiva** de eso: lo que se ejecuta a mano **antes de abrir una fase de federación**, cuando
+todavía no hay job ni tenants.
+
+
 ---
 
 ## 5. El bucle interior · TDD sobre esta arquitectura
@@ -255,6 +389,59 @@ Por fase, en este orden:
 **Los tests citan el diseño.** Cada test lleva en su nombre la referencia `§x` o `D-nn` que lo exige, de modo
 que se pueda trazar del test a la línea del LLD que lo justifica. Es lo que permite revisar una fase
 leyendo los tests en vez del código.
+
+### 5.1 Qué compra cada rojo, y por qué hay que escribir el esqueleto
+
+*Añadido tras F2, que se escribió test-first y aun así se dejó la mitad del ciclo por el camino.*
+
+Escribir el test antes produce **dos** cosas, y **no se compran a la vez**:
+
+| Producto | Qué lo compra |
+|---|---|
+| **Presión de diseño** — la interfaz queda decidida antes que la implementación | escribir el test primero. **Da igual la forma del rojo** |
+| **Aserción verificada** — *esta comprobación caza este fallo* | que el test **se ejecute** y falle **por su aserción** |
+
+La primera es real y se cobra sola. En F2 se ve en decisiones que se tomaron **en el fichero de test** y que
+la implementación después obedeció: que `RFFMValue.score` devuelva `Int?` y no un centinela —que es la
+frontera de [D-56] expresada en una firma—, que `kickoff` reciba un `String?` porque la muestra 2 de
+[Anexo RFFM §F.2] no trae el campo, o que `federationClubID` **no lance** mientras sus vecinas sí, que es la
+regla de degradación de §3.7 hecha tipo.
+
+**La segunda no la compra un rojo de compilación.** Y en Swift, con un tipo que todavía no existe, el rojo por
+defecto es ése: `cannot find 'X' in scope`. Demuestra que el código no estaba; **no** demuestra que la
+aserción sirva, porque nunca llegó a ejecutarse. Un `#expect` mal escrito da exactamente el mismo rojo que uno
+bien escrito.
+
+> **El esqueleto es lo que convierte un rojo en el otro, y cuesta un minuto.**
+>
+> **Esqueleto** aquí **no** es la lista de tests —cuidado con la palabra, que en §3 significa otra cosa— ni un
+> diseño previo. Es la **implementación falsa**: el tipo y la función existen, con su nombre y su firma
+> definitivos, compilan, y devuelven a propósito **la respuesta equivocada**. Entonces el rojo es
+> `Expectation failed: 3 == 0`, con el valor delante.
+>
+> **Que devuelva un valor válido pero mal, nunca `fatalError()`:** eso *trapea* y mata el proceso, así que no
+> da una aserción fallida sino una caída que se lleva por delante el resto de la ejecución.
+
+**Y el esqueleto solo se paga si la granularidad es de una regla.** Son dos cosas independientes, y en F2
+faltaron las dos en distinto grado: se escribieron *suites* enteros contra unidades enteras, en vez de una
+regla → su test → su esqueleto → verde. Con un *suite* entero, el esqueleto tendría que fingir doce respuestas
+a la vez y deja de decir nada.
+
+Así que el bucle interior, completo:
+
+```
+una regla → su test → su esqueleto (rojo de aserción) → implementación (verde) → refactor
+```
+
+**Dónde se paga más caro saltárselo: F3.** Es la política de *upsert* de [D-56], donde equivocarse **destruye
+datos que no vuelven**, y sus aserciones son sutiles —*"vacío no sobrescribe"* y *"vacío sobrescribe"* son dos
+líneas casi idénticas—. El esqueleto se escribe solo: si la función es `merge(existing:incoming:)`, el
+esqueleto es **devolver `incoming`**, que es exactamente la implementación ingenua que la decisión existe para
+prohibir. Contra ese esqueleto, cada test de la fase falla por su aserción y con el dato a la vista.
+
+**Lo que esto no sustituye.** La comprobación de mutación (§4.2) compra la misma garantía **a posteriori**, y
+sigue haciendo falta: en F2 encontró algo que ningún rojo de aserción habría encontrado — código defensivo que
+no defendía nada (§4.3). El esqueleto la adelanta y la reparte por el camino; no la reemplaza.
 
 ---
 
@@ -359,16 +546,30 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 
 ## 10. Cuestiones abiertas de este plan
 
-1. **La representación de la coordenada de la FCF** en `federation_competition_id` / `federation_group_id`
-   (§7.2, punto 1). Se resuelve en F2 y genera `D-nn`.
+1. ~~**La representación de la coordenada de la FCF**~~ (§7.2, punto 1). **RESUELTA en F2 — por
+   desaparición**, [D-74]. Al buscar una URL actual con la que fijarla se descubrió que **la FCF ha rehecho
+   su web y ahora tiene API JSON**, con una coordenada de tres códigos numéricos que encaja uno a uno en las
+   columnas del modelo. No hay nada que decidir ni que cambiar. La reobservación está en el
+   [Anexo FCF §C.10](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md); **§C.1–§C.9 de ese anexo quedan
+   obsoletas**.
+
+   > **Y deja dos deberes para F3, que es la fase siguiente.** [D-56] y §5.6 del LLD apoyan la regla de
+   > escritura y la cadencia semanal en que *"la FCF borra la fecha y la hora al jugarse el partido"*; una
+   > temporada entera ya jugada las conserva en **240 de 240**. [D-67] justifica su `202` con las *"~34
+   > peticiones"* de la FCF, que ahora es **1**. Las dos decisiones pueden seguir siendo correctas por otros
+   > motivos — pero **hay que rehacerles la justificación al implementarlas**, no darlas por buenas.
 2. ~~La lista exacta de *upcoming features* de concurrencia.~~ **Resuelta en F0**: `ExistentialAny`,
    `MemberImportVisibility`, `InferIsolatedConformances` y `NonisolatedNonsendingByDefault`, en modo de
    lenguaje `.v6` y en **todos** los *targets*. **Fluent no peleó**: no hizo falta bajar el modo en ninguno,
    así que la válvula de escape que §6 descartaba tampoco se ha echado en falta. `MemberImportVisibility` se
    ganó el sitio de inmediato — cazó tres *imports* transitivos implícitos que habrían compilado en silencio.
 3. **Cuánto vale la evidencia de `federation_name`.** [D-72] guarda el nombre literal de la competición para
-   cerrar el `[I]` de [Anexo RFFM §F.14] —que la inferencia de género descansa sobre **una** muestra—. La
-   columna nace en F1 y **no se llena hasta F10**: hasta entonces la pregunta sigue sin datos.
+   cerrar el `[I]` de [Anexo RFFM §F.14] —que la inferencia de género descansaba sobre **una** muestra—.
+   **Parcialmente resuelta en F2**: el volcado de las 30 competiciones de una temporada dice que el marcador
+   `FEMENINO` **no siempre va al final** (2 de 6) y que **no hay truncado** en ese endpoint, y aporta una
+   segunda señal de contraste (`nombre_grupo_categoria`). La inferencia acierta más de lo que se temía; la
+   columna sigue sin llenarse **hasta F10**, que es cuando la pregunta de fondo —cuánto vale como evidencia
+   forense— tendrá datos de verdad.
 4. **Orden de ataque tras la ingesta.** Este plan cubre hasta F10. Lo siguiente —dominio manual, roles, auth
    real— se planifica cuando la ingesta esté entregada, no antes.
 
@@ -378,3 +579,6 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
