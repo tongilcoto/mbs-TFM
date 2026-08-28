@@ -305,6 +305,7 @@ swift test --filter ApplicationTests        # nivel 2
 swift test --filter PersistenceTests        # nivel 3 — necesita Docker
 swift test --filter APITests                # nivel 4 — necesita Docker
 REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omitir
+KEEP_TEST_DATA=1 swift test                 # conserva los schemas para inspeccionarlos
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
@@ -363,6 +364,30 @@ hubiera quedado de una pasada anterior que no acabase bien:
 | Todo verde | Limpio |
 | Un `#expect` falla | Limpio — `#expect` **no lanza**, así que la limpieza final se ejecuta igual |
 | Algo **lanza** | Queda su *schema*… hasta el siguiente `swift test`, que lo barre |
+
+**Y si quieres inspeccionar lo que dejó un test que falla**, `KEEP_TEST_DATA=1` conserva los *schemas*:
+
+```sh
+KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests
+```
+
+```
+⚠︎ KEEP_TEST_DATA=1 · los schemas de test NO se borrarán al terminar.
+  Míralos en la base `tfm_test`; la siguiente pasada los barre.
+```
+
+Luego los abres en TablePlus (base **`tfm_test`**) y consultas el estado exacto en que quedó la fila:
+
+```sql
+SELECT name, short_name, updated_at FROM e2e_patch1.clubs;
+```
+
+Es la alternativa barata al *breakpoint*, y muchas veces mejor: parar el depurador dentro de un test de
+integración te deja mirando una transacción **que aún no ha confirmado**, así que lo que ves en la BD no es
+lo que verá el siguiente paso.
+
+**El barrido de arranque sigue corriendo con la bandera puesta**, a propósito: cada pasada te deja **su**
+estado, no la acumulación de todas. Comprobado con dos pasadas seguidas — la segunda barre la primera.
 
 El barrido va al arrancar y no en un `defer` por test, por el mismo motivo que el `SET LOCAL` de §6.2: **la
 corrección no debe depender del camino de error** ni de que cada test nuevo se acuerde. Y garantiza algo más

@@ -108,6 +108,14 @@ public enum TestEnvironment {
                 try await configure(migrator, config: config)
                 try await migrator.autoMigrate()
                 try await dropLeftovers(on: migrator)
+                if keepsTestData {
+                    // Por `print` y no por el logger: con el nivel por defecto
+                    // un aviso de log no se vería, y éste tiene que verse
+                    // siempre — es lo que explica por qué la base no queda
+                    // vacía al terminar.
+                    print("⚠︎ KEEP_TEST_DATA=1 · los schemas de test NO se borrarán al terminar.")
+                    print("  Míralos en la base `\(databaseName)`; la siguiente pasada los barre.")
+                }
             } catch {
                 try? await migrator.asyncShutdown()
                 throw TestSetupError(underlying: String(reflecting: error))
@@ -222,9 +230,26 @@ public enum TestEnvironment {
         return schema
     }
 
+    /// `KEEP_TEST_DATA=1` conserva lo que dejan los tests, para poder abrirlo en
+    /// TablePlus después de un fallo.
+    ///
+    /// Es la alternativa barata al *breakpoint*: cuando un test de integración
+    /// falla, lo que quieres ver es **en qué estado quedó la base**, y eso se
+    /// mira mejor con una consulta que parando el depurador en mitad de una
+    /// transacción — que además, al estar parado, no la ha confirmado todavía.
+    ///
+    /// **El barrido de arranque sigue corriendo** aunque esté puesta, y es
+    /// deliberado: cada pasada empieza limpia y te deja **su** estado, no una
+    /// acumulación de todas las anteriores. Si no, a la tercera ejecución ya no
+    /// sabrías de qué pasada era cada *schema*.
+    public static var keepsTestData: Bool {
+        ProcessInfo.processInfo.environment["KEEP_TEST_DATA"] == "1"
+    }
+
     public static func dropClubs(
         _ slugs: [String], schemaPrefix: String, on app: Application
     ) async throws {
+        guard !keepsTestData else { return }
         guard let sql = app.db(.control) as? any SQLDatabase else { return }
         for slug in slugs {
             try await sql.raw("DROP SCHEMA IF EXISTS \(ident: "\(schemaPrefix)\(slug)") CASCADE").run()
