@@ -12,7 +12,12 @@
 /// # Aquí no hay implementación de verdad, y es a propósito
 ///
 /// La que habla con la red llega en **F5**, que es donde hay integración que la
-/// ejercite. Escribirla ahora sería código sin un solo test que lo toque —
+/// ejercite — y con ella el ***canario*** (Plan §4.4): una prueba **fuera de la
+/// suite normal**, tras `FEDERATION_LIVE=1`, que pasa el parser por encima de la
+/// respuesta **viva** y exige que no falle. No compara bytes: el calendario cambia
+/// cada semana por diseño ([Anexo RFFM §F.5]), así que un `diff` daría alarma cada
+/// lunes. Lo que afirma es que **el parser sigue tragando**, que es lo que avisa de
+/// un rediseño como el que se llevó por delante medio anexo de la FCF (`D-74`). Escribirla ahora sería código sin un solo test que lo toque —
 /// exactamente lo que el bucle de §5 del plan existe para evitar—, y además lo
 /// que tendría que resolver son cosas que F2 no sabe todavía: control de
 /// concurrencia y *backoff* ([Anexo FCF §C.6]), y **validar el `2xx`

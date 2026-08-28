@@ -257,9 +257,12 @@ justificación de `D-56` hay que rehacerla**, porque su ejemplo estrella —que 
 el partido— es falso desde el rediseño de esa web (`D-74`). La regla puede seguir siendo buena; su argumento
 no se da por bueno.
 
-Y un aviso para **F5**: el volcado de calendario que tenemos es de una **temporada sin arrancar**, así que la
-rama de "partido jugado" no la ejercita ningún dato real. Hace falta **un volcado de temporada en curso**
-antes de estrenar la ingesta de resultados (Plan §4.3). Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
+**F5 lleva ya dos deberes apuntados** (Plan §4.3 y §4.4). Uno: el volcado de calendario que tenemos es de una
+**temporada sin arrancar**, así que la rama de "partido jugado" no la ejercita ningún dato real — hace falta
+**un volcado de temporada en curso** antes de estrenar la ingesta de resultados. Dos: F5 trae el transporte
+HTTP real, y con él el ***canario*** —la prueba, fuera de la suite normal, que pasa el parser por encima de la
+respuesta **viva** para detectar un rediseño como el de la FCF—. **No compara bytes**: el calendario cambia
+cada semana por diseño y un `diff` daría alarma cada lunes. Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
 `rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
 llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por

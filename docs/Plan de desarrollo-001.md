@@ -146,7 +146,7 @@ dependen de eso.
 | **F2** ✅ | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** (detalle en §4.3) | unit puro | §5.6, Anexo RFFM |
 | **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
-| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match` | integración, Postgres real | §3.7, §4.4 |
+| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (§4.4 de este plan) | integración, Postgres real | §3.7, §4.4 |
 | **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
@@ -315,6 +315,57 @@ el *target* nuevo hasta que tuvo su primer `.swift` — el primer rojo de la fas
 **Lo que se llevó por delante sin planearlo:** dos tests de F0 (`GetClubTests`, `ClubEndpointTests`) afirmaban
 que la FCF no publica goleadores. Era cierto cuando se escribieron; el saneamiento previo a esta fase lo
 corrigió en el catálogo y estos dos se quedaron atrás hasta que la batería completa los cazó.
+
+
+### 4.4 Lo que F5 tiene que traer además de la ingesta: el *canario*
+
+*Anotado tras F2, a propuesta del desarrollador, para que no se pierda.*
+
+`D-74` dejó escrita una lección — **revalidar el anexo de una federación antes de escribir su adaptador**— y
+la dejó dependiendo de que alguien se acuerde. No basta: la FCF rehízo su web entera y estuvimos meses con un
+anexo que describía un sitio inexistente, hasta que se descubrió **por casualidad**. F5 es la fase que puede
+automatizar ese aviso, porque es donde nace el **transporte HTTP real** — hoy `FederationTransport` es un
+protocolo sin implementación, así que antes de F5 no hay con qué hacer la petición.
+
+**El canario no sustituye al volcado guardado: son dos preguntas distintas.**
+
+| | Responde a | Determinista | Cuándo corre |
+|---|---|---|---|
+| **Volcado guardado** (F2) | *¿he roto yo el parser?* | sí | **siempre**, sin red, nivel 1 |
+| **Canario** (F5) | *¿han cambiado ellos?* | **no, por naturaleza** | a demanda |
+
+Fusionarlos las estropea las dos. El valor de la batería en verde es que un rojo significa *"mi cambio está
+mal"*; con una petición de red dentro, un rojo puede significar que la federación está caída o que no hay
+conexión. Y §4.1 fija que F2 es *unit puro*: el canario **vive fuera de la suite normal**, tras un
+interruptor —`FEDERATION_LIVE=1`— y no entra en el camino de `swift test`.
+
+#### La regla que decide si esto sirve de algo: **no es un `diff` de bytes**
+
+**El calendario cambia todas las semanas, y por diseño.** Los horarios se fijan el domingo al cierre y los
+marcadores entran el fin de semana ([Anexo RFFM §F.5]). Un canario que compare el fichero guardado contra una
+captura nueva daría alarma **cada lunes** — y una bandera que grita siempre es peor que ninguna, porque a las
+tres semanas nadie la mira.
+
+Lo que se afirma es **estructural**, y la herramienta ya existe: **pasar nuestro parser por encima de la
+respuesta viva y exigir que no falle.** Si el `__NEXT_DATA__` desaparece, si `codjornada` deja de ser un
+número, si cambian los nombres de las 15 claves del partido o se va `calendar.host`, el parser revienta — y
+ése **es** el aviso. Encima, unos pocos invariantes baratos: que haya jornadas, que los `codacta` sigan siendo
+únicos, que la etiqueta de temporada siga teniendo la forma `AAAA-BBBB`.
+
+En una frase: **el canario no comprueba que el fichero siga igual, sino que el parser siga tragando.**
+
+#### Y tiene que distinguir "cambió la fuente" de "caducó la coordenada"
+
+`temporada=22` cambia cada año, y `competicion`/`grupo` con ella ([Anexo RFFM §F.1]). Un canario cableado a
+una coordenada concreta empieza a dar falsos positivos en cuanto pase la temporada. **Un 404 tiene que decir
+una cosa y un parseo fallido otra**, o vuelve a ser la bandera que grita sin motivo.
+
+#### Y a largo plazo la bandera de verdad es otra
+
+El **job de ingesta de F6**, con su pasada semanal, detecta el cambio aunque nadie mire — y encima sobre las
+coordenadas reales de los clubes, que no caducan porque las mantiene el administrador. El canario de F5 es la
+versión **preventiva** de eso: lo que se ejecuta a mano **antes de abrir una fase de federación**, cuando
+todavía no hay job ni tenants.
 
 
 ---
