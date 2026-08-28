@@ -23,15 +23,23 @@ Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregada
 así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber qué se puede tocar
 con `curl`. Lo que hay:
 
-| Fase | Qué añadió | Cómo se mira |
-|---|---|---|
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba | `curl` (§4) |
-| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift run Run migrate-tenants`, y TablePlus (§3) |
-| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales. **Sin red y sin BD** | `swift test --filter FederationTests` (§5) |
+| Fase | Qué añadió | Cómo se **prueba** | Cómo se **mira** |
+|---|---|---|---|
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba | `swift test --filter 'Club\|Tenan'` → **29 tests** · necesita Docker | `curl` (§4) |
+| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
+| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red** | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4) |
 
-O sea: dos de las tres fases entregadas **no se pueden probar con `curl`**, y la forma de mirarlas es la base
-de datos y los tests. Es deliberado — el plan construye la ingesta antes que su superficie de alta, que es
-**F10**.
+*(Las cifras son reales: cada filtro se ha ejecutado. `--filter` es una **expresión regular sobre el nombre
+del test**, no un nombre de *target*, así que `Season` coge también `SeasonLabel`, y `Federation` a secas
+cogería además el catálogo que vive en `DomainTests`.)*
+
+**Dos de las tres fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
+construye la ingesta antes que su superficie de alta, que es **F10**. Para F1 lo que se mira es la **base de
+datos**; para F2, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
+especificación revisable, no el código"*).
+
+> **F2 no deja rastro en la base de datos, y no es un fallo.** Su fase es *"contra fixtures, **sin persistir
+> nada**"*. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de abajo es dónde corre **la API**.
 
@@ -96,16 +104,16 @@ puerto **interno** `5432`. Desde el Mac es `localhost:5434`. Es la misma base de
 
 Todo por variables, para que CI apunte a lo suyo sin tocar código:
 
-| Variable                              | Por defecto | Para qué                                   |
-| ------------------------------------- | ----------- | ------------------------------------------ |
-| `DB_HOST`                             | `localhost` | `db` dentro de compose                     |
-| `DB_PORT`                             | `5434`      | `5432` dentro de compose                   |
-| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm`       |                                            |
-| `DOMAIN_SUFFIX`                       | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
-| `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL. Vale también en `swift test` |
-| `HTTP_TRACE`                          | apagado     | `1` vuelca los cuerpos HTTP (§2.4). Solo en `.development`/`.testing` |
+| Variable                              | Por defecto | Para qué                                                                               |
+| ------------------------------------- | ----------- | -------------------------------------------------------------------------------------- |
+| `DB_HOST`                             | `localhost` | `db` dentro de compose                                                                 |
+| `DB_PORT`                             | `5434`      | `5432` dentro de compose                                                               |
+| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm`       |                                                                                        |
+| `DOMAIN_SUFFIX`                       | `localhost` | El sufijo que se recorta del `Host` (§6.1)                                             |
+| `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL. Vale también en `swift test`                |
+| `HTTP_TRACE`                          | apagado     | `1` vuelca los cuerpos HTTP (§2.4). Solo en `.development`/`.testing`                  |
 | `REQUIRE_DB`                          | apagado     | `1` hace que los tests de BD **fallen** en vez de omitirse (§5.2). `CI` la activa sola |
-| `KEEP_TEST_DATA`                      | apagado     | `1` conserva los *schemas* de test para inspeccionarlos (§5.2) |
+| `KEEP_TEST_DATA` | apagado | `1` conserva los *schemas* de test para inspeccionarlos (§5.2). **Solo la mira `swift test`**: en un `swift run Run …` no hace nada |
 
 ```sh
 LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
@@ -535,6 +543,16 @@ swift run Run migrate-tenants -t atleti     # solo a uno
 swift run Run migrate-tenants --revert      # revierte
 swift run Run --help
 ```
+
+> **«TODOS los clubes» son los de `tfm`, y `tfm_test` no existe para estos comandos.** Es la confusión
+> natural y conviene atajarla: `swift run Run …` trabaja **siempre** sobre tu base manual (§3.1), así que
+> `migrate-tenants` recorre lo que haya en `tfm.public.tenants` — si solo diste de alta `atleti`, la
+> respuesta correcta es `1 tenant(s) procesados`, y no falta ninguno.
+>
+> Los tenants de los tests viven en **otra base**, `tfm_test`, los crean los propios tests —**uno por test**,
+> con el *slug* diciendo qué prueban: `season-uq-label`, `comp-cascade`, `scope-a`— y los borran al terminar.
+> Ni `migrate-tenants` los ve, ni `KEEP_TEST_DATA=1` cambia nada al ejecutarlo, porque **esa variable solo la
+> lee `swift test`**. Para verlos: `KEEP_TEST_DATA=1 swift test`, y luego TablePlus sobre `tfm_test`.
 
 **El alta de un club es un comando, no un endpoint** (`D-23`, §6.3). Por eso `/club` no tiene `POST` ni
 `DELETE`. Y por eso el comando hace **cuatro** cosas, no tres:
