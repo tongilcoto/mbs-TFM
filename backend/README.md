@@ -25,7 +25,7 @@ con `curl`. Lo que hay:
 
 | Fase   | Qué añadió                                                                                                   | Cómo se **prueba**                                                              | Cómo se **mira**                                                          |
 | ------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba           | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker            | `curl` (§4)                                                               |
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba           | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker  | `curl` (§4)                                                               |
 | **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker    | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                  | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red** | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
 
