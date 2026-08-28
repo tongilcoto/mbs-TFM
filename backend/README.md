@@ -10,13 +10,28 @@
 
 ## 0. Qué hay montado ahora mismo
 
-Fase **F0** del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md): el esqueleto que camina.
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1** y **F2**.
+**102 tests.**
 
-| Operación | Estado |
+| Operación HTTP | Estado |
 |---|---|
 | `GET /v1/club` | ✅ |
 | `PATCH /v1/club` | ✅ |
 | Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
+
+**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1 ni F2 tienen superficie HTTP,
+así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber qué se puede tocar
+con `curl`. Lo que hay:
+
+| Fase | Qué añadió | Cómo se mira |
+|---|---|---|
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba | `curl` (§4) |
+| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift run Run migrate-tenants`, y TablePlus (§3) |
+| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales. **Sin red y sin BD** | `swift test --filter FederationTests` (§5) |
+
+O sea: dos de las tres fases entregadas **no se pueden probar con `curl`**, y la forma de mirarlas es la base
+de datos y los tests. Es deliberado — el plan construye la ingesta antes que su superficie de alta, que es
+**F10**.
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de abajo es dónde corre **la API**.
 
@@ -310,6 +325,7 @@ swift test --filter APITests                # nivel 4 — necesita Docker
 REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omitir
 KEEP_TEST_DATA=1 swift test                 # conserva los schemas para inspeccionarlos
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
+swift test --filter FederationTests         # nivel 1 — federación: sin red y sin Docker
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
@@ -330,7 +346,7 @@ que hace falta para leerla:
   (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
   falla uno de nueve.
 
-El paralelo no sobra —los 31 tests bajan de 0,85 s a 0,25 s, y correrlos concurrentes **es** lo que destapó
+El paralelo no sobra —los 102 tests bajan de **2,8 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
 las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
@@ -543,7 +559,7 @@ La URL del club se le entrega al firmar el contrato (§9.10).
 
 ## 7. El *spec* y el código generado
 
-El contrato está en `Sources/APIContract/openapi.yaml` — **6.100 líneas y las 20 entidades completas**. Es la
+El contrato está en `Sources/APIContract/openapi.yaml` — **6.184 líneas y las 20 entidades completas**. Es la
 **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` que el servidor conforma
 (`D-65`).
 
@@ -566,6 +582,10 @@ filter:
 
 Añades ahí la operación → compilas → **no compila**, porque falta su método → la implementas. Ese "no
 compila" es la garantía entera de *design-first*.
+
+> **Que esa lista siga teniendo dos entradas después de tres fases es información, no abandono.** F1 y F2
+> entregaron dominio, persistencia y un adaptador de federación, y ninguna de las tres cosas pasa por HTTP.
+> La primera operación nueva la traerá **F10** (`D-67`).
 
 ### 7.2 Dos cosas que sorprenden
 
@@ -600,7 +620,12 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (generado del
             ├─► Persistence ────► Application
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de NADA)
+
+            Federation ────────► Application    (adaptadores RFFM / FCF)
 ```
+
+`Federation` **todavía no cuelga de `App`**: su primer llamante es el job de ingesta (F6) y el `/preview`
+(F10). Hoy lo mantiene en el grafo de *build* su *target* de tests.
 
 **El grafo de `Package.swift` *es* la Regla de dependencia** (§2.2), no una convención de carpetas.
 Compruébalo tú mismo:
