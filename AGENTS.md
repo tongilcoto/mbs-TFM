@@ -218,6 +218,12 @@ docker compose down -v
   que alguien decida su código HTTP.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
+- **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
+  el test primero compra la presión de diseño, pero un `cannot find 'X' in scope` **no** demuestra que la
+  aserción cace nada, porque no llegó a ejecutarse. Antes de implementar, la función existe con su firma
+  definitiva y **devuelve mal a propósito** — un valor válido pero equivocado, nunca `fatalError()`, que
+  trapea y se lleva la ejecución entera. Y una regla por ciclo: con un *suite* entero el esqueleto no dice
+  nada. Es lo que F2 se saltó (Plan §4.3).
 
 **Si abres el proyecto en Xcode y ves `Cannot find type 'Components' in scope`, no está roto.** `Components`
 y el resto del contrato **no existen en disco hasta que el plugin corre** (`D-69`), así que el índice de Xcode
@@ -241,7 +247,10 @@ Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-0
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
 Con F0, F1 y F2 entregadas, lo inmediato es **F3: la política de *upsert*** —descriptivo, volátil, propiedad
-y emparejamiento (§3.7, `D-56`)—, que es **unit puro y cero I/O**. Llega con un deber apuntado: **la
+y emparejamiento (§3.7, `D-56`)—, que es **unit puro y cero I/O**. Es además donde el bucle de Plan §5.1 se
+aplica en serio: si la función es `merge(existing:incoming:)`, el esqueleto es **devolver `incoming`** —pisar
+siempre, la implementación ingenua que `D-56` existe para prohibir—, y contra él cada test de la fase falla
+por su aserción y con el dato delante. Llega con un deber apuntado: **la
 justificación de `D-56` hay que rehacerla**, porque su ejemplo estrella —que la FCF borra la fecha al jugarse
 el partido— es falso desde el rediseño de esa web (`D-74`). La regla puede seguir siendo buena; su argumento
 no se da por bueno.

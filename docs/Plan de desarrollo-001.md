@@ -279,11 +279,24 @@ al pie de la letra, pero **la rama de "partido jugado" no la ejercita ningún da
 consecuencia práctica: **F5 necesita un volcado de temporada en curso** para que la ingesta de resultados no
 se estrene en producción.
 
-**F2 sí se escribió en TDD**, al contrario que F1, y se nota en una cosa concreta: los cuatro *suites*
-empezaron sin compilar. Pero conviene ser honesto sobre el límite de la técnica aquí — **las aserciones del
-parser salen de haber leído el volcado**, así que son *tests de caracterización*: fijan lo que la fuente hace
-hoy, no lo que debería hacer. Es lo correcto para código contra un sistema de terceros, y es justo por eso que
-el anexo fechado y la marca `[C]` son parte del método y no decoración.
+**F2 sí se escribió en TDD**, al contrario que F1: los cuatro *suites* se escribieron antes que su
+implementación y los cuatro se vieron fallar. Pero **fue test-first, no el bucle de §5 entero**, y conviene
+decir en qué se quedó corto, que son tres cosas y ninguna es la misma:
+
+1. **El rojo fue de compilación, no de aserción.** `cannot find 'RFFMValue' in scope`, cuatro veces. Eso compra
+   la presión de diseño entera y **nada** de la garantía de que la aserción cace el fallo que dice cazar. Lo
+   que faltó —un minuto de trabajo— es el **esqueleto**: la implementación falsa que compila y devuelve mal, de
+   modo que el rojo traiga el valor delante. Está explicado en §5.1, que nació de aquí.
+2. **La granularidad fue de *suite*, no de regla.** §5 pide *"una regla: rojo → verde → refactor"* y aquí
+   fueron cuatro ciclos de suite entero → unidad entera. Es independiente de lo anterior, y además es lo que
+   habría hecho útil el esqueleto: fingiendo doce respuestas a la vez, un esqueleto no dice nada.
+3. **Las aserciones del parser salen de haber leído el volcado**, así que son *tests de caracterización*: fijan
+   lo que la fuente hace hoy, no lo que debería hacer. Esto **no** es un desvío del método —es lo correcto
+   contra un sistema de terceros, donde la alternativa sería inventarse la forma del JSON— y es justo por eso
+   que el anexo fechado y la marca `[C]` son parte del método y no decoración.
+
+Lo que tapó el hueco del punto 1 fue la comprobación de mutación, conseguida al final en vez de por el camino.
+Funcionó; pero es la red, no el procedimiento.
 
 **La comprobación de mutación encontró algo que los tests verdes no podían.** Once mutaciones, **once
 detectadas** —y con especificidad: cambiar `codjornada` por `jornada` tumba el test de la numeración y ningún
@@ -325,6 +338,59 @@ Por fase, en este orden:
 **Los tests citan el diseño.** Cada test lleva en su nombre la referencia `§x` o `D-nn` que lo exige, de modo
 que se pueda trazar del test a la línea del LLD que lo justifica. Es lo que permite revisar una fase
 leyendo los tests en vez del código.
+
+### 5.1 Qué compra cada rojo, y por qué hay que escribir el esqueleto
+
+*Añadido tras F2, que se escribió test-first y aun así se dejó la mitad del ciclo por el camino.*
+
+Escribir el test antes produce **dos** cosas, y **no se compran a la vez**:
+
+| Producto | Qué lo compra |
+|---|---|
+| **Presión de diseño** — la interfaz queda decidida antes que la implementación | escribir el test primero. **Da igual la forma del rojo** |
+| **Aserción verificada** — *esta comprobación caza este fallo* | que el test **se ejecute** y falle **por su aserción** |
+
+La primera es real y se cobra sola. En F2 se ve en decisiones que se tomaron **en el fichero de test** y que
+la implementación después obedeció: que `RFFMValue.score` devuelva `Int?` y no un centinela —que es la
+frontera de [D-56] expresada en una firma—, que `kickoff` reciba un `String?` porque la muestra 2 de
+[Anexo RFFM §F.2] no trae el campo, o que `federationClubID` **no lance** mientras sus vecinas sí, que es la
+regla de degradación de §3.7 hecha tipo.
+
+**La segunda no la compra un rojo de compilación.** Y en Swift, con un tipo que todavía no existe, el rojo por
+defecto es ése: `cannot find 'X' in scope`. Demuestra que el código no estaba; **no** demuestra que la
+aserción sirva, porque nunca llegó a ejecutarse. Un `#expect` mal escrito da exactamente el mismo rojo que uno
+bien escrito.
+
+> **El esqueleto es lo que convierte un rojo en el otro, y cuesta un minuto.**
+>
+> **Esqueleto** aquí **no** es la lista de tests —cuidado con la palabra, que en §3 significa otra cosa— ni un
+> diseño previo. Es la **implementación falsa**: el tipo y la función existen, con su nombre y su firma
+> definitivos, compilan, y devuelven a propósito **la respuesta equivocada**. Entonces el rojo es
+> `Expectation failed: 3 == 0`, con el valor delante.
+>
+> **Que devuelva un valor válido pero mal, nunca `fatalError()`:** eso *trapea* y mata el proceso, así que no
+> da una aserción fallida sino una caída que se lleva por delante el resto de la ejecución.
+
+**Y el esqueleto solo se paga si la granularidad es de una regla.** Son dos cosas independientes, y en F2
+faltaron las dos en distinto grado: se escribieron *suites* enteros contra unidades enteras, en vez de una
+regla → su test → su esqueleto → verde. Con un *suite* entero, el esqueleto tendría que fingir doce respuestas
+a la vez y deja de decir nada.
+
+Así que el bucle interior, completo:
+
+```
+una regla → su test → su esqueleto (rojo de aserción) → implementación (verde) → refactor
+```
+
+**Dónde se paga más caro saltárselo: F3.** Es la política de *upsert* de [D-56], donde equivocarse **destruye
+datos que no vuelven**, y sus aserciones son sutiles —*"vacío no sobrescribe"* y *"vacío sobrescribe"* son dos
+líneas casi idénticas—. El esqueleto se escribe solo: si la función es `merge(existing:incoming:)`, el
+esqueleto es **devolver `incoming`**, que es exactamente la implementación ingenua que la decisión existe para
+prohibir. Contra ese esqueleto, cada test de la fase falla por su aserción y con el dato a la vista.
+
+**Lo que esto no sustituye.** La comprobación de mutación (§4.2) compra la misma garantía **a posteriori**, y
+sigue haciendo falta: en F2 encontró algo que ningún rojo de aserción habría encontrado — código defensivo que
+no defendía nada (§4.3). El esqueleto la adelanta y la reparte por el camino; no la reemplaza.
 
 ---
 
