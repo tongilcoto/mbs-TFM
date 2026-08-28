@@ -1,0 +1,31 @@
+# Configuración del plugin de generación (D-65, §5.5).
+#
+# El spec vivía en `backend/openapi/openapi.yaml`; se movió aquí porque es donde
+# el plugin de swift-openapi-generator lo espera —junto a este fichero, dentro
+# del target que lo consume—. Cierra §9.1 del LLD.
+
+generate:
+  - types       # DTOs de `components/schemas`
+  - server      # `APIProtocol`: un método por operationId, que el servidor conforma
+
+accessModifier: public
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EL FILTRO ES EL TRINQUETE DEL ALCANCE.
+#
+# `APIProtocol` declara un método por operación generada, y conformarlo obliga a
+# implementarlas TODAS. Con las ~100 operaciones del spec completo, la fase F0
+# tendría que escribir 99 stubs que lanzan "no implementado" — ruido que además
+# apaga la garantía de D-65, porque un stub compila igual de bien que un handler.
+#
+# En su lugar se genera **solo lo implementado**. Cada fase del plan de
+# desarrollo añade aquí sus operaciones, y el compilador vuelve a exigir que
+# estén todas. La lista de abajo es, literalmente, el alcance entregado.
+#
+# El spec NO se toca: sigue completo y sigue siendo la fuente de verdad. Esto
+# solo elige qué parte de él se traduce a Swift hoy.
+# ─────────────────────────────────────────────────────────────────────────────
+filter:
+  operations:
+    - getClub     # F0 — el esqueleto que camina
+    - updateClub  # F0 — el camino de escritura, para tener con qué practicar

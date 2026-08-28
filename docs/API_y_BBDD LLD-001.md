@@ -1586,7 +1586,7 @@ Los DTOs **conforman `Content`** (cruzan HTTP) y están **desacoplados** tanto d
 del `…Record` de Fluent (§4.4); el Controller mapea entre ellos.
 
 > **El detalle campo a campo vive en el *spec*, no aquí** ([D-25]). Cada DTO de esta sección tiene su
-> esquema en [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml), que es la **fuente de
+> esquema en [`backend/Sources/APIContract/openapi.yaml`](../backend/Sources/APIContract/openapi.yaml), que es la **fuente de
 > verdad**: duplicarlo en prosa garantizaba que los dos se separasen. Aquí quedan las **convenciones** que
 > el spec no puede expresar por sí solo.
 
@@ -1835,18 +1835,22 @@ struct SeasonResponse: Content {
 
 ### 5.5 OpenAPI
 
-- **El *spec* existe y se mantiene al día: [`backend/openapi/openapi.yaml`](../backend/openapi/openapi.yaml)**
+- **El *spec* existe y se mantiene al día: [`backend/Sources/APIContract/openapi.yaml`](../backend/Sources/APIContract/openapi.yaml)**
   (OpenAPI **3.1**). Cubre **las 20 entidades de §3.2**, en paralelo a §5.1: el contrato está completo. Se
-  valida con `npx @redocly/cli lint backend/openapi/openapi.yaml`.
+  valida con `npx @redocly/cli lint backend/Sources/APIContract/openapi.yaml`.
 - **Escribir el *spec* es parte del diseño, no un volcado posterior:** obliga a concretar lo que en prosa
   queda ambiguo (opcional vs anulable, qué es `readOnly`, qué códigos devuelve cada operación). Sirve de
   *harness* del diseño mientras aún no hay código.
 - **Enfoque: *design-first*** ([D-65], §9.1 cerrada). El *spec* es la **fuente de verdad**: un plugin de
   build de `swift-openapi-generator` + `vapor/swift-openapi-vapor` genera los tipos y un **`APIProtocol` con
   un método por `operationId`** que el servidor conforma, de modo que **el compilador detecta la divergencia**
-  entre contrato e implementación. Consecuencias operativas: el fichero se mueve o enlaza dentro del *target*
-  SwiftPM que lo consuma (junto a `openapi-generator-config.yaml`), y las cifras de *build* de §8.2 hay que
-  **remedirlas** con el plugin dentro.
+  entre contrato e implementación. Las dos consecuencias operativas que esto tenía **ya están resueltas**: el
+  fichero **se movió** al *target* que lo consume, junto a `openapi-generator-config.yaml` (cierra §9.1), y
+  las cifras de *build* **están remedidas** con el plugin dentro (§8.2).
+- **Se genera *filtrado*, no entero** ([D-69]). `APIProtocol` obliga a implementar **todas** las operaciones
+  generadas, así que el `filter` del fichero de configuración lista **solo las implementadas**: esa lista
+  **es** el alcance entregado, y cada fase la amplía. El *spec* no se toca — sigue completo y sigue siendo
+  la fuente de verdad ([D-25]).
 - **El generador emite tipos, no validación.** Ninguna palabra clave de validación de JSON Schema está
   soportada — `pattern`, `minLength`/`maxLength`, `minimum`/`maximum`, `maxItems`, `minProperties` — ni
   tampoco `readOnly`, `default`, `tags` ni `security`. Lo que **sí** aplica: `required`, `enum`, `$ref`,
@@ -2261,10 +2265,19 @@ habilita una **pirámide** con base ancha y barata:
 
 | Nivel | Qué prueba | Herramienta | Capa (§2.2) | I/O |
 |-------|-----------|-------------|-------------|-----|
-| **Unit de dominio** | Invariantes de entidades/VO y **reglas** (tramos de sanción §3.6, disponibilidad por ausencias, invariantes de `Match`/`Goal`) | XCTest puro | Dominio (§4.1) | **cero** |
-| **Unit de casos de uso** | Orquestación de los *interactors* con **puertos falseados** (repos/clientes en memoria) | XCTest + dobles de los puertos (§4.3) | Aplicación | **cero** |
-| **Integración de adaptadores** | Mapeo `Record ↔ Entidad`, consultas, migraciones, enrutado `search_path`, **RLS** | XCTVapor + **Postgres real** (contenedor efímero) | Adaptador secundario (§4.4) + §6/§7.4 | real |
-| **E2E / contrato** | Rutas HTTP, DTOs, auth, códigos de error | XCTVapor `app.test(...)` | Adaptador primario (§5) | real |
+| **Unit de dominio** | Invariantes de entidades/VO y **reglas** (tramos de sanción §3.6, disponibilidad por ausencias, invariantes de `Match`/`Goal`) | `swift-testing` puro ([D-70]) | Dominio (§4.1) | **cero** |
+| **Unit de casos de uso** | Orquestación de los *interactors* con **puertos falseados** (repos/clientes en memoria) | `swift-testing` + dobles de los puertos (§4.3) | Aplicación | **cero** |
+| **Integración de adaptadores** | Mapeo `Record ↔ Entidad`, consultas, migraciones, enrutado `search_path`, **RLS** | `VaporTesting` + **Postgres real** (contenedor efímero) | Adaptador secundario (§4.4) + §6/§7.4 | real |
+| **E2E / contrato** | Rutas HTTP, DTOs, auth, códigos de error | `VaporTesting` `app.testing().test(...)` | Adaptador primario (§5) | real |
+
+> **El nivel lo fija la columna de I/O, no la de capa.** La correspondencia entre las dos es la consecuencia
+> normal de §2.2 —el Dominio no hace I/O y los adaptadores sí—, pero no es la definición, y al implementar F0
+> apareció el primer caso que las separa: `HostSlugExtractor` (§6.1) es **lógica pura viviendo en
+> infraestructura**. Recortar un sufijo de un `Host` no toca red ni BD, así que su test pertenece al **nivel
+> rápido** aunque su código esté en la capa de fuera.
+>
+> Es la regla general para lo que venga: **si un componente no hace I/O, se prueba sin él, esté donde esté**.
+> Meterlo en integración porque "es infraestructura" solo lo haría más lento sin probar nada más.
 
 Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos `Clock`/`UUIDProvider` de
 §4.3 hacen el tiempo y los ids inyectables); los dos superiores, **pocos y selectivos**.
@@ -2282,20 +2295,39 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 - **Entornos** (dev/staging/prod) y datos semilla.
 - **CI/CD** — *build* en CI/builder remoto, migraciones, despliegue; ejecución de la pirámide de §8.1 en CI
   (unit siempre; integración con Postgres de servicio).
-  - **La RAM del *build* deja de ser un riesgo: está medida.** Pico de memoria **anónima** de
-    `swift build -c release --static-swift-stdlib`: **1,54 GiB** — por debajo del suelo de 2–4 GB que
-    estimaba el ADR (Anexo D.2), y breve (p50 del build: 0,09 GiB). **No hace falta *runner* especial ni
-    *builder* remoto por motivos de memoria.** Detalle y metodología en el
-    [spike de tenancy](../spikes/tenancy/README.md).
+  - **La RAM del *build* deja de ser un riesgo: está medida, y remedida con el plugin dentro.** Pico de
+    memoria **anónima** de `swift build -c release --static-swift-stdlib`, misma metodología en los dos
+    pases (muestreo a 0,5 s del campo `anon` del cgroup; ver
+    [la lección](../docs/lessonsToLearn/Medir%20la%20RAM%20de%20un%20build%20en%20Docker.md)):
+
+    | | Spike (1 entidad, **sin** generador) | **F0** (7 *targets* por capa, **con** el plugin) |
+    |---|---|---|
+    | Pico `anon` | 1,54 GiB | **1,76 GiB** |
+    | p50 | 0,09 GiB | **0,45 GiB** |
+    | p90 | 0,72 GiB | **1,12 GiB** |
+    | Paso de compilación | ~175 s | **185 s** |
+
+    **El pico apenas se movió (+14 %) y sigue por debajo del suelo de 2–4 GB que estimaba el ADR (Anexo
+    D.2): no hace falta *runner* especial ni *builder* remoto por motivos de memoria.** Lo que sí cambió
+    de forma es el **p50, que se multiplica por cinco**: con capas y generador, el *build* ya no pasa la
+    mayor parte del tiempo en el valle. Es una diferencia de perfil, no de techo.
+
+    *Aviso de alcance, que es lo que [la lección 4](../docs/lessonsToLearn/Medir%20la%20RAM%20de%20un%20build%20en%20Docker.md)
+    exige de cualquier cifra así:* entre los dos pases cambió también la *toolchain* (`swift:6.0-jammy` →
+    `swift:6.2-noble`), así que **no todo el delta es atribuible al plugin**. Y el filtro de [D-69] hace que
+    el coste del generador escale con el **alcance implementado**, no con el tamaño del *spec*: hoy son 543
+    líneas generadas de las ~20.000 posibles, de modo que **esta medida volverá a subir** conforme avancen
+    las fases. Los dos pases se tomaron en **10 núcleos**; `swift build` paraleliza por núcleos, así que un
+    *runner* con menos pedirá menos.
   - **Lo que sí hay que vigilar en CI es el tiempo**, no la memoria: ~175 s solo el paso de compilación, sin
     caché y con las capas base ya presentes. En un *runner* limpio se suman la descarga de `swift:6.0-jammy`
     y la resolución de dependencias, así que **la caché de capas es la palanca**, no el tamaño de la máquina.
   - **Ojo al extrapolar la cifra de RAM:** `swift build` paraleliza por núcleos, así que **más CPUs = más
     pico**. La medida se tomó en 10 núcleos; un *runner* con menos pedirá menos. Y es un **suelo**: el spike
     compila una entidad y cero capas (§2.2), así que conviene repetirla cuando el backend tenga forma.
-  - **Y hay un motivo concreto para repetirla:** *design-first* ([D-65]) mete un **plugin de generación en
-    tiempo de compilación** que produce Swift para las 20 entidades del *spec*. Es exactamente el tipo de
-    cambio que levanta el suelo, así que la medición se rehace **con el plugin dentro**, no antes.
+  - **La repetición que [D-65] pedía ya está hecha** (tabla de arriba): el plugin de generación en tiempo
+    de compilación levantó el suelo mucho menos de lo temido. Lo que queda por vigilar no es el pico sino
+    su **crecimiento por fase**, porque [D-69] ata el coste del generador al alcance implementado.
 
 > Resto pendiente.
 
@@ -2306,8 +2338,10 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 1. ~~Enfoque OpenAPI definitivo (design-first vs code-first).~~ **Resuelta: *design-first*** con
    `swift-openapi-generator` + `vapor/swift-openapi-vapor` ([D-65], §5.5). Se conserva el número para no
    romper las referencias `§9.n`. Lo que la decisión **deja** abierto no es una cuestión de diseño sino
-   de montaje: dónde vive físicamente el *spec* dentro del *target* SwiftPM y cuánto sube el *build*
-   con el plugin dentro (§8.2).
+   de montaje. **También resuelto, al montar F0:** el *spec* vive en
+   `backend/Sources/APIContract/openapi.yaml`, junto a su `openapi-generator-config.yaml`, y el *build*
+   subió mucho menos de lo temido — pico de 1,54 → 1,76 GiB (§8.2). De la implementación salió además una
+   decisión que esta cuestión no anticipaba: **se genera filtrado** ([D-69]).
 2. Forma exacta del tier dedicado (proyecto Supabase vs despliegue completo) y su provisión.
 3. Estrategia de automatización de migraciones por tenant — **estrechada**. El mecanismo y la idempotencia
    por club están resueltos y comprobados (§4.7, §6.4): registro dinámico de `DatabaseID`, `_fluent_migrations`
@@ -2336,7 +2370,25 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    identidad (§3.2), así que hereda literalmente el problema de §9.8: cada verano hay que rehacer los
    cargos. Lo que se decida allí aplica aquí, y conviene resolverlas **juntas** — son la misma pregunta
    sobre dos tablas.
-10. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
+10. ~~Cómo llega un usuario a *su* subdominio.~~ **Resuelta: la URL se entrega al club a la firma del
+    contrato**, como parte de la relación con el proveedor. No hace falta descubridor en el ápice, y con él
+    **desaparece la única superficie no autenticada que habría enumerado tenants** — que era el motivo por el
+    que esta cuestión no era gratis.
+
+    Encaja con [D-23] y §6.3: el alta de un club **es provisión**, no una operación de esta API. La URL es un
+    entregable de esa provisión, igual que el *schema*.
+
+    Tres consecuencias que sí hay que respetar:
+
+    - **El `slug` pasa a ser contractual.** §6.1 ya lo daba por "público y, en la práctica, inmutable";
+      ahora está escrito en un contrato. Lo elige el proveedor al aprovisionar —contrastándolo con la lista
+      de nombres reservados (§6.1)—, y **cambiarlo es renegociar**, no un `PATCH`.
+    - **El correo de invitación tiene que llevar URL absoluta y cualificada por tenant**
+      (`POST /v1/staff-members/{id}/invite`, §5.1). Es el único camino por el que entra alguien que **no**
+      estuvo en la firma: un enlace relativo, o al ápice, lo dejaría sin saber a qué subdominio ir.
+    - **El ápice sigue necesitando existir** como SAN del certificado *wildcard* (§6.1), pero ya no tiene
+      que servir lógica de producto. Lo que ponga ahí el proveedor es indiferente al diseño.
+11. **Qué ve un jugador o un tutor si algún día tienen cuenta.** §7 asume que las apps móviles son de solo
     lectura y que basta con pertenecer al club. Un jugador —o el tutor de un menor— viendo la ficha, las
     ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
     RGPD que no se han diseñado. Hoy no bloquea porque las cuentas son de *staff* (ADR, Anexo C.4).

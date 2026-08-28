@@ -302,6 +302,23 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: |
+            El cuerpo está bien formado y bien tipado, pero **incumple una regla**: `name` o
+            `shortName` vacíos o solo con espacios (`minLength: 1`).
+
+            **No es un 400.** El 400 es para lo que no se puede ni decodificar, o para el cuerpo
+            sin ningún campo (`minProperties: 1`). Aquí el JSON es válido y el tipo correcto; lo
+            que falla es el **valor**, y quien lo rechaza es el *Value Object* del Dominio
+            (§5.5), no el adaptador — de modo que la ruta de ingesta, que no pasa por este
+            contrato, queda sujeta a la misma regla.
+
+            El `code` del *Problem* es `INVALID_VALUE` y el `detail` nombra el campo, para que la
+            UI pueda señalarlo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   # ──────────────────────────── Seasons (§5.1) ────────────────────────────
   /seasons:
