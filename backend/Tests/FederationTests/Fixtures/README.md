@@ -5,9 +5,17 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 
 ## Son copias, y hay que saberlo
 
-| Fichero | Copia byte a byte de |
-|---|---|
-| `rffm-calendario.txt` | `docs/Federation APIs examples/RFFM-calendario-next_data.txt` |
+| Fichero | Copia byte a byte de | Qué contiene |
+|---|---|---|
+| `RFFM-calendario-temporada-sin-jugar.html` | `docs/Federation APIs examples/` + el mismo nombre | El calendario de PREFERENTE AFICIONADO Grupo 1, temporada 2026-27: 34 jornadas, 306 partidos |
+
+**El nombre dice las dos cosas que hay que saber antes de usarlo.** Es `.html`
+—no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
+dentro de un `<script id="__NEXT_DATA__">` ([Anexo RFFM §F.7]); y lleva
+`sin-jugar` porque la temporada **no ha arrancado**: los 306 partidos vienen sin
+marcador y sin hora, así que **esta muestra no ejercita la rama de "partido
+jugado"**. Para eso hace falta un volcado de temporada en curso, que F5 necesita
+y todavía no tenemos (Plan §4.3).
 
 **El original vive en `docs/`, que es donde está la evidencia** sobre la que se
 escriben los anexos de federación. Aquí hay una copia porque **SwiftPM solo
@@ -20,14 +28,14 @@ conviene tener dos criterios.
 los dos sitios:
 
 ```sh
-cp "docs/Federation APIs examples/RFFM-calendario-next_data.txt" \
-   backend/Tests/FederationTests/Fixtures/rffm-calendario.txt
+cp "docs/Federation APIs examples/RFFM-calendario-temporada-sin-jugar.html" \
+   "backend/Tests/FederationTests/Fixtures/RFFM-calendario-temporada-sin-jugar.html"
 diff -q  # y comprobar que siguen idénticos
 ```
 
 ## No intentes leerlos en Xcode
 
-`rffm-calendario.txt` son **379 KB en una sola línea, sin un solo salto** — es la
+`RFFM-calendario-temporada-sin-jugar.html` son **379 KB en una sola línea, sin un solo salto** — es la
 respuesta HTTP tal cual, y así la manda el servidor. El resaltador de Xcode se
 rinde con líneas de ese tamaño y deja el texto sin estilo, que **en modo oscuro es
 invisible**. No está corrupto: está sin colorear.
@@ -38,7 +46,7 @@ Para mirarlo, desde la raíz del repositorio:
 # el JSON de dentro del __NEXT_DATA__, indentado
 python3 -c "
 import json
-raw = open('backend/Tests/FederationTests/Fixtures/rffm-calendario.txt', encoding='utf-8').read()
+raw = open('backend/Tests/FederationTests/Fixtures/RFFM-calendario-temporada-sin-jugar.html', encoding='utf-8').read()
 data, _ = json.JSONDecoder().raw_decode(raw[raw.find('{'):])
 print(json.dumps(data['props']['pageProps']['calendar'], ensure_ascii=False, indent=2))
 " | less

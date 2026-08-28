@@ -15,9 +15,16 @@ struct RFFMCalendarParserTests {
     /// El volcado del 2026-08-28:
     /// `temporada=22&tipojuego=1&competicion=26737701&grupo=26737702`.
     /// PREFERENTE AFICIONADO, Grupo 1 — **34 jornadas, 18 equipos, 306 partidos.**
+    ///
+    /// **`.html` y no `.txt` porque es HTML**: la RFFM sirve el calendario como
+    /// página, con el JSON dentro de un `__NEXT_DATA__` ([Anexo RFFM §F.7]). Y
+    /// **`sin-jugar` va en el nombre porque es la limitación de esta muestra**: la
+    /// temporada no ha arrancado, así que los 306 partidos llegan sin marcador y
+    /// sin hora. La rama de "partido jugado" no la ejercita nadie hasta F5.
     static let fixture: String = {
         let url = Bundle.module.url(
-            forResource: "rffm-calendario", withExtension: "txt", subdirectory: "Fixtures"
+            forResource: "RFFM-calendario-temporada-sin-jugar", withExtension: "html",
+            subdirectory: "Fixtures"
         )!
         return try! String(contentsOf: url, encoding: .utf8)
     }()

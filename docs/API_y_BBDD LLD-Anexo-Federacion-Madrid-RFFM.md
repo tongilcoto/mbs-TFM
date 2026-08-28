@@ -669,7 +669,7 @@ El `[I]` de arriba ya está resuelto: se volcaron las **30 competiciones** de
 
 §F.1 daba los parámetros y §F.2 el objeto de partido, pero **el sobre que los envuelve no estaba descrito**, y
 es lo que necesita quien escriba el parser. Volcado completo del 2026-08-28 en
-[`docs/Federation APIs examples/RFFM-calendario-next_data.txt`](./Federation%20APIs%20examples/). **[C]**
+[`docs/Federation APIs examples/RFFM-calendario-temporada-sin-jugar.html`](./Federation%20APIs%20examples/). **[C]**
 
 ```
 GET https://www.rffm.es/competicion/calendario?temporada=22&tipojuego=1&competicion=26737701&grupo=26737702
