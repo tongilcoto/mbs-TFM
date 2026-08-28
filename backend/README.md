@@ -23,15 +23,24 @@ Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregada
 así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber qué se puede tocar
 con `curl`. Lo que hay:
 
-| Fase | Qué añadió | Cómo se **prueba** | Cómo se **mira** |
-|---|---|---|---|
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba | `swift test --filter 'Club\|Tenan'` → **29 tests** · necesita Docker | `curl` (§4) |
-| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
-| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red** | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4) |
+| Fase   | Qué añadió                                                                                                   | Cómo se **prueba**                                                              | Cómo se **mira**                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba           | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker            | `curl` (§4)                                                               |
+| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker    | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
+| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                  | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red** | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
 
-*(Las cifras son reales: cada filtro se ha ejecutado. `--filter` es una **expresión regular sobre el nombre
-del test**, no un nombre de *target*, así que `Season` coge también `SeasonLabel`, y `Federation` a secas
-cogería además el catálogo que vive en `DomainTests`.)*
+> **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
+> ellas, `zsh` se come el `|` como una tubería.
+>
+> `--filter` es una **expresión regular sobre el nombre del test**, no un nombre de *target*, y eso tiene dos
+> consecuencias que sorprenden. Una: arrastra tests sueltos de *suites* que no esperabas —el filtro de F0 se
+> lleva un par de `SeasonPersistenceTests` porque llevan la palabra "tenant" en el nombre—. Y otra: hay que
+> escribir **las dos** raíces, `Tenancy` y `Tenant`, porque son *suites* distintas; con solo una se pierden
+> tests. Por lo mismo, `Season` coge también `SeasonLabel`, y `Federation` a secas se llevaría de propina el
+> catálogo de federaciones, que vive en `DomainTests` (40 en vez de 36).
+>
+> **Son filtros para trabajar, no una partición del proyecto.** Para saber si algo está roto, `swift test` a
+> secas.
 
 **Dos de las tres fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
 construye la ingesta antes que su superficie de alta, que es **F10**. Para F1 lo que se mira es la **base de
