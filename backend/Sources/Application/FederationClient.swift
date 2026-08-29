@@ -1,5 +1,6 @@
 public import struct Foundation.Date
 public import struct Domain.SeasonLabel
+public import struct Domain.WallClockTime
 public import enum Domain.Modality
 
 /// Puerto de salida hacia la API de la federación (§4.3, §5.6).

@@ -10,8 +10,8 @@
 
 ## 0. Qué hay montado ahora mismo
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1** y **F2**.
-**102 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1**, **F2** y
+**F3**. **115 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
@@ -19,15 +19,16 @@ Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregada
 | `PATCH /v1/club` | ✅ |
 | Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
 
-**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1 ni F2 tienen superficie HTTP,
+**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3 tienen superficie HTTP,
 así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber qué se puede tocar
 con `curl`. Lo que hay:
 
-| Fase   | Qué añadió                                                                                                   | Cómo se **prueba**                                                              | Cómo se **mira**                                                          |
-| ------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba           | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker  | `curl` (§4)                                                               |
-| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker    | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
-| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                  | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red** | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
+| Fase   | Qué añadió                                                                                                               | Cómo se **prueba**                                                                                                                     | Cómo se **mira**                                                          |
+| ------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba                       | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker                                                         | `curl` (§4)                                                               |
+| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio             | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker                                                           | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
+| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                              | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                        | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
+| **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía** | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red** | sus tests, y solo sus tests (§5.4)                                        |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
 > ellas, `zsh` se come el `|` como una tubería.
@@ -39,16 +40,28 @@ con `curl`. Lo que hay:
 > tests. Por lo mismo, `Season` coge también `SeasonLabel`, y `Federation` a secas se llevaría de propina el
 > catálogo de federaciones, que vive en `DomainTests` (40 en vez de 36).
 >
+> **El filtro de F3 va por nombre de *suite* justo por eso**, y conviene saber qué pasa si se acorta: el
+> `'Upsert|Kickoff|MatchResult'` que pide el cuerpo devuelve **16 en vez de 13**, porque `--filter` mira
+> también el nombre de la **función** de Swift, no solo el rótulo del `@Test`. Se lleva dos del parser de F2
+> (sus funciones se llaman `kickoff…`) y —lo importante— **uno de Postgres**: `save da de alta y luego
+> actualiza la misma fila`, que por dentro se llama *upsert* y **necesita Docker**. Con el filtro de la
+> tabla, F3 corre sin contenedor.
+>
 > **Son filtros para trabajar, no una partición del proyecto.** Para saber si algo está roto, `swift test` a
 > secas.
 
-**Dos de las tres fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
+**Tres de las cuatro fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
 construye la ingesta antes que su superficie de alta, que es **F10**. Para F1 lo que se mira es la **base de
-datos**; para F2, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
+datos**; para F2 y F3, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
 especificación revisable, no el código"*).
 
-> **F2 no deja rastro en la base de datos, y no es un fallo.** Su fase es *"contra fixtures, **sin persistir
-> nada**"*. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
+> **Ni F2 ni F3 dejan rastro en la base de datos, y no es un fallo.** F2 es *"contra fixtures, **sin
+> persistir nada**"* y F3 es *"unit puro, **cero I/O**"*: cuatro funciones y dos *Value Objects* que ni
+> siquiera saben que existe Postgres. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
+>
+> **Y F3 todavía no tiene llamante**, que es lo que más despista al mirarlo: la ingesta que usará estas
+> reglas —el *merge* de cada entidad— es **F5**, y la cadena que decide *qué fila* se fusiona con qué es
+> **F4**. Hoy lo que las mantiene en el grafo de *build* son sus tests, igual que le pasa a `Federation`.
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de abajo es dónde corre **la API**.
 
@@ -343,6 +356,8 @@ REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omit
 KEEP_TEST_DATA=1 swift test                 # conserva los schemas para inspeccionarlos
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --filter FederationTests         # nivel 1 — federación: sin red y sin Docker
+swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResultTests'
+                                            # nivel 1 — F3: la política de upsert (§0)
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
@@ -363,7 +378,7 @@ que hace falta para leerla:
   (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
   falla uno de nueve.
 
-El paralelo no sobra —los 102 tests bajan de **2,8 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
+El paralelo no sobra —los 115 tests bajan de **2,8 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
 las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
@@ -529,6 +544,26 @@ fase es leer sus tests y comprobar que dicen lo que el diseño dice**, sin neces
 
 Ese nombre afirma tres cosas comprobables contra la documentación: que la regla existe en el *spec*, que el
 generador **no** la aplica, y que por tanto alguien tiene que aplicarla a mano.
+
+**Dónde esto se vuelve imprescindible: F3.** Su política de *upsert* no tiene endpoint ni fila que mirar, así
+que **los tests son literalmente el entregable**. Y hay dos que se leen de dos en dos, porque dicen lo
+contrario con las mismas palabras:
+
+```swift
+@Test("sin marcador, la hora que desaparece devuelve el horario a provisional (D-30)")
+@Test("con marcador, la hora que desaparece se ignora: es pérdida de dato (D-56)")
+```
+
+Es la tabla de `D-56` hecha código: **el mismo campo vacío significa dos cosas** según el partido se haya
+jugado o no. Si al revisar solo se lee uno de los dos, la regla parece incoherente; leídos juntos, es lo que
+impide que una sincronización borre la hora a la que se jugó un partido.
+
+```sh
+swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResultTests' \
+           --no-parallel --disable-xctest
+```
+
+Trece renglones, en orden de fichero, y cada uno con su `§x` o su `D-nn`. Eso **es** la revisión de la fase.
 
 ---
 
