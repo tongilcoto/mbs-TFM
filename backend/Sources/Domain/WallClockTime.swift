@@ -11,6 +11,13 @@
 /// `Europe/Madrid`"*— se aplica cuando alguien componga fecha + hora para
 /// mostrarlas, no aquí: convertir a instante en la ingesta obligaría a decidir qué
 /// pasa en los cambios de hora con un dato que la fuente ni siquiera afirma.
+///
+/// **Vive en el Dominio, y no siempre estuvo aquí.** Nació en Aplicación con el
+/// puerto de F2, que fue quien primero necesitó nombrar una hora suelta. Es un
+/// *Value Object* con invariante —el reloj de 24 h— y §4.1 los pone en el
+/// Dominio; lo que forzó la mudanza es `Kickoff`, que **es** dominio (`D-30`) y
+/// lo lleva dentro. Un segundo tipo idéntico en la otra capa habría sido la
+/// alternativa, y es peor.
 public struct WallClockTime: Hashable, Sendable {
     public let hour: Int
     public let minute: Int

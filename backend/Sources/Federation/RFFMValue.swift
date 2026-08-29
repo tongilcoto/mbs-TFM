@@ -3,7 +3,7 @@ import struct Foundation.Calendar
 import struct Foundation.DateComponents
 import struct Foundation.TimeZone
 import struct Foundation.CharacterSet
-public import struct Application.WallClockTime
+public import struct Domain.WallClockTime
 import enum Application.FederationError
 
 /// Las coerciones campo a campo de la RFFM.

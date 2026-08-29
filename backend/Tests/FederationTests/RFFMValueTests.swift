@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import Application
+import Domain
 @testable import Federation
 
 /// Nivel 1 (§8.1). Cada `@Test` cita la observación del anexo que lo exige: es
