@@ -88,14 +88,14 @@ extension APIHandler {
         }
 
         var seasonID: SeasonID?
-        var competitionID: CompetitionID?
+        var competitionIDs: [CompetitionID]?
         if case .json(let payload) = input.body {
             do {
                 seasonID = try payload.seasonId.map {
                     SeasonID(raw: try Self.uuid($0, field: "seasonId"))
                 }
-                competitionID = try payload.competitionId.map {
-                    CompetitionID(raw: try Self.uuid($0, field: "competitionId"))
+                competitionIDs = try payload.competitionIds.map { list in
+                    try list.map { CompetitionID(raw: try Self.uuid($0, field: "competitionIds")) }
                 }
             } catch let error as InvalidUUID {
                 return .badRequest(.init(body: .application_problem_plus_json(
@@ -105,19 +105,35 @@ extension APIHandler {
             }
         }
 
+        // **`minItems: 1` lo comprueba aquí el adaptador**, porque el generador
+        // lo ignora (`D-65`). Una lista vacía **no significa "todas"**: significa
+        // que el cliente no ha decidido, y adivinar por él sería lanzar el
+        // recorrido entero de un club por una casilla sin marcar.
+        if let competitionIDs, competitionIDs.isEmpty {
+            return .badRequest(.init(body: .application_problem_plus_json(
+                Self.problem(status: 400, code: "EMPTY_SELECTION",
+                             title: "`competitionIds` no puede venir vacío",
+                             detail: "minItems: 1. Para la temporada vigente entera, omítelo."))))
+        }
+
         // **Sin antirrebote** (§5.6): quien pulsa el botón lo pulsa porque quiere
         // ahora, y una guarda silenciosa le diría que ya está sincronizado sin
         // haber ido a mirar.
         let scope = IngestionScope(
-            seasonID: seasonID, competitionID: competitionID, minInterval: nil)
+            seasonID: seasonID, competitionIDs: competitionIDs, minInterval: nil)
 
         let useCase = IngestClubCalendars(
             unitOfWork: unitOfWork, federationClients: federationClients,
             clock: clock, ids: ids)
 
         do {
-            // ── Una competición: se hace aquí y se devuelve (§2.3-c) ─────────
-            if competitionID != nil {
+            // ── Una sola competición: se hace aquí y se devuelve (§2.3-c) ────
+            //
+            // **Lo decide la petición, no los datos.** Con `{}` sobre un club que
+            // solo tiene una competición la respuesta sigue siendo 202: que un
+            // cliente reciba 200 o 202 según cuántos equipos tenga el club sería
+            // una forma de respuesta imposible de programar.
+            if competitionIDs?.count == 1 {
                 let report = try await useCase.execute(scope: scope, actor: actor)
                 switch report.entries.first?.outcome {
                 case .synced(let run):

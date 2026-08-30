@@ -96,6 +96,31 @@ struct TenantTraversalTests {
         return competitionID
     }
 
+    /// Una competición **adicional** en la temporada que ya sembró `seed`.
+    static func seedExtra(
+        _ slug: String, group: String, on app: Application
+    ) async throws -> CompetitionID {
+        let fixture = TenantFixture(app: app, slug: slug, schema: "\(prefix)\(slug)")
+        let competitionID = CompetitionID(raw: UUID())
+        try await fixture.scope { repositories in
+            guard let season = try await repositories.seasons.list(includingArchived: false).first
+            else { throw MissingSeed(slug: slug) }
+            try await repositories.competitions.save(
+                try Competition(
+                    id: competitionID, seasonID: season.id,
+                    modality: .futbol11, gender: .masculino,
+                    federationCompetitionID: "24037550", federationGroupID: group,
+                    ageCategory: .infantil, divisionLabel: "Primera División Autonómica",
+                    groupLabel: "Grupo 2", createdAt: now, updatedAt: now))
+        }
+        return competitionID
+    }
+
+    struct MissingSeed: Error, CustomStringConvertible {
+        let slug: String
+        var description: String { "no hay temporada sembrada en \(slug)" }
+    }
+
     /// Las pasadas registradas en el *schema* de ese club.
     static func runs(_ slug: String, on app: Application) async throws -> [IngestionRun] {
         let fixture = TenantFixture(app: app, slug: slug, schema: "\(prefix)\(slug)")
@@ -249,6 +274,29 @@ struct TenantTraversalTests {
             #expect(outcomes.map(\.slug) == ["jobdos", "jobuno"])
             #expect(outcomes.map(\.succeeded) == [true, false])
             #expect(IngestCommand.incomplete(outcomes) == ["jobuno"])
+        }
+    }
+
+    @Test("`-c` con varias competiciones recorre las dos (D-88)")
+    func severalCompetitionsFromTheCommandLine() async throws {
+        try await Self.withTenants(["jobuno"]) { app in
+            let cadete = try await Self.seed("jobuno", group: "111", on: app)
+            let infantil = try await Self.seedExtra("jobuno", group: "222", on: app)
+
+            let client = RecordingClient()
+            _ = try await IngestCommand.ingest(
+                on: app, scope: IngestionScope(competitionIDs: [cadete, infantil]),
+                tenantSlugs: ["jobuno"],
+                federationClients: SingleClientProvider(client: client),
+                clock: Self.clock)
+
+            // Es lo que `swift run Run ingest -t jobuno -c "uuid1,uuid2"` hace, y
+            // el equivalente del `POST` con dos casillas marcadas.
+            #expect(client.received.map(\.federationGroupID) == ["111", "222"])
+
+            // Y las dos dejaron su fila, cada una la suya (`D-85`).
+            let runs = try await Self.runs("jobuno", on: app)
+            #expect(Set(runs.map(\.competitionID)) == Set([cadete, infantil]))
         }
     }
 

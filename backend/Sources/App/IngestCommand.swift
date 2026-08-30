@@ -35,7 +35,8 @@ public struct IngestCommand: AsyncCommand {
         @Option(name: "season", help: "UUID de la temporada. Por defecto, la vigente (§3.2).")
         public var season: String?
 
-        @Option(name: "competition", short: "c", help: "UUID de una competición concreta.")
+        @Option(name: "competition", short: "c",
+                help: "UUIDs de competiciones concretas (separados por coma).")
         public var competition: String?
 
         @Option(name: "min-interval-hours",
@@ -63,22 +64,15 @@ public struct IngestCommand: AsyncCommand {
     public func run(using context: CommandContext, signature: Signature) async throws {
         let app = context.application
 
-        let scope = try IngestionScope(
-            seasonID: signature.season.map { try Self.uuid($0, field: "--season") }
-                .map(SeasonID.init(raw:)),
-            competitionID: signature.competition.map { try Self.uuid($0, field: "--competition") }
-                .map(CompetitionID.init(raw:)),
-            minInterval: signature.force
-                ? nil
-                : Double(signature.minIntervalHours ?? Self.defaultMinIntervalHours) * 3600)
+        let scope = try Self.scope(
+            season: signature.season,
+            competition: signature.competition,
+            minIntervalHours: signature.minIntervalHours,
+            force: signature.force)
 
         let outcomes = try await Self.ingest(
             on: app, scope: scope,
-            tenantSlugs: signature.tenant.map { list in
-                list.split(separator: ",").map {
-                    $0.trimmingCharacters(in: .whitespaces)
-                }
-            },
+            tenantSlugs: signature.tenant.map { Self.list($0) },
             federationClients: CatalogFederationClientProvider())
 
         guard !outcomes.isEmpty else {
@@ -170,6 +164,44 @@ public struct IngestCommand: AsyncCommand {
         let query = TenantRecord.query(on: app.db(.control))
         if let slugs { query.filter(\.$slug ~~ slugs) }
         return try await query.sort(\.$slug).all().map(\.slug)
+    }
+
+    /// Traduce **lo que teclea el operador** al ámbito del caso de uso.
+    ///
+    /// Está fuera de `run` y recibe valores sueltos en vez de la `Signature`
+    /// entera por dos motivos, y el segundo es el que importa: una `Signature`
+    /// de ConsoleKit no se puede construir a mano en un test, y **esta
+    /// traducción no la miraba nadie**. Lo dijo la comprobación de mutación —
+    /// romper el `--competition` para que solo cogiera el primer valor no tumbaba
+    /// ningún test, porque los del recorrido reciben el ámbito ya construido.
+    ///
+    /// Aquí viven las dos precedencias que el `--help` no puede explicar:
+    /// **`--force` gana sobre `--min-interval-hours`**, y una lista vacía de
+    /// competiciones es lo mismo que no pasar ninguna.
+    static func scope(
+        season: String?, competition: String?, minIntervalHours: Int?, force: Bool
+    ) throws -> IngestionScope {
+        let competitionIDs = try competition.map { raw in
+            try Self.list(raw).map { CompetitionID(raw: try Self.uuid($0, field: "--competition")) }
+        }
+        return IngestionScope(
+            seasonID: try season.map { SeasonID(raw: try Self.uuid($0, field: "--season")) },
+            competitionIDs: (competitionIDs?.isEmpty ?? true) ? nil : competitionIDs,
+            minInterval: force
+                ? nil
+                : Double(minIntervalHours ?? Self.defaultMinIntervalHours) * 3600)
+    }
+
+    /// Una opción con varios valores separados por coma.
+    ///
+    /// ConsoleKit no tiene `@Option` repetible, así que la lista viaja en una
+    /// cadena. Se usa en `--tenant` y en `--competition` con la **misma** forma:
+    /// una asimetría entre las dos sería justo lo que nadie recuerda al escribir
+    /// el comando con prisa.
+    static func list(_ raw: String) -> [String] {
+        raw.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     private static func uuid(_ raw: String, field: String) throws -> UUID {

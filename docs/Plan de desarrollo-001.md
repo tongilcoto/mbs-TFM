@@ -624,8 +624,8 @@ falló fue poder leerlo.
 ### 4.8 F6 · El job, el recorrido por tenant y la cadencia — **entregada**
 
 La fase que **le pone llamante** a todo lo que F5 dejó suelto —hasta hoy la única forma de generar una pasada
-era un test— y la primera desde F0 que abre superficie HTTP: **9 ficheros de código** y **29 tests**, con la
-batería completa en **246**.
+era un test— y la primera desde F0 que abre superficie HTTP: **9 ficheros de código** y **42 tests**, con la
+batería completa en **259**.
 
 | Bloque | Qué entrega |
 |---|---|
@@ -641,6 +641,8 @@ batería completa en **246**.
 | ¿Qué pasa si una competición falla en mitad del recorrido? (§9.3 repetida) | **Se continúa.** La unidad de aislamiento es la competición, porque [D-83] la hace atómica y [D-85] deja escrito el fallo → [D-86] |
 | ¿Cuál es el intervalo exacto de §5.6? | **No vive en el código.** Lunes + fin de semana, puestos por el disparador; el código trae un **antirrebote**, que no es el tope semanal → [D-87] |
 | ¿Cómo se lee el registro de pasadas, y cómo se relanza una? | Un recurso, dos operaciones, y **200 o 202 según el coste** → [D-88] |
+| ¿Y si el administrador quiere relanzar **varias** a la vez? | El cuerpo lleva **lista**, no un id: la pantalla son equipos con una casilla, y marcar tres es **una** acción → [D-88] |
+| ¿De dónde saca el backoffice la competición de un equipo? | **De sus partidos.** `Team` no tiene competición y `TeamRegistration` es `(equipo, temporada)`: la participación se deriva ([D-27]). Es derivación, no arista del modelo — F10 decide si la materializa |
 | ¿Puede el `202` prometer lo que no ha comprobado? | **No.** Planifica antes de responder, así una `seasonId` inexistente da 404 y no un 202 con un fallo invisible detrás |
 | ¿Basta la temporada vigente como alcance del recorrido? | **Como valor por defecto, sí**; como prohibición, no. `seasonId` y `competitionId` son las dos filas de la coordenada de la federación (§3.5) |
 
@@ -681,7 +683,7 @@ lanza sobre una lista explícita de clubes.
    `ErrorHandlingMiddleware`, que devuelve el código **sin cuerpo** y §5.4 exige `application/problem+json` en
    todo error del contrato.
 
-**Comprobación de mutación: 23 mutaciones, 23 cazadas**, con especificidad — romper *solo* la guarda de la
+**Comprobación de mutación: 30 mutaciones, 30 cazadas**, con especificidad — romper *solo* la guarda de la
 temporada desconocida tumba *solo* el test de [D-84], y romper *solo* el 502 tumba *solo* el de la pasada
 fallida. **Cinco sobrevivieron a la primera pasada, y las cinco eran «falta un test»** — ninguna era código
 que sobrara, y una de ellas era seria:
@@ -701,6 +703,24 @@ que sobrara, y una de ellas era seria:
 | el ámbito del `GET` no se comprueba | `una competición de otro club no existe: 404` |
 | el 502 pasa a 404 · el 202 no planifica antes | los 2 de [D-88] |
 | el `ServerError` del transporte vuelve a ser 500 | `sin competitionId el registro no se sirve: 400` |
+| solo se recorre la primera de la lista · el orden se pierde | los 2 de la lista de [D-88] |
+| un id desconocido de la lista se ignora | `si una no existe, no se sincroniza ninguna` |
+| dos competiciones responden 200 · la lista vacía es "todas" | los 2 del nivel 4 |
+| **`-c` deja de partir la coma** · **el trim se cae** | *(faltaban)* los 8 de `IngestArgumentsTests` |
+
+**Y una superviviente más, encontrada al añadir la lista de [D-88]: el parseo de argumentos no lo miraba
+nadie.** Romper `--competition` para que solo cogiera el primer valor **no tumbaba ningún test** — los del
+recorrido reciben el `IngestionScope` ya construido, así que entre la cadena que teclea el operador y el
+ámbito no había ningún test. Se cerró como se cerró la del código de salida: **extrayendo la traducción a una
+función pura** (`IngestCommand.scope(season:competition:minIntervalHours:force:)`) y probándola sin Docker.
+Ahí viven además las dos precedencias que el `--help` no puede explicar: `--force` gana sobre
+`--min-interval-hours`, y una lista vacía es como no pasar ninguna.
+
+> **Y de escribir ese test salió una trampa de aserción que conviene conocer.** `#expect(scope.minInterval ==
+> 6 * 3600)` **falla**, e imprime `21600.0 == 21600` — los dos valores iguales. Un literal entero contra un
+> `TimeInterval?` no compara lo que parece; hay que escribir `Double(6 * 3600)`. Es el caso peor de la familia
+> de §5.1: no un rojo que no demuestra nada, sino una **aserción que no puede pasar** — y su gemela con `!=`
+> sería una que no puede fallar.
 
 > **La superviviente que más enseña es la tercera.** *"La competición que nunca se sincronizó no entra"* pasaba
 > todos los tests, y significa que **una competición recién dada de alta —el enganche de [D-67], que es F10—

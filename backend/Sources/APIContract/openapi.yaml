@@ -3436,13 +3436,16 @@ paths:
 
         **Dos respuestas, y la diferencia es el coste** (§2.3-c):
 
-        - Con `competitionId` → **200** con la pasada ya hecha. Es una petición a la federación y el
-          calendario de un grupo: cabe dentro de una respuesta HTTP, y devolverla ya resuelta es lo que
-          hace útil el botón de la ficha de una competición.
-        - Sin él → **202**, con la lista de lo que se ha aceptado. Una temporada entera son decenas de
-          competiciones y ~240 partidos cada una (D-67): meter eso en una petición síncrona es
-          exactamente lo que aquella decisión existe para evitar. El resultado se consulta después con el
-          `GET` de arriba.
+        - **Exactamente una** en `competitionIds` → **200** con la pasada ya hecha. Es una petición a la
+          federación y el calendario de un grupo: cabe dentro de una respuesta HTTP, y devolverla ya
+          resuelta es lo que hace útil el botón de la ficha de una competición.
+        - **Dos o más, una temporada, o nada** → **202**, con la lista de lo que se ha aceptado. Cada
+          competición son ~240 partidos (D-67): meter varias en una petición síncrona es exactamente lo
+          que aquella decisión existe para evitar. El resultado se consulta después con el `GET` de arriba.
+
+        **El código lo decide la petición, no los datos.** Con `{}` sobre un club que solo tiene una
+        competición la respuesta sigue siendo **202**: que un cliente reciba 200 o 202 según cuántos
+        equipos tenga el club sería una forma de respuesta imposible de programar.
 
         **Ignora el antirrebote** del job (§5.6): quien pulsa el botón lo pulsa porque quiere ahora.
 
@@ -3463,7 +3466,7 @@ paths:
               $ref: '#/components/schemas/TriggerIngestionRequest'
       responses:
         '200':
-          description: La pasada de esa competición, ya terminada.
+          description: La pasada, ya terminada. Solo cuando la petición nombra **exactamente una** competición.
           content:
             application/json:
               schema:
@@ -6453,13 +6456,23 @@ components:
           description: |
             Solo las competiciones de esta temporada. Sin esto, la vigente. **Una temporada que no exista
             no cae a la vigente**: da 404 (D-84).
-        competitionId:
-          type: string
-          format: uuid
+        competitionIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
           description: |
-            Solo ésta, y **síncronamente** (200 en vez de 202). Gana sobre `seasonId` por ser más
-            específica, y no pasa por el filtro de temporada vigente: quien la pide por su id ya sabe cuál
-            quiere.
+            Solo éstas. Gana sobre `seasonId` por ser más específica, y **no pasa por el filtro de
+            temporada vigente**: quien las pide por su id ya sabe cuáles quiere.
+
+            **Es una lista y no un id suelto** porque la pantalla que la usa es una lista de equipos con
+            una casilla al lado: resincronizar tres es *una* acción del usuario, y partirla en tres
+            peticiones le traslada al navegador el manejo de tres respuestas, tres errores parciales y tres
+            estados de carga.
+
+            **Con exactamente un elemento la respuesta es 200**; con dos o más, 202. Una lista **vacía**
+            es 400: no significa "todas", significa que el cliente no ha decidido.
 
     IngestionAcceptedResponse:
       type: object

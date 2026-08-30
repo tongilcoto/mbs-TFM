@@ -105,12 +105,21 @@ public struct IngestClubCalendars: Sendable {
             // quiere —el botón de la ficha en el backoffice— y hacérselo pasar
             // por "¿es de la temporada en curso?" convertiría una petición
             // explícita en un silencio.
-            if let competitionID = scope.competitionID {
-                guard let competition = try await repositories.competitions.find(competitionID)
-                else {
-                    throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+            if let requested = scope.competitionIDs, !requested.isEmpty {
+                var competitions: [Competition] = []
+                // **Se resuelven todas antes de tocar la red.** El plan entero
+                // cabe en el ámbito 1 de `D-83`, así que un id equivocado en la
+                // lista se ve **antes** de empezar: quien marcó tres casillas se
+                // entera de que una estaba mal, en vez de recibir dos pasadas y
+                // un silencio.
+                for competitionID in requested {
+                    guard let competition = try await repositories.competitions.find(competitionID)
+                    else {
+                        throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                    }
+                    competitions.append(competition)
                 }
-                return (club.federation, due([competition], scope: scope))
+                return (club.federation, due(competitions, scope: scope))
             }
 
             // **La vigente es el valor por defecto, no una prohibición** (§3.2).
@@ -176,8 +185,15 @@ public struct IngestionScope: Sendable, Equatable {
     /// Solo esta temporada. `nil` ⇒ la **vigente** (§3.2).
     public let seasonID: SeasonID?
 
-    /// Solo esta competición. Gana sobre `seasonID`, porque es más específica.
-    public let competitionID: CompetitionID?
+    /// Solo éstas. Gana sobre `seasonID`, porque es más específica.
+    ///
+    /// **Es una lista y no un id suelto** por la pantalla que la usa: el
+    /// backoffice enseña los equipos del club con una casilla al lado, y
+    /// resincronizar tres es **una** acción del usuario. Partirla en tres
+    /// peticiones le traslada al cliente el manejo de tres respuestas, tres
+    /// errores parciales y tres estados de carga — y al servidor, tres
+    /// recorridos que ya sabía hacer de una vez.
+    public let competitionIDs: [CompetitionID]?
 
     /// **Antirrebote, no el tope semanal.** Una competición sincronizada con
     /// éxito hace menos de esto no se vuelve a pedir.
@@ -191,11 +207,11 @@ public struct IngestionScope: Sendable, Equatable {
 
     public init(
         seasonID: SeasonID? = nil,
-        competitionID: CompetitionID? = nil,
+        competitionIDs: [CompetitionID]? = nil,
         minInterval: TimeInterval? = nil
     ) {
         self.seasonID = seasonID
-        self.competitionID = competitionID
+        self.competitionIDs = competitionIDs
         self.minInterval = minInterval
     }
 }

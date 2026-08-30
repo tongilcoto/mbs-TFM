@@ -2825,13 +2825,38 @@ petición no lleva ni un solo campo de la pasada: lleva **qué sincronizar**, qu
 lleva `Competition` como *entrada* de la ingesta ([D-16]). Quien escribe la fila sigue siendo el job, con la
 política de §3.7 intacta.
 
+**El cuerpo lleva una *lista* de competiciones, no un id suelto, y lo decidió la pantalla.** El backoffice
+enseña **los equipos del club con una casilla al lado** y un botón de resincronizar: marcar tres es **una**
+acción del usuario. Partirla en tres peticiones le traslada al navegador el manejo de tres respuestas, tres
+errores parciales y tres estados de carga — para un trabajo que el servidor ya sabía hacer de una vez.
+
+> **Y trae un hallazgo del modelo que conviene no perder: `Team` no tiene competición.** Ni columna, ni
+> `TeamRegistration` —que es `(equipo, temporada)`—: la participación se **deriva de los partidos** ([D-27]).
+> Así que esa pantalla se **rotula** con el equipo pero el id que viaja es el de la `Competition`, y la
+> correspondencia hoy solo sale de `Match`. Encaja con el caso de uso —un equipo sin partidos no tiene nada
+> que resincronizar; su primera ingesta es el `federation-link` de [D-67]— pero es una **derivación, no una
+> arista del modelo**, y F10 es quien tendrá que decidir si el enganche la materializa.
+
 **Dos respuestas, y la diferencia es el coste** —el mismo argumento de [D-67], aplicado un nivel más abajo—:
 
-- **Con `competitionId` → 200**, con la pasada ya hecha. Es **una** petición a la federación y el calendario de
-  un grupo: cabe en una respuesta HTTP, y devolverla resuelta es lo que hace útil el botón de la ficha.
-- **Sin él → 202**, con la lista de competiciones aceptadas. Una temporada son decenas de competiciones y
-  ~240 partidos cada una; meter eso en una petición síncrona es lo que [D-67] existe para evitar. El resultado
-  se consulta con el `GET`, **que es para lo que [D-85] creó la tabla**.
+- **Exactamente una en `competitionIds` → 200**, con la pasada ya hecha. Es **una** petición a la federación y
+  el calendario de un grupo: cabe en una respuesta HTTP, y devolverla resuelta es lo que hace útil el botón de
+  la ficha.
+- **Dos o más, una temporada, o nada → 202**, con la lista de competiciones aceptadas. Cada una son ~240
+  partidos; meter varias en una petición síncrona es lo que [D-67] existe para evitar. El resultado se consulta
+  con el `GET`, **que es para lo que [D-85] creó la tabla**.
+
+**El código lo decide la petición, no los datos.** Con `{}` sobre un club que solo tenga una competición la
+respuesta sigue siendo **202**: que un cliente reciba 200 o 202 según cuántos equipos tenga el club sería una
+forma de respuesta imposible de programar.
+
+**Una lista vacía es 400, no "todas".** No significa *"sincronízalo todo"* — significa que el cliente no ha
+decidido, y adivinar por él aquí es lanzar el recorrido entero de un club por una casilla sin marcar. Para la
+temporada vigente entera, el campo se omite.
+
+**Y un id desconocido en la lista falla antes de empezar, no a mitad.** El plan se resuelve entero en el
+ámbito 1 de [D-83], así que quien marcó tres casillas se entera de que una estaba mal — en vez de recibir dos
+pasadas y un silencio.
 
 **El `202` planifica antes de responder, y eso no es un detalle de implementación.** Calcular qué entra es lo
 que permite decir *qué* se ha aceptado, sí — pero sobre todo es lo que hace que una `seasonId` inexistente dé

@@ -1667,7 +1667,7 @@ real ocurre siempre en el caso de uso (§7.4).
 | Método | Ruta | Caso de uso | Éxito | Errores |
 |--------|------|-------------|-------|---------|
 | **GET** | `/v1/ingestion-runs?competitionId=&limit=` | `ListIngestionRuns` | **200** + `[IngestionRunResponse]` | 400 (falta ámbito, `limit` fuera de rango), 404 (competición) |
-| **POST** | `/v1/ingestion-runs` | `IngestClubCalendars` | **200** + `IngestionRunResponse` *(con `competitionId`)* · **202** + `IngestionAcceptedResponse` *(temporada)* | 400, **403** (rol), 404, **501** (federación sin adaptador), **502** (la fuente) |
+| **POST** | `/v1/ingestion-runs` | `IngestClubCalendars` | **200** + `IngestionRunResponse` *(exactamente una competición)* · **202** + `IngestionAcceptedResponse` *(varias, o una temporada)* | 400, **403** (rol), 404, **501** (federación sin adaptador), **502** (la fuente) |
 
 - **El único recurso que no describe al club sino a su sincronización.** §5.6 dice que el módulo de ingesta
   no expone superficie HTTP propia, y sigue siendo verdad de lo que importa: no hay descubrimiento ni proxy a
@@ -1675,10 +1675,16 @@ real ocurre siempre en el caso de uso (§7.4).
 - **El `POST` no crea la fila y por eso no rompe la regla de propiedad de arriba**: el cuerpo no lleva ni un
   campo de la pasada — lleva **qué sincronizar**, igual que `Competition` como entrada de la ingesta
   ([D-16]). La escribe el job, con la política de §3.7 intacta.
-- **200 o 202 según el coste**, que es [D-67] un nivel más abajo: una competición es **una** petición a la
-  federación y cabe en la respuesta; una temporada son decenas y ~240 partidos cada una. El `202` **planifica
-  antes de responder**, de modo que una `seasonId` inexistente da 404 y no un 202 con un fallo invisible
-  detrás ([D-84]).
+- **`competitionIds` es una lista**, y la decidió la pantalla: el backoffice enseña los equipos con una
+  casilla al lado, así que resincronizar tres es **una** acción del usuario y **una** petición ([D-88]). Una
+  lista vacía es **400**, no *"todas"*.
+- **200 o 202 según el coste**, que es [D-67] un nivel más abajo: **exactamente una** competición cabe en la
+  respuesta; dos o más, o una temporada, no. **Lo decide la petición, no los datos** — con `{}` sobre un club
+  de una sola competición sigue siendo 202. El `202` **planifica antes de responder**, de modo que una
+  `seasonId` inexistente da 404 y no un 202 con un fallo invisible detrás ([D-84]).
+- **`Team` no tiene competición** (§3.2, [D-27]): la lista se rotula con el equipo, pero el id que viaja es el
+  de la `Competition`, y esa correspondencia se deriva hoy de `Match`. Queda para F10 decidir si el enganche
+  de [D-67] la materializa.
 - **`competitionId` obligatorio en el `GET`**, como en `/rounds` y por lo mismo: una pasada fuera de su
   competición no significa nada, y exigirlo acota la colección a lo que se sirve **sin paginación** (§5.3).
   Orden fijo: de la más reciente a la más antigua.

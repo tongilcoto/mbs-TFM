@@ -68,7 +68,7 @@ struct IngestionEndpointTests {
     /// El *schema* del club, con la **entrada** de la ingesta sembrada (`D-16`).
     static func withSeededClub(
         failingFederation: Bool = false,
-        _ body: @escaping @Sendable (Application, SeasonID, CompetitionID) async throws -> Void
+        _ body: @escaping @Sendable (Application, SeasonID, CompetitionID, CompetitionID) async throws -> Void
     ) async throws {
         try await TestEnvironment.withApp(
             federationClients: StubProvider(failing: failingFederation),
@@ -81,6 +81,9 @@ struct IngestionEndpointTests {
 
             let seasonID = SeasonID(raw: UUID())
             let competitionID = CompetitionID(raw: UUID())
+            // La segunda es el "Infantil A" de la pantalla: el club tiene varios
+            // equipos y la lista de casillas tiene más de una fila.
+            let otherCompetitionID = CompetitionID(raw: UUID())
             let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
             let actor = ActorContext(clubSlug: try Slug(slug))
             try await unitOfWork.withRepositories(actor: actor) { repositories in
@@ -95,9 +98,16 @@ struct IngestionEndpointTests {
                         federationCompetitionID: "24037548", federationGroupID: "24037549",
                         ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
                         groupLabel: "Grupo 1", createdAt: now, updatedAt: now))
+                try await repositories.competitions.save(
+                    try Competition(
+                        id: otherCompetitionID, seasonID: seasonID,
+                        modality: .futbol11, gender: .masculino,
+                        federationCompetitionID: "24037550", federationGroupID: "24037551",
+                        ageCategory: .infantil, divisionLabel: "Primera División Autonómica",
+                        groupLabel: "Grupo 2", createdAt: now, updatedAt: now))
             }
 
-            try await body(app, seasonID, competitionID)
+            try await body(app, seasonID, competitionID, otherCompetitionID)
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
         }
     }
@@ -131,10 +141,10 @@ struct IngestionEndpointTests {
     /// compilaría — que es el punto entero de *design-first* (`D-65`).
     static func body(
         _ request: inout TestingHTTPRequest,
-        seasonId: String? = nil, competitionId: String? = nil
+        seasonId: String? = nil, competitionIds: [String]? = nil
     ) throws {
         let payload = Components.Schemas.TriggerIngestionRequest(
-            seasonId: seasonId, competitionId: competitionId)
+            seasonId: seasonId, competitionIds: competitionIds)
         request.headers.contentType = .json
         request.body = ByteBuffer(
             string: String(decoding: try JSONEncoder().encode(payload), as: UTF8.self))
@@ -144,13 +154,13 @@ struct IngestionEndpointTests {
 
     @Test("con `competitionId` la pasada se hace y se devuelve (200, §2.3-c)")
     func aSingleCompetitionSyncsInline() async throws {
-        try await Self.withSeededClub { app, _, competitionID in
+        try await Self.withSeededClub { app, _, competitionID, _ in
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in
                     Self.header(&request)
                     try Self.body(
-                        &request, competitionId: competitionID.raw.uuidString.lowercased())
+                        &request, competitionIds: [competitionID.raw.uuidString.lowercased()])
                 }
             ) { response async throws in
                 // **200 y no 202**: una petición a la federación y el calendario
@@ -166,7 +176,7 @@ struct IngestionEndpointTests {
 
     @Test("sin `competitionId` se acepta el recorrido y se dice qué entra (202, D-67)")
     func awholeSeasonIsAccepted() async throws {
-        try await Self.withSeededClub { app, _, competitionID in
+        try await Self.withSeededClub { app, _, competitionID, _ in
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in
@@ -180,14 +190,15 @@ struct IngestionEndpointTests {
                 let accepted = try JSONDecoder().decode(
                     Components.Schemas.IngestionAcceptedResponse.self,
                     from: Data(response.body.readableBytesView))
-                #expect(accepted.competitionIds == [competitionID.raw.uuidString.lowercased()])
+                #expect(accepted.competitionIds.count == 2)
+                #expect(accepted.competitionIds.contains(competitionID.raw.uuidString.lowercased()))
             }
         }
     }
 
     @Test("un POST sin cuerpo es 400, y por eso el cuerpo es obligatorio (D-65)")
     func aBodylessPostIsRejected() async throws {
-        try await Self.withSeededClub { app, _, _ in
+        try await Self.withSeededClub { app, _, _, _ in
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in Self.header(&request) }
@@ -204,9 +215,59 @@ struct IngestionEndpointTests {
         }
     }
 
+    @Test("con dos competiciones marcadas es 202, no 200 (D-88)")
+    func twoCompetitionsAreAccepted() async throws {
+        try await Self.withSeededClub { app, _, cadete, infantil in
+            let ids = [cadete, infantil].map { $0.raw.uuidString.lowercased() }
+            try await app.testing().test(
+                .POST, "/v1/ingestion-runs",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.body(&request, competitionIds: ids)
+                }
+            ) { response async throws in
+                // **El código lo decide la petición, no los datos.** Una son ~240
+                // partidos; dos ya no caben en una respuesta HTTP (`D-67`).
+                #expect(response.status == .accepted)
+                let accepted = try JSONDecoder().decode(
+                    Components.Schemas.IngestionAcceptedResponse.self,
+                    from: Data(response.body.readableBytesView))
+                // Y en el orden pedido, que es el de las casillas marcadas.
+                #expect(accepted.competitionIds == ids)
+            }
+
+            // Las dos se sincronizaron de verdad: el 202 no es un "quizá".
+            for id in ids {
+                try await app.testing().test(
+                    .GET, "/v1/ingestion-runs?competitionId=\(id)",
+                    beforeRequest: { request async throws in Self.header(&request) }
+                ) { response async throws in
+                    #expect(try Self.decodeRuns(response).count == 1, "id \(id)")
+                }
+            }
+        }
+    }
+
+    @Test("una lista vacía no significa «todas»: 400 (D-88)")
+    func anEmptySelectionIsRejected() async throws {
+        try await Self.withSeededClub { app, _, _, _ in
+            try await app.testing().test(
+                .POST, "/v1/ingestion-runs",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.body(&request, competitionIds: [])
+                }
+            ) { response async in
+                // Adivinar por el cliente aquí significa lanzar el recorrido
+                // entero del club por una casilla sin marcar.
+                #expect(response.status == .badRequest)
+            }
+        }
+    }
+
     @Test("el registro se lee de la más reciente a la más antigua (D-85)")
     func theRegistryReadsNewestFirst() async throws {
-        try await Self.withSeededClub { app, _, competitionID in
+        try await Self.withSeededClub { app, _, competitionID, _ in
             // Dos pasadas, para que el orden signifique algo.
             for _ in 0..<2 {
                 try await app.testing().test(
@@ -214,7 +275,7 @@ struct IngestionEndpointTests {
                     beforeRequest: { request async throws in
                         Self.header(&request)
                         try Self.body(
-                            &request, competitionId: competitionID.raw.uuidString.lowercased())
+                            &request, competitionIds: [competitionID.raw.uuidString.lowercased()])
                     }
                 ) { _ async in }
             }
@@ -235,13 +296,13 @@ struct IngestionEndpointTests {
 
     @Test("la pasada que falla también se puede leer (D-85)")
     func aFailedPassIsReadable() async throws {
-        try await Self.withSeededClub(failingFederation: true) { app, _, competitionID in
+        try await Self.withSeededClub(failingFederation: true) { app, _, competitionID, _ in
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in
                     Self.header(&request)
                     try Self.body(
-                        &request, competitionId: competitionID.raw.uuidString.lowercased())
+                        &request, competitionIds: [competitionID.raw.uuidString.lowercased()])
                 }
             ) { response async in
                 // **502**: el fallo no es del cliente, es del tercero (§5.4, y el
@@ -266,7 +327,7 @@ struct IngestionEndpointTests {
 
     @Test("sin `competitionId` el registro no se sirve: 400 (§5.3)")
     func theRegistryDemandsItsScope() async throws {
-        try await Self.withSeededClub { app, _, _ in
+        try await Self.withSeededClub { app, _, _, _ in
             try await app.testing().test(
                 .GET, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in Self.header(&request) }
@@ -278,7 +339,7 @@ struct IngestionEndpointTests {
 
     @Test("un `limit` fuera de rango es 400, no un recorte silencioso (§5.5)")
     func anOutOfRangeLimitIsRejected() async throws {
-        try await Self.withSeededClub { app, _, competitionID in
+        try await Self.withSeededClub { app, _, competitionID, _ in
             let id = competitionID.raw.uuidString.lowercased()
             for limit in ["0", "101"] {
                 try await app.testing().test(
@@ -297,7 +358,7 @@ struct IngestionEndpointTests {
 
     @Test("una competición de otro club no existe para esta consulta: 404 (§6, §7.5)")
     func anotherClubsCompetitionIsNotFound() async throws {
-        try await Self.withSeededClub { app, _, _ in
+        try await Self.withSeededClub { app, _, _, _ in
             let alien = UUID().uuidString.lowercased()
             try await app.testing().test(
                 .GET, "/v1/ingestion-runs?competitionId=\(alien)",
@@ -312,7 +373,7 @@ struct IngestionEndpointTests {
 
     @Test("una temporada que no existe no cae a la vigente: 404 (D-84)")
     func anUnknownSeasonIsNotFound() async throws {
-        try await Self.withSeededClub { app, _, _ in
+        try await Self.withSeededClub { app, _, _, _ in
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in

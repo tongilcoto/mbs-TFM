@@ -11,7 +11,7 @@
 ## 0. Qué hay montado ahora mismo
 
 Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0** a **F6**.
-**246 tests.**
+**259 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
@@ -34,7 +34,7 @@ leerlo y el job hay que poder dispararlo desde el backoffice (`D-88`). Lo que ha
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                                                                                       | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                                                                                                                                                                 | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)                 |
 | **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía**                                                          | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red**                                                                                                                                          | sus tests, y solo sus tests (§5.4)                                                   |
 | **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante**                                             | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                                                                                                                                                                       | sus tests, y solo sus tests (§5.4)                                                   |
-| **F6** | El **job** (`swift run Run ingest`), el recorrido por tenant, la cadencia y los **dos endpoints** de arriba | `swift test --filter IngestClubCalendars` → **14 tests** sin Docker · `--filter TenantTraversal` → **6** **con** Docker · `--filter IngestionEndpoint` → **9** **con** Docker | `swift run Run ingest` (§6) y `curl` sobre `/v1/ingestion-runs` (§4) |
+| **F6** | El **job** (`swift run Run ingest`), el recorrido por tenant, la cadencia y los **dos endpoints** de arriba | `swift test --filter 'IngestClubCalendars\|IngestArguments'` → **24 tests** sin Docker · `--filter TenantTraversal` → **7** **con** Docker · `--filter IngestionEndpoint` → **11** **con** Docker | `swift run Run ingest` (§6.1) y `curl` sobre `/v1/ingestion-runs` (§4.5) |
 | **F5** | La **ingesta del calendario de punta a punta**: las cuatro entidades de salida, el caso de uso, el transporte HTTP y el **canario**. Y `IngestionRun`, el registro de cada pasada | `swift test --filter 'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` → **33 tests** sin Docker · `--filter IngestCalendarTests` → **19** sin Docker · `--filter 'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` → **18** **con** Docker | TablePlus sobre las cinco tablas nuevas, y el volcado real que entra en ellas (§5.5) |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
@@ -397,8 +397,13 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **El cuerpo `{}` no es opcional.** Un `POST` sin cuerpo devuelve **400**: el servidor generado lo parsea
   igual, así que el *spec* declara `required: true` con todos los campos opcionales. Es `D-65` otra vez — lo
   que el YAML promete hay que ir a comprobarlo.
-- **200 o 202 según el coste** (`D-67` un nivel más abajo): una competición es una petición a la federación
-  y cabe en la respuesta; una temporada son decenas y ~240 partidos cada una.
+- **200 o 202 según el coste** (`D-67` un nivel más abajo): **exactamente una** competición cabe en la
+  respuesta; dos o más, o una temporada, no. **Lo decide la petición, no los datos**: con `{}` sobre un club
+  de una sola competición sigue siendo 202, porque una respuesta que cambia de forma según cuántos equipos
+  tenga el club no se puede programar.
+- **`competitionIds` es una lista porque la pantalla lo es**: equipos con una casilla al lado. Vacía → **400**;
+  para la temporada entera, se omite. Y ojo: **`Team` no tiene competición** —la participación se deriva de
+  los partidos (`D-27`)—, así que el backoffice rotula con el equipo y manda el id de la competición.
 - **Una pasada que falla también se lee.** Prueba con una coordenada mala: el `POST` devuelve **502** y el
   `GET` te enseña la fila con `outcome: "failed"` y su motivo. Es la razón de ser entera de `D-85` — la
   pasada que falla es la que nadie ve.
@@ -780,7 +785,8 @@ usuario ni JWT que validar; el botón del backoffice existe además, y llama al 
 ```sh
 swift run Run ingest                        # todos los clubes, temporada vigente
 swift run Run ingest -t atleti              # solo un club (o varios: -t "atleti,otro")
-swift run Run ingest -c <uuid-competicion>  # solo una competición
+swift run Run ingest -c <uuid>              # solo una competición
+swift run Run ingest -c "<uuid>,<uuid>"     # varias, en el orden pedido
 swift run Run ingest --season <uuid>        # una temporada concreta, aunque no sea la vigente
 swift run Run ingest --force                # ignora el antirrebote de 6 h
 swift run Run ingest --min-interval-hours 24

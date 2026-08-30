@@ -118,11 +118,58 @@ struct IngestClubCalendarsTests {
 
         let federation = SpyFederationClient(returning: Self.calendar)
         _ = try await Self.useCase(store: store, federation: federation)
-            .execute(scope: IngestionScope(competitionID: wanted.id), actor: Self.actor)
+            .execute(scope: IngestionScope(competitionIDs: [wanted.id]), actor: Self.actor)
 
         // Es el filtro del botón "resincroniza ésta" del backoffice: una sola
         // petición a la federación, no las de toda la temporada.
         #expect(federation.received.map(\.federationGroupID) == ["222"])
+    }
+
+    @Test("con varias competiciones se recorren todas, en el orden pedido (D-88)")
+    func severalCompetitionsAreAllVisited() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        let cadete = try Self.competition(seasonID: current.id, federationGroupID: "222")
+        let infantil = try Self.competition(seasonID: current.id, federationGroupID: "333")
+        let senior = try Self.competition(seasonID: current.id, federationGroupID: "444")
+        await store.seed(seasons: [current], competitions: [cadete, infantil, senior])
+
+        let federation = SpyFederationClient(returning: Self.calendar)
+        _ = try await Self.useCase(store: store, federation: federation)
+            .execute(
+                scope: IngestionScope(competitionIDs: [senior.id, cadete.id]),
+                actor: Self.actor)
+
+        // La pantalla es una lista de equipos con una casilla al lado, así que
+        // marcar tres es **una** acción del usuario: el ámbito lleva lista, no un
+        // id suelto. Y el orden es el pedido, no el del almacén.
+        #expect(federation.received.map(\.federationGroupID) == ["444", "222"])
+    }
+
+    @Test("si una de las competiciones pedidas no existe, no se sincroniza ninguna (D-84)")
+    func anUnknownCompetitionInTheListStopsTheWholeRequest() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        let cadete = try Self.competition(seasonID: current.id, federationGroupID: "222")
+        await store.seed(seasons: [current], competitions: [cadete])
+
+        let federation = SpyFederationClient(returning: Self.calendar)
+        let useCase = Self.useCase(store: store, federation: federation)
+
+        // **Se falla antes de empezar, no a mitad.** El plan se resuelve entero
+        // en un solo ámbito (`D-83`), así que un id equivocado en la lista se ve
+        // antes de tocar la red — y quien marcó tres casillas se entera de que
+        // una estaba mal en vez de recibir dos pasadas y un silencio.
+        await #expect(throws: ApplicationError.self) {
+            try await useCase.execute(
+                scope: IngestionScope(competitionIDs: [cadete.id, CompetitionID(raw: UUID())]),
+                actor: Self.actor)
+        }
+        #expect(federation.received.isEmpty)
     }
 
     @Test("con `seasonId` se recorre esa temporada aunque no sea la vigente (§5.6)")
@@ -231,7 +278,7 @@ struct IngestClubCalendarsTests {
         let federation = SpyFederationClient(returning: Self.calendar)
         _ = try await Self.useCase(store: store, federation: federation)
             .execute(
-                scope: IngestionScope(competitionID: wanted.id, minInterval: 6 * 3600),
+                scope: IngestionScope(competitionIDs: [wanted.id], minInterval: 6 * 3600),
                 actor: Self.actor)
 
         // **Las tres puertas se miran con la misma regla.** El botón del
