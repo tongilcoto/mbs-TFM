@@ -2549,10 +2549,20 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
     RGPD que no se han diseñado. Hoy no bloquea porque las cuentas son de *staff* (ADR, Anexo C.4).
 
-12. **La terna *(equipo, temporada, competición)* no la sirve ninguna lectura.** El backoffice trabaja con
-    ella —lo que su usuario llama *"un equipo"* es eso— y hoy hacen falta **N+1 peticiones** para componerla:
+12. **La terna *(equipo, temporada, competición)* no la sirve ninguna lectura.** Es la **pantalla principal**
+    del backoffice —la tabla de equipos del club con su competición al lado— y lo que su usuario llama *"un
+    equipo"* es esa terna entera.
+
+    **Una sola consulta SQL la resuelve** (medido abajo: 5,8 ms para los doce equipos de una temporada). Lo
+    que faltan son **N+1 peticiones HTTP**, porque **ninguna ruta expone esa consulta**:
     `GET /teams?seasonId=` da los equipos **sin** competición, `GET /competitions?seasonId=` da las
-    competiciones **sin** equipos, y el `competitionId` de un equipo solo aparece en sus partidos.
+    competiciones —con su nombre ya compuesto— **sin** equipos, y el `competitionId` de un equipo solo aparece
+    en sus partidos, que además exigen ámbito y van paginados (§5.3). **Es un agujero de contrato, no de
+    esquema ni de rendimiento.**
+
+    **Y cruzarlo en el cliente no vale**: juntar las dos listas por `(categoría, género, modalidad)` funciona
+    hasta que el "Infantil A" y el "Infantil B" del club caen **en el mismo grupo** —el caso de [D-77]—, donde
+    una competición tiene dos equipos propios y el cruce por atributos pasa a ser una adivinanza.
 
     **No es un fallo del modelo**: `Team` no lleva temporada ([D-28]) ni competición porque la participación
     se **deriva** ([D-27]), y eso es lo que hace que "Infantil A" sea la misma entidad año tras año. Es una
@@ -2598,11 +2608,17 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     implicara ya"*. Allí se descartó además la variante *"conservarla como caché materializada"*, por meter un
     **segundo escritor** que sincronizar con `Match` en cada pasada. **Esta cuestión no reabre aquello.**
 
-    Tres salidas, todas de **lectura** y ninguna elegida: **(a)** `TeamResponse` gana un bloque de
-    competiciones cuando la petición trae `?seasonId=`; **(b)** `CompetitionResponse` gana sus equipos
-    propios; **(c)** un recurso de lectura propio para esa pantalla. **Se decide con el backoffice delante, no
-    antes** — y conviene mirarla junto a F10: si el enganche de [D-67] acaba materializando la arista, (a)
-    sale casi gratis.
+    Tres salidas, todas de **lectura** y ninguna decidida todavía, aunque la primera es la que se propone:
+
+    - **(a) `TeamResponse` gana sus competiciones cuando la petición trae `?seasonId=`.** Una petición, filas
+      = equipos —que es como piensa el backoffice—, y un equipo puede traer **dos** (liga y copa, [D-12]).
+      Detrás va la consulta con `LATERAL` que se mide abajo. **Es un derivado de respuesta**, del mismo tipo
+      que `isOwn`, `displayName` o `isCurrent`: no una columna, no una tabla, no un segundo escritor.
+    - **(b)** `CompetitionResponse` gana sus equipos propios — el mismo dato visto del otro lado.
+    - **(c)** un recurso de lectura propio para esa pantalla, si acaba pidiendo más de lo que cabe en (a).
+
+    **Se cierra con el backoffice delante, no antes**, y conviene mirarla junto a F10: si el enganche de
+    [D-67] acaba materializando la arista equipo↔competición, (a) sale casi gratis.
 
 > **Dónde está lo demás.** Las cuestiones de **dominio del modelo de datos** quedaron resueltas (§3.6, con
 > el razonamiento en el [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)). Lo que falta por **observar** de la
