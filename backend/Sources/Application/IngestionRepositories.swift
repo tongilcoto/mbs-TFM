@@ -45,3 +45,23 @@ public protocol MatchRepository: Sendable {
 
     func save(_ match: Match) async throws
 }
+
+/// Puerto de salida de `IngestionRun` (§4.3): **el registro de las pasadas**.
+///
+/// # Es el único de F5 con un ciclo de vida propio
+///
+/// Los otros cuatro se usan **dentro** del ámbito de la pasada. Éste no puede:
+/// la pasada es una transacción (`D-83`), así que un registro escrito dentro de
+/// ella se desharía con el `rollback` **justo en el caso que más importa** — la
+/// pasada que falla, que es la que nadie ve porque no hay usuario delante
+/// (§2.3-b). Se escribe en su propio ámbito, después, gane o pierda (`D-85`).
+public protocol IngestionRunRepository: Sendable {
+    /// Escribe el registro. **Solo inserta**: una pasada ocurrió o no ocurrió, y
+    /// reescribir la historia de una sincronización no significa nada.
+    func record(_ run: IngestionRun) async throws
+
+    /// Las últimas pasadas de una competición, **de la más reciente a la más
+    /// antigua**, que es el orden en el que se leen: la pregunta es *"¿qué pasó
+    /// la última vez?"*.
+    func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun]
+}

@@ -48,7 +48,47 @@ public struct IngestCalendar: Sendable {
 
     public func execute(
         competitionID: CompetitionID, actor: ActorContext
-    ) async throws -> IngestionReport {
+    ) async throws -> IngestionRun {
+        let startedAt = clock.now()
+        do {
+            let run = try await sync(competitionID: competitionID, actor: actor)
+            try await record(run, actor: actor)
+            return run
+        } catch {
+            // `D-85`: **la pasada que falla es la que nadie ve**, porque no hay
+            // usuario esperando una respuesta (§2.3-b). Es la que más falta hace
+            // registrar, y la que un registro escrito dentro de la transacción de
+            // `D-83` se llevaría por delante con el `rollback`.
+            //
+            // Los contadores quedan a cero, y es lo honesto: la transacción se
+            // deshizo, así que no se escribió nada aunque la pasada hubiera
+            // llegado a la última jornada.
+            let failed = try IngestionRun(
+                id: IngestionRunID(raw: ids.next()),
+                competitionID: competitionID,
+                startedAt: startedAt, finishedAt: clock.now(),
+                outcome: .failed, error: "\(type(of: error)): \(error)")
+
+            // Si el registro tampoco se puede escribir, **manda el error
+            // original**: es el que explica lo que pasó, y taparlo con "no pude
+            // apuntarlo" dejaría al que depura mirando al sitio equivocado.
+            do { try await record(failed, actor: actor) } catch {}
+
+            throw error
+        }
+    }
+
+    /// El registro va en **su propio ámbito**, fuera de la transacción de la
+    /// pasada (`D-83`, `D-85`). Es lo que hace que sobreviva al `rollback`.
+    private func record(_ run: IngestionRun, actor: ActorContext) async throws {
+        try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await repositories.ingestionRuns.record(run)
+        }
+    }
+
+    private func sync(
+        competitionID: CompetitionID, actor: ActorContext
+    ) async throws -> IngestionRun {
         // ── Ámbito 1: leer la coordenada ────────────────────────────────
         let coordinate = try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)

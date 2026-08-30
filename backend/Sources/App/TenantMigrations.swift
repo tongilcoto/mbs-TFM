@@ -32,6 +32,7 @@ public enum TenantMigrations {
             CreateCompetition(),
             CreateRound(),
             CreateMatch(),
+            CreateIngestionRun(),
         ]
     }
 }

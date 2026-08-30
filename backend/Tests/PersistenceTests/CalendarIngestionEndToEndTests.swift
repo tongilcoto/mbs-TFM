@@ -279,6 +279,138 @@ struct CalendarIngestionEndToEndTests {
         }
     }
 
+    // ── D-85: el registro sobrevive a lo que la pasada no ──────────────────
+
+    /// **La prueba que justifica que el registro vaya en su propio ámbito.**
+    ///
+    /// El nivel 2 puede afirmar que se llama a `record`, pero no que la fila
+    /// sobreviva: sus dobles no tienen transacción. Aquí sí. La pasada revienta a
+    /// mitad, el `rollback` se lleva clubes, equipos, jornadas y partidos — **y el
+    /// registro se queda**, que es el único sitio donde va a constar que esa noche
+    /// la ingesta falló.
+    ///
+    /// Si el `record` viviera dentro del ámbito de escritura, este test pasaría
+    /// en el nivel 2 y fallaría aquí. Es exactamente la clase de cosa que Plan §5
+    /// pone en el nivel 3.
+    @Test("el registro de la pasada fallida sobrevive al rollback (D-85)")
+    func theRunRecordSurvivesTheRollback() async throws {
+        try await Self.withTenant("e2e-log") { tenant in
+            let season = try Season(
+                id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+                federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+            let competition = try Competition(
+                id: CompetitionID(raw: UUID()), seasonID: season.id,
+                modality: .futbol11, gender: .masculino,
+                federationCompetitionID: "24037548", federationGroupID: "24037549",
+                ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
+                groupLabel: "Grupo 1", createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.seasons.save(season)
+                try await $0.competitions.save(competition)
+            }
+
+            let useCase = IngestCalendar(
+                unitOfWork: FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control)),
+                federation: StubFederationClient(returning: Self.brokenCalendar()),
+                clock: FixedInstantClock(instant: Self.syncInstant),
+                ids: SystemUUIDProvider())
+
+            await #expect(throws: DomainError.self) {
+                try await useCase.execute(
+                    competitionID: competition.id,
+                    actor: .init(clubSlug: try Slug("e2e-log"), isSystem: true))
+            }
+
+            let after = try await tenant.scope { repositories in
+                (teams: try await repositories.teams.list(),
+                 runs: try await repositories.ingestionRuns.list(
+                    competitionID: competition.id, limit: 10))
+            }
+
+            // Lo de la pasada, deshecho.
+            #expect(after.teams.isEmpty)
+            // El registro, no.
+            #expect(after.runs.count == 1)
+            #expect(after.runs.first?.outcome == .failed)
+            #expect(after.runs.first?.error?.isEmpty == false)
+            #expect(after.runs.first?.matchesCreated == 0)
+        }
+    }
+
+    /// Ida y vuelta del registro con **descartes dentro**, que es donde vive el
+    /// `jsonb`.
+    ///
+    /// Se prueba aquí y no en el nivel 2 por lo mismo que lo anterior: la forma
+    /// del documento es cosa del driver, y Postgres ya cazó una vez que un array
+    /// de Swift se enlaza como `jsonb[]` y no como `jsonb`.
+    @Test("el registro guarda y recupera sus descartes (D-85, §4.4)")
+    func theRunRecordRoundTripsItsSkips() async throws {
+        try await Self.withTenant("e2e-skips") { tenant in
+            let season = try Season(
+                id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+                federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+            let competition = try Competition(
+                id: CompetitionID(raw: UUID()), seasonID: season.id,
+                modality: .futbol11, gender: .masculino,
+                federationCompetitionID: "24037548", federationGroupID: "24037549",
+                ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
+                groupLabel: "Grupo 1", createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.seasons.save(season)
+                try await $0.competitions.save(competition)
+            }
+
+            let useCase = IngestCalendar(
+                unitOfWork: FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control)),
+                federation: StubFederationClient(returning: Self.calendarWithADatelessMatch()),
+                clock: FixedInstantClock(instant: Self.syncInstant),
+                ids: SystemUUIDProvider())
+
+            _ = try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("e2e-skips"), isSystem: true))
+
+            let runs = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: competition.id, limit: 10)
+            }
+
+            #expect(runs.count == 1)
+            #expect(runs.first?.outcome == .succeeded)
+            #expect(runs.first?.matchesCreated == 1)
+            #expect(runs.first?.skipped == [IngestionSkip(
+                reason: .missingMatchDate,
+                detail: "[2] E.F.M.O. BOADILLA - LAS ROZAS C.F.")])
+        }
+    }
+
+    /// Una jornada con un partido bueno y otro **sin fecha**, que la pasada deja
+    /// fuera y reporta (`D-75`).
+    static func calendarWithADatelessMatch() -> FederationCalendar {
+        func ref(_ id: String, _ name: String) -> FederationTeamRef {
+            FederationTeamRef(
+                federationTeamID: id, name: name, letter: "A",
+                federationClubID: "club-\(id)", crestURL: nil)
+        }
+        func match(
+            _ acta: String, _ home: FederationTeamRef, _ away: FederationTeamRef, _ date: Date?
+        ) -> FederationMatch {
+            FederationMatch(
+                federationMatchID: acta, home: home, away: away,
+                homeScore: nil, awayScore: nil, date: date, kickoff: nil,
+                venue: nil, venueCode: nil)
+        }
+        return FederationCalendar(
+            seasonLabel: try! SeasonLabel("2025/26"),
+            competitionName: nil, groupLabel: "Grupo 1", currentRound: 1,
+            rounds: [FederationRound(number: 1, label: "1", matches: [
+                match("1", ref("821", "CELTIC CASTILLA C.F."),
+                      ref("304468", "C.D. GALAPAGAR"),
+                      Date(timeIntervalSince1970: 1_758_931_200)),
+                match("2", ref("900", "E.F.M.O. BOADILLA"),
+                      ref("901", "LAS ROZAS C.F."), nil),
+            ])])
+    }
+
     /// Una jornada con dos partidos: el primero es bueno y el segundo enfrenta a
     /// un equipo consigo mismo, que `Match` rechaza (§3.5).
     static func brokenCalendar() -> FederationCalendar {

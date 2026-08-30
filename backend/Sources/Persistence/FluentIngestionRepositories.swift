@@ -278,3 +278,61 @@ extension MatchRecord {
         )
     }
 }
+
+public struct FluentIngestionRunRepository: IngestionRunRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func record(_ run: IngestionRun) async throws {
+        let record = IngestionRunRecord()
+        record.id = run.id.raw
+        record.$competition.id = run.competitionID.raw
+        record.startedAt = run.startedAt
+        record.finishedAt = run.finishedAt
+        record.outcome = run.outcome.rawValue
+        record.error = run.error
+        record.opponentClubsCreated = run.opponentClubsCreated
+        record.opponentClubsUpdated = run.opponentClubsUpdated
+        record.teamsCreated = run.teamsCreated
+        record.teamsUpdated = run.teamsUpdated
+        record.roundsCreated = run.roundsCreated
+        record.roundsUpdated = run.roundsUpdated
+        record.matchesCreated = run.matchesCreated
+        record.matchesUpdated = run.matchesUpdated
+        record.skipped = .init(rows: run.skipped)
+        try await record.create(on: database)
+    }
+
+    public func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
+        try await IngestionRunRecord.query(on: database)
+            .filter(\.$competition.$id == competitionID.raw)
+            .sort(\.$finishedAt, .descending)
+            .limit(limit)
+            .all()
+            .map { try $0.toDomain() }
+    }
+}
+
+extension IngestionRunRecord {
+    func toDomain() throws -> IngestionRun {
+        guard let outcome = IngestionOutcome(rawValue: outcome) else {
+            throw PersistenceError.corruptEnumeration(
+                table: Self.schema, column: "outcome", value: self.outcome)
+        }
+        var run = try IngestionRun(
+            id: IngestionRunID(raw: try requireID()),
+            competitionID: CompetitionID(raw: $competition.id),
+            startedAt: startedAt, finishedAt: finishedAt,
+            outcome: outcome, error: error)
+        run.opponentClubsCreated = opponentClubsCreated
+        run.opponentClubsUpdated = opponentClubsUpdated
+        run.teamsCreated = teamsCreated
+        run.teamsUpdated = teamsUpdated
+        run.roundsCreated = roundsCreated
+        run.roundsUpdated = roundsUpdated
+        run.matchesCreated = matchesCreated
+        run.matchesUpdated = matchesUpdated
+        run.skipped = skipped.rows
+        return run
+    }
+}

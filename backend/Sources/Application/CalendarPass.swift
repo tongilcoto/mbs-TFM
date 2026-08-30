@@ -32,7 +32,7 @@ final class CalendarPass {
     private var rounds: [Round]
     private var matches: [Match]
 
-    private(set) var report: IngestionReport
+    private(set) var report: IngestionRun
 
     init(
         competition: Competition,
@@ -48,7 +48,10 @@ final class CalendarPass {
         self.teams = try await repositories.teams.list()
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
-        self.report = IngestionReport(competitionID: competition.id, syncedAt: now)
+        self.report = try IngestionRun(
+            id: IngestionRunID(raw: ids.next()),
+            competitionID: competition.id,
+            startedAt: now, finishedAt: now)
     }
 
     func run(_ calendar: FederationCalendar) async throws {

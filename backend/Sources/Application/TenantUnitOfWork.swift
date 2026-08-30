@@ -32,4 +32,5 @@ public protocol Repositories: Sendable {
     var opponentClubs: any OpponentClubRepository { get }
     var teams: any TeamRepository { get }
     var matches: any MatchRepository { get }
+    var ingestionRuns: any IngestionRunRepository { get }
 }

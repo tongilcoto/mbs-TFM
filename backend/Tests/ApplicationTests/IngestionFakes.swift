@@ -21,6 +21,7 @@ actor IngestionStore {
     var opponentClubs: [OpponentClub] = []
     var teams: [Team] = []
     var matches: [Match] = []
+    var ingestionRuns: [IngestionRun] = []
 
     /// Cuántas veces se abrió un ámbito de tenant. Lo mira el test de
     /// atomicidad: la pasada escribe en **uno**.
@@ -45,6 +46,7 @@ actor IngestionStore {
     func save(_ value: OpponentClub) { upsert(&opponentClubs, value) { $0.id == value.id } }
     func save(_ value: Team) { upsert(&teams, value) { $0.id == value.id } }
     func save(_ value: Match) { upsert(&matches, value) { $0.id == value.id } }
+    func record(_ value: IngestionRun) { ingestionRuns.append(value) }
 
     private func upsert<T>(_ list: inout [T], _ value: T, where match: (T) -> Bool) {
         if let index = list.firstIndex(where: match) { list[index] = value } else {
@@ -119,6 +121,18 @@ struct FakeClubRepository: ClubRepository {
     func save(_ club: Club) async throws {}
 }
 
+struct FakeIngestionRunRepository: IngestionRunRepository {
+    let store: IngestionStore
+    func record(_ run: IngestionRun) async throws { await store.record(run) }
+    func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
+        await store.ingestionRuns
+            .filter { $0.competitionID == competitionID }
+            .sorted { $0.finishedAt > $1.finishedAt }
+            .prefix(limit)
+            .map { $0 }
+    }
+}
+
 struct FakeRepositories: Repositories {
     let store: IngestionStore
     var clubs: any ClubRepository { FakeClubRepository() }
@@ -130,6 +144,9 @@ struct FakeRepositories: Repositories {
     }
     var teams: any TeamRepository { FakeTeamRepository(store: store) }
     var matches: any MatchRepository { FakeMatchRepository(store: store) }
+    var ingestionRuns: any IngestionRunRepository {
+        FakeIngestionRunRepository(store: store)
+    }
 }
 
 /// El ámbito de tenant, sin transacción y sin `search_path`.

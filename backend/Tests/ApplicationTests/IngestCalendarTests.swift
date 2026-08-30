@@ -487,7 +487,7 @@ struct IngestCalendarTests {
         #expect(stored?.lastSyncedAt == Self.syncInstant)
         #expect(stored?.isSynced == true)
         #expect(stored?.federationName == "PRIMERA DIVISION AUTONOMICA CADETE")
-        #expect(report.syncedAt == Self.syncInstant)
+        #expect(report.finishedAt == Self.syncInstant)
     }
 
     // ── La guarda que exigió el hallazgo de los dos volcados ───────────────
@@ -662,16 +662,22 @@ struct IngestCalendarTests {
 
     // ── D-83: dónde están las fronteras transaccionales ────────────────────
 
-    /// `D-83`: la pasada abre **dos** ámbitos —leer la coordenada y escribir el
-    /// resultado— y la llamada a la federación queda **fuera de los dos**. Con
-    /// uno solo, una caída del proveedor dejaría una transacción abierta
-    /// esperando, que es como se agota el *pool* de §6.4.
+    /// `D-83` y `D-85`: **tres** ámbitos, y cada uno está donde está por una
+    /// razón distinta.
     ///
-    /// Y todo lo que se escribe va en **el segundo**, entero: o la competición
-    /// queda sincronizada o no queda tocada, coherente con que `last_synced_at`
-    /// signifique *"última sincronización con éxito"*.
-    @Test("la pasada abre dos ámbitos y la red queda fuera de los dos (D-83)")
-    func opensExactlyTwoScopes() async throws {
+    /// 1. **Leer la coordenada.** Se cierra antes de llamar a la federación: con
+    ///    un ámbito solo, una caída del proveedor dejaría una transacción abierta
+    ///    esperando, que es como se agota el *pool* de §6.4.
+    /// 2. **Escribir**, entero. O la competición queda sincronizada o no queda
+    ///    tocada, coherente con que `last_synced_at` signifique *"última
+    ///    sincronización con éxito"*.
+    /// 3. **Registrar la pasada**, y **fuera** del anterior a propósito
+    ///    (`D-85`): dentro, el `rollback` se llevaría por delante el registro de
+    ///    la pasada que falla, que es justo la que hay que poder leer.
+    ///
+    /// La llamada a la federación queda fuera de los tres.
+    @Test("la pasada abre tres ámbitos y la red queda fuera de todos (D-83, D-85)")
+    func opensExactlyThreeScopes() async throws {
         let season = try Self.season()
         let competition = try Self.competition(seasonID: season.id)
         let (useCase, store, _) = await Self.pass(
@@ -681,7 +687,7 @@ struct IngestCalendarTests {
             competitionID: competition.id,
             actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
 
-        #expect(await store.scopesOpened == 2)
+        #expect(await store.scopesOpened == 3)
     }
 
     /// Y el caso que el nivel 2 **no puede** cazar solo, porque estos dobles no
@@ -721,5 +727,96 @@ struct IngestCalendarTests {
         #expect(await store.opponentClubs.count == 2)
         #expect(report.skipped.map(\.reason) == [.duplicateClubName, .unresolvedTeam])
         #expect(await store.matches.isEmpty)
+    }
+
+    // ── D-85: el registro de la pasada ────────────────────────────────────
+
+    /// `D-85`. La ingesta **no tiene usuario delante** (§2.3-b): corre sola, por
+    /// tenant, y si lo que dice de sí misma no se guarda no lo lee nadie. La
+    /// pregunta que la tabla existe para contestar —*"¿por qué falta este
+    /// partido?"*— se hace días después.
+    @Test("la pasada deja registro de lo que escribió (D-85)")
+    func recordsWhatThePassWrote() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.calendar())
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 1)
+        #expect(runs.first?.competitionID == competition.id)
+        #expect(runs.first?.succeeded == true)
+        #expect(runs.first?.error == nil)
+        #expect(runs.first?.finishedAt == Self.syncInstant)
+        #expect(runs.first?.opponentClubsCreated == 2)
+        #expect(runs.first?.teamsCreated == 2)
+        #expect(runs.first?.roundsCreated == 1)
+        #expect(runs.first?.matchesCreated == 1)
+    }
+
+    /// La otra mitad, y **es la que justifica la tabla**: una pasada que revienta
+    /// es la que nadie ve, porque no hay usuario esperando una respuesta. Si el
+    /// registro viviera dentro de la transacción de `D-83`, el `rollback` se lo
+    /// llevaría por delante **justo en este caso**.
+    ///
+    /// Los contadores quedan a cero, y es lo honesto: la transacción se deshizo,
+    /// así que no se escribió nada aunque la pasada hubiera llegado lejos.
+    @Test("la pasada que falla también deja registro, con su motivo (D-85)")
+    func recordsFailuresToo() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(
+            seasonID: season.id, federationName: "PREFERENTE AFICIONADO")
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(
+                competitionName: "PRIMERA DIVISION AUTONOMICA CADETE"))
+
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 1)
+        #expect(runs.first?.succeeded == false)
+        #expect(runs.first?.outcome == .failed)
+        #expect(runs.first?.error?.isEmpty == false)
+        #expect(runs.first?.matchesCreated == 0)
+    }
+
+    /// Y los descartes viajan con la pasada, que es lo que la hace útil: sin
+    /// ellos la tabla dice *"algo pasó"* y no *"faltó esto y por esto"*.
+    ///
+    /// **No contradice `D-79`**: la marca sigue sin ser una columna de la fila
+    /// emparejada. Vive en el registro de la pasada, que es otra cosa.
+    @Test("los descartes viajan en el registro, no en la fila emparejada (D-79, D-85)")
+    func recordsTheSkippedRows() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let calendar = try Self.calendar(matches: [
+            Self.match(federationMatchID: "5374968"),
+            Self.match(
+                federationMatchID: "5374969",
+                home: Self.teamRef(
+                    id: "900", name: "E.F.M.O. BOADILLA", letter: "B", club: "0011111111"),
+                away: Self.teamRef(
+                    id: "901", name: "LAS ROZAS C.F.", letter: "C", club: "0012222222"),
+                date: nil),
+        ])
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar)
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        #expect(await store.ingestionRuns.first?.skipped == [IngestionSkip(
+            reason: .missingMatchDate,
+            detail: "[5374969] E.F.M.O. BOADILLA - LAS ROZAS C.F.")])
     }
 }
