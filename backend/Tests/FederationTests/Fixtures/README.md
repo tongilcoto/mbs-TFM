@@ -9,6 +9,7 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 |---|---|---|
 | `RFFM-calendario-temporada-sin-jugar.html` | `docs/Federation APIs examples/` + el mismo nombre | PREFERENTE AFICIONADO Grupo 1, temporada **2026-27**: 34 jornadas, 306 partidos, **ninguno jugado** |
 | `RFFM-calendario-temporada-jugada.html` | `docs/Federation APIs examples/` + el mismo nombre | PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, temporada **2025-26**: 30 jornadas, 240 partidos, **todos jugados** |
+| `RFFM-calendario-coordenada-inexistente.html` | `docs/Federation APIs examples/` + el mismo nombre | Lo que la RFFM responde a una coordenada que **no existe**: `200` y `calendar: null` |
 
 **El nombre dice las dos cosas que hay que saber antes de usarlos.** Son `.html`
 —no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
@@ -67,7 +68,8 @@ conviene tener dos criterios.
 los dos sitios:
 
 ```sh
-for f in RFFM-calendario-temporada-sin-jugar.html RFFM-calendario-temporada-jugada.html; do
+for f in RFFM-calendario-temporada-sin-jugar.html RFFM-calendario-temporada-jugada.html \
+         RFFM-calendario-coordenada-inexistente.html; do
   cp "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
   diff -q "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
 done
@@ -102,3 +104,53 @@ resuelve con el comando de arriba; la evidencia, no se resuelve luego.
 La estructura de este volcado, campo a campo, está descrita en
 [Anexo RFFM §F.15](../../../../docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) —
 incluidas las tres cosas que corrigió del anexo anterior.
+
+## El tercer volcado: cómo dice la RFFM que no
+
+Se capturó al escribir el canario de F5, y **desmiente una premisa del plan**.
+Plan §4.4 daba por hecho que una coordenada caducada daría **404** —*"un 404
+tiene que decir una cosa y un parseo fallido otra"*—. Medido: **la RFFM no da 404
+nunca** en la ruta del calendario. Dice que no de dos maneras, y las dos son
+`200`:
+
+| Coordenada mala | Qué responde |
+|---|---|
+| `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** — es este volcado |
+| `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. Ignora el parámetro |
+
+La segunda es la peligrosa: 30 jornadas perfectamente parseables que **no son de
+la temporada que se pidió**. Por eso el parser mira las dos cosas antes de
+interpretar nada, y las llama `coordinateNotFound` y no `malformedResponse` —
+si no, el canario gritaría *"¡han cambiado la forma!"* cada vez que alguien se
+equivoque de número.
+
+Del segundo caso **no hay volcado**: son 392 KB byte a byte iguales al de
+temporada jugada salvo un campo, y su rama se prueba con un `__NEXT_DATA__`
+mínimo escrito a mano en el test. La evidencia de que se comporta así es esta
+tabla y el comando con el que se midió.
+
+## El canario
+
+Vive aquí al lado y **no corre con `swift test`** (Plan §4.4): pregunta *"¿han
+cambiado ellos?"*, que no es determinista.
+
+```sh
+FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests
+```
+
+La coordenada por defecto es la del volcado de temporada jugada, para que el
+canario y el *fixture* hablen de lo mismo. **Caduca**, así que se puede cambiar
+sin tocar código:
+
+```sh
+FEDERATION_LIVE=1 \
+  FEDERATION_LIVE_SEASON=22 \
+  FEDERATION_LIVE_COMPETITION=26737701 \
+  FEDERATION_LIVE_GROUP=26737702 \
+  FEDERATION_LIVE_NAME="PREFERENTE AFICIONADO" \
+  swift test --filter RFFMCanaryTests
+```
+
+**El filtro es `RFFMCanaryTests`** —el nombre del tipo—, no el rótulo del
+*suite*: `--filter FederationCanary` no casa con nada y se queda en
+*"0 tests"*, que se lee como verde.

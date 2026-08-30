@@ -37,7 +37,31 @@ public enum RFFMCalendarParser {
             )
         }
 
-        let calendar = payload.props.pageProps.calendar
+        // ── Coordenada mala ≠ formato cambiado (Plan §4.4) ───────────────────
+        //
+        // **La RFFM no da 404 nunca**, medido al escribir el canario de F5. Da
+        // `200` y uno de estos dos disfraces, y los dos se parecen a un fallo de
+        // formato sin serlo:
+        //
+        //  · `competicion`/`grupo` inexistentes → `calendar: null`;
+        //  · `temporada` inexistente → **el calendario entero de otra
+        //    temporada**, con `temporada` vacía. Ignora el parámetro.
+        //
+        // El segundo es el peligroso: 30 jornadas perfectamente parseables que
+        // **no son de la temporada que se pidió**. Sin esta guarda, el único
+        // aviso sería que `SeasonLabel` no sabe reformatear una cadena vacía
+        // (`D-71`), y saldría como "cambió el formato".
+        guard let calendar = payload.props.pageProps.calendar else {
+            throw FederationError.coordinateNotFound(
+                detail: "la respuesta llegó sin calendario: competicion/grupo no existen")
+        }
+        guard !calendar.temporada.trimmingCharacters(in: .whitespaces).isEmpty else {
+            let name = calendar.competicion ?? "sin nombre"
+            throw FederationError.coordinateNotFound(
+                detail: "la fuente devolvió '\(name)' con la temporada vacía:"
+                    + " el parámetro `temporada` no designa ninguna")
+        }
+
         let host = (calendar.host ?? "").hasSuffix("/")
             ? String(calendar.host!.dropLast())
             : (calendar.host ?? "")

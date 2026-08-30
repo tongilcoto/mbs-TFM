@@ -150,4 +150,71 @@ struct RFFMCalendarParserTests {
     func failsLoudlyOnGarbage(_ body: String) {
         #expect(throws: FederationError.self) { try RFFMCalendarParser.parse(body) }
     }
+
+    // ── Coordenada mala ≠ formato cambiado (Plan §4.4, medido en F5) ────────
+
+    /// **El diseño daba por hecho que una coordenada caducada daría 404. No lo
+    /// da.** Medido contra la RFFM al escribir el canario de F5: con
+    /// `competicion` y `grupo` inexistentes responde **`200`** y una página
+    /// completa cuyo `calendar` es **`null`**.
+    ///
+    /// Sin esta rama, esa respuesta se cae por el `catch` del decodificador y sale
+    /// `malformedResponse` — es decir, el canario gritaría *"¡han cambiado la
+    /// forma de la respuesta!"* cuando lo que pasa es que la coordenada está mal.
+    /// Es exactamente la bandera que grita sin motivo de la que avisa Plan §4.4,
+    /// y a las tres semanas nadie la mira.
+    ///
+    /// El *fixture* es la respuesta real de
+    /// `temporada=21&…&competicion=99999999&grupo=99999999`.
+    @Test("una coordenada inexistente se llama coordenada, no formato (Plan §4.4)")
+    func absentCalendarIsNotAFormatChange() throws {
+        let url = Bundle.module.url(
+            forResource: "RFFM-calendario-coordenada-inexistente", withExtension: "html",
+            subdirectory: "Fixtures")!
+        let page = try String(contentsOf: url, encoding: .utf8)
+
+        #expect(throws: FederationError.self) { try RFFMCalendarParser.parse(page) }
+
+        do {
+            _ = try RFFMCalendarParser.parse(page)
+            Issue.record("se esperaba un error")
+        } catch let error as FederationError {
+            guard case .coordinateNotFound = error else {
+                Issue.record("se esperaba coordinateNotFound y llegó \(error)")
+                return
+            }
+        }
+    }
+
+    /// El segundo disfraz de lo mismo, y **peor**: con una `temporada`
+    /// inexistente la RFFM devuelve `200` y **el calendario entero de otra
+    /// temporada**, con `temporada` vacía. Es decir, ignora el parámetro.
+    ///
+    /// La única señal es ese campo vacío. Sin esta rama, `SeasonLabel` fallaría al
+    /// reformatearlo (`D-71`) y saldría otra vez `malformedResponse` — con 30
+    /// jornadas perfectamente parseadas detrás, listas para escribirse en la
+    /// temporada equivocada si alguien decidiera "tolerar" el fallo.
+    ///
+    /// El JSON es mínimo a propósito: lo que se prueba es **una rama**, y el
+    /// volcado real de este caso son 392 KB idénticos a otro que ya está.
+    @Test("una temporada vacía es coordenada mala, no formato (Plan §4.4)")
+    func emptySeasonIsNotAFormatChange() throws {
+        let page = #"""
+            <script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"calendar":{"estado":"1","competicion":\#
+            "PRIMERA DIVISION AUTONOMICA CADETE","grupo":"Grupo 1","temporada":"",\#
+            "host":"https://appweb.rffm.es/","rounds":[]}}}}
+            </script>
+            """#
+
+        do {
+            _ = try RFFMCalendarParser.parse(page)
+            Issue.record("se esperaba un error")
+        } catch let error as FederationError {
+            guard case .coordinateNotFound = error else {
+                Issue.record("se esperaba coordinateNotFound y llegó \(error)")
+                return
+            }
+        }
+    }
 }

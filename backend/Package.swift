@@ -64,6 +64,14 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-generator.git", from: "1.13.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime.git", from: "1.12.0"),
         .package(url: "https://github.com/vapor/swift-openapi-vapor.git", from: "1.1.0"),
+        // F5: el transporte HTTP real de los adaptadores de federación. Ya
+        // estaba en el grafo —Vapor depende de él—, pero `Federation` no puede
+        // usarlo de gratis: cada target declara lo que importa (ver arriba).
+        //
+        // **No es Vapor.** La regla de §2.2 para este target es que no arrastre
+        // el framework web ni el ORM; un cliente HTTP de servidor es justo lo que
+        // un adaptador secundario que habla con una API ajena necesita.
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.36.0"),
     ],
     targets: [
         // ── Núcleo ────────────────────────────────────────────────────────────
@@ -133,7 +141,10 @@ let package = Package(
         // «unit puro»).
         .target(
             name: "Federation",
-            dependencies: ["Application", "Domain"],
+            dependencies: [
+                "Application", "Domain",
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+            ],
             swiftSettings: commonSwiftSettings
         ),
 
