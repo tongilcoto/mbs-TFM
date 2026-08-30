@@ -2559,6 +2559,38 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     **vista derivada** que falta (§3.4), y se notó al diseñar el disparador de ingesta ([D-88]), cuya pantalla
     es exactamente esa lista.
 
+    **Y tampoco es un problema de coste — está medido, así que no hace falta suponerlo.** La duda razonable
+    es que la unión `Team`↔`Match` no tiene un lado "dueño": son **dos** columnas, y la condición es
+    `home_team_id = X OR away_team_id = X`. Medido el 2026-08-30 contra Postgres 16 sobre datos sintéticos
+    de **28.800 partidos** —diez temporadas de un club de doce equipos: 10 × 12 competiciones × 30 jornadas ×
+    8 partidos, 10 MB de tabla, con `ANALYZE` hecho y el equipo propio repartido 154/146 entre local y
+    visitante—:
+
+    | Consulta | Tiempo | Plan |
+    |---|---|---|
+    | Un equipo: `home = X OR away = X` | **0,23 ms** | `BitmapOr` sobre **los dos** índices |
+    | La misma reescrita como `UNION` | 0,84 ms | idéntico — **la reescritura no gana nada** |
+    | La página entera, *join* directo con el `OR` | **10,9 ms** | `Seq Scan` de 28.800; el `OR` como *join filter* |
+    | La página entera, con `LATERAL` por equipo | **5,8 ms** | `BitmapAnd(competition, BitmapOr(home, away))` |
+
+    Tres lecturas, y la tercera es la que corrige esta misma cuestión:
+
+    1. **El `OR` no impide usar índices.** Postgres escanea los dos y une los mapas de bits. Los cuatro
+       índices que hacen falta (`competition`, `round`, `home_team`, `away_team`) **ya los crea la migración
+       de `matches`**; no hay ninguno que añadir. Y añadir uno compuesto "por si acaso" se pagaría en **cada
+       pasada de ingesta** —~2.900 escrituras por club y semana— para ahorrar sobre 0,23 ms.
+    2. **El truco clásico de reescribir el `OR` como `UNION` es aquí una superstición**: mismo plan, mismo
+       orden de magnitud.
+    3. **El N+1 no cuesta lo que parece.** Doce consultas sueltas son **~2,8 ms** de base de datos, *menos*
+       que los 10,9 ms del *join* único. Lo que cuesta el N+1 son **doce viajes HTTP**, no el trabajo de
+       Postgres. Así que esta cuestión es de **contrato y de latencia de red**, no de esquema ni de índices —
+       y quien la resuelva no debe justificarse con el rendimiento de la consulta.
+
+    *Aviso de alcance, como pide §8.2 de cualquier cifra así:* son datos **sintéticos**, y la consulta del
+    *join* directo escala **linealmente** porque hace `Seq Scan` —a 10× serían ~100 ms, lo cual es
+    **extrapolación, no medida**—. La forma con `LATERAL` no escala así, porque va por índice. 28.800
+    partidos ya son diez años de un club de doce equipos, de modo que el techo realista está cubierto.
+
     **La salida que NO es**: una FK ni una tabla pivote. La relación `Competition`↔`Team` es **N:N** —una
     competición contiene varios equipos propios (el A y el B del mismo Infantil, [D-67]) y un equipo juega
     varias competiciones en la misma temporada (liga y copa, [D-12])—, y su tabla pivote **existió y se

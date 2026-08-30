@@ -2841,6 +2841,10 @@ errores parciales y tres estados de carga — para un trabajo que el servidor ya
 > aparece en sus partidos. Pintar esa lista hoy cuesta **N+1 peticiones**. **No se resuelve aquí** —este
 > endpoint recibe ids, no los descubre— pero queda anotado como cuestión abierta del contrato (§9.12), a
 > decidir cuando el backoffice tenga forma: es una **vista derivada** (§3.4), no una columna nueva.
+>
+> **Y el "N+1" ahí es de peticiones HTTP, no de coste de base de datos**: §9.12 lo mide —doce consultas
+> sueltas salen *más baratas* que el *join* único, y el `home = X OR away = X` usa los dos índices—. Quien
+> resuelva aquello no puede justificarse con el rendimiento.
 
 **Dos respuestas, y la diferencia es el coste** —el mismo argumento de [D-67], aplicado un nivel más abajo—:
 
