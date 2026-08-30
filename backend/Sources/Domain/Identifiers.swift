@@ -22,3 +22,29 @@ public struct CompetitionID: Hashable, Sendable {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Club rival (§3.2). **Identidad del club, separada de sus equipos** (§3.6): un
+/// club rival tiene equipo en varias categorías y todos apuntan a esta misma fila.
+public struct OpponentClubID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
+/// Equipo (§3.2). Propio si `opponentClubID` es nulo, rival si no ([D-03], §3.6).
+public struct TeamID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
+/// Jornada (§3.2). Fija la competición del partido, y por eso la clave de
+/// coordenadas de `Match` no repite `competition_id` (§3.5).
+public struct RoundID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
+/// Partido (§4.2, raíz de agregado).
+public struct MatchID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
