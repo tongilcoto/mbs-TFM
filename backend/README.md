@@ -10,8 +10,8 @@
 
 ## 0. Qué hay montado ahora mismo
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1**, **F2** y
-**F3**. **115 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1**, **F2**,
+**F3** y **F4**. **138 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
@@ -19,49 +19,67 @@ Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregada
 | `PATCH /v1/club` | ✅ |
 | Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
 
-**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3 tienen superficie HTTP,
-así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber qué se puede tocar
-con `curl`. Lo que hay:
+**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4 tienen
+superficie HTTP, así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber
+qué se puede tocar con `curl`. Lo que hay:
 
 | Fase   | Qué añadió                                                                                                               | Cómo se **prueba**                                                                                                                     | Cómo se **mira**                                                          |
 | ------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba                       | `swift test --filter 'Club\|Tenancy\|Tenant'` → **29 tests** · necesita Docker                                                         | `curl` (§4)                                                               |
+| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba                       | `swift test --filter 'Club\|Tenancy\|Tenant'` → **36 tests** · necesita Docker                                                         | `curl` (§4)                                                               |
 | **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio             | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker                                                           | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2) |
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                              | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                        | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
 | **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía** | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red** | sus tests, y solo sus tests (§5.4)                                        |
+| **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante** | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                              | sus tests, y solo sus tests (§5.4)                                        |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
 > ellas, `zsh` se come el `|` como una tubería.
 >
-> `--filter` es una **expresión regular sobre el nombre del test**, no un nombre de *target*, y eso tiene dos
-> consecuencias que sorprenden. Una: arrastra tests sueltos de *suites* que no esperabas —el filtro de F0 se
-> lleva un par de `SeasonPersistenceTests` porque llevan la palabra "tenant" en el nombre—. Y otra: hay que
-> escribir **las dos** raíces, `Tenancy` y `Tenant`, porque son *suites* distintas; con solo una se pierden
-> tests. Por lo mismo, `Season` coge también `SeasonLabel`, y `Federation` a secas se llevaría de propina el
-> catálogo de federaciones, que vive en `DomainTests` (40 en vez de 36).
+> `--filter` es una **expresión regular sobre los identificadores de Swift** —el nombre del tipo de la
+> *suite* y el de la función del `@Test`—, no un nombre de *target*, y eso tiene tres consecuencias que
+> sorprenden. Una: **arrastra tests de *suites* que no esperabas, y la cuenta se mueve sola al añadir una
+> fase**. El filtro de F0 se lleva un par de `SeasonPersistenceTests` porque llevan la palabra "tenant" en el
+> nombre, y desde F4 se lleva además los siete `opponentClub…` de la cadena de emparejamiento: pasó de **29 a
+> 36 sin que F0 tocase una línea**. Otra: hay que escribir **las dos** raíces, `Tenancy` y `Tenant`, porque
+> son *suites* distintas; con solo una se pierden tests. Por lo mismo, `Season` coge también `SeasonLabel`, y
+> `Federation` a secas se llevaría de propina el catálogo de federaciones y los `…ByFederationKey` de F4
+> (**43** en vez de 36).
 >
-> **El filtro de F3 va por nombre de *suite* justo por eso**, y conviene saber qué pasa si se acorta: el
-> `'Upsert|Kickoff|MatchResult'` que pide el cuerpo devuelve **16 en vez de 13**, porque `--filter` mira
-> también el nombre de la **función** de Swift, no solo el rótulo del `@Test`. Se lleva dos del parser de F2
-> (sus funciones se llaman `kickoff…`) y —lo importante— **uno de Postgres**: `save da de alta y luego
-> actualiza la misma fila`, que por dentro se llama *upsert* y **necesita Docker**. Con el filtro de la
-> tabla, F3 corre sin contenedor.
+> Y la tercera, que es la que más despista porque es lo contrario de lo que parece: **el rótulo del `@Test`
+> no se filtra**. Los rótulos de este proyecto están en español y son la parte legible, así que es el primer
+> sitio donde uno busca — y no hay nada. Comprobado: `--filter reconoce` devuelve **0** aunque "se reconoce"
+> esté en **seis** rótulos de F4, y `--filter volátil` devuelve **0** mientras `--filter volatile` devuelve
+> **2**, que son las funciones. **Para buscar por el rótulo, `grep` sobre `Tests/`; `--filter` es para
+> identificadores.**
+>
+> **El filtro de F3 va por nombre de *suite* por esa misma razón**, y conviene saber qué pasa si se acorta:
+> el `'Upsert|Kickoff|MatchResult'` que pide el cuerpo devuelve **17 en vez de 13**, precisamente porque lo
+> que se filtra son los **nombres de función**. Se lleva dos del parser de F2, cuyas funciones se llaman
+> `kickoff…`; uno de F4, `neitherDateNorKickoffCanEnterTheChain`; y —lo importante— **uno de Postgres**:
+> `save da de alta y luego actualiza la misma fila`, que por dentro se llama *upsert* y **necesita Docker**.
+> Con el filtro de la tabla, F3 corre sin contenedor.
 >
 > **Son filtros para trabajar, no una partición del proyecto.** Para saber si algo está roto, `swift test` a
 > secas.
 
-**Tres de las cuatro fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
+**Cuatro de las cinco fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
 construye la ingesta antes que su superficie de alta, que es **F10**. Para F1 lo que se mira es la **base de
-datos**; para F2 y F3, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
+datos**; para F2, F3 y F4, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
 especificación revisable, no el código"*).
 
-> **Ni F2 ni F3 dejan rastro en la base de datos, y no es un fallo.** F2 es *"contra fixtures, **sin
-> persistir nada**"* y F3 es *"unit puro, **cero I/O**"*: cuatro funciones y dos *Value Objects* que ni
-> siquiera saben que existe Postgres. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
+> **Ni F2, ni F3, ni F4 dejan rastro en la base de datos, y no es un fallo.** F2 es *"contra fixtures, **sin
+> persistir nada**"* y F3 y F4 son *"unit puro, **cero I/O**"*: funciones y *Value Objects* que ni siquiera
+> saben que existe Postgres. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
 >
-> **Y F3 todavía no tiene llamante**, que es lo que más despista al mirarlo: la ingesta que usará estas
-> reglas —el *merge* de cada entidad— es **F5**, y la cadena que decide *qué fila* se fusiona con qué es
-> **F4**. Hoy lo que las mantiene en el grafo de *build* son sus tests, igual que le pasa a `Federation`.
+> **Y ninguna de las dos tiene llamante todavía**, que es lo que más despista al mirarlas. Son **las dos
+> mitades de §3.7** y hacen falta juntas: F4 decide **qué fila** de la base de datos es la que la fuente está
+> publicando, y F3 decide **qué se le escribe** una vez decidido. Quien las llamará a las dos es la ingesta
+> del calendario, que es **F5**. Hoy lo que las mantiene en el grafo de *build* son sus tests, igual que le
+> pasa a `Federation`.
+>
+> Corolario práctico al mirar F4: **sus candidatos no son las entidades del modelo.** `TeamCandidate` y
+> `MatchCandidate` llevan **solo las claves de emparejamiento**, así que no busques ahí la fecha del partido
+> ni el marcador — no están, y esa ausencia *es* la regla de §3.7 (*"ni la fecha ni la hora entran nunca en
+> la cadena"*) hecha tipo.
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de abajo es dónde corre **la API**.
 
@@ -358,6 +376,8 @@ swift test --filter TenancyTests            # nivel rápido, aunque sea infraest
 swift test --filter FederationTests         # nivel 1 — federación: sin red y sin Docker
 swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResultTests'
                                             # nivel 1 — F3: la política de upsert (§0)
+swift test --filter 'MatchingChainTests|NormalizedNameTests'
+                                            # nivel 1 — F4: la cadena de emparejamiento (§0)
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
@@ -378,7 +398,7 @@ que hace falta para leerla:
   (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
   falla uno de nueve.
 
-El paralelo no sobra —los 115 tests bajan de **2,8 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
+El paralelo no sobra —los 138 tests bajan de **3,7 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
 las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
@@ -564,6 +584,41 @@ swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResul
 ```
 
 Trece renglones, en orden de fichero, y cada uno con su `§x` o su `D-nn`. Eso **es** la revisión de la fase.
+
+**F4 es el mismo caso y añade dos formas de leer que conviene conocer.**
+
+```sh
+swift test --filter 'MatchingChainTests|NormalizedNameTests' --no-parallel --disable-xctest
+```
+
+Veintitrés renglones, y también aquí **hay parejas que solo tienen sentido leídas juntas** — dos reglas sobre
+el mismo escalón de la cadena que, sueltas, parecen contradecirse:
+
+```swift
+@Test("la clave que no encuentra a nadie cae al paso 2, y por eso D-76 existe")
+@Test("una clave distinta descarta al candidato aunque el nombre case (§3.7)")
+```
+
+El primero **abre** el paso 2 a una fila entrante que sí trae clave —si no, la fila que nació sin clave no la
+recibiría jamás y `D-76` se quedaría sin caso—. El segundo **cierra** ese mismo hueco para el candidato cuya
+clave contradice, que es otra entidad. Juntos son `D-78`; por separado, cada uno parece la negación del otro.
+
+**Y dos tests que no pueden fallar, a propósito.** Éstos:
+
+```swift
+@Test("un equipo propio sin enganchar no lo engancha la ingesta (D-66, D-67, D-76)")
+@Test("la fecha no está en la cadena porque no está en el tipo (§3.7, D-30)")
+```
+
+No los sostiene una guarda sino **un tipo**: `TeamOwnership` es un `enum` cuyo caso `.own` no lleva nombre de
+club, y `MatchCandidate` no tiene fecha. Al leerlos parecen tautologías, y es justo lo contrario: fijan la
+**decisión de modelado** que hace que esas dos reglas de §3.7 no se puedan desobedecer. Lo que hay que leer
+antes de añadirle un campo "para desempatar" a un candidato.
+
+> **Que un test llegue en verde sin haber estado nunca en rojo es una deuda, y aquí está declarada.** Plan
+> §5.1 pide el rojo de aserción porque *"un test que nunca ha estado en rojo es un test sin probar"*. Estos
+> dos no lo tuvieron. Lo que compra la garantía en su lugar es la **comprobación de mutación**: se abre el
+> paso 2 a los equipos propios y el primero cae. Está en Plan §4.6, con las 16 mutaciones de la fase.
 
 ---
 

@@ -31,7 +31,9 @@ public protocol FederationClient: Sendable {
     ///
     /// **No persiste nada y no empareja nada**: devuelve lo que la fuente dice.
     /// Casar eso con lo que ya hay en la base de datos es la cadena de §3.7, que
-    /// vive en la capa de aplicación (F4) y no aquí.
+    /// vive en el **Dominio** —`MatchingChain`, F4— y no aquí. Lo que sí es de
+    /// esta capa es el caso de uso que carga los candidatos, llama a la cadena y
+    /// escribe el resultado (F5).
     func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar
 }
 
