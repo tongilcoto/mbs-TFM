@@ -2830,12 +2830,17 @@ enseña **los equipos del club con una casilla al lado** y un botón de resincro
 acción del usuario. Partirla en tres peticiones le traslada al navegador el manejo de tres respuestas, tres
 errores parciales y tres estados de carga — para un trabajo que el servidor ya sabía hacer de una vez.
 
-> **Y trae un hallazgo del modelo que conviene no perder: `Team` no tiene competición.** Ni columna, ni
-> `TeamRegistration` —que es `(equipo, temporada)`—: la participación se **deriva de los partidos** ([D-27]).
-> Así que esa pantalla se **rotula** con el equipo pero el id que viaja es el de la `Competition`, y la
-> correspondencia hoy solo sale de `Match`. Encaja con el caso de uso —un equipo sin partidos no tiene nada
-> que resincronizar; su primera ingesta es el `federation-link` de [D-67]— pero es una **derivación, no una
-> arista del modelo**, y F10 es quien tendrá que decidir si el enganche la materializa.
+> **Y trae un hallazgo que no es del modelo sino del contrato, y conviene no confundirlos.** La pantalla
+> trabaja con la terna **(equipo, temporada, competición)** —lo que en el backoffice se llama *"un equipo"*—,
+> y el id que viaja en esta petición es el de la `Competition`. El **modelo** está bien: `Team` no lleva
+> temporada ([D-28]) ni competición porque la participación se **deriva** de los partidos ([D-27]), y eso es
+> lo que permite que "Infantil A" sea la misma entidad año tras año.
+>
+> Lo que falta es la **lectura**: `GET /teams?seasonId=` da los equipos sin su competición,
+> `GET /competitions?seasonId=` da las competiciones sin sus equipos, y el `competitionId` de cada equipo solo
+> aparece en sus partidos. Pintar esa lista hoy cuesta **N+1 peticiones**. **No se resuelve aquí** —este
+> endpoint recibe ids, no los descubre— pero queda anotado como cuestión abierta del contrato (§9.12), a
+> decidir cuando el backoffice tenga forma: es una **vista derivada** (§3.4), no una columna nueva.
 
 **Dos respuestas, y la diferencia es el coste** —el mismo argumento de [D-67], aplicado un nivel más abajo—:
 
@@ -3147,7 +3152,7 @@ desmonta con una petición más, y además impediría a la UI decir nada útil.
 sencillamente **no existe** para la consulta, porque el `search_path` de §6.2 no lo alcanza. Ahí el 404 es
 literal, no una política — y por eso no filtra nada.
 
-**Qué se asume a cambio.** Si algún día las lecturas dejasen de ser abiertas —§9.10, cuentas de jugadores o
+**Qué se asume a cambio.** Si algún día las lecturas dejasen de ser abiertas —§9.11, cuentas de jugadores o
 tutores—, esta decisión hay que revisarla **entera**: con lectura restringida, el 403 sí filtraría existencia
 y volvería a tener sentido el 404.
 

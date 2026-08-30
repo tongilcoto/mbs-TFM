@@ -401,9 +401,11 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
   respuesta; dos o más, o una temporada, no. **Lo decide la petición, no los datos**: con `{}` sobre un club
   de una sola competición sigue siendo 202, porque una respuesta que cambia de forma según cuántos equipos
   tenga el club no se puede programar.
-- **`competitionIds` es una lista porque la pantalla lo es**: equipos con una casilla al lado. Vacía → **400**;
-  para la temporada entera, se omite. Y ojo: **`Team` no tiene competición** —la participación se deriva de
-  los partidos (`D-27`)—, así que el backoffice rotula con el equipo y manda el id de la competición.
+- **`competitionIds` es una lista porque la pantalla lo es**: equipos con una casilla al lado. Vacía →
+  **400**; para la temporada entera, se omite. Lo que el backoffice llama *"un equipo"* es en realidad la
+  terna *(equipo, temporada, competición)*, y el id que viaja es el de la **competición** — pero **ninguna
+  lectura sirve esa terna entera** todavía: hoy costaría N+1 peticiones. Está abierto en §9.12 del LLD, y no
+  bloquea este endpoint, que recibe ids en vez de descubrirlos.
 - **Una pasada que falla también se lee.** Prueba con una coordenada mala: el `POST` devuelve **502** y el
   `GET` te enseña la fila con `outcome: "failed"` y su motivo. Es la razón de ser entera de `D-85` — la
   pasada que falla es la que nadie ve.

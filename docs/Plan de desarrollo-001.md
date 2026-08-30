@@ -642,7 +642,7 @@ batería completa en **259**.
 | ¿Cuál es el intervalo exacto de §5.6? | **No vive en el código.** Lunes + fin de semana, puestos por el disparador; el código trae un **antirrebote**, que no es el tope semanal → [D-87] |
 | ¿Cómo se lee el registro de pasadas, y cómo se relanza una? | Un recurso, dos operaciones, y **200 o 202 según el coste** → [D-88] |
 | ¿Y si el administrador quiere relanzar **varias** a la vez? | El cuerpo lleva **lista**, no un id: la pantalla son equipos con una casilla, y marcar tres es **una** acción → [D-88] |
-| ¿De dónde saca el backoffice la competición de un equipo? | **De sus partidos.** `Team` no tiene competición y `TeamRegistration` es `(equipo, temporada)`: la participación se deriva ([D-27]). Es derivación, no arista del modelo — F10 decide si la materializa |
+| ¿De dónde saca el backoffice la terna *(equipo, temporada, competición)*? | **De ninguna lectura entera**: hoy son N+1 peticiones. No es fallo del modelo —la participación se deriva por diseño ([D-27], [D-28])— sino una **vista derivada que falta**. Abierta en §9.12 |
 | ¿Puede el `202` prometer lo que no ha comprobado? | **No.** Planifica antes de responder, así una `seasonId` inexistente da 404 y no un 202 con un fallo invisible detrás |
 | ¿Basta la temporada vigente como alcance del recorrido? | **Como valor por defecto, sí**; como prohibición, no. `seasonId` y `competitionId` son las dos filas de la coordenada de la federación (§3.5) |
 

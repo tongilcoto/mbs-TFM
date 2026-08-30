@@ -1682,9 +1682,9 @@ real ocurre siempre en el caso de uso (§7.4).
   respuesta; dos o más, o una temporada, no. **Lo decide la petición, no los datos** — con `{}` sobre un club
   de una sola competición sigue siendo 202. El `202` **planifica antes de responder**, de modo que una
   `seasonId` inexistente da 404 y no un 202 con un fallo invisible detrás ([D-84]).
-- **`Team` no tiene competición** (§3.2, [D-27]): la lista se rotula con el equipo, pero el id que viaja es el
-  de la `Competition`, y esa correspondencia se deriva hoy de `Match`. Queda para F10 decidir si el enganche
-  de [D-67] la materializa.
+- **El cliente llega con los ids, no los descubre aquí.** La pantalla trabaja con la terna *(equipo,
+  temporada, competición)* y hoy **ninguna lectura la sirve entera** — ver §9.12. Es cuestión del contrato,
+  no del modelo: la participación se deriva por diseño ([D-27], [D-28]).
 - **`competitionId` obligatorio en el `GET`**, como en `/rounds` y por lo mismo: una pasada fuera de su
   competición no significa nada, y exigirlo acota la colección a lo que se sirve **sin paginación** (§5.3).
   Orden fijo: de la más reciente a la más antigua.
@@ -2390,7 +2390,7 @@ API. Ahí RLS sería la única defensa.
 - **El coste de la comprobación de ámbito** ([D-62]) y el de leer las asignaciones en cada petición
   ([D-59]). Ninguno medido.
 - **La política de arrastre de asignaciones entre temporadas** — ver §9.9.
-- **Qué ve un jugador o un tutor** si algún día tienen cuenta — ver §9.10.
+- **Qué ve un jugador o un tutor** si algún día tienen cuenta — ver §9.11.
 
 ---
 
@@ -2548,6 +2548,21 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     lectura y que basta con pertenecer al club. Un jugador —o el tutor de un menor— viendo la ficha, las
     ausencias y las fotos de **todo** el club es otra cosa, y con datos de menores tiene implicaciones de
     RGPD que no se han diseñado. Hoy no bloquea porque las cuentas son de *staff* (ADR, Anexo C.4).
+
+12. **La terna *(equipo, temporada, competición)* no la sirve ninguna lectura.** El backoffice trabaja con
+    ella —lo que su usuario llama *"un equipo"* es eso— y hoy hacen falta **N+1 peticiones** para componerla:
+    `GET /teams?seasonId=` da los equipos **sin** competición, `GET /competitions?seasonId=` da las
+    competiciones **sin** equipos, y el `competitionId` de un equipo solo aparece en sus partidos.
+
+    **No es un fallo del modelo**: `Team` no lleva temporada ([D-28]) ni competición porque la participación
+    se **deriva** ([D-27]), y eso es lo que hace que "Infantil A" sea la misma entidad año tras año. Es una
+    **vista derivada** que falta (§3.4), y se notó al diseñar el disparador de ingesta ([D-88]), cuya pantalla
+    es exactamente esa lista.
+
+    Tres salidas, ninguna elegida: **(a)** `TeamResponse` gana un bloque de competiciones cuando la petición
+    trae `?seasonId=`; **(b)** `CompetitionResponse` gana sus equipos propios; **(c)** un recurso de lectura
+    propio para esa pantalla. **Se decide con el backoffice delante, no antes** — y conviene mirarla junto a
+    F10: si el enganche de [D-67] acaba materializando la arista, (a) sale casi gratis.
 
 > **Dónde está lo demás.** Las cuestiones de **dominio del modelo de datos** quedaron resueltas (§3.6, con
 > el razonamiento en el [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)). Lo que falta por **observar** de la

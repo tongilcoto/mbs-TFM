@@ -108,7 +108,12 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
   responde **200** con una competición (cabe en la respuesta) o **202** con una temporada (decenas de
   competiciones y ~240 partidos cada una: es `D-67` un nivel más abajo). El `202` **planifica antes de
-  responder**, para que una `seasonId` inexistente dé 404 y no un 202 con un fallo invisible detrás.
+  responder**, para que una `seasonId` inexistente dé 404 y no un 202 con un fallo invisible detrás. El cuerpo
+  lleva **lista** de competiciones porque la pantalla que lo usa son equipos con una casilla al lado: marcar
+  tres es **una** acción del usuario. Y diseñarlo destapó §9.12 — **ninguna lectura sirve la terna *(equipo,
+  temporada, competición)***, que es lo que el backoffice llama *"un equipo"*; hoy costaría N+1 peticiones.
+  No es fallo del modelo (la participación se deriva por diseño, `D-27`/`D-28`): es una vista derivada que
+  falta.
 - **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
   en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
   ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
