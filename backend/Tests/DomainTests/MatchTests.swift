@@ -14,7 +14,12 @@ struct MatchTests {
     static func date(_ iso: String) -> Date {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = TimeZone(identifier: "Europe/Madrid")
+        // **UTC, no `Europe/Madrid`**, que es la convención del proyecto para
+        // fechas de calendario (`SeasonLabel`, `RFFMValue.date`): son `date` en
+        // Postgres y `format: date` en el spec, así que el huso no forma parte
+        // del dato — y con `Europe/Madrid` la medianoche local cae el día
+        // anterior en UTC.
+        f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "dd-MM-yyyy"
         return f.date(from: iso)!
     }
