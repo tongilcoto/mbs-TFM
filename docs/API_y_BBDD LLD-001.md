@@ -2559,10 +2559,18 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     **vista derivada** que falta (§3.4), y se notó al diseñar el disparador de ingesta ([D-88]), cuya pantalla
     es exactamente esa lista.
 
-    Tres salidas, ninguna elegida: **(a)** `TeamResponse` gana un bloque de competiciones cuando la petición
-    trae `?seasonId=`; **(b)** `CompetitionResponse` gana sus equipos propios; **(c)** un recurso de lectura
-    propio para esa pantalla. **Se decide con el backoffice delante, no antes** — y conviene mirarla junto a
-    F10: si el enganche de [D-67] acaba materializando la arista, (a) sale casi gratis.
+    **La salida que NO es**: una FK ni una tabla pivote. La relación `Competition`↔`Team` es **N:N** —una
+    competición contiene varios equipos propios (el A y el B del mismo Infantil, [D-67]) y un equipo juega
+    varias competiciones en la misma temporada (liga y copa, [D-12])—, y su tabla pivote **existió y se
+    borró**: era `Participation`, y [D-27] la eliminó porque *"no podía contener una sola fila que `Match` no
+    implicara ya"*. Allí se descartó además la variante *"conservarla como caché materializada"*, por meter un
+    **segundo escritor** que sincronizar con `Match` en cada pasada. **Esta cuestión no reabre aquello.**
+
+    Tres salidas, todas de **lectura** y ninguna elegida: **(a)** `TeamResponse` gana un bloque de
+    competiciones cuando la petición trae `?seasonId=`; **(b)** `CompetitionResponse` gana sus equipos
+    propios; **(c)** un recurso de lectura propio para esa pantalla. **Se decide con el backoffice delante, no
+    antes** — y conviene mirarla junto a F10: si el enganche de [D-67] acaba materializando la arista, (a)
+    sale casi gratis.
 
 > **Dónde está lo demás.** Las cuestiones de **dominio del modelo de datos** quedaron resueltas (§3.6, con
 > el razonamiento en el [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)). Lo que falta por **observar** de la
