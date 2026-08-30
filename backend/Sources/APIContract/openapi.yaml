@@ -4319,7 +4319,13 @@ components:
             (§3.7). Y como nunca se recalcula, una corrección posterior del nombre **no deja *assets*
             huérfanos**: el fichero conserva su nombre original, algo desfasado pero estable. Un slug
             interno no se muestra, así que que envejezca no molesta.
-          examples: ['celtic-castilla']
+
+            **La derivación es mecánica** (`D-82`): plegar acentos, minúsculas, y cada corrida de lo que
+            no sea letra o dígito se convierte en **un** guion. No se limpia la forma jurídica —"C.F.",
+            "C.D.", "S.A.D."…—: eso exigiría una lista que nadie mantiene y se queda corta con la primera
+            federación nueva, y no compra nada porque este identificador no se muestra. Si dos clubes
+            distintos derivan el mismo slug, el segundo lleva sufijo (`-2`).
+          examples: ['celtic-castilla-c-f']
         federationClubId:
           type: [string, 'null']
           readOnly: true

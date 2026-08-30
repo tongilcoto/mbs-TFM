@@ -29,3 +29,30 @@ public struct WallClockTime: Hashable, Sendable {
         self.minute = minute
     }
 }
+
+extension WallClockTime {
+    /// `"18:05"`, con el cero delante. Es la forma en que se persiste (§4.4) y
+    /// la que la RFFM publica ([Anexo RFFM §F.15]).
+    ///
+    /// **Se guarda como texto y no como `time` de Postgres**, y conviene decir
+    /// por qué: el driver decodifica `time` a un `Date`, que es un instante — y
+    /// volver a meter este valor en un instante es exactamente lo que este tipo
+    /// existe para no hacer. El texto `HH:mm` además **ordena
+    /// lexicográficamente igual que cronológicamente**, así que un `ORDER BY`
+    /// sobre la columna sigue funcionando.
+    public var text: String {
+        let hh = hour < 10 ? "0\(hour)" : "\(hour)"
+        let mm = minute < 10 ? "0\(minute)" : "\(minute)"
+        return "\(hh):\(mm)"
+    }
+
+    /// El inverso de `text`. `nil` si el texto no es una hora de reloj.
+    public init?(text: String) {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let hour = Int(parts[0]), let minute = Int(parts[1]),
+              parts[0].count == 2, parts[1].count == 2
+        else { return nil }
+        self.init(hour: hour, minute: minute)
+    }
+}

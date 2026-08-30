@@ -190,3 +190,81 @@ extension Competition {
         throw DomainError.notEditableAfterSync(field: field)
     }
 }
+
+extension Competition {
+    /// Lo que la **ingesta** escribe al terminar una pasada con éxito (§3.2).
+    ///
+    /// Está aquí y no en `applying(...)` a propósito: aquél es el `PATCH` del
+    /// BFF, y estos dos campos no son suyos —el comentario *"lo escribe la
+    /// ingesta, no un PATCH"* está en su cuerpo—. Son dos escritores distintos
+    /// sobre la misma fila, que es lo que §5.1 llama la frontera de propiedad.
+    ///
+    /// # `federationName` rellena hueco, no sobrescribe
+    ///
+    /// Es `UpsertPolicy.matching` y no `volatile`, y la razón es lo que se
+    /// descubrió capturando los volcados de F5: la RFFM **reutiliza los códigos
+    /// de competición y grupo entre temporadas**, así que un nombre distinto no
+    /// es un rótulo que cambió — es la coordenada apuntando a otra competición.
+    /// Eso no se resuelve escribiendo el nombre nuevo: se para antes, y de eso
+    /// se encarga `requireSameSource(as:)`.
+    ///
+    /// # Y no lanza por `isSynced`
+    ///
+    /// La guarda de `D-22` cierra las coordenadas **al BFF**, no a la ingesta:
+    /// si esto pasara por `applying(...)`, la segunda pasada de una competición
+    /// ya sincronizada fallaría por su propia marca.
+    public func synced(at instant: Date, federationName incoming: String?) throws -> Competition {
+        try Competition(
+            id: id,
+            seasonID: seasonID,
+            modality: modality,
+            gender: gender,
+            federationCompetitionID: federationCompetitionID,
+            federationGroupID: federationGroupID,
+            ageCategory: ageCategory,
+            divisionLabel: divisionLabel,
+            groupLabel: groupLabel,
+            federationName: UpsertPolicy.matching(
+                existing: federationName, incoming: incoming),
+            lastSyncedAt: instant,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+extension Competition {
+    /// Comprueba que la coordenada sigue apuntando a **esta** competición
+    /// (`D-84`).
+    ///
+    /// # Por qué hace falta, y por qué no se supo hasta F5
+    ///
+    /// El diseño daba por hecho que una coordenada caducada fallaría: Plan §4.4
+    /// escribe *"un 404 tiene que decir una cosa y un parseo fallido otra"*. Al
+    /// capturar los volcados de F5 se vio que **no hay tercera opción implícita**:
+    /// la RFFM reutiliza los códigos de competición y grupo entre temporadas, así
+    /// que la misma coordenada con otra `temporada` devuelve un calendario
+    /// **perfectamente parseable de otra competición**.
+    ///
+    /// Sin esto, esa pasada escribiría un calendario cadete dentro de una
+    /// competición senior, y los equipos que creara heredarían de ella la
+    /// categoría equivocada (`D-07`). Nada lo impediría después: `Team` no tiene
+    /// `PATCH` de categoría (`D-66`) y `Match` no tiene `PATCH` en absoluto.
+    ///
+    /// # Compara con `federation_name`, que ya existía para esto
+    ///
+    /// `D-72` lo guarda como **evidencia y no rótulo**. Ésta es la primera vez
+    /// que se cobra.
+    ///
+    /// # Los dos silencios no paran nada, y es deliberado
+    ///
+    /// Si no hay nombre guardado, es la **primera** pasada y no hay con qué
+    /// comparar; si la fuente no publica nombre, callar no es contradecir
+    /// (`D-56`). Parar en cualquiera de los dos haría que ninguna competición
+    /// se pudiera sincronizar la primera vez.
+    public func requireSameSource(as incoming: String?) throws {
+        guard let federationName, let incoming, federationName != incoming else { return }
+        throw DomainError.federationSourceMismatch(
+            expected: federationName, found: incoming)
+    }
+}

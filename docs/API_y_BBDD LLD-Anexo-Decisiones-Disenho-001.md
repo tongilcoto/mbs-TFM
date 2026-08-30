@@ -25,6 +25,7 @@
 | **Arquitectura**       |                                                                                            |                                    |
 | **D-01**               | Dominio independiente de frameworks, no *Active Record*                                    | §2.2, §4, §8.1                     |
 | **D-02**               | Enumerados como `text` + `CHECK`, no `ENUM` nativo de Postgres                             | §4.6                               |
+| **D-83**               | La pasada de ingesta abre tres ámbitos, y la red no está dentro de ninguno                 | §2.3, §6.2, §6.4                   |
 | **Modelo de datos**    |                                                                                            |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                    | §3.2, §3.4                         |
@@ -57,6 +58,9 @@
 | **D-48**               | El ranking de goleadores no tiene *fallback*, y su capacidad sí condiciona el dato         | §3.2, §5.1, §5.2                   |
 | **D-52**               | El gol en propia puerta: se guarda su autor, pero no le suma                               | §3.2, §3.3, §3.6, §4.6, §5.1, §5.2 |
 | **D-58**               | El género es de la competición, y el equipo lo hereda                                      | §3.2, §3.3, §3.5, §5.1, §5.2       |
+| **D-81**               | Las fechas de la jornada no se leen: se derivan de las de sus partidos                     | §3.2, §3.7                         |
+| **D-82**               | El slug del club rival se deriva del nombre, mecánicamente y sin diccionario               | §3.2, §3.5                         |
+| **D-85**               | El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción   | §3.2, §3.3, §3.5, §5.6             |
 | **Integración**        |                                                                                            |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento             | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                               | §3.2, §3.6                         |
@@ -73,6 +77,7 @@
 | **D-78**               | El «si no» de la cadena es «si el paso anterior no resolvió», no «si el dato no viene»      | §3.7                               |
 | **D-79**               | La ambigüedad del paso inexacto no se resuelve: se reporta, y sin columna nueva             | §3.7, §5.1, §9                     |
 | **D-80**               | La normalización de nombres se equivoca a propósito hacia el mismo club                     | §3.7                               |
+| **D-84**               | Una coordenada caducada no da 404: devuelve el calendario de otra competición              | §3.7, §5.6                         |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -145,6 +150,42 @@ persistencia), no la disciplina de quien escribe.
 
 **Decisión:** `text` + `CHECK`. Se prioriza que **añadir un valor a un enumerado sea una migración uniforme**
 en los dos tiers, sin tratamiento especial por tipo Postgres.
+
+---
+
+### D-83 · La pasada de ingesta abre tres ámbitos, y la red no está dentro de ninguno
+
+**Qué hay que decidir.** §6.2 dice que **todo** acceso a datos de tenant entra por `TenantUnitOfWork`, y que
+ese ámbito **es una transacción**. Los casos de uso de F0 reciben repositorios y es el **adaptador primario**
+quien abre el ámbito: una petición, un ámbito. La pasada de ingesta no encaja ahí, porque en mitad del
+trabajo hay una **llamada de red a un tercero**.
+
+**Las tres opciones, y por qué dos son malas.**
+
+| Opción | Qué pasa |
+|---|---|
+| Un solo ámbito, la red dentro | Una caída del proveedor deja una transacción abierta esperando. Con un club es una conexión; con el recorrido por tenant de F6 es el ***pool* de §6.4 agotado** por una federación lenta |
+| Un ámbito por jornada | Un fallo en la 12 conserva las 11 anteriores, pero deja la competición **a medias sin que nada lo indique**, y obliga a decidir qué significa `last_synced_at` en ese estado |
+| **Tres ámbitos, la red fuera** | La elegida |
+
+**Decisión.** La pasada abre tres, y cada uno está donde está por una razón distinta:
+
+1. **Leer la coordenada** (`Season` + `Competition`). Se cierra **antes** de llamar a la federación.
+2. **Escribir**, entero y en uno solo. O la competición queda sincronizada o no queda tocada, que es lo que
+   hace que `last_synced_at` signifique *"última sincronización **con éxito**"* (§3.2).
+3. **Registrar la pasada**, y **fuera** del anterior a propósito — ver [D-85].
+
+**Y esto vive en el caso de uso, no en el adaptador.** Podría parecer un detalle de infraestructura que le
+toca al llamante, y no lo es: es la misma trampa que `D-56` señala con el orden de los dos marcadores. Si la
+frontera transaccional la pusiera el `AsyncCommand` de F6, sería *"un detalle que se puede hacer mal desde
+fuera"*, y equivocarlo aquí no da un dato feo — da media competición sincronizada.
+
+**Lo que un fallo hace, y lo que no hace.** Deshace lo de **esta** pasada. **No borra nada** de lo que había:
+el `rollback` devuelve el *schema* al estado anterior, competición incluida, y `last_synced_at` se queda como
+estaba. Comprobado contra Postgres real, no deducido.
+
+**Consecuencia asumida.** La competición se lee **dos veces**, una por ámbito. Es un `SELECT` por PK y evita
+mantener viva una transacción durante la latencia de un tercero; el intercambio es evidente.
 
 ---
 
@@ -1081,6 +1122,114 @@ segunda línea de defensa. Consecuencia práctica, aplicada en F1:
 
 ---
 
+### D-81 · Las fechas de la jornada no se leen: se derivan de las de sus partidos
+
+**Qué hay que decidir.** §3.2 exige `Round.start_date` y `end_date`, los dos obligatorios. **La federación no
+publica ninguno de los dos.** Lo que publica es un rótulo por jornada —`"1 (27-09-2025)"`— y la fecha de cada
+partido.
+
+**Lo que se midió antes de decidir** (dos volcados reales, F5):
+
+| | temporada sin arrancar (2026-27) | temporada jugada (2025-26) |
+|---|---|---|
+| Fechas por jornada | **una sola**, igual al rótulo | **dos** en 26 de las 30 |
+| Día de la semana | los 306 en **domingo** | 171 sábado, 65 domingo, **4 entre semana** |
+| Rótulo de la jornada | esa única fecha | el **primer** día (el sábado) |
+
+**Decisión.** `start_date` = **mínimo** y `end_date` = **máximo** de las fechas de los partidos de la jornada.
+En la temporada jugada eso da sábado→domingo en 26 de 30 y recoge los 4 partidos entre semana; en la que no ha
+arrancado **colapsa en un solo día**, y se guarda así.
+
+**Por qué no el rótulo.** Es **un** día: sirve para el sábado y pierde el domingo, donde cae un tercio de los
+partidos de una jornada real. Además obliga a parsear un texto libre para obtener algo que ya está estructurado
+en otro sitio.
+
+**Por qué no se expande al fin de semana cuando colapsa.** Era la otra opción y se descartó: escribir el
+sábado de una jornada que la federación ha puesto en domingo es **inventar un dato**, que es lo que [D-75]
+prohíbe. Y el atajo que lo justificaría —*"el calendario nace en sábado"*, [Anexo RFFM §F.5]— **el volcado lo
+desmiente**: los 306 partidos de la competición senior nacen en **domingo**. El día por defecto es de la
+competición, no de la federación.
+
+**Es campo volátil** (§3.7): un partido aplazado estira la jornada y la pasada siguiente lo refleja.
+
+**Lo que se asume.** Una jornada cuyos partidos **ninguno** trae fecha no se puede crear, y sus partidos se
+quedan fuera y se reportan. Es coherente con que `match_date` sea `NOT NULL` y con [D-75]: la jornada siguiente
+los recogerá cuando la fuente los publique.
+
+---
+
+### D-82 · El slug del club rival se deriva del nombre, mecánicamente y sin diccionario
+
+**Qué hay que decidir.** El *spec* dice que el `slug` de `OpponentClub` lo **genera el servidor a partir del
+nombre al crear la fila** y es **inmutable** después. Quien crea esas filas es la ingesta (§3.7), y el nombre
+llega como lo publica la federación: `"CELTIC CASTILLA C.F."`.
+
+**Decisión.** Derivación **mecánica**: plegar acentos, minúsculas, y cada corrida de lo que no sea letra o
+dígito se convierte en **un** guion. `"CELTIC CASTILLA C.F."` → `celtic-castilla-c-f`.
+
+**Por qué no se limpia la forma jurídica.** La versión bonita —que diera `celtic-castilla`— exige una lista de
+`"C.F."`, `"C.D."`, `"S.A.D."`, `"U.D."`, `"E.F.M.O."`… que es una segunda fuente de verdad que nadie
+mantiene, se queda corta con la primera federación nueva, y **no compra nada**: el slug **no se muestra**
+(§3.2), solo enruta y nombra ficheros.
+
+**Es la regla opuesta a la de [D-80], en el mismo texto y a propósito.** `NormalizedName` **borra** las
+fronteras —para que `"C.D."` y `"CD"` emparejen—; el slug **las conserva** como guiones. Una compara, el otro
+nombra.
+
+**Dos casos que la derivación sola no resuelve, y que la pasada sí:**
+
+| Choque | Qué se hace |
+|---|---|
+| Del **slug** (`UNIQUE(slug)`, §3.5): dos grafías distintas del mismo nombre, con claves de federación que se contradicen | **Sufijo**, empezando en `-2`. El desempate vive en el caso de uso, no en el VO: exige saber qué hay guardado |
+| Del **nombre** (`UNIQUE(name)`, §3.5): el mismo nombre literal | **No se crea: se reporta.** Es el desenlace de [D-79] por otro camino. Sin esta guarda, una coincidencia de nombre reventaría el `UNIQUE` y con él la transacción de **toda la competición** ([D-83]) |
+
+El segundo lo encontró la integración, no el diseño: con los dobles del nivel 2 —que no tienen
+restricciones— la fila entraba tan contenta.
+
+**Y un nombre del que no queda ni una letra ni un dígito no da slug: se reporta.** Un `club-1` de relleno
+sería inventar identidad, y esa identidad acaba en una clave de Storage ([D-19]) y en un `UNIQUE`.
+
+---
+
+### D-85 · El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción
+
+**Qué hay que decidir.** La cadena de §3.7 devuelve por qué escalón se supo cada emparejamiento, y [D-79]
+cerró que la *"marca para revisión"* **no es una columna**. Pero eso deja abierta otra pregunta: ese resultado
+lo devuelve el caso de uso, **y la ingesta no tiene a nadie delante** (§2.3-b). Es un job que corre solo, por
+tenant. Si lo que la pasada dice de sí misma no se guarda, no lo lee nadie — y la pregunta real, *"¿por qué
+falta este partido?"*, se hace días después.
+
+**Decisión.** Una tabla, `ingestion_runs`. **Es la entidad 21 de §3.2**, y la única que F5 añade al modelo.
+Guarda cuándo, sobre qué competición, cómo acabó, ocho contadores, el motivo del fallo si lo hubo, y **los
+descartes con su motivo** en un documento.
+
+**No contradice [D-79].** Aquella decisión habla de la fila **emparejada**: `OpponentClub` y `Team` siguen sin
+saber que esto existe, y resolver un descarte no consiste en tocar una bandera —se vuelve a pasar, y la pasada
+siguiente ya no lo reporta.
+
+**Se escribe en su propio ámbito de tenant, fuera de la transacción de la pasada.** Es la parte que no es
+evidente y la que justifica la entrada: con [D-83] la pasada es atómica, así que un registro escrito **dentro**
+desaparecería con el `rollback` **justo en el caso que más importa** — la pasada que falla, que es
+precisamente la que nadie ve. Si además el registro tampoco se puede escribir, **manda el error original**:
+taparlo con *"no pude apuntarlo"* dejaría al que depura mirando al sitio equivocado.
+
+**Dos valores de `outcome`, no tres.** No hay `partial`, porque [D-83] no lo permite: o se escribió entera o
+no se escribió nada. **Que haya descartes no la hace parcial** — un partido sin fecha es un dato que la fuente
+no ha publicado todavía, no un fallo de la pasada.
+
+**Los descartes van como documento y no como tabla hija.** No se consultan por sus campos: se leen enteros,
+junto a su pasada. Una tabla más significaría una FK, una cascada y un `JOIN` para contestar la única pregunta
+que se le hace.
+
+**Es la primera tabla del modelo sin clave natural**, y es correcto: dos pasadas de la misma competición en el
+mismo minuto son un reintento, no un duplicado.
+
+**Lo que no trae, y es deliberado.** El `GET` para leerla desde el backoffice. Su llamante real es el job de
+F6 —hoy la única forma de generar una fila es un test—, y el recurso en el *spec* se diseña con el job
+delante.
+
+---
+
 ## Integración
 
 ### D-16 · Las coordenadas de la federación son configuración tecleada, no descubrimiento
@@ -1625,6 +1774,58 @@ regla en otra capa, y además frágil: quitar *"la última letra suelta"* se com
 **Lo que se asume a cambio.** Dos clubes que de verdad se llamen `"Peña X"` y `"Pena X"` en la misma
 competición saldrían ambiguos, y alguien tendría que mirarlos. Es el desenlace de [D-79], que existe
 precisamente para que el sesgo de esta entrada sea seguro.
+
+---
+
+### D-84 · Una coordenada caducada no da 404: devuelve el calendario de otra competición
+
+**Cómo se descubrió.** Capturando los volcados de F5. Se pidió el mismo grupo en dos temporadas cambiando
+**un** parámetro:
+
+```
+…/competicion/calendario?temporada=NN&tipojuego=1&competicion=24037548&grupo=24037549
+```
+
+| `temporada` | Lo que devuelve |
+|---|---|
+| `22` | 2026-2027 · **PREFERENTE AFICIONADO** · Grupo 1 |
+| `21` | 2025-2026 · **PRIMERA DIVISION AUTONOMICA CADETE** · Grupo 1 |
+
+**La RFFM reutiliza los códigos de competición y grupo entre temporadas.** No es un error de captura.
+
+**Lo que confirma.** La regla de §3.5 de que `Competition` se identifica por (`season_id`,
+`federation_group_id`) y **nunca por el grupo a secas**. Estaba razonada; ahora tiene dato detrás.
+
+**Lo que rompe.** La premisa del canario de Plan §4.4: *"un 404 tiene que decir una cosa y un parseo fallido
+otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y las dos son `200`:
+
+| Coordenada mala | Respuesta |
+|---|---|
+| `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** |
+| `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. **Ignora el parámetro** |
+| Coordenada **de otra temporada**, válida | `200` con un calendario perfectamente parseable **de otra competición** |
+
+La tercera es la peligrosa: no hay ningún síntoma técnico. Sin guarda, la pasada escribiría un calendario
+cadete dentro de una competición senior, y los equipos que creara heredarían de ella la categoría equivocada
+([D-07]). Nada lo arreglaría después: `Team` no tiene `PATCH` de categoría ([D-66]) y `Match` no tiene `PATCH`
+en absoluto.
+
+**Decisión, en tres sitios distintos:**
+
+1. **La ingesta se para antes de escribir nada** si el nombre que publica la fuente no es el que se guardó en
+   `Competition.federation_name`. La evidencia con la que detectarlo **ya existía**: [D-72] la guarda como
+   procedencia y no como rótulo, y ésta es la primera vez que se cobra. Los dos silencios no paran nada —sin
+   nombre guardado es la **primera** pasada, y una fuente que calla no contradice ([D-56]).
+2. **El parser distingue coordenada mala de formato cambiado**: `calendar: null` y `temporada` vacía se llaman
+   `coordinateNotFound`, no `malformedResponse`. Si no, el canario gritaría *"¡han cambiado la forma!"* cada
+   vez que alguien se equivoque de número — la bandera que grita siempre de la que avisa el propio Plan §4.4.
+3. **El canario compara el nombre**, además de pasar el parser.
+
+**Y con eso el canario tiene cuatro señales, no dos:** sin red · coordenada mala · código HTTP raro · formato
+cambiado. Solo la última es para lo que existe.
+
+**La lección, otra vez la de [D-74].** Una premisa del diseño sobre un sistema de terceros **no se hereda: se
+mide**. Ésta llevaba escrita desde F2 y era falsa; se cayó a la primera petición que se le hizo.
 
 ---
 
@@ -3104,3 +3305,8 @@ paquete sin problema.
 [D-78]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-79]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-80]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-81]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-82]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-83]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

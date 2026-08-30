@@ -146,7 +146,7 @@ dependen de eso.
 | **F2** ✅ | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** (detalle en §4.3) | unit puro | §5.6, Anexo RFFM |
 | **F3** ✅ | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento (detalle en §4.5) | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
-| **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (§4.4 de este plan) | integración, Postgres real | §3.7, §4.4 |
+| **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
@@ -504,6 +504,122 @@ candidatos pasadas por argumento, y quien las cargue del repositorio será F5. E
 obligaría a inventar las entidades **y** los repositorios de `Team`, `OpponentClub` y `Match`, que es lo que
 §4.1 separó en dos fases.
 
+
+### 4.7 F5 · La ingesta del calendario de punta a punta — **entregada**
+
+La fase que **junta** lo que F3 y F4 entregaron sueltos —la cadena decide qué fila es, `UpsertPolicy` decide
+qué se le escribe— y la primera que toca las cuatro capas a la vez: **23 ficheros de código** y **79 tests**,
+con la batería completa en **217**. Corre en 4 s con Postgres; los de dominio y aplicación, en 30 ms sin él.
+
+| Bloque | Qué entrega |
+|---|---|
+| Dominio | `Round`, `OpponentClub`, `Team`, `Match`, `MatchStatus`, `IngestionRun` — cada entidad con su `merging` campo a campo por las cuatro clases de §3.7 |
+| Aplicación | `IngestCalendar` + `CalendarPass`, los puertos `Clock` y `UUIDProvider`, y cinco repositorios nuevos |
+| Persistencia | Cinco tablas con sus migraciones en el orden de FK de §4.6, y la clave de `Team` con `NULLS NOT DISTINCT` |
+| Federación | El **transporte HTTP real** y el ***canario*** |
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿De dónde salen `Round.start_date` y `end_date`, que la fuente no publica? | Del **mínimo y el máximo de las fechas de sus partidos**. Medido: en la temporada jugada da sábado→domingo en 26 de 30 jornadas → [D-81] |
+| ¿Cómo se genera el `slug` de `OpponentClub`? | **Mecánicamente**, sin lista de formas jurídicas. Y el desempate de colisiones vive en el caso de uso, no en el VO → [D-82] |
+| ¿Dónde están las fronteras transaccionales de una pasada? | **Tres ámbitos, y la red fuera de los tres.** La decisión vive en el caso de uso, no en el adaptador → [D-83] |
+| ¿Una coordenada caducada falla? | **No.** Devuelve `200` y el calendario de **otra competición** → [D-84] |
+| ¿Dónde queda constancia de una pasada? | En una **tabla**, y escrita **fuera** de la transacción de la pasada → [D-85] |
+| ¿Sirve el volcado que había para la rama de "partido jugado"? | No, y ya no hace falta: el volcado de temporada jugada cierra el deber de §4.3 |
+
+**El hallazgo de la fase, y no se buscaba.** El volcado de temporada jugada se capturó con **la misma
+coordenada** que el anterior cambiando solo `temporada`, y devolvió **otra competición**: PREFERENTE
+AFICIONADO con `temporada=22`, PRIMERA DIVISION AUTONOMICA CADETE con `temporada=21`. **La RFFM reutiliza los
+códigos de competición y grupo entre temporadas.**
+
+Eso confirmó con dato real una regla que solo estaba razonada (§3.5: `Competition` se identifica por
+`season_id` + `federation_group_id`) y **rompió una premisa de §4.4 de este plan**. Al medirlo entero, la RFFM
+**no da 404 nunca** en la ruta del calendario: dice que no de tres maneras y las tres son `200`. Sin guarda, la
+pasada habría escrito un calendario cadete dentro de una competición senior, con los equipos heredando de ella
+la categoría equivocada ([D-07]) y sin `PATCH` con el que arreglarlo después. La evidencia para detectarlo ya
+existía —`federation_name`, [D-72]— y **ésta es la primera vez que se cobra**.
+
+> **La lección es la de [D-74] otra vez, y conviene contarla como se dio: no se descubrió revisando el anexo,
+> sino capturando un volcado que se pedía para otra cosa.** Una premisa sobre un sistema de terceros no se
+> hereda: se mide, y se mide cuando se va a usar.
+
+**Lo que el nivel 3 cazó y el nivel 2 no podía.** Tres veces, y las tres por lo mismo: **los dobles no tienen
+restricciones**.
+
+1. §3.5 declara `OpponentClub(name)` **único**, y la cadena sí produce el intento de crear un segundo club con
+   el mismo nombre —descarta al candidato cuya clave contradice y cae al paso 3—. Sin guarda, una coincidencia
+   de nombre reventaría el `UNIQUE` y con él **la pasada de toda la competición**.
+2. PostgresKit mapea un array de Swift a un **array de Postgres**, así que `[IngestionSkip]` se enlazaba como
+   `jsonb[]` contra una columna `jsonb`.
+3. La clave única de `Team`: con un `UNIQUE` normal entraron **dos "Cadete A" propios idénticos**, que es
+   literalmente la trampa de la que §3.5 avisa. Ése sí se escribió como ciclo con esqueleto, y el rojo salió
+   contra Postgres.
+
+**Lo que no trae, y es deliberado.**
+
+- **Ningún endpoint.** La superficie HTTP sigue siendo la de F0: el `filter` del generador no cambia. El
+  adaptador primario de la ingesta es el `AsyncCommand` de **F6**, y el `GET` del registro de pasadas va con
+  él —hoy la única forma de generar una fila es un test—.
+- **El escudo** (`crest_key`, [D-19]): exige un adaptador de Supabase Storage que §4.1 no pone en esta fase.
+  La columna existe y su regla de *upsert* está decidida; el valor se queda nulo.
+- **El cableado de `Federation` en `App`**: sigue sin llamante hasta F6.
+
+**El bucle de §5.1, entero: 35 ciclos**, cada uno con su esqueleto y su rojo de aserción. Cuatro cosas que
+solo se ven haciéndolo así:
+
+1. **El rojo cazó un error del test, por tercera fase seguida.** La aserción de la ambigüedad daba por hecho
+   que no se crearía ningún club, olvidando que el equipo **local** sí se resuelve. Escrito después, habría
+   pasado en verde diciendo algo falso.
+2. **Un esqueleto no se pudo escribir, y eso también es información.** `Round.merging` con "pisar siempre"
+   exigiría inventarse una fecha centinela, porque las dos columnas son `NOT NULL`: el fallo **no es
+   representable**. Es el mismo argumento estructural de `TeamOwnership.own` en F4, y se dijo en el test en vez
+   de fingir un ciclo.
+3. **Dos tests llegaron en verde y se dejaron escritos**: la idempotencia de la segunda pasada y el equipo
+   propio ya enganchado. Los sostiene la **composición** —la cadena más la política— y el **orden**, no una
+   línea; se verificaron con mutación en vez de con un rojo fingido.
+4. **El orden equipo→club es una regla que ningún tipo protege.** Resolver el club primero crearía un
+   `OpponentClub` con el nombre de nuestro propio club en cuanto la pasada se cruce con nuestro equipo — que es
+   lo que hace en todas las jornadas. Tiene test propio por eso.
+
+**Comprobación de mutación: 35 mutaciones, 34 cazadas y 1 equivalente**, con especificidad — romper *solo* la
+letra del slug tumba *solo* los tres de [D-82], y romper la guarda de la competición tumba *solo* los dos de
+[D-84].
+
+| Se rompe | Lo caza |
+|---|---|
+| el rango de la jornada es el primero, no mín/máx | `el rango de la jornada es el mínimo y el máximo` ([D-81]) |
+| el nombre del club es volátil y no descriptivo | `la corrección del nombre sobrevive a la pasada siguiente` |
+| la ingesta reasigna `opponent_club_id` | los 2 de [D-20] |
+| el estado sale del marcador **de la pasada** | `el estado sale del marcador fusionado` ([D-57]) |
+| el club se resuelve **también** para el equipo propio | `el equipo propio ya enganchado no vuelve a rival ni crea club` |
+| la guarda de [D-84] se quita | `una coordenada que apunta a otra competición para la pasada` |
+| el slug no se desempata | `dos clubes distintos con el mismo nombre no colisionan de slug` ([D-82]) |
+| la pasada fallida no se registra | los 2 de [D-85], uno de ellos contra Postgres |
+| la clave de `Team` pierde `NULLS NOT DISTINCT` | 6 tests de nivel 3 |
+| el transporte no valida el `2xx` | `un 500 no llega al parser` ([Anexo RFFM §F.7]) |
+
+**Y tres supervivientes, con tres lecturas distintas** — que es la primera vez que se dan las tres en la misma
+fase:
+
+1. **Falta un test** (`Round.merging`): el caso probado movía el **final** de la jornada y dejaba el inicio
+   quieto, así que romper `startDate` no tumbaba nada. Corregido: ahora las dos fechas se mueven.
+2. **Falta un test** (`IngestionRun`): las tres guardas del `init` no las ejercitaba nadie. Se escribieron sus
+   cuatro tests, y las cinco mutaciones correspondientes caen cada una por su lado.
+3. **Mutante equivalente**, y es el interesante: cruzar los dos marcadores que `Match` le pasa a
+   `Kickoff.merging` **no cambia nada**. `Kickoff` solo pregunta *"¿hay marcador?"*, y `incoming ?? existing`
+   es simétrico respecto a esa pregunta. La regla que [D-56] protege —que se fusione **antes** de decidir— sí
+   está cubierta, por otras dos mutaciones; lo que no es observable es el **orden de los dos argumentos**.
+
+> **Ésa es una tercera lectura que F2 no había visto.** Una mutación superviviente son *"falta un test"* o
+> *"sobra el código"* — y a veces **ninguna de las dos**: el programa mutado es el mismo programa. Un arnés que
+> no admita esa salida empuja a escribir un test que no puede fallar.
+
+**Y una nota de arnés que se suma a las de F1 y F4**: el *script* imprimía el progreso por `stdout` y la
+invocación lo pasaba por `tail`, así que **el resumen final se perdió** y hubo que reconstruirlo comparando la
+lista de detectadas con la de definidas. El veredicto por código de salida siguió siendo correcto; lo que
+falló fue poder leerlo.
 
 ---
 

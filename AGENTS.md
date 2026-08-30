@@ -80,6 +80,16 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   §5.6 sigue siendo **requisito**, pero por `D-55` —la clasificación de la FCF no se puede pedir hacia
   atrás—, no por la fecha. Y el `202` de `D-67`, arriba. **La lección se repite: una regla puede sobrevivir a
   su ejemplo, pero hay que ir a comprobarlo.**
+- **Una coordenada caducada no falla: devuelve el calendario de otra competición** (`D-84`). Se descubrió en
+  F5 capturando un volcado que se pedía para otra cosa: **la RFFM reutiliza los códigos de competición y grupo
+  entre temporadas**, así que `competicion=24037548&grupo=24037549` da PREFERENTE AFICIONADO con
+  `temporada=22` y PRIMERA DIVISION AUTONOMICA CADETE con `temporada=21`. Y **no da 404 nunca** en esa ruta:
+  con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con una `temporada`
+  inexistente responde `200` con el calendario de otra e **ignora el parámetro**. Consecuencias: confirma con
+  dato la regla de §3.5 (`Competition` se identifica por `season_id` **+** `federation_group_id`); obliga a la
+  ingesta a **comparar el nombre contra `Competition.federation_name` antes de escribir**; y le da al canario
+  de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier adaptador de federación: **una premisa
+  sobre un sistema de terceros no se hereda, se mide** — ésta llevaba escrita desde F2 y era falsa.
 - **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
   en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
   ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
@@ -145,16 +155,30 @@ Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR 
 `Competition` en dominio y persistencia, **F2**, el puerto `FederationClient` con el adaptador del
 calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **política de *upsert*** de §3.7
 —`UpsertPolicy`, `Kickoff` y `MatchResult` en el Dominio, sin una sola bandera nueva en el esquema (Plan
-§4.5)—, y **F4**, la **cadena de emparejamiento** —`MatchingChain`, `MatchOutcome` y `NormalizedName`, también
-sin columnas nuevas (Plan §4.6)—. **138 tests.** **Web backoffice, app iOS y app
-Android siguen sin empezar.**
+§4.5)—, **F4**, la **cadena de emparejamiento** —`MatchingChain`, `MatchOutcome` y `NormalizedName`, también
+sin columnas nuevas (Plan §4.6)—, y **F5**, la **ingesta del calendario de punta a punta** —las cuatro
+entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—. **217 tests.**
+**Web backoffice, app iOS y app Android siguen sin empezar.**
 
-**F1 no tiene superficie HTTP, y es deliberado** (Plan §4.1): entrega entidades, *Value Objects*, puertos,
-`Record`s y migraciones, y **ningún caso de uso** — su llamante es la cascada de `D-67`, que es F10. La lista
-de operaciones del `filter` sigue siendo la de F0, que es como se lee el alcance entregado (`D-69`).
+**F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
+decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
+equipos— y la segunda pasada no duplica nada contra los `UNIQUE` de verdad. Trae además **la entidad 21 del
+modelo**, `IngestionRun` (`D-85`): el registro de cada pasada, escrito **fuera** de su transacción para que
+sobreviva al `rollback` de la que falla — que es la única que nadie ve, porque la ingesta no tiene usuario
+delante.
+
+**Desde F0 no se ha añadido un solo endpoint, y no es un descuido: es el plan.** F1 entrega entidades,
+*Value Objects*, puertos, `Record`s y migraciones **sin ningún caso de uso**; F3 y F4, dos reglas puras sin
+llamante; y F5, la pasada entera, cuyo adaptador primario es un `AsyncCommand` y **no un Controller**
+(§2.3-b). La superficie HTTP nueva llega en **F10** (`POST /teams/{id}/federation-link` + `/preview`), con
+una parada en F6 si el `GET` del registro de pasadas se decide allí. Así que **el `filter` de
+`openapi-generator-config.yaml` sigue siendo el de F0**, y eso es literalmente cómo se lee el alcance
+entregado (`D-69`): al añadir un endpoint, se añade ahí primero.
 
 Sí existe ya un **artefacto ejecutable**: el *spec* OpenAPI en [`backend/Sources/APIContract/openapi.yaml`](./backend/Sources/APIContract/openapi.yaml), que se construye **entidad a entidad** en paralelo al §5 del LLD (hoy: `Club`, `Season`, `Competition`, `OpponentClub`, `Team`, `Round`, `Match`, `StandingRow`, `LeagueScorer` — con la que queda **cerrada toda la superficie de salida de la ingesta**— y, del **dominio manual**, `Player`, `Absence`, `Appearance`, `Card` y `Goal` con CRUD completo, más `CompetitionSanctionBracket`, que es **configuración** y se escribe como conjunto con un `PUT` (`D-50`). más las cuatro de **roles y permisos** (`StaffMember`, `StaffPosition`, `PositionPermission`,
-`StaffAssignment`), más `TeamRegistration`, la inscripción del equipo en la temporada (`D-68`). **El contrato queda completo: las 20 entidades del §3.2 tienen sus endpoints**). Validación:
+`StaffAssignment`), más `TeamRegistration`, la inscripción del equipo en la temporada (`D-68`). **El contrato queda completo: las 20 entidades que §3.2 tenía cuando se cerró tienen sus endpoints**).
+**La 21ª, `IngestionRun`, todavía no**: la añadió F5 y su recurso se diseña en F6, con el job delante —hoy la
+única forma de generar una fila es un test (`D-85`). Validación:
 
 ```sh
 npx @redocly/cli lint backend/Sources/APIContract/openapi.yaml
@@ -187,7 +211,7 @@ y el `/preview` (F10). Hoy lo mantiene en el grafo de *build* su *target* de tes
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
-| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). **Sin** `import Vapor/Fluent` |
+| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. **Sin** `import Vapor/Fluent` |
 | `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`) |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
@@ -211,6 +235,10 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
 swift run Run serve
 curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
 HTTP_TRACE=1 swift test --filter APITests --no-parallel   # ver los cuerpos HTTP
+FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests     # el CANARIO: pasa el parser por
+                                          # encima de la respuesta VIVA (Plan §4.4). Fuera de
+                                          # `swift test`, y con red. Coordenada configurable por
+                                          # FEDERATION_LIVE_SEASON/_COMPETITION/_GROUP/_NAME
 docker compose down -v
 ```
 
@@ -263,26 +291,28 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F4 entregadas, lo inmediato es **F5: la ingesta del calendario de punta a punta** —`Round`,
-`OpponentClub`, `Team` y `Match` contra Postgres real—, que es la primera fase que **junta** lo que F3 y F4
-entregaron sueltos: la cadena decide qué fila es, `UpsertPolicy` decide qué se le escribe. Trae además el
-transporte HTTP real y su ***canario*** (Plan §4.4). Y hereda de F4 un mapeo trivial pero deliberado: los
-candidatos de la cadena llevan **solo claves de emparejamiento**, así que las entidades nuevas se proyectan a
-ellos en vez de pasarse enteras — es lo que hace estructural, y no disciplinar, que la fecha no entre nunca
-en la cadena.
+Con F0–F5 entregadas, lo inmediato es **F6: el `AsyncCommand`, el recorrido por tenant y la cadencia
+semanal** (§2.3-b, §4.7, §5.6). Es la fase que le pone llamante a todo lo de F5 —hoy el único es un test— y la
+que por fin cuelga `Federation` de `App`. Lleva ya tres deberes apuntados: el **`GET` del registro de
+pasadas** para leerlo desde el backoffice (`D-85`, con su fila en el *spec* y en el `filter`), el **intervalo
+exacto** de §5.6 —con el tope semanal como requisito, por `D-55`— y **qué hacer cuando una competición falla
+en mitad del recorrido**, que §9.3 deja abierto para las migraciones y ahora se repite aquí.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
-11/11 mutaciones) y F4 lo repitió con **16/16**, con dos huecos de cobertura encontrados *al preparar* la
-comprobación de mutación, antes de correrla.
+11/11 mutaciones), F4 lo repitió con **16/16**, y F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre
+**35 ciclos**. F5 aportó una lectura que no se había dado: una mutación superviviente son *"falta un test"* o
+*"sobra el código"* — **y a veces ninguna de las dos**, porque el programa mutado es el mismo programa
+(cruzar los dos marcadores que `Match` le pasa a `Kickoff` no es observable: `Kickoff` solo pregunta *"¿hay
+marcador?"*, y esa pregunta es simétrica).
 
-**F5 lleva ya dos deberes apuntados** (Plan §4.3 y §4.4). Uno: el volcado de calendario que tenemos es de una
-**temporada sin arrancar**, así que la rama de "partido jugado" no la ejercita ningún dato real — hace falta
-**un volcado de temporada en curso** antes de estrenar la ingesta de resultados. Dos: F5 trae el transporte
-HTTP real, y con él el ***canario*** —la prueba, fuera de la suite normal, que pasa el parser por encima de la
-respuesta **viva** para detectar un rediseño como el de la FCF—. **No compara bytes**: el calendario cambia
-cada semana por diseño y un `diff` daría alarma cada lunes. Ojo al montar ese puerto: hay ingesta ya escrita en la app iOS
-`rffm-agenda-ios`, de la que se hereda la forma y las coordenadas, pero **no** su estado mutable entre
-llamadas ni su modelo de pantalla sin identificadores de federación (Plan §7).
+**Los dos deberes que F5 arrastraba están hechos** (Plan §4.3 y §4.4). El **volcado de temporada en curso**
+existe —de hecho es de una temporada **jugada**, la 2025-26 entera: 240 partidos con marcador y con hora, así
+que la rama de "partido jugado" ya la ejercita dato real—. Y el ***canario*** está escrito y verificado en
+vivo: `FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests`. **No compara bytes** —el calendario cambia cada
+semana por diseño—: pasa el parser por encima de la respuesta viva y exige que no falle. Al tocarlo, saber que
+tiene **cuatro** señales y no dos, porque `D-84` obligó: sin red · coordenada mala · código HTTP raro ·
+formato cambiado. Solo la última es para lo que existe.
+
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
 tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes cloud por *tier*.
 

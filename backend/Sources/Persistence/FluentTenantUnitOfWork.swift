@@ -68,4 +68,13 @@ struct FluentRepositories: Repositories {
     var clubs: any ClubRepository { FluentClubRepository(database: database) }
     var seasons: any SeasonRepository { FluentSeasonRepository(database: database) }
     var competitions: any CompetitionRepository { FluentCompetitionRepository(database: database) }
+    var rounds: any RoundRepository { FluentRoundRepository(database: database) }
+    var opponentClubs: any OpponentClubRepository {
+        FluentOpponentClubRepository(database: database)
+    }
+    var teams: any TeamRepository { FluentTeamRepository(database: database) }
+    var matches: any MatchRepository { FluentMatchRepository(database: database) }
+    var ingestionRuns: any IngestionRunRepository {
+        FluentIngestionRunRepository(database: database)
+    }
 }

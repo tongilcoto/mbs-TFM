@@ -21,7 +21,12 @@ struct RFFMCalendarPayload: Decodable {
     }
 
     struct PageProps: Decodable {
-        let calendar: Calendar
+        /// **Anulable, y medido**: con una `competicion`/`grupo` inexistentes
+        /// la RFFM devuelve `200` y esta clave a `null` (F5). Si fuese
+        /// obligatoria, esa respuesta se caería por el `catch` del decodificador
+        /// y se llamaría "cambió el formato", que es la alarma falsa de la que
+        /// avisa Plan §4.4.
+        let calendar: Calendar?
         /// La jornada en curso ([Anexo RFFM §F.7]).
         let currentRound: String?
     }

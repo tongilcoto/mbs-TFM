@@ -87,4 +87,9 @@ public enum PersistenceError: Error, Equatable, Sendable {
     case missingTimestamp(table: String, id: String)
     /// No hay fila que actualizar. En `clubs` significa *schema* sin aprovisionar.
     case notFound(table: String)
+    /// Un par de columnas que el Dominio modela como **una sola cosa** llegó a
+    /// medias. Hoy solo `matches.home_score`/`away_score`, que son `MatchResult`
+    /// —"los dos goles o ninguno"— repartido en dos columnas anulables porque el
+    /// esquema no sabe expresar el par. Es corrupción, no un caso de negocio.
+    case corruptPair(table: String, columns: String, id: String)
 }
