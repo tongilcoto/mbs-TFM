@@ -26,6 +26,8 @@
 | **D-01**               | Dominio independiente de frameworks, no *Active Record*                                    | §2.2, §4, §8.1                     |
 | **D-02**               | Enumerados como `text` + `CHECK`, no `ENUM` nativo de Postgres                             | §4.6                               |
 | **D-83**               | La pasada de ingesta abre tres ámbitos, y la red no está dentro de ninguno                 | §2.3, §6.2, §6.4                   |
+| **D-86**               | El recorrido de la ingesta no se detiene en el primer fallo: la unidad de aislamiento es la competición | §2.3, §5.6, §9.3      |
+| **D-87**               | La cadencia de la ingesta vive fuera del proceso; lo que el código trae es un antirrebote  | §2.3, §5.6                         |
 | **Modelo de datos**    |                                                                                            |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                    | §3.2, §3.4                         |
@@ -78,6 +80,7 @@
 | **D-79**               | La ambigüedad del paso inexacto no se resuelve: se reporta, y sin columna nueva             | §3.7, §5.1, §9                     |
 | **D-80**               | La normalización de nombres se equivoca a propósito hacia el mismo club                     | §3.7                               |
 | **D-84**               | Una coordenada caducada no da 404: devuelve el calendario de otra competición              | §3.7, §5.6                         |
+| **D-88**               | La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara — y el disparador responde 200 o 202 según el coste | §5.1, §5.6, §2.3 |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -187,6 +190,76 @@ estaba. Comprobado contra Postgres real, no deducido.
 **Consecuencia asumida.** La competición se lee **dos veces**, una por ámbito. Es un `SELECT` por PK y evita
 mantener viva una transacción durante la latencia de un tercero; el intercambio es evidente.
 
+### D-86 · El recorrido de la ingesta no se detiene en el primer fallo
+
+**Qué hay que decidir.** [D-83] deja la pasada de **una** competición atómica, y F6 la pone dentro de dos
+bucles: por competición del club, y por club del plano de control (§4.7). La pregunta que §9.3 dejó abierta
+para las migraciones —*«¿qué pasa con los ya migrados cuando el número 30 revienta?»*— se repite aquí, y aquí
+sí hay que contestarla, porque este bucle corre solo y cada semana.
+
+**Decisión.** El recorrido **continúa**, y la **unidad de aislamiento es la competición**. Un fallo no aborta
+ni el club ni el recorrido: se apunta y se sigue con el siguiente.
+
+**Por qué aquí sí y en las migraciones no está claro.** No es la misma pregunta, aunque lo parezca:
+
+| | Migración a medias (§9.3) | Pasada a medias |
+|---|---|---|
+| Qué deja | *schemas* a distinta versión de esquema, y **nada que lo diga** | la base **exactamente como estaba** ([D-83]) |
+| Qué constancia queda | ninguna, salvo mirar `_fluent_migrations` club a club | una fila en `ingestion_runs` con el motivo ([D-85]) |
+| Se arregla | volviendo a lanzar, y hay que saber por dónde iba | **solo** con la pasada siguiente, que es automática |
+
+Es decir: las dos piezas que hacen segura esta decisión **ya estaban puestas** antes de tomarla. Sin la
+atomicidad de `D-83` continuar dejaría media competición escrita; sin el registro de `D-85` continuar sería
+callarse.
+
+**Lo que decide el coste de equivocarse.** Abortar al primer fallo hace que **una** coordenada caducada
+—de las que [D-84] demuestra que existen y que no dan error— deje sin sincronizar a todo lo que vaya detrás por
+orden alfabético. Con un club es molesto; con el recorrido por tenant, un club de una federación aún no
+soportada bloquearía a los demás.
+
+**Las dos mitades son inseparables: se continúa *y* se apunta.** Continuar sin apuntar convierte un recorrido
+con fallos en uno que parece haber ido bien, y la ingesta **no tiene a nadie delante** (§2.3-b). Por eso el
+recorrido devuelve el desenlace de cada competición **y** el comando sale con **código distinto de cero** si
+algo falló: es la única señal que ve el cron.
+
+**Lo que esto no es.** No es un reintento. Una competición que falla se vuelve a intentar en la pasada
+siguiente, y no antes; construir aquí una cola de reintentos sería adivinar un problema que el registro de
+`D-85` todavía no ha demostrado que exista.
+
+---
+
+### D-87 · La cadencia vive fuera del proceso; el código trae un antirrebote
+
+**Qué hay que decidir.** §5.6 fija un **tope semanal** como requisito —por [D-55], que es lo irrecuperable— y
+deja el intervalo exacto *"para cuando se escriba el job"*. Que es ahora.
+
+**Decisión.** La cadencia la pone **quien dispara** el comando —un cron, una *scheduled machine*—, y **no hay
+temporizador dentro del proceso**. El calendario propuesto: **lunes** (horarios confirmados de la semana
+entrante más el resultado de la jornada recién jugada) y **sábado y domingo** (marcadores). De martes a
+viernes no hay nada nuevo que traer.
+
+**Por qué no un planificador en el `serve`.** Tres razones, y la tercera es la que decide:
+
+1. Muere con el proceso, y un despliegue en PaaS reinicia sin avisar.
+2. No reintenta ni deja constancia de no haber corrido: el fallo es **silencio**, que es el modo de fallo que
+   `D-85` existe para combatir.
+3. **Ata la ingesta al ciclo de vida del servidor web**, que es justo lo que §2.3-b separa: el adaptador
+   primario de la ingesta es un `AsyncCommand` *porque* es un actor de sistema sin petición HTTP detrás.
+
+**Lo que el código sí trae, y no es lo mismo.** Un ***antirrebote*** (`--min-interval-hours`, por defecto 6):
+una competición sincronizada con éxito hace menos de eso no se vuelve a pedir. **No es el tope semanal.**
+Aquél es un **máximo** entre pasadas y lo hace cumplir el calendario de disparos; esto es un **mínimo** que
+hace inofensivo un disparo de más —un reintento del cron, dos disparadores solapados—. Seis horas está muy por
+debajo del intervalo más corto de la cadencia propuesta, de modo que **nunca suprime una pasada legítima**.
+
+**Y la competición que nunca se sincronizó entra siempre**, tenga el antirrebote el valor que tenga. Sin esa
+excepción, una competición recién dada de alta —el enganche de [D-67], que es F10— se quedaría esperando para
+siempre: nunca se sincronizó, así que nunca sería *"vieja"*, así que el cron nunca la tocaría. **Lo encontró
+la comprobación de mutación, no un rojo.**
+
+**Consecuencia sobre el tope semanal: sigue sin estar hecho cumplir por el código, y hay que decirlo.** El
+requisito de §5.6 es del calendario de disparos. Lo que este diseño sí garantiza es que **el registro permite
+comprobarlo a posteriori** — `ingestion_runs` dice cuándo se pasó por última vez.
 ---
 
 ## Modelo de datos
@@ -2731,6 +2804,60 @@ pedirle al cliente un dato que no le corresponde para luego decirle que se equiv
 
 ---
 
+### D-88 · La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara
+
+**Qué hay que decidir.** §5.6 dice que el módulo de ingesta **no expone superficie HTTP propia**, y sigue
+siendo verdad de lo que importa: no hay descubrimiento, no hay proxy a la federación, y las entidades que la
+ingesta escribe se leen por sus recursos de siempre. Pero [D-85] dejó una tabla que **no la lee nadie** y F6
+un job que **solo se puede lanzar entrando en la máquina**. Las dos cosas hay que resolverlas juntas, porque
+la respuesta de una es la forma de mirar la otra.
+
+**Decisión.** Un recurso, `/v1/ingestion-runs`, con dos operaciones y ninguna más:
+
+| Operación | Qué hace |
+|---|---|
+| `GET ?competitionId=…&limit=…` | La cola reciente de pasadas de esa competición, de la más nueva a la más vieja |
+| `POST` | Pide que la ingesta pase. **No crea la fila** |
+
+**El `POST` no rompe la frontera de propiedad de §5.1**, aunque lo parezca. La regla —*"el BFF corrige lo que
+la ingesta trae; no crea ni borra filas emparejadas"*— habla de **escribir el dato**. Aquí el cuerpo de la
+petición no lleva ni un solo campo de la pasada: lleva **qué sincronizar**, que es exactamente lo mismo que ya
+lleva `Competition` como *entrada* de la ingesta ([D-16]). Quien escribe la fila sigue siendo el job, con la
+política de §3.7 intacta.
+
+**Dos respuestas, y la diferencia es el coste** —el mismo argumento de [D-67], aplicado un nivel más abajo—:
+
+- **Con `competitionId` → 200**, con la pasada ya hecha. Es **una** petición a la federación y el calendario de
+  un grupo: cabe en una respuesta HTTP, y devolverla resuelta es lo que hace útil el botón de la ficha.
+- **Sin él → 202**, con la lista de competiciones aceptadas. Una temporada son decenas de competiciones y
+  ~240 partidos cada una; meter eso en una petición síncrona es lo que [D-67] existe para evitar. El resultado
+  se consulta con el `GET`, **que es para lo que [D-85] creó la tabla**.
+
+**El `202` planifica antes de responder, y eso no es un detalle de implementación.** Calcular qué entra es lo
+que permite decir *qué* se ha aceptado, sí — pero sobre todo es lo que hace que una `seasonId` inexistente dé
+**404 antes del 202**, en vez de un `202` seguido de un fallo en segundo plano que nadie ve. Es la lección de
+[D-84] aplicada a nuestro propio código: **sincronizar otra cosa —o nada— no es un fallo visible**.
+
+**Lo que el recurso no tiene, y por qué.** Ni `PATCH`, ni `DELETE`, ni `GET` por id. Una pasada ocurrió o no
+ocurrió: no hay nada deducido que corregir, que es [D-21] en su forma más pura. Y no se navega a una pasada
+—se mira la cola reciente de su competición—, así que un `GET /ingestion-runs/{id}` sería una ruta sin
+pregunta detrás.
+
+**Un hallazgo del contrato que conviene no repetir.** El `requestBody` se declaró `required: false`,
+describiendo que el cuerpo se podía omitir. **Era falso**: el servidor generado lo parsea igual y un `POST`
+sin nada devuelve 400. Se corrigió el *spec* —`required: true`, con **todos** los campos opcionales y `{}`
+para *"la temporada vigente"*— en vez de corregir la realidad. Es [D-65] otra vez y por tercera fase: **el
+generador emite tipos, no comportamiento**, y lo que el YAML promete hay que ir a comprobarlo con un test.
+
+**Y una consecuencia que salió del mismo test.** Un parámetro obligatorio que falta lo rechaza el código
+generado **antes** de llegar al *handler*, así que `GET /ingestion-runs` sin `competitionId` daba **500**
+aunque el *spec* declare 400. `ProblemMiddleware` traduce ahora el `ServerError` del transporte, reutilizando
+la tabla que el propio runtime ya tiene (`RuntimeError: HTTPResponseConvertible`). Lo que **no** se usa es su
+`ErrorHandlingMiddleware`: devuelve el código **sin cuerpo**, y §5.4 exige `application/problem+json` en
+*todo* error del contrato.
+
+---
+
 ## Autorización
 
 ### D-59 · La autorización vive en el tenant, y el rol no viaja en el JWT
@@ -3310,3 +3437,6 @@ paquete sin problema.
 [D-83]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

@@ -10,19 +10,22 @@
 
 ## 0. Qué hay montado ahora mismo
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1**, **F2**,
-**F3** y **F4**. **138 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0** a **F6**.
+**246 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
-| `GET /v1/club` | ✅ |
-| `PATCH /v1/club` | ✅ |
-| Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
+| `GET /v1/club` | ✅ F0 |
+| `PATCH /v1/club` | ✅ F0 |
+| `GET /v1/ingestion-runs` | ✅ F6 |
+| `POST /v1/ingestion-runs` | ✅ F6 |
+| Todo lo demás del *spec* (~96 operaciones) | ⛔ No generado — ver §7 |
 
-**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4, ni F5
-tienen superficie HTTP —el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b)—,
-así que **la lista de operaciones no sirve para saber qué hay montado**: solo para saber qué se puede tocar
-con `curl`. Lo que hay:
+**Esa tabla estuvo congelada de F0 a F5, y era lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4, ni
+F5 tienen superficie HTTP —el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller
+(§2.3-b)—, así que **la lista de operaciones no sirve para saber qué hay montado**: solo para saber qué se
+puede tocar con `curl`. F6 es la primera que la mueve, y solo porque el registro de pasadas hay que poder
+leerlo y el job hay que poder dispararlo desde el backoffice (`D-88`). Lo que hay:
 
 | Fase   | Qué añadió                                                                                                                                                                        | Cómo se **prueba**                                                                                                                                                                                                                                                              | Cómo se **mira**                                                                     |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -31,6 +34,7 @@ con `curl`. Lo que hay:
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                                                                                       | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                                                                                                                                                                 | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)                 |
 | **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía**                                                          | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red**                                                                                                                                          | sus tests, y solo sus tests (§5.4)                                                   |
 | **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante**                                             | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                                                                                                                                                                       | sus tests, y solo sus tests (§5.4)                                                   |
+| **F6** | El **job** (`swift run Run ingest`), el recorrido por tenant, la cadencia y los **dos endpoints** de arriba | `swift test --filter IngestClubCalendars` → **14 tests** sin Docker · `--filter TenantTraversal` → **6** **con** Docker · `--filter IngestionEndpoint` → **9** **con** Docker | `swift run Run ingest` (§6) y `curl` sobre `/v1/ingestion-runs` (§4) |
 | **F5** | La **ingesta del calendario de punta a punta**: las cuatro entidades de salida, el caso de uso, el transporte HTTP y el **canario**. Y `IngestionRun`, el registro de cada pasada | `swift test --filter 'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` → **33 tests** sin Docker · `--filter IngestCalendarTests` → **19** sin Docker · `--filter 'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` → **18** **con** Docker | TablePlus sobre las cinco tablas nuevas, y el volcado real que entra en ellas (§5.5) |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
@@ -292,14 +296,19 @@ curl -s http://atleti.localhost:8080/v1/club | jq
 ```sh
 swift run Run provision-tenant celtic -f fcf --name "Celtic de Ejemplo" --short-name Celtic
 
-curl -s http://celtic.localhost:8080/v1/club | jq '{slug, federation, federationProvidesScorers}'
+curl -s http://celtic.localhost:8080/v1/club | jq '{slug, federation, federationProvidesRoundStandings}'
 ```
 
 ```json
-{ "slug": "celtic", "federation": "fcf", "federationProvidesScorers": false }
+{ "slug": "celtic", "federation": "fcf", "federationProvidesRoundStandings": false }
 ```
 
-Las dos banderas cambiaron **sin que nadie las escribiera en la base de datos**: se derivan del catálogo de
+> **Ojo con el ejemplo que había aquí antes**, que usaba `federationProvidesScorers` y decía `false`. Es
+> falso desde el 2026-08-28: la FCF **sí** publica goleadores en su web nueva (`D-74`, Anexo FCF §C.10.7), y
+> el catálogo se corrigió entonces. La bandera que sigue distinguiendo a las dos federaciones es la de la
+> **clasificación por jornada** (`D-55`). Corregido en F6 al releer este manual.
+
+La bandera cambió **sin que nadie la escribiera en la base de datos**: se derivan del catálogo de
 federaciones, que es **código y no tabla** (§3.6, `D-17`). Mira `Sources/Domain/FederationCode.swift` — es
 el único sitio del proyecto donde aparecen las cadenas `"rffm"` y `"fcf"`.
 
@@ -364,6 +373,36 @@ que controla el cliente entero, así que aceptarla allí sería dejar abierto un
 
 ---
 
+### 4.5 La ingesta, desde `curl`
+
+Los dos endpoints que trae F6 (`D-88`). Necesitas una `Season` y una `Competition` dadas de alta — hoy se
+siembran por repositorio o por *script*, porque su `POST` no está generado todavía (§7).
+
+```sh
+# Lanzar la pasada de UNA competición: síncrona, 200, con el resultado dentro
+curl -s -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' \
+  -d '{"competitionId":"<uuid>"}' | jq
+
+# La temporada vigente entera: 202, y dice qué ha aceptado
+curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Leer el registro
+curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&limit=5" | jq
+```
+
+**Tres cosas que se aprenden más rápido probándolas que leyéndolas:**
+
+- **El cuerpo `{}` no es opcional.** Un `POST` sin cuerpo devuelve **400**: el servidor generado lo parsea
+  igual, así que el *spec* declara `required: true` con todos los campos opcionales. Es `D-65` otra vez — lo
+  que el YAML promete hay que ir a comprobarlo.
+- **200 o 202 según el coste** (`D-67` un nivel más abajo): una competición es una petición a la federación
+  y cabe en la respuesta; una temporada son decenas y ~240 partidos cada una.
+- **Una pasada que falla también se lee.** Prueba con una coordenada mala: el `POST` devuelve **502** y el
+  `GET` te enseña la fila con `outcome: "failed"` y su motivo. Es la razón de ser entera de `D-85` — la
+  pasada que falla es la que nadie ve.
+
 ## 5. Los tests
 
 ```sh
@@ -407,7 +446,7 @@ que hace falta para leerla:
   (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
   falla uno de nueve.
 
-El paralelo no sobra —los 138 tests bajan de **3,7 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
+El paralelo no sobra —cuando se midió, los 138 tests bajaban de **3,7 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
 las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
@@ -733,6 +772,43 @@ provisión, la provisión tiene que dejarlo dado de alta.
 
 La URL del club se le entrega al firmar el contrato (§9.10).
 
+### 6.1 `ingest` — la pasada de la federación
+
+El adaptador primario del módulo de ingesta (§2.3-b). **No es un endpoint** porque un job de sistema no tiene
+usuario ni JWT que validar; el botón del backoffice existe además, y llama al mismo caso de uso (§4.5).
+
+```sh
+swift run Run ingest                        # todos los clubes, temporada vigente
+swift run Run ingest -t atleti              # solo un club (o varios: -t "atleti,otro")
+swift run Run ingest -c <uuid-competicion>  # solo una competición
+swift run Run ingest --season <uuid>        # una temporada concreta, aunque no sea la vigente
+swift run Run ingest --force                # ignora el antirrebote de 6 h
+swift run Run ingest --min-interval-hours 24
+```
+
+**Sale con código distinto de cero si algo falló**, y esa es la única señal que ve un cron (`D-86`). Un fallo
+**no detiene el recorrido**: la unidad de aislamiento es la competición, porque la pasada ya es atómica
+(`D-83`) y ya deja constancia de su fallo (`D-85`). Para leerla:
+
+```sh
+curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>" | jq
+```
+
+**Lo que este comando no trae es la cadencia** (`D-87`). No hay temporizador dentro del proceso: quien lo
+llama es un cron o una *scheduled machine*, y §5.6 pide **lunes** (horarios confirmados + resultado de la
+jornada) más **sábado y domingo** (marcadores). De martes a viernes no hay nada nuevo que traer. Lo que el
+comando sí trae es el **antirrebote**: una competición sincronizada con éxito hace menos de 6 h no se vuelve
+a pedir, para que un disparo de más no repita trabajo. **No confundirlo con el tope semanal**, que es un
+máximo y lo hace cumplir el calendario de disparos, no el código.
+
+**Una competición que nunca se sincronizó entra siempre**, tenga el antirrebote el valor que tenga — si no,
+la recién dada de alta esperaría para siempre.
+
+> **Hoy no hay cron.** Mientras no exista, la ingesta corre a mano o por el `POST` del backoffice, y el tope
+> semanal de §5.6 **no lo garantiza nada**. Está apuntado en el Plan §9 como deber del desarrollador.
+
+---
+
 > ⚠️ **`migrate-tenants` va siempre por conexión directa, nunca por un *pooler*** (§6.4). Se apoya en un
 > `SET` de sesión, que detrás de un *pooler* en modo transacción deja de significar lo que parece. El precio
 > de equivocarse no es leer mal: es **crear la tabla en el *schema* de otro club**, y eso no se deshace
@@ -742,7 +818,8 @@ La URL del club se le entrega al firmar el contrato (§9.10).
 
 ## 7. El *spec* y el código generado
 
-El contrato está en `Sources/APIContract/openapi.yaml` — **6.184 líneas y las 20 entidades completas**. Es la
+El contrato está en `Sources/APIContract/openapi.yaml` — **6.477 líneas y las 21 entidades completas**
+(F6 añadió la 21ª, `IngestionRun`, con su recurso). Es la
 **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` que el servidor conforma
 (`D-65`).
 
@@ -759,16 +836,23 @@ entregado**:
 ```yaml
 filter:
   operations:
-    - getClub
-    - updateClub
+    - getClub             # F0
+    - updateClub          # F0
+    - listIngestionRuns   # F6
+    - triggerIngestion    # F6
 ```
 
 Añades ahí la operación → compilas → **no compila**, porque falta su método → la implementas. Ese "no
 compila" es la garantía entera de *design-first*.
 
-> **Que esa lista siga teniendo dos entradas después de tres fases es información, no abandono.** F1 y F2
-> entregaron dominio, persistencia y un adaptador de federación, y ninguna de las tres cosas pasa por HTTP.
-> La primera operación nueva la traerá **F10** (`D-67`).
+> **Esa lista estuvo congelada en dos entradas de F0 a F5, y era información, no abandono.** F1 a F5
+> entregaron dominio, persistencia, dos reglas puras y la pasada entera, y **nada de eso pasa por HTTP**: el
+> adaptador primario de la ingesta es un `AsyncCommand` (§2.3-b). **F6 es la primera que la mueve**, con las
+> dos operaciones que el módulo de ingesta sí necesita asomar (`D-88`). Las siguientes llegan en **F10**
+> (`D-67`).
+>
+> **Comprobado al añadirlas**: poner las dos en el `filter` y compilar da
+> `type 'APIHandler' does not conform to protocol 'APIProtocol'`, exactamente como promete `D-69`.
 
 ### 7.2 Dos cosas que sorprenden
 
@@ -782,7 +866,12 @@ devuelve el caso del `Output` que toque. La consecuencia es buena aunque cueste 
 error que el *spec* no declara no se puede devolver**, porque no existe como caso del enum.
 
 `ProblemMiddleware` sigue haciendo falta, pero para lo de **fuera** del transporte: resolución de tenant,
-404 de ruta.
+404 de ruta — y, desde F6, **lo que el transporte rechaza antes de llegar al *handler***. Ése es el tercer
+caso y hay que conocerlo: un **parámetro obligatorio que falta** ni siquiera llega a tu código, así que
+`GET /ingestion-runs` sin `competitionId` daba **500** aunque el *spec* declare 400. El middleware traduce
+ahora el `ServerError` del runtime reutilizando su propia tabla de códigos. Lo que **no** se usa es el
+`ErrorHandlingMiddleware` que trae `swift-openapi-runtime`: devuelve el código **sin cuerpo**, y §5.4 exige
+`application/problem+json` en *todo* error del contrato.
 
 ### 7.3 El código generado, para curiosear
 
@@ -801,14 +890,14 @@ cada compilación.
 Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (generado del spec)
             │                └─► Application
             ├─► Persistence ────► Application
+            ├─► Federation ─────► Application   (adaptadores RFFM / FCF)
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de NADA)
-
-            Federation ────────► Application    (adaptadores RFFM / FCF)
 ```
 
-`Federation` **todavía no cuelga de `App`**: su primer llamante es el job de ingesta (F6) y el `/preview`
-(F10). Hoy lo mantiene en el grafo de *build* su *target* de tests.
+**`Federation` cuelga de `App` desde F6.** De F2 a F5 no colgaba, y no era un olvido: no tenía llamante, así
+que lo mantenía en el grafo de *build* su *target* de tests. El llamante es el job de ingesta (§6.1), y el
+`/preview` de F10 será el segundo.
 
 **El grafo de `Package.swift` *es* la Regla de dependencia** (§2.2), no una convención de carpetas.
 Compruébalo tú mismo:

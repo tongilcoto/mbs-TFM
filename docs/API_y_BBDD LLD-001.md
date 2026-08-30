@@ -212,6 +212,13 @@ Federación) con los identificadores de federación (`federation_season_id`, `fe
 **repositorio**). **Distinto adaptador primario, misma capa de acceso** (caso de uso → repositorio → Fluent →
 *schema*), por lo que reutiliza el enrutado por tenant de §6.
 
+> **Construido en F6**, y con dos llamantes en vez de uno: el comando `ingest` —que recorre `public.tenants`
+> igual que `migrate-tenants` (§4.7)— y el disparador manual `POST /v1/ingestion-runs` ([D-88]), que es una
+> petición HTTP del BFF invocando **el mismo caso de uso**. Por eso las reglas del recorrido —qué competiciones
+> entran, qué pasa cuando una falla ([D-86])— viven en la Aplicación y no en el comando: una regla escrita en
+> uno de los dos adaptadores sería una regla que el otro no cumple. La **cadencia**, en cambio, queda fuera del
+> proceso ([D-87]).
+
 **(c) Verificación de la configuración de ingesta** (`POST /v1/teams/{id}/federation-link/preview` y su
 gemelo `POST /v1/competitions/preview`, §5.1) — el **único** caso en que una petición HTTP del BFF llama a la
 API externa **en línea y en la propia respuesta**. Su confirmación (`POST …/federation-link`) también llama a
@@ -1655,6 +1662,31 @@ es azúcar: sin él el backoffice no puede decidir qué botones pinta, y acabar�
 descubrir por el `403` si podía hacerlas. **Es una conveniencia de UI, no la autoridad**: la comprobación
 real ocurre siempre en el caso de uso (§7.4).
 
+**`IngestionRun` — el registro de la ingesta y su disparador** ([D-85], [D-88]):
+
+| Método | Ruta | Caso de uso | Éxito | Errores |
+|--------|------|-------------|-------|---------|
+| **GET** | `/v1/ingestion-runs?competitionId=&limit=` | `ListIngestionRuns` | **200** + `[IngestionRunResponse]` | 400 (falta ámbito, `limit` fuera de rango), 404 (competición) |
+| **POST** | `/v1/ingestion-runs` | `IngestClubCalendars` | **200** + `IngestionRunResponse` *(con `competitionId`)* · **202** + `IngestionAcceptedResponse` *(temporada)* | 400, **403** (rol), 404, **501** (federación sin adaptador), **502** (la fuente) |
+
+- **El único recurso que no describe al club sino a su sincronización.** §5.6 dice que el módulo de ingesta
+  no expone superficie HTTP propia, y sigue siendo verdad de lo que importa: no hay descubrimiento ni proxy a
+  la federación. Lo que asoma es *lo que la ingesta dejó dicho* y *el botón de volver a pasar* ([D-88]).
+- **El `POST` no crea la fila y por eso no rompe la regla de propiedad de arriba**: el cuerpo no lleva ni un
+  campo de la pasada — lleva **qué sincronizar**, igual que `Competition` como entrada de la ingesta
+  ([D-16]). La escribe el job, con la política de §3.7 intacta.
+- **200 o 202 según el coste**, que es [D-67] un nivel más abajo: una competición es **una** petición a la
+  federación y cabe en la respuesta; una temporada son decenas y ~240 partidos cada una. El `202` **planifica
+  antes de responder**, de modo que una `seasonId` inexistente da 404 y no un 202 con un fallo invisible
+  detrás ([D-84]).
+- **`competitionId` obligatorio en el `GET`**, como en `/rounds` y por lo mismo: una pasada fuera de su
+  competición no significa nada, y exigirlo acota la colección a lo que se sirve **sin paginación** (§5.3).
+  Orden fijo: de la más reciente a la más antigua.
+- **Sin `PATCH`, sin `DELETE` y sin `GET` por id**: una pasada ocurrió o no ocurrió — es [D-21] en su forma
+  más pura—, y no se navega a una pasada, se mira la cola reciente de su competición.
+- **Los descartes viajan dentro de cada fila** y no como recurso aparte ([D-85]): se leen enteros junto a su
+  pasada.
+
 
 ### 5.2 DTOs
 
@@ -2003,8 +2035,16 @@ la semana entrante el domingo, al cierre** ([Anexo RFFM §F.5]), y publica los r
 terminar cada jornada. Eso fija dos hitos por semana y, con ellos, el mínimo: **una pasada el lunes** —recoge
 a la vez los horarios confirmados y el resultado de la jornada recién jugada—. Sincronizar más a menudo es
 razonable durante el fin de semana (marcadores) y **no aporta nada** de martes a viernes, cuando no hay nada
-nuevo que traer. El intervalo exacto se cierra al escribir el job; lo que no puede es ser **mayor** que una
-semana, o la app mostraría horarios provisionales de partidos ya jugados.
+nuevo que traer. Lo que no puede es ser **mayor** que una semana, o la app mostraría horarios provisionales de
+partidos ya jugados.
+
+**El intervalo exacto queda cerrado en F6, y la cadencia vive fuera del proceso** ([D-87]): **lunes**, más
+**sábado y domingo**. La pone quien dispara el `AsyncCommand` —un cron, una *scheduled machine*—, y **no hay
+temporizador dentro del servidor**: moriría con el proceso, no reintentaría, y ataría la ingesta al ciclo de
+vida del servidor web, que es justo lo que §2.3-b separa. Lo que el código sí trae es un ***antirrebote***
+(`--min-interval-hours`, 6 por defecto): un **mínimo** que hace inofensivo un disparo de más, no el tope
+semanal, que sigue siendo del calendario de disparos. **Una competición que nunca se sincronizó entra
+siempre**, o la recién dada de alta esperaría para siempre.
 
 **Ese tope semanal sigue siendo un requisito, aunque por una razón sola y no por dos** ([D-75]). La que se
 cae es la de la fecha: la FCF **no** borra fecha y hora al jugarse el partido —una temporada entera ya jugada
@@ -2410,9 +2450,12 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     *Aviso de alcance, que es lo que [la lección 4](../docs/lessonsToLearn/Medir%20la%20RAM%20de%20un%20build%20en%20Docker.md)
     exige de cualquier cifra así:* entre los dos pases cambió también la *toolchain* (`swift:6.0-jammy` →
     `swift:6.2-noble`), así que **no todo el delta es atribuible al plugin**. Y el filtro de [D-69] hace que
-    el coste del generador escale con el **alcance implementado**, no con el tamaño del *spec*: hoy son 543
+    el coste del generador escale con el **alcance implementado**, no con el tamaño del *spec*: en F0 eran 543
     líneas generadas de las ~20.000 posibles, de modo que **esta medida volverá a subir** conforme avancen
-    las fases. Los dos pases se tomaron en **10 núcleos**; `swift build` paraleliza por núcleos, así que un
+    las fases. **Y ha subido, medido en F6**: las dos operaciones nuevas de [D-88] llevan el generado a
+    **2.672 líneas** —×4,9 sobre F0 con solo el doble de operaciones, porque cada esquema nuevo arrastra sus
+    tipos—. La cifra de RAM de arriba **sigue siendo la de F0** y no se ha vuelto a tomar; cuando se retome,
+    la metodología es la de la lección y el número a comparar es el pico `anon`. Los dos pases se tomaron en **10 núcleos**; `swift build` paraleliza por núcleos, así que un
     *runner* con menos pedirá menos.
   - **Lo que sí hay que vigilar en CI es el tiempo**, no la memoria: ~175 s solo el paso de compilación, sin
     caché y con las capas base ya presentes. En un *runner* limpio se suman la descarga de `swift:6.0-jammy`
@@ -2449,6 +2492,12 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    por *schema*, juego completo en las altas, y la restricción de ir por conexión directa. Queda abierto el
    **fallo a mitad de recorrido** (qué pasa con los clubes ya migrados cuando el número 30 revienta) y el
    **paralelismo** entre clubes, que a 50 clubes deja de ser una cuestión estética.
+
+   > **La misma pregunta sobre la ingesta sí está contestada** ([D-86]): el recorrido **continúa** y la unidad
+   > de aislamiento es la competición. Y no se traslada aquí sin más, porque **no es la misma pregunta**: una
+   > pasada a medias deja la base exactamente como estaba ([D-83]) y una fila que lo explica ([D-85]); una
+   > migración a medias deja *schemas* a distinta versión y **nada que lo diga**. Lo que sí se puede copiar es
+   > el criterio: **continuar solo es seguro cuando el fallo deja constancia y no deja estado a medias.**
 4. Estrategia de retención (RGPD, datos de menores): política de **archivado** (`Season.archived_at`, reversible, §5) frente a **erasure** físico (`DELETE ?cascade=true`) — plazos de conservación y "derecho al olvido" por decidir. El *mecanismo* ya está ([D-24]); falta la **política**.
 5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el
    `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado. **Sigue abierta,
@@ -2612,3 +2661,6 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
