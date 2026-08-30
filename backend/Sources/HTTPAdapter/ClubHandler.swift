@@ -15,10 +15,30 @@ import Vapor
 /// generado—, de modo que no puede guardar nada de la petición. El tenant llega
 /// por `TenantContext` (`@TaskLocal`), que fija el middleware.
 public struct APIHandler: APIProtocol {
-    private let unitOfWork: any TenantUnitOfWork
+    // `internal` y no `private`: los handlers viven en varios ficheros desde F6
+    // —`ClubHandler` y `IngestionHandler`—, y `private` es de fichero.
+    let unitOfWork: any TenantUnitOfWork
 
-    public init(unitOfWork: any TenantUnitOfWork) {
+    /// Los tres de F6. Llegan por el `init` y no se construyen aquí dentro por lo
+    /// de siempre: un `Date()` o un `UUID()` escondidos en el adaptador son un
+    /// valor que ningún test puede afirmar (§4.3).
+    let federationClients: any FederationClientProvider
+    let clock: any Clock
+    let ids: any UUIDProvider
+    let background: any BackgroundWork
+
+    public init(
+        unitOfWork: any TenantUnitOfWork,
+        federationClients: any FederationClientProvider,
+        clock: any Clock = SystemClock(),
+        ids: any UUIDProvider = SystemUUIDProvider(),
+        background: any BackgroundWork = DetachedBackgroundWork()
+    ) {
         self.unitOfWork = unitOfWork
+        self.federationClients = federationClients
+        self.clock = clock
+        self.ids = ids
+        self.background = background
     }
 
     public func getClub(_ input: Operations.getClub.Input) async throws

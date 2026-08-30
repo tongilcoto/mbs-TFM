@@ -27,7 +27,21 @@ extension Application {
 ///
 /// Que exista un único fichero así es lo que hace verdad la Regla de dependencia:
 /// nadie más conoce a la vez el puerto y su implementación.
-public func configure(_ app: Application, config: DatabaseConfig = .fromEnvironment()) async throws {
+public func configure(
+    _ app: Application,
+    config: DatabaseConfig = .fromEnvironment(),
+    // Se inyecta para que los tests de nivel 4 puedan poner un doble **sin red**
+    // (Plan §4.4: la batería tiene que ser determinista). En producción es el
+    // catálogo de `D-17`.
+    federationClients: any FederationClientProvider = CatalogFederationClientProvider(),
+    background: any BackgroundWork = DetachedBackgroundWork(),
+    // **El reloj también se inyecta**, y no por simetría: de él sale cuál es la
+    // temporada vigente (§3.2). Con `SystemClock` un test tendría que sembrar la
+    // temporada del año en curso y **caducaría** el 1 de julio siguiente, con el
+    // fallo apareciendo meses después y sin relación con el cambio que lo
+    // destapó.
+    clock: any Clock = SystemClock()
+) async throws {
     // ── Datos ────────────────────────────────────────────────────────────────
     // Un solo *pool*, sin `search_path`: es el del plano de control y también
     // sobre el que la estrategia A abre las transacciones de petición. Su tamaño
@@ -47,10 +61,16 @@ public func configure(_ app: Application, config: DatabaseConfig = .fromEnvironm
 
     app.asyncCommands.use(MigrateTenantsCommand(), as: "migrate-tenants")
     app.asyncCommands.use(ProvisionTenantCommand(), as: "provision-tenant")
+    // F6: el adaptador primario de la ingesta (§2.3-b). Es un comando y no una
+    // ruta a propósito — un job de sistema no tiene usuario ni JWT que validar.
+    app.asyncCommands.use(IngestCommand(), as: "ingest")
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     let handler = APIHandler(
-        unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+        unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+        federationClients: federationClients,
+        clock: clock,
+        background: background
     )
 
     // El transporte se registra sobre un `RoutesBuilder` ya decorado, que es lo

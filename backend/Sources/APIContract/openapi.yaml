@@ -247,6 +247,16 @@ tags:
 
       **Conveniencia de la UI, no autoridad** (§7.4): sirve para decidir qué botones se pintan. La
       comprobación real ocurre siempre en el caso de uso.
+  - name: Ingestion
+    description: |
+      El **registro de las pasadas de ingesta** y el disparador manual (D-85, D-87).
+
+      Es el único recurso del contrato que **no describe al club sino a su sincronización**. Su escritor
+      natural es el job (§2.3-b), que corre solo y sin nadie delante; esto es lo que permite mirar por
+      qué falta un partido días después, y relanzar una pasada sin esperar al cron.
+
+      **Escribe:** la **ingesta**. El `POST` no crea filas a mano — pide que el job pase, y las filas las
+      escribe él.
 
 paths:
 
@@ -3358,6 +3368,138 @@ paths:
   # Sin PATCH. Puesto, ámbito y temporada son **identidad**: cambiarlos es otra asignación, no una
   # edición — el mismo criterio que `Player` con `teamId`/`seasonId` (D-37, D-62).
 
+  # ─────────────────────────── Ingestion (§5.6) ───────────────────────────
+  /ingestion-runs:
+    get:
+      tags: [Ingestion]
+      operationId: listIngestionRuns
+      summary: Lista las pasadas de ingesta de una competición
+      description: |
+        **`competitionId` es obligatorio**, por el mismo motivo que en `/rounds`: una pasada fuera de su
+        competición no significa nada, y exigirlo acota la colección a lo que cabe servir **sin
+        paginación** (§5.3). Se devuelven de la **más reciente a la más antigua**, que es el orden en que
+        se leen — la pregunta siempre es *«¿qué pasó la última vez?»*.
+
+        **Solo lectura y sin `PATCH` ni `DELETE`**: una pasada ocurrió o no ocurrió, y no hay nada
+        deducido que corregir (D-21 llevado a su forma más pura). Tampoco tiene `GET` por id: no se
+        navega a una pasada, se mira la cola reciente de su competición.
+
+        Los descartes (`skipped`) viajan **dentro** de cada fila y no como recurso aparte (D-85): se leen
+        enteros junto a su pasada, y no se consultan por sus campos.
+      parameters:
+        - name: competitionId
+          in: query
+          required: true
+          description: Competición cuyas pasadas se listan. Identificador **interno** (UUID).
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          description: Cuántas devolver, de la más reciente hacia atrás.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Pasadas de la competición, de la más reciente a la más antigua.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IngestionRunResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: La competición no existe en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+    post:
+      tags: [Ingestion]
+      operationId: triggerIngestion
+      summary: Lanza una pasada de ingesta
+      description: |
+        El **disparador manual** de lo que normalmente hace el job (§2.3-b). Existe porque la cadencia
+        vive fuera del proceso (D-87): sin esto, la única forma de forzar una sincronización sería entrar
+        en la máquina.
+
+        **No crea filas a mano.** Pide que la ingesta pase; las filas de `ingestion-runs` las escribe
+        ella, con la misma política de §3.7 que el job — este endpoint no es una segunda puerta de
+        escritura sobre los datos ingeridos.
+
+        **Dos respuestas, y la diferencia es el coste** (§2.3-c):
+
+        - Con `competitionId` → **200** con la pasada ya hecha. Es una petición a la federación y el
+          calendario de un grupo: cabe dentro de una respuesta HTTP, y devolverla ya resuelta es lo que
+          hace útil el botón de la ficha de una competición.
+        - Sin él → **202**, con la lista de lo que se ha aceptado. Una temporada entera son decenas de
+          competiciones y ~240 partidos cada una (D-67): meter eso en una petición síncrona es
+          exactamente lo que aquella decisión existe para evitar. El resultado se consulta después con el
+          `GET` de arriba.
+
+        **Ignora el antirrebote** del job (§5.6): quien pulsa el botón lo pulsa porque quiere ahora.
+
+        Requiere **rol elevado** (§7.3): es una operación de integración, no dato del día a día.
+      requestBody:
+        # **`required: true` con todos sus campos opcionales**, y no es una
+        # contradicción: para pedir la temporada vigente entera se manda `{}`.
+        #
+        # Se declaró `false` primero, describiendo que el cuerpo se podía omitir.
+        # **Era falso**: el servidor generado intenta parsear el cuerpo igual y un
+        # `POST` sin nada devuelve 400 (comprobado con un test, no deducido del
+        # YAML). Se corrige el contrato en vez de la realidad, que es la regla de
+        # D-65: el generador emite tipos, no comportamiento.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerIngestionRequest'
+      responses:
+        '200':
+          description: La pasada de esa competición, ya terminada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionRunResponse'
+        '202':
+          description: Recorrido aceptado. El resultado se consulta con `GET /ingestion-runs`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionAcceptedResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: La temporada o la competición pedidas no existen en este club.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '501':
+          description: |
+            La federación de este club está en el catálogo pero **todavía no tiene adaptador de ingesta**
+            (D-17). No se ha roto nada y no hay nada que reintentar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: |
+            La federación respondió algo que no es de esta competición (D-84) o no respondió. El fallo no
+            es del cliente; queda registrado en `ingestion-runs`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /me:
     get:
       tags: [Me]
@@ -6188,3 +6330,148 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EffectivePermission'
+
+    # ─────────────────────────── Ingestión (§5.6, D-85) ───────────────────────
+    IngestionRunResponse:
+      type: object
+      description: |
+        Una pasada de ingesta: qué se sincronizó, cuándo, cómo acabó y qué se quedó fuera.
+
+        **La única entidad del contrato que no describe al club sino a su sincronización** (D-85). No
+        tiene `updatedAt` ni clave natural, y las dos ausencias son deliberadas: una pasada no se
+        modifica, y dos pasadas de la misma competición en el mismo minuto son un reintento, no un
+        duplicado.
+      required: [id, competitionId, startedAt, finishedAt, outcome, counters, skipped]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+        startedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        finishedAt:
+          type: string
+          format: date-time
+          readOnly: true
+        outcome:
+          $ref: '#/components/schemas/IngestionOutcome'
+        error:
+          type: [string, 'null']
+          readOnly: true
+          description: |
+            Motivo del fallo, si lo hubo. **Texto y no un código**: los fallos que llegan aquí son de la
+            fuente, del esquema o de una invariante, y enumerarlos sería inventar una taxonomía antes de
+            haber visto los casos (D-85).
+          examples: ['FederationError: la coordenada devolvió otra competición']
+        counters:
+          $ref: '#/components/schemas/IngestionCounters'
+        skipped:
+          type: array
+          readOnly: true
+          description: |
+            Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal. **No hace parcial a la
+            pasada**: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo
+            (D-83).
+          items:
+            $ref: '#/components/schemas/IngestionSkip'
+
+    IngestionOutcome:
+      type: string
+      description: |
+        Cómo acabó la pasada. **Dos valores y no tres**: no hay *parcial* porque la pasada es atómica
+        (D-83) — o se escribió entera o no se escribió nada.
+      enum: [succeeded, failed]
+
+    IngestionCounters:
+      type: object
+      description: Cuántas filas creó y actualizó la pasada, por entidad.
+      required:
+        [opponentClubsCreated, opponentClubsUpdated, teamsCreated, teamsUpdated,
+         roundsCreated, roundsUpdated, matchesCreated, matchesUpdated]
+      properties:
+        opponentClubsCreated: { type: integer, minimum: 0, readOnly: true }
+        opponentClubsUpdated: { type: integer, minimum: 0, readOnly: true }
+        teamsCreated: { type: integer, minimum: 0, readOnly: true }
+        teamsUpdated: { type: integer, minimum: 0, readOnly: true }
+        roundsCreated: { type: integer, minimum: 0, readOnly: true }
+        roundsUpdated: { type: integer, minimum: 0, readOnly: true }
+        matchesCreated: { type: integer, minimum: 0, readOnly: true }
+        matchesUpdated: { type: integer, minimum: 0, readOnly: true }
+
+    IngestionSkip:
+      type: object
+      description: |
+        Una fila que la pasada dejó fuera, con su motivo. **No contradice D-79**: la *marca para revisión*
+        sigue sin ser columna de la fila emparejada — esto describe la **pasada**. Resolver un descarte no
+        consiste en tocar una bandera: se vuelve a pasar, y la siguiente ya no lo reporta.
+      required: [reason, detail]
+      properties:
+        reason:
+          $ref: '#/components/schemas/IngestionSkipReason'
+        detail:
+          type: string
+          description: |
+            Con qué encontrar la fila en la fuente: el nombre del equipo, el `codacta`, lo que haya.
+            **Texto**, porque va a un informe que lee una persona.
+          examples: ['C.D. Galapagar "B"']
+
+    IngestionSkipReason:
+      type: string
+      description: |
+        Por qué se quedó fuera. Los tres `ambiguous_*` son el desenlace de D-79 —*no se elige ni se crea:
+        se reporta*—; `unresolved_team` es su arrastre al partido; `missing_match_date` es D-75 negándose
+        a inventar una fecha `NOT NULL`; y `duplicate_club_name` es la guarda del `UNIQUE(name)` de §3.5,
+        sin la cual una coincidencia de nombre reventaría la transacción de toda la pasada.
+      enum:
+        - ambiguous_opponent_club
+        - ambiguous_team
+        - ambiguous_match
+        - unresolved_team
+        - missing_match_date
+        - unsluggable_club_name
+        - duplicate_club_name
+
+    TriggerIngestionRequest:
+      type: object
+      description: |
+        Qué parte del club sincronizar. **Los dos campos son las dos filas de la coordenada de la
+        federación** (§3.7): `temporada` es `Season`, y `competicion` + `grupo` juntos son **una**
+        `Competition` (§3.5). Por eso no hay campo de grupo — ya está dentro de la competición.
+
+        **`{}` ⇒ la temporada vigente entera** (§3.2). El cuerpo es obligatorio aunque todos sus campos
+        sean opcionales: omitirlo del todo devuelve 400, porque el servidor generado lo parsea igual.
+      properties:
+        seasonId:
+          type: string
+          format: uuid
+          description: |
+            Solo las competiciones de esta temporada. Sin esto, la vigente. **Una temporada que no exista
+            no cae a la vigente**: da 404 (D-84).
+        competitionId:
+          type: string
+          format: uuid
+          description: |
+            Solo ésta, y **síncronamente** (200 en vez de 202). Gana sobre `seasonId` por ser más
+            específica, y no pasa por el filtro de temporada vigente: quien la pide por su id ya sabe cuál
+            quiere.
+
+    IngestionAcceptedResponse:
+      type: object
+      description: Qué se ha aceptado recorrer. El resultado se consulta con `GET /ingestion-runs`.
+      required: [competitionIds]
+      properties:
+        competitionIds:
+          type: array
+          description: |
+            Las competiciones que entran en el recorrido, en el orden en que se van a sincronizar. **Vacío
+            es una respuesta legítima**: significa que el club no tiene competiciones dadas de alta en esa
+            temporada, no que haya fallado nada.
+          items:
+            type: string
+            format: uuid

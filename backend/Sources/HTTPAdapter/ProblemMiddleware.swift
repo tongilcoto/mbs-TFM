@@ -1,6 +1,12 @@
 import Application
 import Domain
 import Foundation
+// `HTTPTypes` no llega de gratis desde `OpenAPIRuntime`: `MemberImportVisibility`
+// (SE-0444) exige declarar el módulo que define `.code` de `HTTPResponse.Status`,
+// aunque el tipo que lo lleva venga de otro. Quinta fase seguida en que esta
+// bandera cobra pieza.
+import HTTPTypes
+import OpenAPIRuntime
 import Tenancy
 public import Vapor
 
@@ -107,6 +113,25 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return Problem(status: .internalServerError, code: "SEASON_NOT_FOUND",
                                title: "Temporada inexistente", detail: id,
                                base: typeBaseURI, slug: "season-not-found")
+
+            case .unknownSeason(let id):
+                // 404, al revés que `seasonNotFound`: aquí el id lo puso quien
+                // llama, así que es un dato suyo que no existe — no un *schema*
+                // roto.
+                return Problem(status: .notFound, code: "SEASON_NOT_FOUND",
+                               title: "Temporada desconocida", detail: id,
+                               base: typeBaseURI, slug: "season-not-found")
+
+            case .federationAdapterMissing(let federation):
+                // **501 y no 500**: no se ha roto nada. La federación del club
+                // está en el catálogo (`D-17`) y su adaptador todavía no se ha
+                // escrito —la FCF es F9—, así que la funcionalidad no existe aún
+                // en este servidor. Un 500 invitaría a reintentar y a abrir una
+                // incidencia; un 501 dice la verdad: vuelve cuando esté.
+                return Problem(status: .notImplemented, code: "FEDERATION_ADAPTER_MISSING",
+                               title: "Federación todavía sin adaptador",
+                               detail: "No hay adaptador de ingesta para '\(federation)'.",
+                               base: typeBaseURI, slug: "federation-adapter-missing")
             }
 
         // ── Tenancy (§6.1) ───────────────────────────────────────────────────
@@ -139,6 +164,36 @@ public struct ProblemMiddleware: AsyncMiddleware {
             return Problem(status: abort.status, code: abort.status.code == 404 ? "NOT_FOUND" : "BAD_REQUEST",
                            title: abort.reason, detail: nil,
                            base: typeBaseURI, slug: abort.status.code == 404 ? "not-found" : "bad-request")
+
+        // ── Lo que el transporte generado rechaza antes de llegar al handler ──
+        //
+        // F6 lo descubrió con un test: `GET /ingestion-runs` **sin**
+        // `competitionId` daba **500**, aunque el *spec* declara 400 para ese
+        // caso. El motivo es que un parámetro obligatorio ausente ni siquiera
+        // llega al handler — lo rechaza el código generado, y ese error caía en
+        // el `default` de aquí abajo.
+        //
+        // El runtime ya sabe qué código HTTP le corresponde a cada uno
+        // (`RuntimeError: HTTPResponseConvertible`), así que se reutiliza en vez
+        // de reimplementar la tabla. Lo que **no** se usa es su
+        // `ErrorHandlingMiddleware`: devuelve el código **sin cuerpo**, y §5.4
+        // exige `application/problem+json` en *todo* error del contrato.
+        case let server as ServerError:
+            // Primero, desenvolver: si dentro hay un error nuestro, manda el
+            // nuestro. Sin esto, un `DomainError` que escapara de un handler
+            // pasaría de 422 a 500 solo por venir envuelto.
+            let inner = server.underlyingError
+            if inner is DomainError || inner is ApplicationError || inner is TenancyError {
+                return translate(inner)
+            }
+            let status = HTTPStatus(statusCode: Int(server.httpStatus.code))
+            return Problem(status: status,
+                           code: status.code >= 500 ? "INTERNAL" : "BAD_REQUEST",
+                           title: status.code >= 500
+                               ? "Error interno" : "La petición no cumple el contrato",
+                           detail: server.causeDescription,
+                           base: typeBaseURI,
+                           slug: status.code >= 500 ? "internal" : "bad-request")
 
         default:
             return Problem(status: .internalServerError, code: "INTERNAL",

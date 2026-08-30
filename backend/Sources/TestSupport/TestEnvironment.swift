@@ -1,5 +1,7 @@
 public import App
+public import Application
 import Domain
+public import HTTPAdapter
 import Fluent
 import FluentPostgresDriver
 import Persistence
@@ -137,12 +139,23 @@ public enum TestEnvironment {
     /// destruirse con el cierre en vuelo, y Vapor tiene un `fatalError` para
     /// eso. Se manifiesta como una señal 5 que se lleva la batería entera por
     /// delante, no como un test rojo.
-    public static func withApp(_ body: (Application) async throws -> Void) async throws {
+    public static func withApp(
+        // F6: los tests de nivel 4 del disparador necesitan un `FederationClient`
+        // falseado, o la batería saldría a la red de la federación.
+        federationClients: (any FederationClientProvider)? = nil,
+        background: (any BackgroundWork)? = nil,
+        clock: (any Clock)? = nil,
+        _ body: (Application) async throws -> Void
+    ) async throws {
         try await bootstrap()
         let app = try await Application.make(.testing)
         applyLogLevel(to: app)
         do {
-            try await configure(app, config: config)
+            try await configure(
+                app, config: config,
+                federationClients: federationClients ?? CatalogFederationClientProvider(),
+                background: background ?? DetachedBackgroundWork(),
+                clock: clock ?? SystemClock())
             // Sin `autoMigrate()`: el plano de control ya lo migró `bootstrap()`,
             // una sola vez. Llamarlo aquí es lo que producía la carrera.
             try await body(app)
