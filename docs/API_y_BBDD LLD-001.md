@@ -473,12 +473,25 @@ están en el [Anexo de la Federación](./API_y_BBDD%20LLD-Anexo-Federacion-Madri
 | **Claves de salida** (`federation_team_id`, `federation_club_id`, `federation_match_id`) | **Sí** — la ingesta puede no lograr extraerlas, o el proveedor no publicarlas | **No** — inmutables |
 
 **Cadena de emparejamiento con degradación.** Como las claves de salida pueden faltar, la ingesta empareja
-en tres pasos. Para **equipos y clubes**:
+en tres pasos. Para **clubes**:
 
-1. `federation_team_id` / `federation_club_id`, si vienen;
-2. si no, **nombre normalizado** (sin la letra, sin puntuación, sin acentos) **más categoría** — nunca el
-   nombre a secas, que no distingue categorías y **fusionaría equipos distintos** ([Anexo RFFM §F.3]);
-3. si tampoco, **alta nueva marcada para revisión manual** (§5.1).
+1. `federation_club_id`, si viene;
+2. si no, **nombre normalizado** (sin la letra, sin puntuación, sin acentos);
+3. si tampoco, **alta nueva** (que es rival por construcción, [D-66]).
+
+Para **equipos**, los mismos tres pasos, pero el segundo compara **la clave única entera** (§3.5) con el club
+alcanzado por su nombre en vez de por su id — `(nombre normalizado, category, letter, gender, modality)`:
+
+- **nunca el nombre a secas**, que no distingue categorías y **fusionaría equipos distintos**
+  ([Anexo RFFM §F.3]);
+- **nunca sin la letra**, que es lo que distingue el "Infantil A" del "Infantil B" del mismo club ([D-77]);
+- las tres piezas que la fuente no publica por equipo —`category`, `gender`, `modality`— **las presta la
+  `Competition`** que se sincroniza ([D-07], [D-58]).
+
+Y **el paso 2 no alcanza a los equipos propios sin emparejar**: la ingesta no crea equipos propios ([D-66]) y
+el enganche es un acto deliberado del administrador ([D-67]), así que reconocer uno por el nombre y
+estamparle la clave sería enganchar por la puerta de atrás. Un equipo propio **ya enganchado** sí se
+reconoce, por el paso 1.
 
 Para **partidos**, la cadena tiene solo dos pasos y **el segundo es fiable**, no un apaño ([D-31]):
 
@@ -489,6 +502,20 @@ La diferencia con los equipos es que aquí **no hay tercer paso**: el emparejami
 "alta nueva para revisar", porque sus dos claves son exactas y la segunda **siempre** existe —los equipos ya
 están emparejados cuando se llega al partido—. **Ni la fecha ni la hora entran nunca en la cadena**: son el
 dato que cambia cada semana ([D-30]), así que casar por fecha duplicaría el partido en cuanto se moviese.
+
+**Cómo se encadenan los pasos, que no es obvio y decide si [D-76] llega a ocurrir** ([D-78]). El "si no" es
+**"si el escalón anterior no resolvió"**, no "si el dato no viene": una fila que nació sin clave tiene que
+poder emparejarse por nombre el día que la fuente publique la suya, o el relleno de hueco de [D-76] se queda
+sin caso. Y su reverso: donde el paso 2 es **inexacto** —equipos y clubes—, un candidato cuya clave
+**contradice** a la entrante queda descartado, porque la fuente está diciendo que son dos entidades
+distintas; donde es **exacto** —las coordenadas del partido—, no, porque una clave distinta solo puede
+significar que la federación reemplazó el acta.
+
+**Qué pasa cuando el paso inexacto encuentra dos** ([D-79]). Ni se elige uno ni se da de alta: la fila
+**queda fuera de la pasada y se reporta**, que es material para la fusión de §9. Y el "marcado para revisión"
+del paso 3 **no es una columna** —§3.2 no la tiene y [D-18] cerró el *upsert* sin banderas nuevas—: lo que
+hace revisable un emparejamiento es **por qué escalón se supo**, y eso viaja en el resultado de la cadena,
+no en la fila.
 
 Si aparecen duplicados, hace falta la operación de **fusión** (pendiente): un `PATCH` de nombre no fusiona
 nada.
@@ -517,9 +544,9 @@ corregir datos ingeridos (§5.1), esa corrección **tiene que sobrevivir a la si
 | Tipo de campo | Ejemplos | Comportamiento de la ingesta |
 |---------------|----------|------------------------------|
 | **Descriptivo** (semilla) | `OpponentClub.name`/`short_name`/`crest_key`, `Competition.division_label`/`group_label` | Se escribe **solo en el INSERT**. En el UPDATE **no se toca**: el valor bueno es el del administrador |
-| **Volátil** (propiedad de la federación) | marcador, `status`, **`match_date` y `kickoff_time`**, `venue`, posiciones de `StandingRow`, `LeagueScorer` | Se escribe **siempre que la fuente diga algo** ([D-56]): un campo **ausente o vacío no es un valor** y nunca sobrescribe — la FCF **borra fecha y hora al jugarse el partido**, y pisar a ciegas destruiría el dato. El horario es volátil **incluso ya confirmado** ([D-30]): una suspensión lo devuelve a provisional o lo desplaza. Lo desambigua el marcador: **sin marcador**, un `kickoff_time` vacío es «aún sin confirmar» y se escribe; **con marcador**, es pérdida de dato y se ignora |
+| **Volátil** (propiedad de la federación) | marcador, `status`, **`match_date` y `kickoff_time`**, `venue`, posiciones de `StandingRow`, `LeagueScorer` | Se escribe **siempre que la fuente diga algo** ([D-56]): un campo **ausente o vacío no es un valor** y nunca sobrescribe. Lo que lo sostiene es que los dos errores no cuestan lo mismo ([D-75]): ignorar un vacío real se corrige solo en la pasada siguiente; escribir un silencio **pierde el dato**, y `Match` no tiene `PATCH`. El horario es volátil **incluso ya confirmado** ([D-30]): una suspensión lo devuelve a provisional o lo desplaza. Lo desambigua el marcador —**el ya fusionado**, no el de la pasada—: **sin marcador**, un `kickoff_time` vacío es «aún sin confirmar» y se escribe; **con marcador**, es pérdida de dato y se ignora |
 | **De propiedad** | `Team.opponent_club_id` | **Nunca** lo toca la ingesta en un UPDATE. Es del BFF (`/ownership`, §5.1) — si no, la primera sincronización tras reclamar un equipo lo devolvería a rival |
-| **De emparejamiento** | `federation_team_id`, `federation_club_id` | Solo la ingesta, y solo al insertar. El BFF no los expone en escritura |
+| **De emparejamiento** | `federation_team_id`, `federation_club_id`, `federation_match_id` | Solo la ingesta. **No sobrescribe nunca una clave que ya hay** —son inmutables, y un renumerado se arregla fusionando (§9), no pisando—, pero **sí rellena el hueco** de una fila que nació sin ella ([D-76]): si no, la degradación del paso 2 de la cadena sería permanente. El BFF no los expone en escritura |
 
 ---
 
@@ -560,6 +587,13 @@ frameworks). Cada entidad de §3.2 se materializa en **tres representaciones** r
   repositorios (§4.3); así los agregados quedan desacoplados (§4.2) y no se arrastra Fluent al Dominio.
 - **Invariantes en el Dominio:** los *init*/*factory* validan reglas de §3 (`Match`: `homeTeamID ≠ awayTeamID`;
   `status == .finalizado ⇒ result != nil`; `Goal`: `scoringTeamID ≠ concedingTeamID`).
+- **Dos piezas que no son entidad ni *Value Object*, y aun así son Dominio:** `UpsertPolicy` (F3) y
+  `MatchingChain` (F4), las dos mitades de §3.7 — *qué se escribe* cuando la fila ya se reconoció, y *cómo se
+  reconoce*. Son funciones puras sobre valores, y están aquí y no en Aplicación porque las dos son reglas de
+  **identidad**, no de orquestación: cargar los candidatos y persistir el resultado es del caso de uso (F5),
+  que se los pasa. Los candidatos de la cadena (`OpponentClubCandidate`, `TeamCandidate`, `MatchCandidate`)
+  llevan **solo las claves de emparejamiento** — así, *"ni la fecha ni la hora entran nunca en la cadena"*
+  (§3.7) lo garantiza el tipo, no una guarda que alguien pueda quitar.
 
 ```swift
 // Capa Dominio — sin import Fluent/Vapor
@@ -575,8 +609,10 @@ struct MatchResult {                        // Value Object
 
 struct Kickoff {                            // Value Object — el calendario nace provisional (D-30)
     let date: Date                          // siempre; por defecto sábado, puede pasar a domingo
-    let time: TimeOfDay?                    // nil mientras la federación no fije la franja
+    let time: WallClockTime?                // nil mientras la federación no fije la franja
     var isConfirmed: Bool { time != nil }   // derivado: no puede contradecir al dato
+    // `merging(date:time:existingResult:incomingResult:)` — el upsert de §3.7 con
+    // la desambiguación de D-56. Entregado en F3, junto a `UpsertPolicy`.
 }
 
 struct Match: Identifiable {                 // Entidad de dominio (raíz de agregado, §4.2)
@@ -1905,14 +1941,16 @@ dos son las que el catálogo de capacidades tiene que declarar ([D-17]):
 
 | Qué | RFFM | FCF |
 |-----|------|-----|
-| Calendario y resultados | **1 petición** por grupo | **1 por jornada** (~34) |
+| Calendario y resultados | **1 petición** por grupo | **1 petición** por grupo — la liga entera indexada por jornada ([Anexo FCF §C.10.4], [D-74]) |
 | Clasificación | por **cualquier jornada** | **solo la vigente** → las anteriores al alta se calculan ([D-55]) |
-| Goleadores | `GET /api/scorers` — **sin campo de puesto** | **no observado** ([Anexo FCF §C.9]) |
+| Goleadores | `GET /api/scorers` — **sin campo de puesto** | `goleadores?grupId=…` — **también sin puesto**, y trae un DNI que **no se ingiere** ([Anexo FCF §C.10.7]) |
 | Acta (estado del partido) | sí, 1 por partido **propio** ([D-57]) | no hay endpoint equivalente |
 
-**Y una regla de escritura que no es negociable** ([D-56]): un campo **ausente o vacío no es un valor**. La
-FCF borra la fecha y la hora al jugarse el partido, así que un *upsert* que pise a ciegas **destruye el
-dato**. La política por clase de campo está en §3.7.
+**Y una regla de escritura que no es negociable** ([D-56]): un campo **ausente o vacío no es un valor**. Las
+dos fuentes **callan de tres maneras** —campo vacío, campo ausente y campo inservible ([Anexo RFFM §F.5],
+§F.11)— y nuestro propio adaptador produce `nil` cuando una inferencia falla (§F.4), así que un *upsert* que
+pise a ciegas **destruye el dato**: ignorar de más se corrige en la pasada siguiente, borrar de más no se
+corrige nunca ([D-75]). La política por clase de campo está en §3.7.
 
 **Este módulo no expone superficie HTTP propia** (§2.1). Su relación con el exterior tiene exactamente tres
 puntos de contacto, y ninguno es un contrato REST nuevo:
@@ -1938,11 +1976,13 @@ razonable durante el fin de semana (marcadores) y **no aporta nada** de martes a
 nuevo que traer. El intervalo exacto se cierra al escribir el job; lo que no puede es ser **mayor** que una
 semana, o la app mostraría horarios provisionales de partidos ya jugados.
 
-**Ese tope semanal dejó de ser una recomendación: es un requisito** ([D-56]). En la FCF, un partido que no se
-haya sincronizado **antes de jugarse** pierde su fecha y su hora de forma **irrecuperable** — la fuente deja
-de publicarlas. Y en el mismo proveedor, cada pasada semanal es la **única oportunidad** de capturar la
-clasificación de esa jornada, porque tampoco se puede pedir hacia atrás ([D-55]). Saltarse una semana no
-degrada la frescura: **pierde datos que no vuelven**.
+**Ese tope semanal sigue siendo un requisito, aunque por una razón sola y no por dos** ([D-75]). La que se
+cae es la de la fecha: la FCF **no** borra fecha y hora al jugarse el partido —una temporada entera ya jugada
+las conserva en 240 de 240 ([Anexo FCF §C.10.4])—, así que por ese lado el tope vuelve a ser recomendación.
+La que se mantiene entera es la **clasificación**: la FCF publica **solo la vigente** ([D-55], reverificada
+contra el servidor), de modo que cada pasada semanal es la **única oportunidad** de capturar el *snapshot* de
+esa jornada, y lo que no se capture ya solo se puede **calcular** ([D-15]). Saltarse una semana no degrada la
+frescura: **pierde un dato oficial que no vuelve**.
 
 **Las tres cosas que esta sección daba por pendientes están resueltas** para la RFFM: la clasificación es
 histórica por jornada ([Anexo RFFM §F.8]), los goleadores tienen endpoint JSON propio ([Anexo RFFM §F.13]) y el
@@ -2517,3 +2557,13 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-75]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-76]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-77]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-78]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-79]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-80]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.10.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

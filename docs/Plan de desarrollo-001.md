@@ -144,8 +144,8 @@ dependen de eso.
 | **F0** ✅ | **El esqueleto que camina** (§3) — andamiaje, sin regla de negocio | *build* + integración | §2.2, §9.1, [D-65] |
 | **F1** ✅ | `Season` + `Competition` — dominio y persistencia (detalle abajo). **Sin HTTP**: en los tests se siembran por repositorio | dominio + integración | §3.2, §4.6 |
 | **F2** ✅ | Puerto `FederationClient` + adaptador **RFFM** del calendario, contra *fixtures*. **Sin persistir nada** (detalle en §4.3) | unit puro | §5.6, Anexo RFFM |
-| **F3** | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento | **unit puro, cero I/O** | §3.7, [D-56] |
-| **F4** | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos | unit puro | §3.7, [D-31] |
+| **F3** ✅ | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento (detalle en §4.5) | **unit puro, cero I/O** | §3.7, [D-56] |
+| **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
 | **F5** | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (§4.4 de este plan) | integración, Postgres real | §3.7, §4.4 |
 | **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
@@ -368,6 +368,143 @@ versión **preventiva** de eso: lo que se ejecuta a mano **antes de abrir una fa
 todavía no hay job ni tenants.
 
 
+### 4.5 F3 · La política de *upsert* — **entregada**
+
+La fase más pequeña en código y la más cara de equivocar: **3 ficheros** en el Dominio y **13 tests**, todos
+de nivel 1, con la batería completa en **115**. Corre en **11 ms**, sin red y sin Docker.
+
+| Fichero | Qué contiene |
+|---|---|
+| `Domain/UpsertPolicy.swift` | Las **cuatro clases de campo** de §3.7, una función pura cada una |
+| `Domain/Kickoff.swift` | El VO de [D-30] y **la regla de [D-56]**: el único sitio de la fase donde escribir `nil` es lo correcto |
+| `Domain/MatchResult.swift` | El VO que contesta *«¿se ha jugado?»*, del que cuelga esa desambiguación |
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Sigue en pie [D-56] sin su ejemplo estrella? | **Sí, y con mejor argumento.** No es que la fuente borre: es que **los dos errores no cuestan lo mismo** → [D-75] |
+| ¿Basta *"solo al insertar"* para las claves de emparejamiento? | **No.** Condena a no recuperarse a la fila que nació sin clave. No sobrescribe, pero **rellena el hueco** → [D-76] |
+| ¿Hacen falta banderas nuevas —`..._overridden_at`, un `jsonb` de *overrides*—? | **No.** [D-18] se sostiene: cuatro clases de campo, cuatro funciones, cero columnas |
+| ¿Qué marcador desambigua el horario vacío? | **El fusionado, no el de la pasada.** Y la firma lo impone: `merging` recibe los dos y fusiona dentro |
+| ¿Sigue siendo un **requisito** el tope semanal de §5.6? | **Sí, pero por [D-55]**, no por la fecha: lo irrecuperable es la clasificación de la FCF, no el horario |
+
+**Lo que no trae, y es deliberado.** **Ninguna entidad de ingesta.** `Match`, `Round`, `OpponentClub` y
+`Team` son de **F5**, y la cadena de emparejamiento es **F4**: lo que aquí se entrega son las cuatro reglas
+que las dos van a usar, sin llamante todavía. Escribir hoy el *merge* de `Match` obligaría a inventar la
+entidad **y** la cadena para poder probarlo, que es exactamente lo que §4.1 separó en tres fases.
+
+**Lo que se llevó por delante sin planearlo:** `WallClockTime` se muda de `Application` a `Domain`. Nació con
+el puerto de F2, que fue quien primero necesitó nombrar una hora suelta, pero es un VO con invariante y §4.1
+los pone en el Dominio — lo forzó `Kickoff`, que lo lleva dentro. Un segundo tipo idéntico en la otra capa
+era la alternativa, y es peor.
+
+**Esta vez sí se hizo el bucle entero de §5.1**, que es lo que F2 se dejó por el camino: **doce ciclos**, uno
+por regla, cada uno con su esqueleto y su **rojo de aserción**. Tres cosas que solo se ven haciéndolo así:
+
+1. **La triangulación del campo volátil funcionó como está descrita.** El esqueleto de `volatile` fue
+   `incoming` —pisar siempre, la implementación que [D-56] existe para prohibir—, y el primer test *(«la
+   fuente gana cuando dice algo»)* lo dio por bueno. Lo tumbó el segundo, con el borrado a la vista:
+   `Expectation failed: (merged → nil) == 3`. **Ese rojo es toda la fase en una línea.**
+2. **El rojo cazó un error del propio test.** La constante del *fixture* se llamaba `sabado` y era un
+   **viernes**: se vio porque el fallo imprime las dos fechas. Un test escrito después de la implementación
+   habría pasado en verde con el nombre mintiendo.
+3. **`MemberImportVisibility` volvió a morder** al mudar `WallClockTime`: el *target* de tests de federación
+   lo usaba de gratis y dejó de compilar hasta declarar su `import Domain`. Es la tercera fase seguida en que
+   esa bandera se gana el sitio.
+
+**Comprobación de mutación: 11 mutaciones, 11 detectadas**, y con especificidad — romper *solo* el relleno
+del hueco tumba *solo* el test de [D-76], y romper la desambiguación por marcador tumba *solo* el de
+[D-56]. Las dos que más importan, porque son las dos líneas casi idénticas de las que avisaba §5.1:
+
+| Se rompe | Lo caza |
+|---|---|
+| `volatile` → `incoming` (pisar siempre) | `lo que la fuente no dice no borra lo que hay` ([D-56]) |
+| la hora se pisa **siempre** | `con marcador, la hora que desaparece se ignora` ([D-56]) |
+| la hora **no se vacía nunca** | `sin marcador, la hora que desaparece devuelve el horario a provisional` ([D-30]) |
+| `matching` → `incoming ?? existing` | `un codacta distinto no reescribe el que ya emparejaba` ([D-31]) |
+| `matching` → `existing` (sin relleno) | `una fila que nació sin clave la recibe cuando la fuente la publica` ([D-76]) |
+| `owned` → `incoming ?? existing` | `la ingesta no reasigna el club de un equipo` ([D-18]) |
+
+**Y una deuda que esta fase salda, además de la suya.** [D-74] dejó apuntado que el `202` de [D-67] se
+justificaba con las *"~34 peticiones"* de la FCF, que hoy es **1**. Revisado: el `202` **se mantiene**, con
+dos argumentos nuevos —lo caro es lo que viene detrás del calendario (~240 partidos y **un escudo por club**
+que descargar y subir a Storage, [D-19]), y encolar es lo que permite reintentar sin romper el enganche—.
+Queda anotado dentro de [D-67], y con lo que F10 tiene que medir para cerrarlo del todo.
+
+
+### 4.6 F4 · La cadena de emparejamiento — **entregada**
+
+La otra mitad de §3.7, y la segunda fase seguida sin infraestructura: **4 ficheros** en el Dominio y **23
+tests**, todos de nivel 1, con la batería completa en **138**. Corre en milisegundos, sin red y sin Docker.
+
+| Fichero | Qué contiene |
+|---|---|
+| `Domain/MatchingChain.swift` | Las **tres cadenas** de §3.7 —club, equipo, partido—, sus tipos de candidato y los dos escalones compartidos |
+| `Domain/MatchOutcome.swift` | El desenlace (`matched` / `ambiguous` / `unmatched`) y **por qué escalón se supo** |
+| `Domain/NormalizedName.swift` | El VO del paso 2, con el sesgo de [D-80] |
+| `Domain/Identifiers.swift` | `OpponentClubID`, `TeamID`, `RoundID`, `MatchID` |
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Basta *"nombre normalizado más categoría"* para emparejar un equipo? | **No.** Fusiona el "Infantil A" y el "Infantil B" del mismo club. El paso 2 compara la **clave única entera** → [D-77] |
+| El *"si no"* que encadena los pasos, ¿es *"si no viene el dato"*? | **No, y con la otra lectura [D-76] no ocurre jamás**: es *"si el escalón anterior no resolvió"* → [D-78] |
+| ¿Y si el paso inexacto encuentra dos? | Ni se elige ni se crea: **se reporta**. Y la *"marca para revisión"* de §3.7 **no es una columna** → [D-79] |
+| ¿Dónde vive la cadena? | En el **Dominio**, con `UpsertPolicy`. El comentario de `FederationClient` que la situaba en Aplicación queda corregido |
+| ¿Hace falta una guarda para que la ingesta no enganche un equipo propio? | **No: hace falta un tipo.** `TeamOwnership` es un `enum` y el caso `.own` no lleva nombre de club, así que el paso 2 no puede alcanzarlo ([D-66], [D-67], [D-76]) |
+
+**La decisión de diseño que más rinde, y se puede copiar.** Los candidatos son tipos propios y no las
+entidades de F5, con **solo las claves de emparejamiento** dentro. Eso convierte tres reglas de §3.7 de
+disciplina en estructura: `MatchCandidate` no tiene fecha, así que *"ni la fecha ni la hora entran nunca en la
+cadena"* **no se puede desobedecer**; `TeamOwnership.own` no tiene nombre de club, así que el enganche por la
+puerta de atrás de [D-76] **no se puede escribir**. El precio es un mapeo trivial en F5.
+
+**Tres cosas que solo se ven haciendo el bucle de §5.1:**
+
+1. **El rojo cazó un fixture equivocado, otra vez, y el hallazgo era de otro fichero.** El test de ambigüedad
+   se escribió con `"C.D. Fútbol Tres Cantos"` y `"CD Futbol Tres Cantos"` dando por hecho que colisionaban.
+   No colisionaban: la normalización trataba la puntuación como **separador**, así que `"C.D."` daba `"c d"` y
+   `"CD"` daba `"cd"`. Es decir, **el administrador escribiendo las siglas sin puntos rompía el
+   emparejamiento** — justo lo que ese VO existe para impedir. Salió al preparar un test de la cadena, no del
+   VO → [D-80].
+2. **Dos tests llegaron en verde y no se disimuló.** Los de la frontera de [D-66]/[D-67] pasan sin haber
+   estado rojos, porque los sostiene un `enum` y no una línea. Se verificaron con una **mutación de
+   modelado** —abrir el paso 2 a los equipos propios— en vez de fingir un ciclo.
+3. **La comprobación de mutación encontró dos huecos de cobertura antes de correr.** Al listar qué línea
+   rompería cada test se vio que **nada** distinguía dos partidos que solo difieren en la jornada
+   (eliminatoria a doble vuelta, [D-12]) ni el local del visitante. Los dos ciclos que faltaban se hicieron
+   con rojo real, rompiendo la implementación a propósito para escribirlos.
+
+**Comprobación de mutación: 16 mutaciones, 16 detectadas**, y con especificidad — quitar *solo* la letra del
+paso 2 tumba *solo* el test de [D-77], y lo mismo el género, la modalidad y la categoría por separado:
+
+| Se rompe | Lo caza |
+|---|---|
+| el paso 1 compara los dos opcionales (`nil` casa con `nil`) | `no tener clave no es tener la misma clave` (y 12 más) |
+| el paso 2 no descarta la clave que contradice | `una clave distinta descarta al candidato aunque el nombre case` ([D-78]) |
+| el *"si no"* leído como *"si no viene la clave"* | `la clave que no encuentra a nadie cae al paso 2` ([D-78]) |
+| la ambigüedad se resuelve con el primero | `dos candidatos por nombre no se resuelven: se reportan` ([D-79]) |
+| el paso 2 sin la letra / el género / la modalidad / la categoría | **un test cada uno**, y solo ése |
+| el paso 2 alcanza a los equipos propios sin enganchar | `un equipo propio sin enganchar no lo engancha la ingesta` ([D-76]) |
+| emparejar solo por coordenadas (la alternativa que [D-31] descartó) | `el partido reubicado en otra jornada no se duplica` |
+| las coordenadas sin la jornada | `los dos partidos de una eliminatoria no son el mismo` ([D-12]) |
+| local y visitante cruzados | 5 tests, incluido `el local y el visitante no son intercambiables` |
+| la normalización no pliega acentos / caja, o la puntuación separa | 2, 6 y 2 tests respectivamente |
+
+**Y una lección de arnés que hay que apuntar junto a la de F1.** El *script* de mutación decide por el
+**código de salida**, no raspando nombres —eso ya lo enseñó F1—, pero esta vez falló por otro sitio: una
+mutación **no llegó a aplicarse** porque su patrón de texto no casaba, y el resultado se leyó como
+*"sobrevive"* cuando en realidad era *"no se probó"*. Un arnés de mutación tiene que distinguir esos dos
+casos explícitamente, o miente en la dirección tranquilizadora.
+
+**Lo que no trae, y es deliberado.** **Ningún llamante**, igual que F3: la cadena se prueba con listas de
+candidatos pasadas por argumento, y quien las cargue del repositorio será F5. Escribir hoy esa consulta
+obligaría a inventar las entidades **y** los repositorios de `Team`, `OpponentClub` y `Match`, que es lo que
+§4.1 separó en dos fases.
+
+
 ---
 
 ## 5. El bucle interior · TDD sobre esta arquitectura
@@ -553,11 +690,12 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
    [Anexo FCF §C.10](./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md); **§C.1–§C.9 de ese anexo quedan
    obsoletas**.
 
-   > **Y deja dos deberes para F3, que es la fase siguiente.** [D-56] y §5.6 del LLD apoyan la regla de
-   > escritura y la cadencia semanal en que *"la FCF borra la fecha y la hora al jugarse el partido"*; una
-   > temporada entera ya jugada las conserva en **240 de 240**. [D-67] justifica su `202` con las *"~34
-   > peticiones"* de la FCF, que ahora es **1**. Las dos decisiones pueden seguir siendo correctas por otros
-   > motivos — pero **hay que rehacerles la justificación al implementarlas**, no darlas por buenas.
+   > **Dejó dos deberes para F3, y F3 los ha hecho** (§4.5). [D-56] se mantiene con el argumento cambiado
+   > —el coste de los dos errores no es simétrico, [D-75]— y el `202` de [D-67] también, por el volumen de
+   > escritura y los escudos en vez de por el número de peticiones. De paso, el tope semanal de §5.6 conserva
+   > su rango de **requisito** pero apoyado en [D-55] (la clasificación de la FCF no se puede pedir hacia
+   > atrás), no en la fecha. **Ninguna de las dos reglas cambió; las dos cambiaron de razón**, que era
+   > exactamente lo que había que averiguar.
 2. ~~La lista exacta de *upcoming features* de concurrencia.~~ **Resuelta en F0**: `ExistentialAny`,
    `MemberImportVisibility`, `InferIsolatedConformances` y `NonisolatedNonsendingByDefault`, en modo de
    lenguaje `.v6` y en **todos** los *targets*. **Fluent no peleó**: no hizo falta bajar el modo en ninguno,
@@ -582,3 +720,29 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-75]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-76]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-77]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-78]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-79]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-80]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-18]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-19]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-30]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-31]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-55]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-09]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-15]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-17]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-29]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-70]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.14]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.15]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

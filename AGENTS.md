@@ -44,10 +44,20 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   van en `CreateTeamRequest`, nunca en el `PATCH`.
 - **El copia-pega de la URL de la federación vive en el equipo, no en la competición** (`D-67`):
   `POST /v1/teams/{id}/federation-link` (+ su `/preview`) engancha, crea en cascada `Season` y
-  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. ⚠️ **La razón escrita de ese
-  202 —que la FCF costaba ~34 peticiones— ha caducado**: hoy cuesta una (ver más abajo y `D-74`). El `202`
-  puede seguir siendo lo correcto por desacoplamiento, pero **no se da por bueno sin rehacerle el
-  argumento**. `POST /v1/competitions` se conserva solo como vía para semillas, *scripts* y tests.
+  `Competition` si hacen falta y **encola** la primera ingesta → **202**, no 201. Su razón escrita —que la
+  FCF costaba ~34 peticiones— **caducó** (hoy cuesta una, `D-74`) y **está rehecha en F3**: el `202` se
+  mantiene porque lo caro es lo que viene *detrás* del calendario —~240 partidos y **un escudo por club** que
+  descargar y subir a Storage (`D-19`)— y porque encolar es lo que permite reintentar sin romper el enganche.
+  F10 tiene que medirlo para cerrarlo del todo. `POST /v1/competitions` se conserva solo como vía para
+  semillas, *scripts* y tests.
+- **La cadena de emparejamiento tiene tres pasos, y los tres se escribieron en F4 con enmienda** (§3.7):
+  el paso 2 de equipos compara **la clave única entera** —nombre normalizado, categoría, **letra**, género y
+  modalidad—, porque *"nombre más categoría"* fusionaba el "Infantil A" y el "Infantil B" del mismo club
+  (`D-77`); el *"si no"* que encadena los pasos significa **"si el anterior no resolvió"**, no *"si el dato no
+  viene"*, o `D-76` no llega a ocurrir nunca (`D-78`); y cuando el paso inexacto encuentra dos, **no se
+  decide: se reporta** (`D-79`). Al tocarla, dos cosas: la *"marca para revisión manual"* de §3.7 **no es una
+  columna** —es el escalón que devuelve la cadena—, y el paso 2 **no puede alcanzar equipos propios sin
+  enganchar**, que es el límite que `D-76` le dejó escrito.
 - **`modality` y `gender`, cuando el equipo lo crea la ingesta, los hereda de su `Competition`** (§3.2, `D-07`, `D-58`): los dos entran en la
   clave única de `Team` y **ninguno es campo de escritura de `Team`**. La federación no publica género por
   equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
@@ -63,11 +73,13 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   anexo FCF están obsoletas** — describen el sitio de raspado anterior. De las diferencias que ese anexo daba
   por medidas, **solo sobrevive una**: la FCF publica **únicamente la clasificación vigente** (`D-55`,
   reverificado), así que las jornadas anteriores al alta se calculan (`D-15`).
-- **Dos consecuencias de eso que están sin resolver, y tocan en F3.** `D-56` (*ausente o vacío nunca
-  sobrescribe*) y la cadencia semanal de §5.6 se apoyan en que *"la FCF borra la fecha al jugarse el
-  partido"* — una temporada entera ya jugada las **conserva en 240 de 240**. Y `D-67` justifica su `202` con
-  las *"~34 peticiones"* de la FCF, que ahora es **1**. Las reglas pueden seguir siendo buenas; **sus razones
-  escritas han caducado**, y hay que rehacerlas al implementarlas, no darlas por buenas.
+- **Esas dos razones caducadas se rehicieron en F3, y ninguna regla cambió: cambiaron de argumento.**
+  `D-56` (*ausente o vacío nunca sobrescribe*) ya no se apoya en que la FCF borre nada —no lo hace: 240 de
+  240— sino en que **los dos errores no cuestan lo mismo** (`D-75`): ignorar un vacío real se corrige solo en
+  la pasada siguiente; escribir un silencio pierde el dato y `Match` no tiene `PATCH`. La cadencia semanal de
+  §5.6 sigue siendo **requisito**, pero por `D-55` —la clasificación de la FCF no se puede pedir hacia
+  atrás—, no por la fecha. Y el `202` de `D-67`, arriba. **La lección se repite: una regla puede sobrevivir a
+  su ejemplo, pero hay que ir a comprobarlo.**
 - **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
   en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
   ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
@@ -130,8 +142,11 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
 **backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**
 —`GET /v1/club` responde de HTTP a Postgres contra tenants aislados—, **F1**, que añade `Season` y
-`Competition` en dominio y persistencia, y **F2**, el puerto `FederationClient` con el adaptador del
-calendario de la RFFM contra volcados reales (Plan §4.3). **102 tests.** **Web backoffice, app iOS y app
+`Competition` en dominio y persistencia, **F2**, el puerto `FederationClient` con el adaptador del
+calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **política de *upsert*** de §3.7
+—`UpsertPolicy`, `Kickoff` y `MatchResult` en el Dominio, sin una sola bandera nueva en el esquema (Plan
+§4.5)—, y **F4**, la **cadena de emparejamiento** —`MatchingChain`, `MatchOutcome` y `NormalizedName`, también
+sin columnas nuevas (Plan §4.6)—. **138 tests.** **Web backoffice, app iOS y app
 Android siguen sin empezar.**
 
 **F1 no tiene superficie HTTP, y es deliberado** (Plan §4.1): entrega entidades, *Value Objects*, puertos,
@@ -172,7 +187,7 @@ y el `/preview` (F10). Hoy lo mantiene en el grafo de *build* su *target* de tes
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
-| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones. **Sin** `import Vapor/Fluent` |
+| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). **Sin** `import Vapor/Fluent` |
 | `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`) |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
@@ -248,14 +263,17 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0, F1 y F2 entregadas, lo inmediato es **F3: la política de *upsert*** —descriptivo, volátil, propiedad
-y emparejamiento (§3.7, `D-56`)—, que es **unit puro y cero I/O**. Es además donde el bucle de Plan §5.1 se
-aplica en serio: si la función es `merge(existing:incoming:)`, el esqueleto es **devolver `incoming`** —pisar
-siempre, la implementación ingenua que `D-56` existe para prohibir—, y contra él cada test de la fase falla
-por su aserción y con el dato delante. Llega con un deber apuntado: **la
-justificación de `D-56` hay que rehacerla**, porque su ejemplo estrella —que la FCF borra la fecha al jugarse
-el partido— es falso desde el rediseño de esa web (`D-74`). La regla puede seguir siendo buena; su argumento
-no se da por bueno.
+Con F0–F4 entregadas, lo inmediato es **F5: la ingesta del calendario de punta a punta** —`Round`,
+`OpponentClub`, `Team` y `Match` contra Postgres real—, que es la primera fase que **junta** lo que F3 y F4
+entregaron sueltos: la cadena decide qué fila es, `UpsertPolicy` decide qué se le escribe. Trae además el
+transporte HTTP real y su ***canario*** (Plan §4.4). Y hereda de F4 un mapeo trivial pero deliberado: los
+candidatos de la cadena llevan **solo claves de emparejamiento**, así que las entidades nuevas se proyectan a
+ellos en vez de pasarse enteras — es lo que hace estructural, y no disciplinar, que la fecha no entre nunca
+en la cadena.
+
+**La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
+11/11 mutaciones) y F4 lo repitió con **16/16**, con dos huecos de cobertura encontrados *al preparar* la
+comprobación de mutación, antes de correrla.
 
 **F5 lleva ya dos deberes apuntados** (Plan §4.3 y §4.4). Uno: el volcado de calendario que tenemos es de una
 **temporada sin arrancar**, así que la rama de "partido jugado" no la ejercita ningún dato real — hace falta
@@ -273,4 +291,5 @@ tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes clo
 El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude Code.
 
 [Anexo FCF §C.10]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

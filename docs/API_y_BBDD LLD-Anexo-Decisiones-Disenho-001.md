@@ -67,6 +67,12 @@
 | **D-56**               | «Volátil» no es «pisar siempre»: la fuente solo gana cuando dice algo                      | §3.7, §5.6                         |
 | **D-57**               | El acta entra como fuente de estado, y solo para los partidos del club                     | §3.3, §3.7, §5.6                   |
 | **D-74**               | La coordenada de la FCF deja de ser un problema: su web nueva tiene la forma de la RFFM    | §3.7, §5.6                         |
+| **D-75**               | «Vacío no sobrescribe» sobrevive a su ejemplo falso: lo que la sostiene es el coste asimétrico | §3.7, §5.6                     |
+| **D-76**               | El emparejamiento no sobrescribe, pero sí rellena el hueco                                 | §3.7                               |
+| **D-77**               | El paso 2 de la cadena de equipos lleva la letra: §3.7 fusionaría el A y el B del mismo club | §3.5, §3.7                       |
+| **D-78**               | El «si no» de la cadena es «si el paso anterior no resolvió», no «si el dato no viene»      | §3.7                               |
+| **D-79**               | La ambigüedad del paso inexacto no se resuelve: se reporta, y sin columna nueva             | §3.7, §5.1, §9                     |
+| **D-80**               | La normalización de nombres se equivoca a propósito hacia el mismo club                     | §3.7                               |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -1138,6 +1144,11 @@ un `OpponentClub`.
 de propiedad (nunca la ingesta) y de emparejamiento (solo la ingesta, solo al insertar). La tabla operativa
 está en §3.7 del LLD.
 
+**Dos matices posteriores, los dos de implementarla en F3.** «Volátil» no es «pisar siempre» ([D-56], con su
+argumento rehecho en [D-75]) y «solo al insertar» no alcanza para el emparejamiento, que **sí rellena el
+hueco** ([D-76]). La clasificación en cuatro clases no se toca: era correcta, y es lo que ha permitido
+implementarla en cuatro funciones puras sin una sola bandera nueva.
+
 ---
 
 ### D-19 · Los escudos se descargan; la clave del objeto se deriva del `slug`
@@ -1226,6 +1237,13 @@ al alta.
 ---
 
 ### D-56 · «Volátil» no es «pisar siempre»: la fuente solo gana cuando dice algo
+
+> ⚠️ **Su ejemplo estrella es falso desde el rediseño de la web de la FCF, y la razón está rehecha en
+> [D-75]** (2026-08-29, al implementar F3). *«La FCF borra la fecha y la hora al jugarse el partido»* era
+> cierto de la web vieja; una temporada entera ya jugada las conserva en **240 de 240**
+> ([Anexo FCF §C.10.4]). **La regla y su tabla siguen vigentes tal como están escritas aquí** —lo que cambia
+> es lo que hay que citar para defenderlas—. El texto de abajo se conserva sin tocar porque esto es una
+> bitácora: se anota encima, no se reescribe ([D-26]).
 
 **El caso que rompe [D-18].** `match_date` y `kickoff_time` están clasificados como **volátiles**: la ingesta
 los pisa en cada pasada, incluso ya confirmados, porque una suspensión los mueve ([D-30]). La FCF obliga a
@@ -1371,6 +1389,242 @@ sistema de terceros tiene fecha de caducidad que nadie anuncia, y lo que la dela
 escribir un adaptador, revalidar su anexo** — cuesta media hora y aquí ha evitado escribir un
 `FederationCoordinate` con dos representaciones para un problema inexistente.
 
+
+### D-75 · «Vacío no sobrescribe» sobrevive a su ejemplo falso: lo que la sostiene es el coste asimétrico
+
+**Esta entrada es la revisión que [D-74] dejó apuntada, y toca hacerla ahora**: F3 es la fase que implementa
+[D-56], y el plan es explícito en que una regla no se da por buena con una razón caducada
+([Plan §10](./Plan%20de%20desarrollo-001.md), cuestión 1).
+
+**Lo que se cayó.** [D-56] construyó la regla sobre un caso concreto: *«cuando un partido se juega, la página
+de la FCF deja de publicar la fecha y la hora»* ([Anexo FCF §C.6]), de donde salía que pisar «siempre»
+**borraría el dato el lunes siguiente al partido, para siempre**. La reobservación del 2026-08-28 lo
+desmiente: en un volcado de una temporada **entera ya jugada**, los 240 partidos conservan su `COMIENZO1`
+([Anexo FCF §C.10.4]). El ejemplo estrella era de la web vieja, y esa web ya no existe.
+
+**Lo que no se cayó, y sigue estando medido.** La fuente **calla de tres maneras distintas**, y las tres
+llegan al mismo `nil`:
+
+| Forma de callar | Observado en |
+|---|---|
+| Campo **vacío** — `goles_casa: ""`, `hora: ""` | [Anexo RFFM §F.5], muestras 1 y 2 |
+| Campo **ausente** — la muestra 2 no trae `hora` en absoluto | [Anexo RFFM §F.5] |
+| Campo **inservible** — `&nbsp;` y espacios duros dentro de campos numéricos | [Anexo RFFM §F.11] |
+
+Y hay una cuarta que no es de la fuente sino **nuestra**: `federation_club_id` se **infiere** del nombre del
+fichero del escudo y devuelve `nil` cuando no puede ([Anexo RFFM §F.4]); §3.7 exige que la ingesta **degrade**
+en vez de fallar. Un `UPDATE` ciego convertiría cada degradación nuestra en un borrado suyo. [D-31] añade la
+quinta: la clave puede faltar *«dentro de la propia RFFM en respuestas parciales»*.
+
+**La razón nueva, que es la que hay que citar de ahora en adelante: los dos errores posibles no cuestan lo
+mismo.**
+
+| Si la regla se equivoca… | Qué cuesta |
+|---|---|
+| **Ignorar** un vacío que era información real | El valor viejo sobrevive **una pasada de más**. Se corrige **solo**: en cuanto la fuente vuelva a decir algo, gana ella |
+| **Escribir** un vacío que era silencio | El valor **se pierde**. `Match` no tiene `PATCH` ([D-21]), así que **nadie** lo repone a mano; el único camino de vuelta es que la fuente lo republique — y si dejó de publicarlo, no lo hará |
+
+**Decisión: la regla se mantiene literal, con el argumento cambiado.** No hace falta que ninguna federación
+*borre* nada para que valga; basta con que a veces **callen**, que es lo observado en las dos. Donde antes se
+citaba a la FCF, se cita esta asimetría.
+
+**Lo que esto sí degrada, y conviene no disimularlo.** La segunda fila de la tabla de [D-56] —*con marcador,
+la hora vacía se ignora*— ya no defiende un comportamiento **observado** sino uno **posible**. Se conserva
+por tres motivos, en este orden: su coste de equivocarse es el de la fila 1 de la tabla de arriba (enseñar la
+hora vieja de un partido ya jugado, que no la mira nadie); su beneficio es el de la fila 2; y la app heredada
+de Madrid tiene una función dedicada a defenderse **exactamente de ese caso**, que es evidencia **[I]** de
+que alguna vez ocurrió.
+
+**Lo que se asume a cambio.** Que si una federación llegase a borrar a propósito la hora de un partido ya
+jugado, no lo recogeríamos. No hay forma de distinguir eso de un silencio, y equivocarse por el otro lado es
+peor.
+
+**Y una consecuencia sobre §5.6 que es al revés de lo que parecía.** [D-74] anotó que el tope semanal *«como
+requisito se quedó sin base»*. **Sigue siendo un requisito**, pero por otra decisión: [D-55]. En la FCF la
+clasificación **solo se publica la vigente**, así que cada pasada semanal es la **única oportunidad** de
+capturar el *snapshot* de esa jornada, y lo que no se capture se calcula ([D-15]) o no existe. Lo que cae es
+el argumento de la fecha, no el tope.
+
+---
+
+### D-76 · El emparejamiento no sobrescribe, pero sí rellena el hueco
+
+**El problema, que aparece al escribir la regla y no al leerla.** §3.7 clasifica `federation_team_id`,
+`federation_club_id` y `federation_match_id` como campos *«solo la ingesta, y solo al insertar»*. Literal,
+eso deja tiradas justo a las filas que la propia §3.7 anticipa: dice de esas claves que *«la ingesta puede no
+lograr extraerlas»* y por eso son anulables. Una fila que **nació sin clave** no la recibiría nunca, y se
+quedaría emparejándose por el **paso 2** de la cadena —nombre normalizado + categoría—, que es el escalón
+declarado **inexacto**.
+
+**Alternativas consideradas:**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Estricta: solo en el INSERT | Es la de arriba. Condena a la fila degradada a no recuperarse nunca, y el arreglo sería la operación de **fusión**, que no existe (§9) |
+| Tratarlas como volátiles (gana la fuente) | Un renumerado de la federación **repuntaría filas en silencio**. §3.7 declara estas claves **inmutables** por eso mismo |
+
+**Decisión.** `existing ?? incoming`: **nunca sobrescribe una clave que ya hay; sí escribe donde no había
+nada.** Es el espejo exacto de la regla volátil —allí gana la fuente y el dato viejo es el respaldo; aquí
+gana el dato y la fuente solo llega al hueco—, y esa simetría es lo que hace que las dos se puedan leer
+juntas sin confundirlas.
+
+**Por qué es seguro.** Rellenar un hueco no destruye nada; no hay dato que perder, que es la única cosa que
+[D-75] protege. Y si la clave ya fuese de otra fila, el `UNIQUE` de §3.5 lo para: sale un duplicado que
+fusionar, que es el caso que §9 ya contempla.
+
+**En qué se diferencia de un campo de propiedad, que es la confusión fácil.** En `Team.opponent_club_id` un
+`nil` **sí es un valor** —significa «este equipo es mío» ([D-20])— y rellenarlo desharía la reclamación del
+administrador. En una clave de emparejamiento un `nil` significa «no se pudo extraer». Mismo `nil`, dos
+lecturas opuestas: por eso son dos clases de campo y no una.
+
+**Lo que se asume a cambio.** Si el emparejamiento que llevó hasta esa fila fue el inexacto y se equivocó, se
+le estampa una clave ajena. No es una regresión —esa fila ya se venía casando mal por nombre, y seguiría
+haciéndolo—, pero sí **congela** el error. A cambio lo hace legible: un identificador mal puesto se ve en la
+fila; un emparejamiento por nombre mal hecho, no.
+
+**Y un límite que hay que respetar en F4, donde se escribe la cadena.** Esto **no** puede convertirse en un
+enganche automático por la puerta de atrás: [D-66] es explícito en que la ingesta no reconoce equipos propios
+—*«lo que encuentra y no reconoce es, por construcción, de un `OpponentClub`»*— y [D-67] hace del enganche un
+acto deliberado del administrador. Que el paso 2 de la cadena no vaya a buscar entre los equipos propios sin
+emparejar es responsabilidad **de la cadena**, no de esta regla.
+
+
+---
+
+### D-77 · El paso 2 de la cadena de equipos lleva la letra: §3.7 fusionaría el A y el B del mismo club
+
+**El problema, que aparece al escribir el segundo escalón y no al leerlo.** §3.7 define el paso 2 de la
+cadena de equipos como *"**nombre normalizado** (sin la letra, sin puntuación, sin acentos) **más
+categoría**"*, y razona por qué el nombre a secas no vale citando [Anexo RFFM §F.3]: *"casar por nombre
+habría **fusionado dos equipos distintos en uno**"*, porque el Celtic Castilla 'A' se llama igual en
+infantil que en cadete.
+
+**Pero la categoría solo cierra esa mitad.** La clave única de `Team` es (`opponent_club_id`, `category`,
+`letter`, `gender`, `modality`) (§3.5), y un club con dos equipos **en la misma categoría** —el "Infantil A"
+y el "Infantil B"— comparte nombre **y** categoría. Con el paso 2 tal como está escrito, los dos son
+candidatos indistinguibles: no es que empareje mal, es que **no puede emparejar**, y esa mitad de la liga se
+queda sin ingerir cada semana.
+
+**Y las otras dos columnas de la clave faltaban por el mismo motivo.** `gender` ([D-58]) y `modality`
+([D-07]) tampoco los publica la fuente por equipo, y también distinguen equipos: el "Infantil A" masculino y
+el femenino son equipos distintos, y el de fútbol-11 y el de fútbol-sala también.
+
+**Decisión.** El paso 2 compara **la clave única entera**, con el club alcanzado por su nombre normalizado en
+vez de por su id: `(nombre del club, category, letter, gender, modality)`. Las tres piezas que la fuente no
+publica —categoría, género y modalidad— **se heredan de la `Competition`** que se está sincronizando, que es
+exactamente lo que [D-58] y [D-07] ya establecían para el alta; en el código viajan juntas como
+`CompetitionScope`, para que la firma diga de dónde vienen.
+
+**Por qué es barato.** La letra **la publica la fuente** —embebida entre comillas simples al final del
+nombre, [Anexo RFFM §F.5]— y **el adaptador de F2 ya la separa** (`RFFMValue.teamName`). No hace falta un
+dato nuevo, ni una llamada más, ni una confirmación del administrador.
+
+**Un matiz sobre el `nil` de la letra, que es la confusión fácil con [D-76].** Aquí `nil == nil` **sí** es lo
+correcto: un club sin filial no tiene letra, y eso es un **valor** —«el único equipo»—, no un hueco. Es lo
+contrario que en la clave de federación, donde `nil` significa «no se pudo extraer» y comparar dos ausencias
+empareja filas al azar. §3.5 ya lo tenía previsto al pedir `NULLS NOT DISTINCT` para esa clave única.
+
+**Lo que se asume a cambio.** Que la letra que publica la fuente y la que tiene la fila almacenada coincidan.
+Si la federación cambiara a un equipo de letra, el paso 2 dejaría de reconocerlo y se daría de alta uno
+nuevo — el mismo desenlace que cualquier otro cambio en el escalón inexacto, y el mismo arreglo: la fusión
+(§9).
+
+---
+
+### D-78 · El «si no» de la cadena es «si el paso anterior no resolvió», no «si el dato no viene»
+
+**Dos lecturas de una conjunción, y una de ellas deja a [D-76] sin ocurrir jamás.** §3.7 encadena los
+escalones así: *"1. `federation_team_id` / `federation_club_id`, **si vienen**; 2. **si no**, nombre
+normalizado (…)"*. La lectura literal —*"si no vienen"*— convierte el paso 2 en la rama del dato ausente.
+
+Con esa lectura, sigue el caso que [D-76] existe para atender: una fila que **nació sin clave** porque el
+club no tenía escudo ([Anexo RFFM §F.4]). El día que la federación publica el escudo, la fila entrante **sí**
+trae clave; el paso 1 no encuentra a nadie —la fila almacenada la tiene nula— y el paso 2 está cerrado
+porque el dato *sí* venía. Resultado: alta nueva, duplicado, y el *"sí rellena el hueco"* de [D-76] sin un
+solo caso en el que aplicarse.
+
+**Decisión.** El *"si no"* es **«si el escalón anterior no resolvió»**. Un escalón que no encuentra
+candidato cede el turno al siguiente, traiga o no traiga el dato.
+
+**Y su reverso, sin el cual abrir el paso 2 sería un agujero.** Si el candidato **ya tiene** clave y es
+**otra**, la fuente está afirmando que son dos entidades distintas —dos clubes homónimos, o un renumerado—.
+Emparejarlos los fusionaría en silencio, que es justo lo que §3.7 evita al declarar estas claves inmutables.
+Así que **el paso 2 de equipos y clubes solo mira a los candidatos sin clave**, que es exactamente el
+conjunto al que [D-76] quiere llegar.
+
+**La cadena de partidos hace lo contrario, y la asimetría es la de [D-31].** Allí el paso 2 son las
+coordenadas: FK internas ya resueltas más el `UNIQUE(round_id, home_team_id, away_team_id)` de §3.5, o sea
+un escalón **exacto**. Un `federation_match_id` distinto no es prueba de que sean dos partidos —solo puede
+significar que la federación reemplazó el acta—, y descartar al candidato daría de alta un partido que ese
+mismo `UNIQUE` rechazaría: un fallo de ingesta en vez de un emparejamiento. **Donde el paso 2 es inexacto, la
+clave que contradice descarta; donde es exacto, no.** Que la clave vieja no se pierda lo garantiza
+`UpsertPolicy.matching`, que solo rellena huecos.
+
+**Alternativa descartada: dejar la lectura literal y arreglar los huecos con la fusión.** Es la que [D-76] ya
+descartó por su cuenta —*"condena a la fila degradada a no recuperarse nunca, y el arreglo sería la operación
+de **fusión**, que no existe (§9)"*—. Esta entrada solo añade dónde se implementa esa decisión: en la
+conjunción de la cadena, no en la política de *upsert*.
+
+---
+
+### D-79 · La ambigüedad del paso inexacto no se resuelve: se reporta, y sin columna nueva
+
+**El caso que §3.7 no contempla.** El paso 2 de equipos y clubes es **inexacto por declaración propia**, así
+que puede devolver **más de un** candidato igual de bueno. Y el `UNIQUE(name)` de `OpponentClub` (§3.5) no lo
+impide: es único sobre la **grafía almacenada**, no sobre la normalizada, y `"C.D. Fútbol Tres Cantos"` y
+`"CD Futbol Tres Cantos"` son dos filas legales que normalizan igual.
+
+**Alternativas consideradas:**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Dar de alta (caer al paso 3) | Produce **el duplicado que la cadena existe para evitar**, y sin dejar rastro de por qué |
+| Quedarse con el primero | Congela un emparejamiento posiblemente equivocado — el riesgo del que avisa [D-76] al estampar la clave, pero sin la excusa de que el candidato fuese único. Y es **no determinista** en la práctica: depende del orden de la consulta |
+
+**Decisión.** Un tercer desenlace, `ambiguous`, con los candidatos dentro. La ingesta **ni empareja ni
+crea**: deja la fila fuera de esa pasada y la reporta. Es material directo para la operación de fusión que §9
+ya tiene prevista.
+
+**Y de aquí sale la otra mitad: «marcada para revisión manual» no es una columna.** §3.7 remata el paso 3 con
+*"alta nueva **marcada para revisión manual** (§5.1)"*, y esa marca **no existe** — §3.2 no la lleva y §5.1
+no la menciona. Podría añadirse un `needs_review`, pero sería exactamente la clase de bandera que [D-18]
+rechazó al resolver el *upsert* *"por clases de campo, sin banderas nuevas"*.
+
+Lo que hace revisable un emparejamiento es **saber por qué escalón se supo**, y eso es un dato del
+resultado, no de la fila: la cadena devuelve el escalón junto al identificador (`federationKey`,
+`normalizedName`, `coordinates`) y quien lo reporta es el *job* de F6. **Cero columnas nuevas**, igual que
+F3.
+
+**Lo que se asume a cambio.** Una fila ambigua **no se ingiere** hasta que alguien deshaga el empate, así que
+un duplicado en `OpponentClub` puede congelar los partidos de ese club. Es preferible al reverso —ingerirlos
+mal atribuidos— porque `Match` no tiene `PATCH` ([D-21]) y el dato mal atribuido no se corrige, mientras que
+el que falta llega en la pasada siguiente. Es el argumento de coste asimétrico de [D-75] aplicado al
+emparejamiento.
+
+---
+
+### D-80 · La normalización de nombres se equivoca a propósito hacia el mismo club
+
+**Qué hay que decidir.** El paso 2 compara *"nombre normalizado"* (§3.7), y normalizar es elegir qué
+diferencias **no** cuentan. Cada elección tiene una forma de fallar, y las dos no cuestan lo mismo: **no
+reconocer al mismo club** duplica una fila cada semana; **confundir dos clubes** produce un empate que
+[D-79] deja fuera y reporta.
+
+**Decisión.** Ante la duda, plegar. En concreto, dos elecciones que la versión evidente hace al revés:
+
+| Elección | La evidente | La tomada, y por qué |
+|---|---|---|
+| La `ñ` | No plegarla: en español es letra propia, no una `n` con adorno, y el *locale* `es_ES` lo respeta | **Plegarla**, con *locale* fijo `en_US_POSIX`. La fuente escribe en mayúsculas y sin acentos ([Anexo RFFM §F.5]); que `"PENA"` y `"Peña"` sean dos clubes es el error caro. Fijar el *locale* además hace la comparación **determinista**, condición para que un test signifique algo |
+| La puntuación | Tratar cada signo como **separador**, para que `"C.D."` no se pegue a la palabra siguiente | **Que desaparezca**, espacios incluidos. Como separador, `"C.D."` da `"c d"` y `"CD"` da `"cd"`: **el administrador escribiendo las siglas sin puntos rompe el emparejamiento**, que es literalmente lo que la normalización existe para impedir. Y el miedo que justificaba la otra opción se disuelve al quitar también los espacios: sin fronteras, no hay nada a lo que pegarse |
+
+**Lo que la normalización deliberadamente no hace: quitar la letra.** §3.7 pide el nombre *"sin la letra"* y
+**ya llega así**: la separa el adaptador (`RFFMValue.teamName`, F2), y del lado del modelo `OpponentClub.name`
+tampoco la lleva —la letra es de `Team` (§3.2)—. Repetir el recorte sería una segunda versión de la misma
+regla en otra capa, y además frágil: quitar *"la última letra suelta"* se come la `F` de `"C.F."`.
+
+**Lo que se asume a cambio.** Dos clubes que de verdad se llamen `"Peña X"` y `"Pena X"` en la misma
+competición saldrían ambiguos, y alguien tendría que mirarlos. Es el desenlace de [D-79], que existe
+precisamente para que el sesgo de esta entrada sea seguro.
 
 ---
 
@@ -1579,6 +1833,26 @@ dejar abierta una cuestión pendiente y **dejarla en el camino feliz**.
 campo a campo que impone [D-56]. Treinta y cuatro raspados secuenciales dentro de una petición HTTP no es una
 llamada de API, es un *timeout*: el flujo funcionaría en Madrid y se caería en Cataluña. El pegado
 **engancha y encola**; el motor de ingesta recurrente no es un caso aparte, es el mismo código.
+
+> ⚠️ **Ese párrafo se apoya en una cifra que ya no es cierta, y la revisión toca aquí** (2026-08-29, al
+> entrar en F3, que es cuando [D-74] la dejó apuntada). La FCF rehizo su web: su calendario cuesta hoy **una
+> petición**, no ~34, y es **JSON**, no HTML raspado ([Anexo FCF §C.10.4]). El argumento del *timeout* por
+> número de peticiones **se cae entero**.
+>
+> **El `202` se mantiene, con dos argumentos que sí sobreviven y que hay que citar en su lugar:**
+>
+> 1. **Lo caro no era pedir el calendario, era lo que viene detrás.** La primera ingesta escribe la
+>    competición entera —~240 `Match`, sus `Round`, los `OpponentClub` y sus `Team`— y además **descarga un
+>    escudo por club y lo sube a Storage** ([D-19]). Eso son decenas de peticiones salientes más las
+>    escrituras, y no cabe en una respuesta HTTP ni en la RFFM.
+> 2. **Encolar es lo que hace que el fallo parcial no rompa el enganche.** Si la ingesta revienta a mitad, el
+>    equipo tiene que quedar enganchado igual y la pasada reintentarse — que es posible **porque el *upsert*
+>    es idempotente** ([D-18], [D-75]). Con un `201` síncrono, un fallo de la federación dejaría al usuario
+>    sin saber si el enganche cuajó.
+>
+> **Lo que queda pendiente de F10, y no se decide aquí:** medir esa primera pasada de verdad. Si resultara
+> caber en línea, la decisión volvería a estar abierta — pero se reabriría con un número, que es lo que le
+> faltó a la primera versión.
 
 **Es aditivo, no una configuración de una vez.** Un equipo juega liga **y** copa, y [D-12] resolvió que las
 copas son `Competition` sin entidades nuevas. Así que la acción se repite sobre el mismo equipo, una vez por
@@ -2815,9 +3089,18 @@ paquete sin problema.
 [Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.10.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-69]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-70]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-71]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-72]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-73]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-75]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-76]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-77]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-78]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-79]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-80]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
