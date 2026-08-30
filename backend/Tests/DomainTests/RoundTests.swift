@@ -110,14 +110,18 @@ struct RoundTests {
     /// §3.7, clase **volátil**: el rango es propiedad de la federación, igual
     /// que la fecha de los partidos de los que sale. Un partido aplazado al
     /// miércoles estira la jornada, y la pasada siguiente tiene que reflejarlo.
-    @Test("la jornada que se mueve actualiza su rango (§3.7, volátil)")
+    /// **Las dos fechas se mueven, y el test lo dice a propósito.** La versión
+    /// anterior dejaba el inicio quieto —27→27— y la comprobación de mutación lo
+    /// cazó: romper solo `startDate` no tumbaba nada. Un partido adelantado al
+    /// viernes mueve el inicio igual que un aplazamiento mueve el final.
+    @Test("la jornada que se mueve actualiza sus dos fechas (§3.7, volátil)")
     func spanIsOverwrittenWhenTheSourceSpeaks() throws {
         let existing = try Self.round("27-09-2025", "28-09-2025")
 
         let merged = existing.merging(
-            span: Self.date("27-09-2025")...Self.date("01-10-2025"))
+            span: Self.date("26-09-2025")...Self.date("01-10-2025"))
 
-        #expect(merged.startDate == Self.date("27-09-2025"))
+        #expect(merged.startDate == Self.date("26-09-2025"))
         #expect(merged.endDate == Self.date("01-10-2025"))
     }
 

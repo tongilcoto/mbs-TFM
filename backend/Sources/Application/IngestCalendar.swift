@@ -15,19 +15,23 @@ public import Domain
 /// transacción abierta mientras se espera a la federación es lo que convierte
 /// una caída suya en conexiones bloqueadas del *pool* (§6.4).
 ///
-/// Así que la pasada abre **dos** ámbitos y la red queda fuera de los dos. Y esa
-/// decisión no puede vivir en el adaptador —sería un detalle que se puede hacer
-/// mal desde fuera, como el orden de los marcadores de `D-56`—, así que vive
-/// aquí (`D-83`).
+/// Así que la pasada abre **tres** ámbitos y la red queda fuera de los tres. Y
+/// esa decisión no puede vivir en el adaptador —sería un detalle que se puede
+/// hacer mal desde fuera, como el orden de los marcadores de `D-56`—, así que
+/// vive aquí (`D-83`).
 ///
-/// # Todo lo que se escribe va en un solo ámbito
+/// # Los tres, y por qué son tres
 ///
-/// El segundo. Una violación de restricción aborta la transacción entera
-/// (`25P02`, F1), y aquí eso es **la propiedad que se quiere**: o la competición
-/// queda sincronizada entera o no queda tocada, coherente con que
-/// `last_synced_at` signifique *"última sincronización **con éxito**"* (§3.2).
-/// Lo que un fallo **nunca** hace es destruir lo que había: no se borra nada, se
-/// deshace lo de esta pasada.
+/// 1. **Leer la coordenada**, y cerrarlo antes de llamar a la federación.
+/// 2. **Escribir**, y ahí va **todo**. Una violación de restricción aborta la
+///    transacción entera (`25P02`, F1), y aquí eso es **la propiedad que se
+///    quiere**: o la competición queda sincronizada entera o no queda tocada,
+///    coherente con que `last_synced_at` signifique *"última sincronización
+///    **con éxito**"* (§3.2). Lo que un fallo **nunca** hace es destruir lo que
+///    había: no se borra nada, se deshace lo de esta pasada.
+/// 3. **Registrar la pasada** (`D-85`), y **fuera** del anterior: dentro, el
+///    `rollback` se llevaría por delante el registro de la pasada que falla, que
+///    es justo la que hay que poder leer porque no hay nadie mirando.
 public struct IngestCalendar: Sendable {
     private let unitOfWork: any TenantUnitOfWork
     private let federation: any FederationClient

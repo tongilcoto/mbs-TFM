@@ -298,6 +298,7 @@ opcional (§3.5).
 | **StaffPosition** (Puesto)                        | `name`, **`level`**, **`scope_kind`**, `grants_all_verbs`, `is_technical`, `deleted_at?`                                                                                        | Catálogo **por tenant**, precargado y con CRUD del admin: cada club nombra sus cargos como quiera. **`level`** = la pirámide (0 = administración); **no autoriza escrituras** —eso lo hace el ámbito— sino que gobierna **quién puede nombrar a quién** ([D-62]). **`scope_kind`** (§3.3) dice sobre qué eje de la identidad de `Team` alcanza el puesto, y es lo que evita enumerar un puesto por categoría ([D-60]). **`grants_all_verbs`** solo lo lleva el puesto de administración ([D-61]). `is_technical` es cosmética: filtra listas en la UI. Único(`name`) |
 | **PositionPermission** (Permiso de puesto)        | `staff_position_id`, **`verb`**                                                                                                                                                 | Qué casos de uso concede un puesto. **`verb` es `text` sin `CHECK` y sin tabla de catálogo** ([D-61]): el catálogo lo fija el código (un `enum … CaseIterable`) y lo publica `GET /v1/permissions/verbs`; la validación ocurre en el caso de uso (**422**), no en la BD. Único(`staff_position_id`, `verb`) |
 | **StaffAssignment** (Asignación)                  | `staff_member_id`, `staff_position_id`, **`season_id`**, **`scope_kind`**, `team_id?`, `modality?`, `category?`, `gender?`, `deleted_at?`                                        | Quién ocupa qué puesto, sobre qué ámbito y en qué temporada. **Múltiple a propósito** —un coordinador casi siempre entrena además a un equipo—, y de ahí que el permiso se evalúe **por asignación** y nunca colapsando a la persona ([D-62]). **`season_id` es identidad, no atributo**, por el mismo criterio que `Player` ([D-05], [D-37]): cambiarlo es **otra fila**, de ahí que no haya `PATCH` (§5.1). **Las cuatro columnas de ámbito son anulables y excluyentes**: exactamente la que corresponde al `scope_kind` va informada, y `club` las lleva **todas** nulas. `scope_kind` se **duplica** aquí desde el puesto con **FK compuesta** (`staff_position_id`, `scope_kind`) → único caso en que [D-28] permite copiar un campo ([D-62]). Unicidad: ver §3.5 |
+| **IngestionRun** (Pasada de ingesta)              | `competition_id`, `started_at`, `finished_at`, **`outcome`**, `error?`, ocho contadores, **`skipped`** | **La escribe solo el módulo de ingesta**, y es la única entidad del modelo que **no describe al club sino a su sincronización** ([D-85]). Existe porque la ingesta **no tiene usuario delante** (§2.3-b): corre sola, por tenant, así que lo que dice de sí misma no lo lee nadie si no se guarda — y la pregunta real, *«¿por qué falta este partido?»*, se hace días después. **Se escribe fuera de la transacción de la pasada** ([D-83]): dentro, el `rollback` se llevaría por delante el registro de la pasada que falla, que es justo la que hay que poder leer. **`outcome`** (§3.3) tiene **dos** valores y no tres: no hay *parcial* porque la pasada es atómica, y que haya descartes no la hace parcial. **`skipped`** es un **documento**, no una tabla hija: se lee entero junto a su pasada, y no se consulta por sus campos. **No contradice [D-79]** —la *marca para revisión* sigue sin ser columna de la fila emparejada; esto describe la **pasada**—. **Sin clave natural ni `updated_at`**, los dos casos únicos del modelo: dos pasadas de la misma competición en el mismo minuto son un reintento, y una pasada no se modifica |
 
 ### 3.3 Enumerados (propuesta)
 
@@ -317,6 +318,14 @@ opcional (§3.5).
 - **Goal.side:** `derecha, izquierda, centro`.
 - **Goal.body_part:** `pie, cabeza, otro`.
 - **Goal.play_type:** `juego_abierto, penalti, falta, en_propia_puerta`.
+- **IngestionRun.outcome:** `succeeded, failed` ([D-85]). **Dos y no tres**: no hay `partial` porque la
+  pasada es atómica ([D-83]) — o se escribió entera o no se escribió nada. Que haya filas descartadas **no**
+  la hace parcial: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo.
+- **IngestionSkip.reason:** `ambiguousOpponentClub, ambiguousTeam, ambiguousMatch, unresolvedTeam,
+  missingMatchDate, unsluggableClubName, duplicateClubName`. **No es columna**: viaja dentro del documento
+  `IngestionRun.skipped`, así que no lleva `CHECK` — lo hace cumplir el tipo al serializar. Es el catálogo de
+  por qué una fila se queda fuera de una pasada, y cada valor tiene su decisión detrás ([D-79], [D-75],
+  [D-82]).
 - **StaffPosition.scope_kind:** `club, modality, category, gender, team`. **No es un enumerado de negocio
   sino un discriminante estructural**: nombra sobre qué eje de la clave de identidad de `Team` (§3.5)
   alcanza un puesto, y por eso sus valores son nombres de columnas de `Team` más `club` (todos) — no una
@@ -547,6 +556,27 @@ corregir datos ingeridos (§5.1), esa corrección **tiene que sobrevivir a la si
 | **Volátil** (propiedad de la federación) | marcador, `status`, **`match_date` y `kickoff_time`**, `venue`, posiciones de `StandingRow`, `LeagueScorer` | Se escribe **siempre que la fuente diga algo** ([D-56]): un campo **ausente o vacío no es un valor** y nunca sobrescribe. Lo que lo sostiene es que los dos errores no cuestan lo mismo ([D-75]): ignorar un vacío real se corrige solo en la pasada siguiente; escribir un silencio **pierde el dato**, y `Match` no tiene `PATCH`. El horario es volátil **incluso ya confirmado** ([D-30]): una suspensión lo devuelve a provisional o lo desplaza. Lo desambigua el marcador —**el ya fusionado**, no el de la pasada—: **sin marcador**, un `kickoff_time` vacío es «aún sin confirmar» y se escribe; **con marcador**, es pérdida de dato y se ignora |
 | **De propiedad** | `Team.opponent_club_id` | **Nunca** lo toca la ingesta en un UPDATE. Es del BFF (`/ownership`, §5.1) — si no, la primera sincronización tras reclamar un equipo lo devolvería a rival |
 | **De emparejamiento** | `federation_team_id`, `federation_club_id`, `federation_match_id` | Solo la ingesta. **No sobrescribe nunca una clave que ya hay** —son inmutables, y un renumerado se arregla fusionando (§9), no pisando—, pero **sí rellena el hueco** de una fila que nació sin ella ([D-76]): si no, la degradación del paso 2 de la cadena sería permanente. El BFF no los expone en escritura |
+
+**Lo que la fuente no publica y la ingesta deriva.** Dos campos obligatorios de §3.2 no existen en ninguna
+respuesta, así que salen de otros que sí:
+
+| Campo | De dónde sale | Decisión |
+|---|---|---|
+| `Round.start_date` / `end_date` | **mínimo y máximo** de las fechas de los partidos de la jornada. En la temporada jugada eso da sábado→domingo en 26 de 30 y recoge los 4 partidos entre semana; sin arrancar, colapsa en un día | [D-81] |
+| `OpponentClub.slug` | del **nombre**, mecánicamente y sin lista de formas jurídicas. Es la regla **opuesta** a la de `NormalizedName` en el mismo texto: aquélla borra las fronteras, ésta las conserva como guiones | [D-82] |
+
+**Y una guarda antes de escribir nada: que la coordenada siga apuntando a esta competición.** La RFFM
+**reutiliza los códigos de competición y grupo entre temporadas**, medido en F5: la misma coordenada con otra
+`temporada` devuelve un calendario perfectamente parseable **de otra competición**, y **no da 404**. La
+evidencia con la que se detecta ya existía —`Competition.federation_name` ([D-72])— y ésta es la primera vez
+que se usa. Si el nombre discrepa, la pasada **se para sin escribir** ([D-84]); los dos silencios no paran
+nada, porque sin nombre guardado es la primera pasada y una fuente que calla no contradice ([D-56]).
+
+**La pasada es atómica, y su registro no.** Todo lo que una pasada escribe va en **un** ámbito de tenant
+—o la competición queda sincronizada o no queda tocada ([D-83])—, y la llamada a la federación queda **fuera**
+de ese ámbito: una transacción abierta esperando a un tercero es como se agota el *pool* de §6.4. El
+**registro** de la pasada (`IngestionRun`, §3.2) va en un ámbito propio, porque dentro el `rollback` se
+llevaría por delante justo el de la pasada que falla ([D-85]).
 
 ---
 
@@ -852,7 +882,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   (`app.migrations.add(...)`), no el nombre de fichero:
   `Club → Season → OpponentClub → Team → TeamRegistration → Competition → Round → Match → StandingRow → Player → Absence →
   Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket →
-  StaffMember → StaffPosition → PositionPermission → StaffAssignment`.
+  StaffMember → StaffPosition → PositionPermission → StaffAssignment → IngestionRun`.
 - **Las cuatro de *staff* (§7.3) van al final** porque `StaffAssignment` depende de `StaffMember`,
   `StaffPosition`, `Season` y `Team`. Dos de ellas llevan además **datos de precarga**: el catálogo de
   puestos y sus permisos nacen con una propuesta razonable que el admin luego edita, así que su migración
@@ -1990,6 +2020,21 @@ calendario **sí** devuelve división y grupo como texto ([Anexo RFFM §F.12]) �
 el alta, no teclea. Lo que queda abierto está en `§F.6` y `§C.9` de cada anexo, y de ello solo una cosa
 bloquea diseño: **los códigos de `tipo_gol` y `codigo_tipo_amonestacion`**, que deciden si el desglose de
 `Goal` y el tipo de `Card` pueden llegar del acta o siguen siendo entrada manual ([D-57]).
+
+**Antes de ingerir, comprobar que la coordenada sigue siendo de esta competición.** Es la corrección que F5
+trajo con dato delante ([D-84]): **una coordenada caducada no falla**. La RFFM reutiliza sus códigos entre
+temporadas y responde `200` con el calendario de otra competición; con `competicion`/`grupo` inexistentes
+responde `200` con `calendar: null`; y con una `temporada` inexistente responde `200` con el calendario de
+**otra temporada** e ignora el parámetro. Las tres se parecen a un fallo de formato sin serlo, así que el
+adaptador las llama por su nombre y la ingesta compara el nombre de la competición contra
+`Competition.federation_name` antes de escribir.
+
+**El *canario*.** Fuera de la batería normal, tras `FEDERATION_LIVE=1`, se pasa el parser por encima de la
+respuesta **viva** y se exige que no falle. **No compara bytes** —el calendario cambia cada semana por
+diseño—: lo que afirma es que el parser sigue tragando, más unos invariantes baratos y la comprobación de
+[D-84]. Contesta *"¿han cambiado ellos?"*, que es otra pregunta que la del volcado guardado —*"¿he roto yo el
+parser?"*—, y por eso vive fuera: con una petición de red dentro, un rojo de la batería dejaría de significar
+*"mi cambio está mal"*.
 
 ---
 
