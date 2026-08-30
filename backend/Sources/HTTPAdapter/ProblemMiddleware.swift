@@ -63,6 +63,18 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "El campo ya no es editable",
                                detail: "\(field): la competición ya se ha sincronizado",
                                base: typeBaseURI, slug: "not-editable-after-sync")
+
+            case .federationSourceMismatch(let expected, let found):
+                // **502 y no 409** (§5.4, `D-84`). Nada de lo que el cliente
+                // mandó está mal: lo que ha cambiado es lo que el tercero
+                // devuelve en esa coordenada. Es el mismo criterio con el que
+                // §5.1 trata la latencia de la federación en `/preview` — la
+                // familia 5xx dice "el fallo no es tuyo", y un 409 invitaría a
+                // reintentar con otro cuerpo, que aquí no arregla nada.
+                return Problem(status: .badGateway, code: "FEDERATION_SOURCE_MISMATCH",
+                               title: "La coordenada apunta a otra competición",
+                               detail: "se esperaba '\(expected)' y la fuente devolvió '\(found)'",
+                               base: typeBaseURI, slug: "federation-source-mismatch")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────
@@ -75,6 +87,26 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Club sin aprovisionar",
                                detail: "El schema del club '\(slug)' no tiene datos.",
                                base: typeBaseURI, slug: "tenant-not-provisioned")
+
+            // Los dos siguientes los levanta la pasada de ingesta, que **no
+            // pasa por HTTP** (§2.3-b). Se traducen igual porque el `switch` es
+            // exhaustivo a propósito, y porque F10 sí los va a hacer cruzar la
+            // frontera: el enganche de `D-67` encola una ingesta y su `/preview`
+            // la ejecuta en línea.
+            case .competitionNotFound(let id):
+                // 404 literal: para esta petición la competición no está.
+                return Problem(status: .notFound, code: "COMPETITION_NOT_FOUND",
+                               title: "Competición desconocida", detail: id,
+                               base: typeBaseURI, slug: "competition-not-found")
+            case .seasonNotFound(let id):
+                // **500 y no 404**, al revés que la de arriba: la FK
+                // `competitions.season_id` es `NOT NULL` y con integridad
+                // referencial, así que una competición sin temporada no es un
+                // dato que falte — es el *schema* roto. Mismo criterio que
+                // `tenantNotProvisioned`.
+                return Problem(status: .internalServerError, code: "SEASON_NOT_FOUND",
+                               title: "Temporada inexistente", detail: id,
+                               base: typeBaseURI, slug: "season-not-found")
             }
 
         // ── Tenancy (§6.1) ───────────────────────────────────────────────────

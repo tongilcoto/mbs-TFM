@@ -15,4 +15,11 @@ public enum DomainError: Error, Equatable, Sendable {
     /// valor puede ser perfectamente válido —lo que no es válido es el
     /// *momento*—. El adaptador lo traducirá a **409**, no a 422 (§5.4).
     case notEditableAfterSync(field: String)
+
+    /// La coordenada de la competición sigue siendo válida pero **ya no apunta a
+    /// esta competición** (`D-84`): la fuente devuelve un calendario de otra.
+    ///
+    /// No es un dato mal formado ni una invariante rota por el usuario: es la
+    /// constatación de que el proveedor reutiliza sus códigos entre temporadas.
+    case federationSourceMismatch(expected: String, found: String)
 }
