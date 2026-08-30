@@ -616,9 +616,13 @@ struct IngestCalendarTests {
     /// El caso lo produce la propia cadena: un club ya guardado con
     /// `federation_club_id` **contradice** a uno entrante con otro, así que el
     /// paso 2 lo descarta (§3.7) — la fuente está diciendo que son dos clubes
-    /// distintos— y se crea uno nuevo. Pero el slug se deriva del **nombre**
-    /// (`D-82`), y los dos nombres son el mismo, así que el `UNIQUE(slug)` de
-    /// §3.5 rechazaría la fila.
+    /// distintos— y se crea uno nuevo.
+    ///
+    /// **Los dos nombres son distintos** —`"C D GALAPAGAR"` y
+    /// `"C.D. GALAPAGAR"`—, que es lo que hace el caso posible: `UNIQUE(name)`
+    /// (§3.5) no deja repetir nombre. Pero el slug se deriva del nombre
+    /// (`D-82`) tratando toda la puntuación como una frontera, así que los dos
+    /// dan `c-d-galapagar` y el `UNIQUE(slug)` rechazaría la fila.
     ///
     /// Como el slug es **inmutable** y acaba en claves de Storage (`D-19`), no se
     /// puede "arreglar después": se desempata al crear, con sufijo. Y el
@@ -630,11 +634,12 @@ struct IngestCalendarTests {
         let competition = try Self.competition(seasonID: season.id)
         let store = IngestionStore()
         await store.seed(opponentClubs: [try OpponentClub(
-            id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR",
+            id: OpponentClubID(raw: UUID()), name: "C D GALAPAGAR",
             shortName: "Galapagar", slug: try Slug("c-d-galapagar"),
             federationClubID: "0011078749", createdAt: Date(), updatedAt: Date())])
 
-        // Mismo nombre, **otro** federation_club_id: la fuente dice que es otro
+        // Otra grafía del mismo nombre —así que normaliza igual y el slug
+        // colisiona— con **otro** federation_club_id: la fuente dice que es otro
         // club, y el paso 2 descarta al que contradice.
         let calendar = try Self.calendar(matches: [
             Self.match(away: Self.teamRef(
@@ -647,12 +652,12 @@ struct IngestCalendarTests {
             competitionID: competition.id,
             actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
 
-        let galapagar = await store.opponentClubs
-            .filter { $0.name == "C.D. GALAPAGAR" }
-            .sorted { $0.slug.value < $1.slug.value }
-        #expect(galapagar.count == 2)
-        #expect(galapagar.map(\.slug.value) == ["c-d-galapagar", "c-d-galapagar-2"])
-        #expect(galapagar.map(\.federationClubID) == ["0011078749", "0099999999"])
+        let galapagar = await store.opponentClubs.sorted { $0.slug.value < $1.slug.value }
+        #expect(galapagar.count == 3)  // los dos Galapagar y el Celtic del local
+        let slugs = galapagar.filter { $0.slug.value.hasPrefix("c-d-galapagar") }
+        #expect(slugs.map(\.slug.value) == ["c-d-galapagar", "c-d-galapagar-2"])
+        #expect(slugs.map(\.name) == ["C D GALAPAGAR", "C.D. GALAPAGAR"])
+        #expect(slugs.map(\.federationClubID) == ["0011078749", "0099999999"])
     }
 
     // ── D-83: dónde están las fronteras transaccionales ────────────────────
@@ -677,5 +682,44 @@ struct IngestCalendarTests {
             actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
 
         #expect(await store.scopesOpened == 2)
+    }
+
+    /// Y el caso que el nivel 2 **no puede** cazar solo, porque estos dobles no
+    /// tienen restricciones: §3.5 declara `OpponentClub(name)` **único**, así que
+    /// dos clubes con el mismo nombre literal no caben en la tabla.
+    ///
+    /// La cadena sí produce ese intento —descarta al candidato cuya clave
+    /// contradice (§3.7) y cae al paso 3—, y sin guarda la fila reventaría el
+    /// `UNIQUE` y con él **la transacción entera**: una coincidencia de nombre se
+    /// llevaría por delante la pasada de toda la competición.
+    ///
+    /// Así que se trata como lo que es: dos filas que dicen ser el mismo club y
+    /// la fuente dice que no. Ni se elige ni se crea, se reporta — el mismo
+    /// desenlace que `D-79`, por un camino distinto.
+    @Test("dos clubes con el mismo nombre literal se reportan, no revientan la pasada (§3.5)")
+    func duplicateClubNameIsReportedInsteadOfBreakingThePass() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        await store.seed(opponentClubs: [try OpponentClub(
+            id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR",
+            shortName: "Galapagar", slug: try Slug("c-d-galapagar"),
+            federationClubID: "0011078749", createdAt: Date(), updatedAt: Date())])
+
+        let calendar = try Self.calendar(matches: [
+            Self.match(away: Self.teamRef(
+                id: "304468", name: "C.D. GALAPAGAR", letter: "B", club: "0099999999"))
+        ])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar, store: store)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        // Solo el club del local se da de alta. El Galapagar entrante se reporta.
+        #expect(await store.opponentClubs.count == 2)
+        #expect(report.skipped.map(\.reason) == [.duplicateClubName, .unresolvedTeam])
+        #expect(await store.matches.isEmpty)
     }
 }

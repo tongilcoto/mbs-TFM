@@ -214,7 +214,14 @@ let package = Package(
         // Niveles 3 y 4: Postgres real en contenedor efímero, nunca SQLite (§8.1).
         .testTarget(
             name: "PersistenceTests",
-            dependencies: ["Application", "Domain", "Persistence", "Tenancy", "App", "TestSupport"],
+            dependencies: [
+                "Application", "Domain", "Persistence", "Tenancy", "App", "TestSupport",
+                // F5: la pasada de punta a punta pasa el **parser real** por
+                // encima de los volcados reales antes de escribir en Postgres.
+                // Sin esta dependencia el test tendría que inventarse el
+                // calendario, que es justo lo que no demostraría nada.
+                "Federation",
+            ],
             swiftSettings: commonSwiftSettings
         ),
         .testTarget(

@@ -72,5 +72,11 @@ public struct IngestionSkip: Equatable, Sendable {
         case missingMatchDate
         /// `D-82`: del nombre no queda nada de lo que derivar un slug.
         case unsluggableClubName
+        /// §3.5 declara `OpponentClub(name)` **único**, y la cadena puede
+        /// producir el intento de crear un segundo club con el mismo nombre
+        /// literal —descarta al candidato cuya clave de federación contradice y
+        /// cae al paso 3—. Sin este desenlace, esa fila reventaría el `UNIQUE` y
+        /// con él la transacción de toda la pasada.
+        case duplicateClubName
     }
 }

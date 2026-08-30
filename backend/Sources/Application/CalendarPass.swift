@@ -346,6 +346,19 @@ final class CalendarPass {
     }
 
     private func createClub(_ ref: FederationTeamRef) async throws -> OpponentClubID? {
+        // §3.5: `UNIQUE(name)`. La cadena llega aquí habiendo **descartado** a
+        // un candidato que se llama igual —porque su clave de federación
+        // contradice a la entrante (§3.7)—, así que este choque es alcanzable, y
+        // sin la guarda reventaría el `UNIQUE` y con él la transacción de la
+        // pasada entera: una coincidencia de nombre se llevaría por delante toda
+        // la competición. Ni se elige ni se crea, se reporta — el desenlace de
+        // `D-79` por otro camino.
+        guard !clubs.contains(where: { $0.name == ref.name }) else {
+            report.skipped.append(
+                IngestionSkip(reason: .duplicateClubName, detail: ref.name))
+            return nil
+        }
+
         guard let slug = freeSlug(from: ref.name) else {
             // `D-82`: del nombre no queda nada de lo que derivar un slug, y un
             // relleno inventado acabaría en una clave de Storage (`D-19`).
