@@ -19,9 +19,10 @@ Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregada
 | `PATCH /v1/club` | ✅ |
 | Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
 
-**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4 tienen
-superficie HTTP, así que **la lista de operaciones no sirve para saber qué hay montado** — solo para saber
-qué se puede tocar con `curl`. Lo que hay:
+**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4, ni F5
+tienen superficie HTTP —el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b)—,
+así que **la lista de operaciones no sirve para saber qué hay montado**: solo para saber qué se puede tocar
+con `curl`. Lo que hay:
 
 | Fase   | Qué añadió                                                                                                               | Cómo se **prueba**                                                                                                                     | Cómo se **mira**                                                          |
 | ------ | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -30,6 +31,7 @@ qué se puede tocar con `curl`. Lo que hay:
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                              | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                        | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)      |
 | **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía** | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red** | sus tests, y solo sus tests (§5.4)                                        |
 | **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante** | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                              | sus tests, y solo sus tests (§5.4)                                        |
+| **F5** | La **ingesta del calendario de punta a punta**: las cuatro entidades de salida, el caso de uso, el transporte HTTP y el **canario**. Y `IngestionRun`, el registro de cada pasada | `swift test --filter 'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` → **33 tests** sin Docker · `--filter IngestCalendarTests` → **19** sin Docker · `--filter 'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` → **18** **con** Docker | TablePlus sobre las cinco tablas nuevas, y el volcado real que entra en ellas (§5.5) |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
 > ellas, `zsh` se come el `|` como una tubería.
@@ -378,6 +380,13 @@ swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResul
                                             # nivel 1 — F3: la política de upsert (§0)
 swift test --filter 'MatchingChainTests|NormalizedNameTests'
                                             # nivel 1 — F4: la cadena de emparejamiento (§0)
+swift test --filter 'RoundTests|OpponentClubTests|TeamTests|MatchTests|IngestionRunTests'
+                                            # nivel 1 — F5: las entidades de la ingesta
+swift test --filter IngestCalendarTests      # nivel 2 — F5: la pasada, con puertos falseados
+swift test --filter 'IngestionPersistenceTests|CalendarIngestionEndToEndTests'
+                                            # nivel 3 — F5: las tablas y la pasada real
+FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests
+                                            # EL CANARIO — fuera de la batería, con red (§5.5)
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
@@ -622,6 +631,57 @@ antes de añadirle un campo "para desempatar" a un candidato.
 
 ---
 
+### 5.5 El canario, que **no** corre con `swift test`
+
+```sh
+FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests
+```
+
+Es la única prueba del repositorio que **habla con internet**, y vive fuera de la batería a propósito. Las dos
+contestan preguntas distintas:
+
+| | Responde a | Determinista | Cuándo corre |
+|---|---|---|---|
+| Los volcados de `Tests/FederationTests/Fixtures/` | *¿he roto yo el parser?* | sí | **siempre**, sin red |
+| **El canario** | *¿han cambiado ellos?* | **no, por naturaleza** | a demanda |
+
+Fusionarlas las estropea las dos: con una petición de red dentro de `swift test`, un rojo puede significar que
+la federación está caída — y entonces el verde deja de significar *"mi cambio está bien"*.
+
+**No compara bytes.** El calendario cambia todas las semanas por diseño: los horarios se fijan el domingo y
+los marcadores entran el fin de semana. Un `diff` daría alarma **cada lunes**, y una bandera que grita siempre
+es peor que ninguna. Lo que hace es pasar **nuestro parser** por encima de la respuesta viva y exigir que no
+falle, más unos invariantes baratos (que haya jornadas, que los `codacta` sigan siendo únicos).
+
+**Sabe decir cuatro cosas distintas, y solo una es un hallazgo:**
+
+| Lo que sale | Qué significa | ¿Hay que hacer algo? |
+|---|---|---|
+| *"No se pudo hablar con la RFFM"* | no hay red, o su servidor está caído | no |
+| *"La coordenada ha caducado"* | `temporada` cambia cada año | pasarle otra por variable de entorno |
+| *"Respondió 500"* | fallo suyo | no, salvo que se repita días |
+| **⚠️ *"El parser ya no traga"*** | **han cambiado la forma de la respuesta** | **sí: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser** |
+
+Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de otra competición**. La RFFM
+reutiliza los códigos de competición y grupo entre temporadas (`D-84`), así que una coordenada caducada **no
+da 404** — devuelve el calendario de otra cosa. El canario compara también el nombre.
+
+**La coordenada por defecto caduca**, así que es configurable sin tocar código:
+
+```sh
+FEDERATION_LIVE=1 \
+  FEDERATION_LIVE_SEASON=22 \
+  FEDERATION_LIVE_COMPETITION=26737701 \
+  FEDERATION_LIVE_GROUP=26737702 \
+  FEDERATION_LIVE_NAME="PREFERENTE AFICIONADO" \
+  swift test --filter RFFMCanaryTests
+```
+
+> **El filtro es `RFFMCanaryTests`, el nombre del tipo.** `--filter FederationCanary` —el rótulo del *suite*—
+> no casa con nada y se queda en `Test run with 0 tests … passed`, que **se lee como verde**. Es la misma
+> trampa de §5.1 con otra cara: `--filter` es una expresión regular sobre identificadores de Swift.
+
+
 ## 6. Los comandos administrativos
 
 ```sh
@@ -647,6 +707,12 @@ swift run Run --help
 > natural y conviene atajarla: `swift run Run …` trabaja **siempre** sobre tu base manual (§3.1), así que
 > `migrate-tenants` recorre lo que haya en `tfm.public.tenants` — si solo diste de alta `atleti`, la
 > respuesta correcta es `1 tenant(s) procesados`, y no falta ninguno.
+>
+> **F5 añade cinco tablas, así que hay que volver a pasarlo.** Si tenías `atleti` dado de alta desde F1, su
+> *schema* se quedó en `clubs`/`seasons`/`competitions`: `swift run Run migrate-tenants` le añade
+> `opponent_clubs`, `teams`, `rounds`, `matches` e `ingestion_runs`. No hay que reaprovisionar nada — Fluent
+> aplica solo las que faltan, y las dos primeras se **intercalan antes** de `competitions` sin que eso importe:
+> ninguna FK las relaciona.
 >
 > Los tenants de los tests viven en **otra base**, `tfm_test`, los crean los propios tests —**uno por test**,
 > con el *slug* diciendo qué prueban: `season-uq-label`, `comp-cascade`, `scope-a`— y los borran al terminar.
