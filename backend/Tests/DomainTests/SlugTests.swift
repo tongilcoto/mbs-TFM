@@ -33,4 +33,36 @@ struct SlugTests {
     func rejectsInvalid(_ value: String) {
         #expect(throws: DomainError.self) { try Slug(value) }
     }
+
+    // ── Derivación desde el nombre (D-82) ────────────────────────────────────
+
+    /// El *spec* dice que el `slug` de `OpponentClub` lo **genera el servidor a
+    /// partir del nombre al crear la fila**, y quien crea esas filas es la
+    /// ingesta (§3.7). El nombre llega como lo publica la RFFM: mayúsculas,
+    /// puntuación irregular y a veces acentos ([Anexo RFFM §F.5]).
+    ///
+    /// **La derivación es mecánica** (`D-82`): plegar, minúsculas, y todo lo que
+    /// no sea letra o dígito se convierte en **una** frontera. Nada de listas de
+    /// formas jurídicas —"C.F.", "S.A.D.", "E.F.M.O."— que serían una segunda
+    /// fuente de verdad que nadie mantiene.
+    @Test("deriva el slug del nombre que publica la federación (D-82)", arguments: [
+        ("CELTIC CASTILLA C.F.", "celtic-castilla-c-f"),
+        ("C.D. GALAPAGAR", "c-d-galapagar"),
+        ("ARAVACA C.F. - CEIBA", "aravaca-c-f-ceiba"),
+        ("A.D. UNIÓN ADARVE", "a-d-union-adarve"),
+        ("E.F.M.O. BOADILLA", "e-f-m-o-boadilla"),
+        ("PEÑA MADRIDISTA 2000", "pena-madridista-2000"),
+    ])
+    func derivesFromName(_ input: String, _ expected: String) throws {
+        #expect(try Slug(derivedFrom: input).value == expected)
+    }
+
+    /// Un nombre del que no queda nada sluguificable **no da un slug feo: no da
+    /// slug**. Es la misma frontera que `NormalizedName` NO tiene —allí no hay
+    /// nombre inválido— y que aquí sí, porque el slug entra en claves de Storage
+    /// (`D-19`) y en un `UNIQUE` (§3.5). Lo reporta la ingesta.
+    @Test("un nombre sin una sola letra ni dígito no produce slug (D-82)")
+    func rejectsUnsluggableName() {
+        #expect(throws: DomainError.self) { try Slug(derivedFrom: "··· --- ···") }
+    }
 }
