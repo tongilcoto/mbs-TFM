@@ -346,6 +346,26 @@ intercambiables:
 interno. Dentro del *schema* se une siempre por UUID. Sirve exclusivamente para que la ingesta **reconozca**
 a qué fila corresponde lo que llega de fuera.
 
+**Y el prefijo `federation_` es la marca de esa regla, no un adorno: se lee al revés.** Una columna que lo
+lleva es texto de la federación; una FK interna **no lo lleva nunca**, *aunque apunte a una entidad que sí
+tenga el suyo*. El caso que lo enseña está en la misma tabla:
+
+| Columna | Qué es | ¿Prefijo? |
+|---|---|---|
+| `teams.federation_team_id` | el `codigo_equipo` — **texto de ellos**, nunca se une | **sí** |
+| `teams.opponent_club_id` | **UUID nuestro**, FK a `opponent_clubs`, se une siempre | **no** |
+| `opponent_clubs.federation_club_id` | cómo llama la federación a **ese** club | **sí** |
+
+Renombrar la de en medio a `federation_opponent_club_id` es la tentación natural —las tres hablan del mismo
+club rival— y sería **exactamente al revés**: diría *"texto de la federación"* de un UUID que es FK, y encima
+chocaría de nombre con la de abajo, que sí lo es. Dos columnas con el mismo prefijo significando cosas
+opuestas es lo que este prefijo existe para impedir.
+
+**Corolario para el sufijo `_id`, que sí es ambiguo y se asume:** en `federation_*_id` el `_id` es *"así lo
+llaman ellos"*; en el resto es *"apunta a esa fila"*. Se deja así porque **es el prefijo el que desambigua**,
+y renombrarlos a `_code` costaría seis columnas, los dos anexos, el *spec* y la cadena de emparejamiento a
+cambio de lo que esta regla ya dice.
+
 **Por qué importa:** si la Federación cambiara su numeración, o si un endpoint dejara de traer un código, el
 modelo **sigue en pie** — se degradaría la calidad del emparejamiento, no la integridad de los datos.
 
