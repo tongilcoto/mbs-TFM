@@ -2095,6 +2095,10 @@ dejar abierta una cuestión pendiente y **dejarla en el camino feliz**.
 2. **`Competition`** — creada, o **reutilizada** si ya existe: dos equipos del mismo club pueden caer en el
    mismo grupo (el A y el B del mismo Infantil), y el segundo pegado no puede volver a crearla. El `preview`
    ya lo anticipa con `alreadyRegistered`.
+2.b **`TeamRegistration`** — la inscripción del equipo en esa temporada **y en esa competición** ([D-68] y su
+   enmienda). Si ya había una fila con `competition_id` nulo —el equipo creado en junio—, **se completa** en
+   vez de añadirse. Es el paso que hace que el equipo y su competición se puedan leer juntos **antes** de que
+   exista un solo `Match`.
 3. **`Team.federation_team_id`** — el enganche propiamente dicho, escrito **donde tiene sitio**. Y aquí está
    la razón de fondo para no dejarlo en la competición: `ownTeamFederationId` **no se persistía** (no hay
    columna en §3.2, no vuelve en `CompetitionResponse`). Era una instrucción de un solo uso. Mientras la
@@ -2203,7 +2207,9 @@ de firma. §3.4 conserva la composición de la competición como vista derivada,
 
 1. **El enganche de [D-67] crea la inscripción.** Su cascada gana un paso entre la `Competition` y el
    `federation_team_id`. Con eso, *«todo equipo propio que juega está inscrito»* es cierto **por
-   construcción**, y las dos fuentes del filtro no pueden contradecirse.
+   construcción**, y las dos fuentes del filtro no pueden contradecirse. **Y con la enmienda de abajo, la
+   inscripción que crea lleva la competición dentro** — que es lo que hace legible la portada del backoffice
+   desde el mismo `202`, sin esperar a la primera pasada.
 2. **`seasonId` pasa a ser obligatorio en `POST /v1/teams`: un equipo nace inscrito.** Sin esto existe el
    estado «equipo creado, inscrito en ninguna parte» — invisible en todas las pantallas, que es justo el
    fallo que esta decisión repara. Es el mismo movimiento que [D-67] hizo con `ownTeamFederationId`:
@@ -2249,6 +2255,70 @@ temporada nueva es exactamente ese gancho.
 - **Un club puede inscribir un equipo que luego no llegue a tener calendario.** El filtro lo devolverá bajo
   esa temporada sin que exista un solo partido. **No es deriva: es el dato correcto** —el club lo inscribió—
   y es justo lo que [D-27] no podía representar.
+
+#### Enmienda · la inscripción lleva también la competición
+
+*Añadida al diseñar la pantalla principal del backoffice ([D-88], §9.12). La tabla **todavía no existe** —no
+está en el juego de migraciones—, así que esto se corrige antes de que haya una sola fila que migrar.*
+
+**El agujero es el mismo de esta decisión, en el otro eje.** Arriba se tapó *"el equipo existe pero no
+pertenece a ninguna temporada"*. Queda abierto **"el equipo pertenece a una competición y el sistema no lo
+puede decir"**, y ocurre en el camino normal del administrador:
+
+1. Pega la URL del calendario en la ficha del Cadete A → la cascada de [D-67] crea `Season`, crea
+   `Competition`, escribe `Team.federation_team_id` y devuelve **202**.
+2. En ese instante **el sistema acaba de escribir que ese equipo va con esa competición**.
+3. Y no lo puede leer: la única arista equipo↔competición del modelo pasa por `Match`, y no hay ninguno
+   todavía. Si además la primera pasada falla ([D-86]), el equipo se queda sin competición hasta la semana
+   siguiente.
+
+La pantalla principal del backoffice es exactamente esa lista —equipo y su competición—, así que el agujero
+no es teórico: es la portada.
+
+**Se aplica el propio criterio de esta decisión**, que no era *"¿tiene atributos?"* sino ***"¿es
+derivable?"***. Antes del primer calendario, **no lo es**. Después sí, y coincide — igual que la inscripción
+de temporada coincide con la derivación de `Match` en cuanto empieza la liga.
+
+**Decisión.** `team_registrations` gana **`competition_id`, anulable**, y su clave única pasa a las **tres**
+columnas.
+
+| Momento | Fila |
+|---|---|
+| Junio: `POST /teams` con `seasonId` | `(equipo, temporada, **NULL**)` — inscrito, sin competición conocida |
+| El enganche de [D-67] | esa fila **se completa** con la competición |
+| Copa, enganchada aparte ([D-12]) | **segunda fila** `(equipo, temporada, copa)` |
+
+**Invariante:** a lo sumo **una** fila con `competition_id` nulo por equipo y temporada, y **desaparece en
+cuanto hay una con competición**. Sin esa regla, la portada mostraría el mismo equipo dos veces: una con liga
+y otra sin nada.
+
+**El recurso no cambia de forma, y eso importa.** Esta decisión presume de que *"el par (equipo, temporada)
+**es** el recurso"* y de que no hay `{registrationId}` que exponer —*"el síntoma que delató a `Participation`
+en su día"*—. Con tres columnas eso peligraría… si la competición entrase en la ruta. **No entra**: el
+`PUT /v1/teams/{teamId}/registrations/{seasonId}` sigue siendo el recurso y gana un **cuerpo opcional con el
+conjunto** de competiciones, que es el patrón de [D-50] —`PUT` del conjunto— ya usado dos veces en este
+contrato. Sigue sin haber id sintético y sigue siendo idempotente.
+
+**Y la incoherencia se hace irrepresentable, no se vigila.** `competition_id` y `season_id` podrían
+contradecirse —una competición de otra temporada—. En vez de una guarda que alguien tiene que recordar, la FK
+es **compuesta**: `(competition_id, season_id) → competitions(id, season_id)`, lo que exige un
+`UNIQUE(id, season_id)` en `competitions` que no cuesta nada. Es el criterio de [D-61]: la integridad en el
+sistema de tipos, no en la disciplina.
+
+**Lo que NO cambia:**
+
+- **Los rivales siguen derivándose de `Match`** ([D-27]). La unión asimétrica de arriba se mantiene; lo único
+  que gana el sumando propio es que ahora trae la competición consigo.
+- **Sigue sin ser `Participation`.** Aquélla la escribía la ingesta y era un índice de `Match`; ésta la
+  escribe **el club** y contiene lo que `Match` todavía no puede implicar. El argumento no se ha estirado: es
+  literalmente el de esta misma decisión.
+- **`Team` no se toca.** Ni `season_id` ni `competition_id` dentro ([D-28]): la competición se afirma
+  *sobre* el equipo, no *dentro* de él, y "Infantil A" sigue siendo la misma entidad año tras año.
+
+**Lo que se asume.** Un equipo puede jugar una competición que nadie enganchó —la ingesta trae partidos de
+una competición sin inscripción—. La portada seguiría sin verla. Es el caso simétrico del último punto de
+arriba y se resuelve igual: **la lectura es la unión** de la inscripción y la derivación, ya que las dos
+significan cosas distintas y ninguna miente.
 
 ---
 

@@ -1281,6 +1281,20 @@ paths:
         ahí que el `PUT` sea idempotente por construcción y que no exista un `{registrationId}` que
         exponer — el síntoma que delató a `Participation` en su día.
 
+        **Y la competición va en el cuerpo, como conjunto** (D-68, enmienda). La inscripción lleva también
+        `competition_id` —es lo que permite pintar la portada del backoffice, *(equipo, competición)*, desde
+        el instante del enganche y sin esperar a que haya partidos—, pero **la competición no entra en la
+        ruta**: eso convertiría el recurso en una terna y traería de vuelta el `{registrationId}` que esta
+        decisión evita. Se edita **como conjunto**, que es el patrón de D-50 (`PUT` de
+        `/sanction-brackets` y de `/staff-positions/{id}/permissions`).
+
+        **Cuerpo omitido o `{}` ⇒ inscrito en la temporada sin competición conocida** — el estado de junio, y
+        el que `POST /teams` deja escrito. Un cuerpo con `competitionIds` **reemplaza el conjunto entero**;
+        la fila sin competición desaparece en cuanto hay una con ella, o el equipo saldría dos veces.
+
+        **No hace falta llamarlo para engancharse**: la cascada de `/federation-link` (D-67) escribe la
+        competición sola.
+
         **Solo equipos propios.** Un rival no se inscribe: aparece porque juega (§3.4) → **409**.
 
         No hace falta llamarlo en el camino feliz: `POST /teams` inscribe al crear, y la cascada de
@@ -1288,6 +1302,12 @@ paths:
         arrastre de cada verano— y la corrección.
 
         Requiere **rol elevado** (§7.3).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterTeamRequest'
       responses:
         '204':
           description: |
@@ -1298,7 +1318,8 @@ paths:
         '409':
           description: |
             El equipo es **rival** (`opponentClubId` no nulo): su participación se deriva de los partidos,
-            no se afirma (D-27, D-68).
+            no se afirma (D-27, D-68). También si alguna competición de `competitionIds` **no es de esa
+            temporada**: la incoherencia la impide una FK compuesta (§3.5), y aquí se traduce.
           content:
             application/problem+json:
               schema:
@@ -4615,6 +4636,25 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    RegisterTeamRequest:
+      type: object
+      description: |
+        En qué competiciones de esa temporada juega el equipo (D-68, enmienda). **Conjunto completo**: lo que
+        no venga en la lista se retira, que es el patrón de D-50.
+
+        **Omitirlo, o `{}`, deja al equipo inscrito sin competición conocida** — el estado de junio, cuando
+        el club ya formó el equipo y la federación aún no ha publicado calendario. Lo normal es no llamar
+        aquí: la cascada de `/federation-link` (D-67) escribe la competición al enganchar.
+      properties:
+        competitionIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: |
+            Competiciones de **esa** temporada. Varias son legítimas: un equipo juega liga y copa (D-12), y
+            cada una es una `Competition` distinta. Una competición de otra temporada da **409**.
 
     CreateTeamRequest:
       type: object

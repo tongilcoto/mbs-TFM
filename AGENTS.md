@@ -63,6 +63,14 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   equipo —va en el nombre de la competición—, así que el `/preview` lo propone y el administrador lo confirma
   en el alta. No devolver `gender` a `UpdateTeamRequest`: una inferencia mal puesta ahí no da un dato feo, da
   un 409 de unicidad.
+- **La inscripción del equipo lleva la competición, y eso se decidió antes de que la tabla existiera**
+  (`D-68` + enmienda): `TeamRegistration` es `(team_id, season_id, competition_id?)`. La razón no es
+  rendimiento —derivar la pareja de `Match` cuesta milisegundos, medido en §9.12— sino que **hay un instante
+  en que el sistema sabe que un equipo va con una competición y no lo puede leer**: entre el `202` del
+  enganche (`D-67`) y la primera pasada no existe ni un `Match`. Es el mismo agujero que creó la entidad en
+  el eje de la temporada, tapado ahora en el de la competición. **No es `Participation`** (`D-27`): la
+  escribe el club, no la ingesta. Al tocarla: el `UNIQUE` de tres columnas va con **`NULLS NOT DISTINCT`**, y
+  la coherencia con la temporada es una **FK compuesta**, no una guarda.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
