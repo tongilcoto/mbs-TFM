@@ -81,6 +81,7 @@
 | **D-80**               | La normalización de nombres se equivoca a propósito hacia el mismo club                     | §3.7                               |
 | **D-84**               | Una coordenada caducada no da 404: devuelve el calendario de otra competición              | §3.7, §5.6                         |
 | **D-88**               | La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara — y el disparador responde 200 o 202 según el coste | §5.1, §5.6, §2.3 |
+| **D-89**               | El estado de la sincronización viaja con la competición; el registro de pasadas es el detalle, no la lista | §3.4, §5.1, §5.2, §5.6 |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -3004,6 +3005,65 @@ la tabla que el propio runtime ya tiene (`RuntimeError: HTTPResponseConvertible`
 
 ---
 
+### D-89 · El estado de la sincronización viaja con la competición, no se pide al registro
+
+**Qué hay que decidir.** La pantalla principal del backoffice es una tabla de *(equipo, competición)* —§9.12—
+y sus dos columnas siguientes son **estado y fecha de la ingesta**. La fecha ya está servida
+(`CompetitionResponse.lastSyncedAt`, desde F1). El estado no, y hay tres sitios donde podría salir.
+
+**Lo primero, que no es evidente: el estado NO se deriva de la fecha.** `last_synced_at` es *"última
+sincronización **con éxito**"* (§3.2), y una pasada que falla hace `rollback` sin tocarlo ([D-83]). Así que:
+
+| | `lastSyncedAt` | Última pasada | Lo que la pantalla debe decir |
+|---|---|---|---|
+| A | ayer | `succeeded` | al día |
+| B | ayer | **`failed`** | **algo va mal** |
+
+Las dos filas son **idénticas** mirando solo la fecha. Y B es exactamente el caso que [D-85] y [D-86] existen
+para hacer visible: el recorrido continúa, apunta el fallo, y **no hay nadie delante**.
+
+**Las dos opciones descartadas.**
+
+| Opción | Por qué no |
+|---|---|
+| La web llama a `GET /ingestion-runs` **por competición** | Es el N+1 de §9.12 otra vez y **peor**: aquél se paga al montar la pantalla, éste **en cada recarga** |
+| Relajar `/ingestion-runs` para que `competitionId` sea opcional | Ese endpoint es el **detalle forense**, y su ámbito obligatorio es lo que le permite ir sin paginación y con orden fijo ([D-88]). *"La última de cada competición"* es otra consulta (`DISTINCT ON`), otra semántica y otro orden: sería **un segundo endpoint disfrazado del primero** |
+
+**Decisión.** `CompetitionResponse` gana **dos campos derivados**, y `/ingestion-runs` **no se toca**:
+
+- **`lastIngestionAt`** — cuándo terminó la última pasada, **con éxito o sin él**. Con `lastSyncedAt` forma
+  el par que la pantalla necesita: *"lo último que tenemos"* y *"la última vez que se intentó"*. Iguales ⇒ la
+  última fue bien.
+- **`ingestionHealth`** — `ok` · `failing` · `stale` · `never`, evaluados **en ese orden** porque se solapan.
+
+**El precedente exacto es `ClubResponse`**: lleva `federationProvidesRoundStandings` y
+`federationProvidesScorers` **derivadas del catálogo en código** ([D-17]) en vez de obligar al cliente a
+llamar a un endpoint de capacidades. Aquí es lo mismo un piso más abajo — y §3.4 ya reserva el sitio: **vistas
+derivadas, agregaciones, no tablas base**.
+
+**Por qué el `stale` lo calcula el servidor, que es la mitad que importa.** Depende del **tope semanal de
+§5.6**, que no es una constante de presentación: es la regla que [D-55] hace irrecuperable —la clasificación
+de la FCF no se puede pedir hacia atrás—. Calculado en el cliente, lo reimplementarían por separado la web,
+iOS y Android, y se desincronizarían el día que el tope cambie. **Una regla de negocio no se reparte entre
+clientes.**
+
+**Consecuencia buena: la portada es UNA petición.** Con §9.12(a) —`GET /teams?seasonId=` devolviendo cada
+equipo con sus competiciones— y estos dos campos dentro de cada competición, las cuatro columnas de la tabla
+salen de un viaje. Por dentro cuesta **una consulta más** —`DISTINCT ON (competition_id) … ORDER BY
+finished_at DESC`—, no N.
+
+**Lo que hay que vigilar, y es la trampa de siempre.** Esto es un **derivado de lectura**, no una columna. En
+cuanto alguien lo materialice en `competitions` para ahorrarse el `DISTINCT ON`, habrá **un segundo escritor**
+que mantener sincronizado con `ingestion_runs` en cada pasada — exactamente la deriva que [D-18] evita y por
+la que [D-27] eliminó `Participation`. Si algún día el volumen lo pidiera, se mide primero: §9.12 dejó
+demostrado que en este modelo la intuición de coste falla por dos órdenes de magnitud.
+
+**Lo que no trae.** Ningún cambio en `ingestion_runs` ni en el modelo. Y ningún código: `/competitions` y
+`/teams` no están generados todavía ([D-69]), así que esto es diseño — que es justo por lo que sale gratis
+hacerlo ahora.
+
+---
+
 ## Autorización
 
 ### D-59 · La autorización vive en el tenant, y el rol no viaja en el JWT
@@ -3586,3 +3646,4 @@ paquete sin problema.
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

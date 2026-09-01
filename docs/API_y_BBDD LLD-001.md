@@ -342,6 +342,11 @@ opcional (§3.5).
 ### 3.4 Vistas derivadas (agregaciones, no tablas base)
 
 Calculadas por consulta o vistas materializadas:
+- **Estado de la sincronización de una competición** — `ingestionHealth` y `lastIngestionAt`, derivados de la
+  **última fila** de `ingestion_runs` de esa competición ([D-89]). **No es tabla ni columna**: materializarlo
+  en `competitions` metería un segundo escritor que sincronizar en cada pasada ([D-18]). `last_synced_at` sí
+  es columna, pero **no sirve para esto**: una pasada fallida hace `rollback` sin tocarla ([D-83]), así que
+  una competición rota y una sana tienen el mismo valor.
 - **Composición de la competición** (qué equipos la forman) — `DISTINCT` de `home_team_id` ∪ `away_team_id` en los `Match` de esa competición. **No es tabla** ([D-27]): la ingesta descubre los equipos *desde* el calendario, así que `Match` ya los contiene todos. `StandingRow` ofrece una segunda derivación equivalente cuando la clasificación está disponible. De aquí sale el filtro `?seasonId=` de `GET /v1/teams` (§5) **para los equipos rivales**; los **propios** salen de `TeamRegistration`, porque en junio todavía no hay `Match` del que derivarlos ([D-68]). **Y la inscripción trae su competición**, que es lo que permite servir la portada del backoffice —la lista *(equipo, competición)*— **sin tocar `Match`** y desde el instante del enganche, antes de la primera pasada ([D-68] enmienda, §9.12). La derivación **no se sustituye**: se le añade un segundo sumando, y los dos conjuntos son disjuntos por construcción.
 - **Rendimiento de equipo por temporada** (Total/Local/Visitante): J, G, E, P, GF, GC, PTS — desde `Match`.
 - **Desglose de goles del equipo** (marcados/recibidos por dimensión) — desde `Goal`, filtrando directamente por `scoring_team_id = :id_del_equipo` (marcados) o `conceding_team_id = :id_del_equipo` (recibidos); **sin join** a `Match`.
@@ -1700,6 +1705,10 @@ real ocurre siempre en el caso de uso (§7.4).
   más pura—, y no se navega a una pasada, se mira la cola reciente de su competición.
 - **Los descartes viajan dentro de cada fila** y no como recurso aparte ([D-85]): se leen enteros junto a su
   pasada.
+- **Este recurso es el detalle, no la lista** ([D-89]). El **resumen** —*«¿está al día esta competición?»*—
+  viaja con la competición (`ingestionHealth`, `lastIngestionAt`), para que la portada del backoffice sea una
+  petición y no una por competición. Por eso `competitionId` sigue siendo obligatorio aquí: relajarlo
+  convertiría este endpoint en un segundo endpoint disfrazado, con otra consulta y otro orden.
 
 
 ### 5.2 DTOs
@@ -2563,6 +2572,11 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     `JOIN` de dos tablas pequeñas y **no toca `Match`**. Se conserva el planteamiento y la medición porque
     explican **por qué** la salida no era servir mejor la derivación, sino admitir que hay un hecho que la
     derivación no puede contener.
+
+    > **Y sus otras dos columnas —estado y fecha de la ingesta— se resolvieron aparte, en [D-89]**: la fecha
+    > ya estaba (`lastSyncedAt`), y el estado viaja con la competición como derivado de lectura, no pidiéndolo
+    > al registro de pasadas competición por competición. Con las dos piezas, **la portada entera es una sola
+    > petición**.
 
     > **Lo que la desatascó fue mirar *cuándo* falla, no *cuánto cuesta*.** La consulta sobre `Match` es
     > rápida —está medido abajo— y aun así estaba mal: entre el `202` del enganche y la primera pasada, el

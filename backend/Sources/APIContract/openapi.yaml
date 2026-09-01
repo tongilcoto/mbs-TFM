@@ -4442,8 +4442,22 @@ components:
           format: date-time
           readOnly: true
           description: |
-            Última sincronización con éxito. **`null` ⇒ nunca sincronizada**, que es exactamente la
+            Última sincronización **con éxito**. **`null` ⇒ nunca sincronizada**, que es exactamente la
             condición bajo la cual las coordenadas externas siguen siendo editables por `PATCH` (§3.7).
+
+            **No sirve para saber si algo va mal** (D-89): una pasada que falla hace `rollback` y **no
+            toca este campo** (D-83), así que una competición sincronizada ayer y rota hoy tiene el mismo
+            valor que una que está perfecta. Para eso está `ingestionHealth`.
+        lastIngestionAt:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: |
+            Cuándo terminó la **última pasada**, con éxito **o sin él** (D-89). Con `lastSyncedAt` forman
+            el par que la pantalla necesita: *"lo último que tenemos"* y *"la última vez que se intentó"*.
+            Iguales ⇒ la última pasada fue bien.
+        ingestionHealth:
+          $ref: '#/components/schemas/IngestionHealth'
         createdAt:
           type: string
           format: date-time
@@ -6423,6 +6437,27 @@ components:
             (D-83).
           items:
             $ref: '#/components/schemas/IngestionSkip'
+
+    IngestionHealth:
+      type: string
+      description: |
+        Cómo está la sincronización de esta competición (D-89). **Derivado en lectura**, como `isCurrent`
+        o `displayName` — no hay columna detrás.
+
+        **Lo deriva el servidor y no el cliente**, y ésa es la decisión: `stale` depende del **tope semanal
+        de §5.6** (irrecuperable por D-55), que es una regla de negocio. Calculada en el cliente, la
+        reimplementarían por separado la web, iOS y Android, y se desincronizarían el día que el tope
+        cambie.
+
+        **Los casos se evalúan en este orden**, porque se solapan:
+
+        | Valor | Cuándo |
+        |---|---|
+        | `failing` | la **última pasada falló** — hay algo que mirar, y su motivo está en `/ingestion-runs` |
+        | `never` | nunca hubo una pasada con éxito (recién enganchada, o la primera aún encolada) |
+        | `stale` | el último éxito es de hace **más de una semana**: §5.6 dice que eso no debe pasar |
+        | `ok` | el resto |
+      enum: [ok, failing, stale, never]
 
     IngestionOutcome:
       type: string

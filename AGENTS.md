@@ -116,7 +116,10 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
   responde **200** con una competición (cabe en la respuesta) o **202** con una temporada (decenas de
   competiciones y ~240 partidos cada una: es `D-67` un nivel más abajo). El `202` **planifica antes de
-  responder**, para que una `seasonId` inexistente dé 404 y no un 202 con un fallo invisible detrás. El cuerpo
+  responder**, para que una `seasonId` inexistente dé 404 y no un 202 con un fallo invisible detrás. **Y ese
+  recurso es el *detalle*, no la lista** (`D-89`): el resumen —*"¿está al día?"*— viaja con la competición
+  (`ingestionHealth`, `lastIngestionAt`) como derivado de lectura. Ojo con la trampa: `last_synced_at` **no**
+  sirve para saber si algo va mal, porque una pasada fallida hace `rollback` sin tocarla (`D-83`). El cuerpo
   lleva **lista** de competiciones porque la pantalla que lo usa son equipos con una casilla al lado: marcar
   tres es **una** acción del usuario. Y diseñarlo destapó §9.12 — **ninguna lectura sirve la terna *(equipo,
   temporada, competición)***, que es lo que el backoffice llama *"un equipo"*; hoy costaría N+1 peticiones.
