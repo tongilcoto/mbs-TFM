@@ -404,6 +404,61 @@ struct IngestClubCalendarsTests {
         #expect(outcomes == [.failed, .succeeded])
     }
 
+    // ── Lo que encontraron las pruebas manuales (F6) ─────────────────────────
+
+    @Test("la pasada con éxito registra cuánto tardó (D-85)")
+    func aSuccessfulRunIsTimed() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        await store.seed(
+            seasons: [current], competitions: [try Self.competition(seasonID: current.id)])
+
+        let useCase = IngestClubCalendars(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federationClients: FakeFederationClientProvider(
+                [.rffm: SpyFederationClient(returning: Self.calendar)]),
+            clock: TickingClock(from: Self.now),
+            ids: SequentialUUIDProvider())
+
+        _ = try await useCase.execute(scope: IngestionScope(), actor: Self.actor)
+
+        // Contra la BD de trabajo, **toda** pasada con éxito registraba 0,00 s
+        // mientras la fallida sí se medía. `IngestionRun.finishedAt >= startedAt`
+        // se cumplía trivialmente, así que ninguna invariante lo delataba.
+        // Con la cadencia fuera del proceso (`D-87`), cuánto tarda una pasada es
+        // lo que dice si la federación se ha puesto lenta.
+        let run = try #require(await store.ingestionRuns.first)
+        #expect(run.finishedAt > run.startedAt)
+    }
+
+    @Test("el motivo del fallo no se queda en la descripción opaca (D-85)")
+    func aFailureKeepsItsDebugDetail() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        await store.seed(
+            seasons: [current], competitions: [try Self.competition(seasonID: current.id)])
+
+        let useCase = IngestClubCalendars(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federationClients: FakeFederationClientProvider(
+                [.rffm: OpaqueFailingClient(detail: "duplicate key value violates unique constraint")]),
+            clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        _ = try await useCase.execute(scope: IngestionScope(), actor: Self.actor)
+
+        // `D-85` dice que el motivo es **texto y no un código** para poder
+        // depurarlo. `PSQLError` —el error más probable de la ingesta— esconde
+        // el suyo tras *"Generic description to prevent accidental leakage"*, de
+        // modo que la fila que existe para contestar *"¿por qué falta este
+        // partido?"* no contestaba nada. Lo destaparon las pruebas manuales.
+        let run = try #require(await store.ingestionRuns.first)
+        let reason = try #require(run.error)
+        #expect(reason.contains("unique constraint"), "el motivo real: \(reason)")
+    }
+
     // ── El catálogo decide el adaptador (D-17) ───────────────────────────────
     //
     // Los dos tests de aquí abajo **llegaron en verde**, y no se disimula (Plan

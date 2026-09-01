@@ -683,6 +683,30 @@ lanza sobre una lista explícita de clubes.
    `ErrorHandlingMiddleware`, que devuelve el código **sin cuerpo** y §5.4 exige `application/problem+json` en
    todo error del contrato.
 
+**Y una sesión de pruebas manuales que encontró dos defectos que la batería no podía ver** —contra la base de
+trabajo, con la RFFM de verdad y 240 partidos reales entrando—. Los dos en `IngestionRun`, y los dos por el
+mismo motivo de método: **los niveles 2 y 3 corren con un reloj fijo y con dobles sin restricciones**.
+
+1. **El motivo de una pasada fallida era ilegible.** Un `UNIQUE` reventando deja un `PSQLError`, que esconde
+   su descripción tras *"Generic description to prevent accidental leakage of sensitive data"*. La fila que
+   existe para contestar *"¿por qué falta este partido?"* no contestaba nada. Con `String(reflecting:)` deja
+   `sqlState: 23505 · Key (federation_match_id)=(5374968) already exists`.
+2. **La pasada con éxito no medía su duración.** El informe se construye al empezar, así que
+   `started_at == finished_at`; la fallida sí se medía, y esa **asimetría era el síntoma**. Ninguna invariante
+   lo delataba, porque `finishedAt >= startedAt` se cumple trivialmente.
+
+Se cubren con dos dobles nuevos —`TickingClock` y un error opaco al estilo de `PSQLError`— y **32 mutaciones,
+32 cazadas** en total. La lección se apunta junto a las de arnés de F1, F4 y F5: **un reloj fijo y unos dobles
+sin restricciones son exactamente las dos cosas que hacen barata la batería, y exactamente las dos que ocultan
+esta clase de fallo.** Ejecutar el sistema y mirar la tabla no es opcional.
+
+> **De propina, `D-84` quedó reverificado en vivo el 2026-08-31**, y por accidente: al sembrar una segunda
+> competición con `temporada=22` la RFFM devolvió el calendario de 2025/26 — **ignoró el parámetro**, que es
+> su tercer modo de fallo. El sistema se negó a escribir un calendario cadete en una competición senior: la
+> guarda no podía disparar (primera sincronización, sin `federation_name` con qué comparar), lo paró el
+> `UNIQUE`, `D-85` dejó la fila y `D-86` siguió con lo demás. **La defensa en profundidad funcionó, y el
+> escalón que la salvó no fue el que se diseñó para eso.**
+
 **Comprobación de mutación: 30 mutaciones, 30 cazadas**, con especificidad — romper *solo* la guarda de la
 temporada desconocida tumba *solo* el test de [D-84], y romper *solo* el 502 tumba *solo* el de la pasada
 fallida. **Cinco sobrevivieron a la primera pasada, y las cinco eran «falta un test»** — ninguna era código

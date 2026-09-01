@@ -251,3 +251,41 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 }
+
+/// Un reloj que **avanza** un segundo en cada consulta.
+///
+/// `FixedClock` no sirve para afirmar una duración: con él, empezar y terminar
+/// son el mismo instante y un cronómetro roto pasa el test. Lo encontraron las
+/// pruebas manuales de F6 —toda pasada con éxito registraba 0,00 s— y por eso
+/// este doble existe.
+final class TickingClock: Clock, @unchecked Sendable {
+    private let start: Date
+    private var ticks = 0
+    init(from start: Date) { self.start = start }
+    func now() -> Date {
+        defer { ticks += 1 }
+        return start.addingTimeInterval(Double(ticks))
+    }
+}
+
+/// Un error que **esconde su descripción**, como `PSQLError`.
+///
+/// No es un caso rebuscado: es el error más probable de la ingesta —una
+/// violación de restricción— y su `description` dice literalmente *"Generic
+/// description to prevent accidental leakage of sensitive data"*. Todo lo útil
+/// está en su `debugDescription`, que es lo que `String(reflecting:)` devuelve.
+struct OpaqueError: Error, CustomStringConvertible, CustomDebugStringConvertible {
+    let detail: String
+    var description: String {
+        "Generic description to prevent accidental leakage of sensitive data"
+    }
+    var debugDescription: String { "OpaqueError(detail: \(detail))" }
+}
+
+/// Falla **siempre**, con un error opaco.
+struct OpaqueFailingClient: FederationClient {
+    let detail: String
+    func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+        throw OpaqueError(detail: detail)
+    }
+}

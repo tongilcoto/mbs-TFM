@@ -11,7 +11,7 @@
 ## 0. Qué hay montado ahora mismo
 
 Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0** a **F6**.
-**259 tests.**
+**261 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
@@ -409,6 +409,9 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **Una pasada que falla también se lee.** Prueba con una coordenada mala: el `POST` devuelve **502** y el
   `GET` te enseña la fila con `outcome: "failed"` y su motivo. Es la razón de ser entera de `D-85` — la
   pasada que falla es la que nadie ve.
+- **Y el motivo dice algo.** Si el fallo viene de Postgres, la fila lleva el `sqlState` y la restricción que
+  reventó, no la descripción genérica que `PSQLError` da por defecto. Costó una sesión de pruebas manuales
+  descubrir que ahí no había nada legible (`D-85`).
 
 ## 5. Los tests
 

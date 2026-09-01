@@ -191,7 +191,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**246 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**261 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -354,6 +354,13 @@ encontrado, porque ningún test tenía motivo para existir hasta que la mutació
 *"sobra el código"* — **y a veces ninguna de las dos**, porque el programa mutado es el mismo programa
 (cruzar los dos marcadores que `Match` le pasa a `Kickoff` no es observable: `Kickoff` solo pregunta *"¿hay
 marcador?"*, y esa pregunta es simétrica).
+
+**Y dos defectos que F6 solo encontró ejecutando el sistema contra la base de trabajo**, no con la batería:
+el motivo de una pasada fallida era ilegible —`PSQLError` esconde su descripción; se arregla con
+`String(reflecting:)`— y **la pasada con éxito no medía su duración**, porque el informe se construye al
+empezar. Los dos en `IngestionRun`, y los dos invisibles por la misma razón de método: **los niveles 2 y 3
+corren con un reloj fijo y con dobles sin restricciones**, que es lo que los hace baratos y lo que oculta esta
+clase de fallo. Al añadir algo a `IngestionRun`, ejecutarlo y mirar la tabla.
 
 **Y una lección de arnés nueva, de F6: un test de nivel 3 puede romper los de otras suites.** El primer test
 del recorrido enumeraba **todos** los tenants de `public.tenants`, y las suites corren en paralelo — así que

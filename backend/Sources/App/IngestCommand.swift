@@ -132,7 +132,7 @@ public struct IngestCommand: AsyncCommand {
                 outcomes.append(
                     TenantIngestion(
                         slug: slug, report: nil,
-                        error: "\(type(of: error)): \(error)"))
+                        error: diagnosticText(for: error)))
             }
         }
         return outcomes

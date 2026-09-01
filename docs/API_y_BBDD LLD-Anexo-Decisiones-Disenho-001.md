@@ -1317,6 +1317,28 @@ que se le hace.
 **Es la primera tabla del modelo sin clave natural**, y es correcto: dos pasadas de la misma competición en el
 mismo minuto son un reintento, no un duplicado.
 
+**Dos precisiones que costaron una sesión de pruebas manuales**, porque la batería no podía verlas:
+
+1. **El motivo se guarda con `String(reflecting:)`, no con `"\(error)"`.** *"Texto y no un código"* solo
+   sirve si el texto dice algo, y el error **más probable** de la ingesta —una violación de restricción—
+   esconde el suyo: `PSQLError` describe *"Generic description to prevent accidental leakage of sensitive
+   data"*. Contra la base de trabajo, una pasada abortada por el `UNIQUE` de `federation_match_id` dejaba esa
+   frase y nada más; con la corrección deja `sqlState: 23505 · Key (federation_match_id)=(5374968) already
+   exists`, que **es** la respuesta a *"¿por qué falta este partido?"*. La cautela de PostgresNIO es correcta
+   para un log compartido; esto es una fila **dentro del *schema* del club**, que solo alcanza quien ya tiene
+   sus datos (§6.2).
+2. **Las marcas de tiempo las pone quien conoce los dos extremos.** El informe se construye al **empezar** la
+   pasada, así que con las suyas `started_at == finished_at` y **toda pasada con éxito registraba duración
+   cero** — mientras la fallida sí se medía, porque su registro se arma al final. La invariante del `init` no
+   lo delataba: `finishedAt >= startedAt` se cumple trivialmente. Con la cadencia fuera del proceso
+   ([D-87]), cuánto tarda una pasada es justo lo que dice si la federación se ha puesto lenta.
+
+> **Las dos son la misma lección, y es de método**: los niveles 2 y 3 usan un reloj fijo y dobles sin
+> restricciones, así que **ninguno de los dos fallos era observable en la batería**. Uno necesitaba un reloj
+> que avanzara; el otro, un `UNIQUE` reventando de verdad. Se cubren ya con `TickingClock` y con un doble que
+> imita a `PSQLError` —descripción opaca, `debugDescription` útil—, pero quien los encontró fue **ejecutar el
+> sistema y mirar la tabla**.
+
 **Lo que no trae, y es deliberado.** El `GET` para leerla desde el backoffice. Su llamante real es el job de
 F6 —hoy la única forma de generar una fila es un test—, y el recurso en el *spec* se diseña con el job
 delante.

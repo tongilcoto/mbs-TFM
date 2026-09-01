@@ -70,7 +70,7 @@ public struct IngestClubCalendars: Sendable {
                 report.entries.append(
                     ClubIngestionReport.Entry(
                         competitionID: competition.id,
-                        outcome: .failed("\(type(of: error)): \(error)")))
+                        outcome: .failed(diagnosticText(for: error))))
             }
         }
         return report
