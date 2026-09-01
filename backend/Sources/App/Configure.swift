@@ -64,6 +64,9 @@ public func configure(
     // F6: el adaptador primario de la ingesta (§2.3-b). Es un comando y no una
     // ruta a propósito — un job de sistema no tiene usuario ni JWT que validar.
     app.asyncCommands.use(IngestCommand(), as: "ingest")
+    // Herramienta de operación, no contrato: da de alta la **entrada** de la
+    // ingesta desde la URL del calendario, mientras `D-67` (F10) no exista.
+    app.asyncCommands.use(SeedCompetitionCommand(), as: "seed-competition")
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     let handler = APIHandler(

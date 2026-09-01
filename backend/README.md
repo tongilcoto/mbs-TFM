@@ -11,7 +11,7 @@
 ## 0. Qué hay montado ahora mismo
 
 Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0** a **F6**.
-**261 tests.**
+**266 tests.**
 
 | Operación HTTP | Estado |
 |---|---|
@@ -34,7 +34,7 @@ leerlo y el job hay que poder dispararlo desde el backoffice (`D-88`). Lo que ha
 | **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                                                                                       | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                                                                                                                                                                 | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)                 |
 | **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía**                                                          | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red**                                                                                                                                          | sus tests, y solo sus tests (§5.4)                                                   |
 | **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante**                                             | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                                                                                                                                                                       | sus tests, y solo sus tests (§5.4)                                                   |
-| **F6** | El **job** (`swift run Run ingest`), el recorrido por tenant, la cadencia y los **dos endpoints** de arriba | `swift test --filter 'IngestClubCalendars\|IngestArguments'` → **24 tests** sin Docker · `--filter TenantTraversal` → **7** **con** Docker · `--filter IngestionEndpoint` → **11** **con** Docker | `swift run Run ingest` (§6.1) y `curl` sobre `/v1/ingestion-runs` (§4.5) |
+| **F6** | El **job** (`swift run Run ingest`), el recorrido por tenant, la cadencia y los **dos endpoints** de arriba | `swift test --filter 'IngestClubCalendars\|IngestArguments'` → **24 tests** sin Docker · `--filter TenantTraversal` → **7** **con** Docker · `--filter IngestionEndpoint` → **11** **con** Docker | `swift run Run ingest` (§6.2) y `curl` sobre `/v1/ingestion-runs` (§4.5) |
 | **F5** | La **ingesta del calendario de punta a punta**: las cuatro entidades de salida, el caso de uso, el transporte HTTP y el **canario**. Y `IngestionRun`, el registro de cada pasada | `swift test --filter 'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` → **33 tests** sin Docker · `--filter IngestCalendarTests` → **19** sin Docker · `--filter 'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` → **18** **con** Docker | TablePlus sobre las cinco tablas nuevas, y el volcado real que entra en ellas (§5.5) |
 
 > **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
@@ -782,7 +782,56 @@ provisión, la provisión tiene que dejarlo dado de alta.
 
 La URL del club se le entrega al firmar el contrato (§9.10).
 
-### 6.1 `ingest` — la pasada de la federación
+### 6.1 `seed-competition` — dar de alta lo que la ingesta necesita
+
+La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`: son su *entrada*).
+El camino de verdad es pegar la URL en la ficha del equipo (`D-67`), y eso es **F10**; hasta entonces, esto:
+
+```sh
+swift run Run seed-competition -t atleti \
+  -u "https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549" \
+  -c cadete -g masculino
+```
+
+```
+→ consultando la federación…
+  temporada:   2025/26  (temporada=21)
+  competición: PRIMERA DIVISION AUTONOMICA CADETE
+  grupo:       Grupo 1
+  jornadas:    30
+Competición lista: db679b16-f61d-42ec-b83f-3455fd67ccc6
+```
+
+Y te imprime el `ingest` y el `curl` listos para pegar.
+
+**Es una herramienta, no contrato.** `POST /v1/competitions` existe en el *spec* y no es esto — aquél es el
+camino del administrador, con su `preview` (`D-22`). Esto vive donde `provision-tenant`.
+
+**Cuatro cosas que hace y un `INSERT` a mano no:**
+
+- **Se pega la URL entera** (`D-22`), que es la mitigación contra el dígito mal tecleado. Un dígito cambiado
+  **no da error**: sincroniza otro calendario (`D-84`).
+- **Los rótulos los dice la federación** —etiqueta de temporada, nombre de la competición, grupo—, así que no
+  te los inventas tú.
+- **Pasa por el Dominio**, de modo que las fechas de la temporada se derivan de su etiqueta (§3.2) y las
+  invariantes se comprueban.
+- **Valida antes de escribir.** Coordenada inexistente o URL incompleta → falla **sin dejar fila**:
+
+```
+Error: FederationError.coordinateNotFound(detail: "la respuesta llegó sin calendario: competicion/grupo no existen")
+Error: A la URL le falta el parámetro 'grupo': …
+```
+
+`--category` y `--gender` son obligatorios y no tienen valor por defecto: el género entra en la clave única de
+cada equipo que la ingesta cree (`D-58`), así que equivocarlo no da un rótulo feo — da un 409 tres días
+después. La federación no lo publica por competición, va dentro del nombre, y **inferirlo es el `/preview` de
+F10**, no una herramienta.
+
+Repetirlo es idempotente: si la competición ya existe, la reutiliza y te devuelve su id.
+
+---
+
+### 6.2 `ingest` — la pasada de la federación
 
 El adaptador primario del módulo de ingesta (§2.3-b). **No es un endpoint** porque un job de sistema no tiene
 usuario ni JWT que validar; el botón del backoffice existe además, y llama al mismo caso de uso (§4.5).

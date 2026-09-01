@@ -194,7 +194,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**261 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**266 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -270,6 +270,13 @@ swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           # hoy: clubs -> seasons -> competitions
+swift run Run seed-competition -t atleti -u "<URL del calendario>" \
+                               -c cadete -g masculino
+                                          # HERRAMIENTA, no contrato: da de alta la
+                                          # *entrada* de la ingesta desde la URL pegada
+                                          # (`D-22`), con los rótulos que dice la
+                                          # federación y pasando por el Dominio. Valida
+                                          # antes de escribir. Hasta que llegue F10 (`D-67`)
 swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -t <slug[,slug]>  solo esos clubes
                                           #   -c <uuid>         solo esa competición
