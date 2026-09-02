@@ -606,16 +606,31 @@ Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de 
 reutiliza los códigos de competición y grupo entre temporadas (`D-84`), así que una coordenada caducada **no
 da 404** — devuelve el calendario de otra cosa. El canario compara también el nombre.
 
-**La coordenada por defecto caduca**, así que es configurable sin tocar código:
+**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto caduca —`temporada` cambia cada
+año—, así que las otras cuatro son configurables sin tocar código:
+
+| Variable | Por defecto |
+|---|---|
+| `FEDERATION_LIVE_SEASON` | `21` |
+| `FEDERATION_LIVE_COMPETITION` | `24037548` |
+| `FEDERATION_LIVE_GROUP` | `24037549` |
+| `FEDERATION_LIVE_MODALITY` | `futbol_11` — es el `tipojuego` de la URL |
+| `FEDERATION_LIVE_NAME` | `PRIMERA DIVISION AUTONOMICA CADETE` |
+
+Son las del volcado de temporada jugada, a propósito: así el canario y el *fixture* hablan de lo mismo.
 
 ```sh
 FEDERATION_LIVE=1 \
   FEDERATION_LIVE_SEASON=22 \
   FEDERATION_LIVE_COMPETITION=26737701 \
   FEDERATION_LIVE_GROUP=26737702 \
+  FEDERATION_LIVE_MODALITY=futbol_7 \
   FEDERATION_LIVE_NAME="PREFERENTE AFICIONADO" \
   swift test --filter RFFMCanaryTests
 ```
+
+Una modalidad fuera del catálogo **falla diciendo cuáles hay**, en vez de caer a `futbol_11`: elegir por
+quien llama es lo que haría que el canario mirase otra modalidad y lo llamase verde.
 
 > **El filtro es `RFFMCanaryTests`, el nombre del tipo.** `--filter FederationCanary` —el rótulo del *suite*—
 > no casa con nada y se queda en `Test run with 0 tests … passed`, que **se lee como verde**. Es la misma
