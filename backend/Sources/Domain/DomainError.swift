@@ -20,6 +20,6 @@ public enum DomainError: Error, Equatable, Sendable {
     /// esta competición** (`D-84`): la fuente devuelve un calendario de otra.
     ///
     /// No es un dato mal formado ni una invariante rota por el usuario: es la
-    /// constatación de que el proveedor reutiliza sus códigos entre temporadas.
+    /// constatación de que el proveedor ignora el parámetro `temporada` (`D-84` enmendada).
     case federationSourceMismatch(expected: String, found: String)
 }

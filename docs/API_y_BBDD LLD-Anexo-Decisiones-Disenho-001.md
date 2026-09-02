@@ -1895,22 +1895,64 @@ precisamente para que el sesgo de esta entrada sea seguro.
 
 ### D-84 · Una coordenada caducada no da 404: devuelve el calendario de otra competición
 
-**Cómo se descubrió.** Capturando los volcados de F5. Se pidió el mismo grupo en dos temporadas cambiando
-**un** parámetro:
+> ### ⚠️ Enmienda del 2026-09-02 · la causa que esta entrada daba era falsa
+>
+> **Decía que la RFFM reutiliza los códigos de competición y grupo entre temporadas. No los reutiliza.** Lo
+> corrigió el desarrollador con tres URLs reales de la propia web:
+>
+> | Competición | Temporada | `competicion` / `grupo` |
+> |---|---|---|
+> | PREFERENTE AFICIONADO · G1 | 2026-27 | `26737701` / `26737702` |
+> | PREFERENTE AFICIONADO · G1 | **2025-26** | **`24037456` / `24037457`** |
+> | PRIMERA DIVISIÓN AUTONÓMICA CADETE · G1 | 2026-27 | `26737737` / `26737738` |
+>
+> La misma competición tiene **códigos distintos en cada temporada**, y cada temporada recibe un bloque nuevo
+> (`240374xx` → `267377xx`).
+>
+> **Lo que pasa de verdad, medido contra el servidor vivo el 2026-09-02:** `competicion` + `grupo`
+> determinan la competición **por completo**, y **`temporada` se ignora**.
+>
+> | Coordenada | Devuelve |
+> |---|---|
+> | `temporada=22` + `26737701/26737702` | PREFERENTE AFICIONADO |
+> | `temporada=21` + `24037456/24037457` | PREFERENTE AFICIONADO |
+> | **`temporada=22`** + `24037456/24037457` | PREFERENTE AFICIONADO |
+> | **`temporada=21`** + `26737701/26737702` | PREFERENTE AFICIONADO |
+>
+> **Cómo se llegó a la conclusión equivocada, y esto es lo que de verdad hay que llevarse:** *la fuente
+> respondió lo que se le preguntó*. El campo `calendar.temporada` del `__NEXT_DATA__` **es el eco del
+> parámetro**, no una propiedad del calendario devuelto. Medido el 2026-09-02 sobre los **mismos** códigos
+> `24037456/24037457`:
+>
+> | Se pide | `calendar.temporada` responde | Fechas reales de los partidos |
+> |---|---|---|
+> | `temporada=21` | `2025-2026` | 01-02-2026 → 31-05-2026 |
+> | `temporada=22` | **`2026-2027`** | **01-02-2026 → 31-05-2026** — *las mismas* |
+> | `temporada=23` | `''` (no existe) | — |
+>
+> Así que quien capturó los volcados **vio la respuesta decir «2026-2027»** y concluyó, razonablemente, que
+> era otra temporada. No lo era. **Una fuente que devuelve tu propio parámetro como si fuera un dato es una
+> trampa que ninguna cantidad de rigor al medir evita** — solo evitarla saber que está ahí. Ahora lo está.
+>
+> **Y la decisión de abajo se mantiene entera**, porque la conclusión no dependía de la causa: sigue siendo
+> cierto que **una coordenada equivocada no da 404 y devuelve un calendario perfectamente parseable de otra
+> cosa**. Solo cambia *por qué*: no porque los códigos se repitan, sino porque **`temporada` es decorativa** y
+> un dígito mal en `competicion`/`grupo` cae en otra competición real —los códigos son densos: `24037456` y
+> `24037548` existen los dos—.
+>
+> **Lo que la corrección sí cambia, y es nuevo:** el riesgo principal ya no es *"la misma coordenada en otra
+> temporada"*, es **la coordenada que se queda vieja**. Como los códigos cambian cada año, una URL del año
+> pasado sigue devolviendo el calendario del año pasado **para siempre y sin error**. Y contra eso
+> `federation_name` es una guarda **débil**, porque el nombre de una competición suele ser el mismo todos los
+> años. Ver la nota al final de esta entrada.
 
-```
-…/competicion/calendario?temporada=NN&tipojuego=1&competicion=24037548&grupo=24037549
-```
-
-| `temporada` | Lo que devuelve |
-|---|---|
-| `22` | 2026-2027 · **PREFERENTE AFICIONADO** · Grupo 1 |
-| `21` | 2025-2026 · **PRIMERA DIVISION AUTONOMICA CADETE** · Grupo 1 |
-
-**La RFFM reutiliza los códigos de competición y grupo entre temporadas.** No es un error de captura.
+**Cómo se descubrió.** Capturando los volcados de F5, al comparar dos coordenadas de competiciones distintas
+(ver la enmienda de arriba para la causa correcta).
 
 **Lo que confirma.** La regla de §3.5 de que `Competition` se identifica por (`season_id`,
-`federation_group_id`) y **nunca por el grupo a secas**. Estaba razonada; ahora tiene dato detrás.
+`federation_group_id`) y **nunca por el grupo a secas**. Con la enmienda queda **reforzada por otro camino**:
+los códigos no se repiten, así que cada temporada trae una `Competition` nueva con coordenada nueva — y
+`season_id` en la clave es lo que hace que eso sea expresable.
 
 **Lo que rompe.** La premisa del canario de Plan §4.4: *"un 404 tiene que decir una cosa y un parseo fallido
 otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y las dos son `200`:
@@ -1918,8 +1960,8 @@ otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y 
 | Coordenada mala | Respuesta |
 |---|---|
 | `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** |
-| `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. **Ignora el parámetro** |
-| Coordenada **de otra temporada**, válida | `200` con un calendario perfectamente parseable **de otra competición** |
+| `temporada` inexistente **o simplemente otra** | `200` con el calendario que digan `competicion`/`grupo`. **El parámetro se ignora siempre** (medido 2026-09-02) |
+| Coordenada **de otra competición**, válida | `200` con un calendario perfectamente parseable **de otra cosa** |
 
 La tercera es la peligrosa: no hay ningún síntoma técnico. Sin guarda, la pasada escribiría un calendario
 cadete dentro de una competición senior, y los equipos que creara heredarían de ella la categoría equivocada
@@ -1942,6 +1984,24 @@ cambiado. Solo la última es para lo que existe.
 
 **La lección, otra vez la de [D-74].** Una premisa del diseño sobre un sistema de terceros **no se hereda: se
 mide**. Ésta llevaba escrita desde F2 y era falsa; se cayó a la primera petición que se le hizo.
+
+
+**Nota abierta de la enmienda: falta una guarda, y no es la que parece.** El caso que queda sin cubrir es la
+**coordenada que se queda vieja**: mismo nombre de competición, así que `federation_name` no la caza.
+
+**La tentación es comparar la etiqueta de temporada, y sería una guarda que no puede fallar.**
+`FederationCalendar.seasonLabel` sale de `calendar.temporada`, que es **el eco del parámetro que enviamos** —y
+lo enviamos desde `Season.federation_season_id`—. Comparar eso con `Season.label` es comparar un dato consigo
+mismo: parecería protección y no lo sería. **Que quede escrito, porque es el error natural.**
+
+**La señal que sí es dato son las fechas de los partidos.** No son eco: con `temporada=22` sobre los códigos
+de 2025-26, el calendario sigue trayendo partidos del **01-02-2026 al 31-05-2026**. Y `Season` ya deriva su
+ventana de la etiqueta (§3.2, del 1 de julio al 30 de junio), así que la guarda es *"¿caen los partidos dentro
+de la temporada a la que digo que pertenece esta competición?"*.
+
+**No se implementa en esta enmienda a propósito**: corregir una afirmación falsa y añadir una regla nueva son
+dos cosas, y la segunda merece su propia entrada — con su decisión sobre qué hacer con el partido aplazado que
+se sale del rango por un día.
 
 ---
 

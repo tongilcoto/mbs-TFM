@@ -603,7 +603,7 @@ falle, más unos invariantes baratos (que haya jornadas, que los `codacta` sigan
 | **⚠️ *"El parser ya no traga"*** | **han cambiado la forma de la respuesta** | **sí: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser** |
 
 Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de otra competición**. La RFFM
-reutiliza los códigos de competición y grupo entre temporadas (`D-84`), así que una coordenada caducada **no
+no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`** (`D-84`), así que una coordenada caducada **no
 da 404** — devuelve el calendario de otra cosa. El canario compara también el nombre.
 
 **Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto caduca —`temporada` cambia cada

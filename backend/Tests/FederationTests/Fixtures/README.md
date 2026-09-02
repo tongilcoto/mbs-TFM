@@ -27,7 +27,9 @@ Se capturaron con **la misma coordenada** y cambiando un solo parámetro:
 ```
 
 **Y devuelven competiciones distintas** — PREFERENTE AFICIONADO una, PRIMERA
-DIVISION AUTONOMICA CADETE la otra. No es un error de captura: la RFFM **reutiliza
+DIVISION AUTONOMICA CADETE la otra. No es un error de captura: **son dos competiciones
+distintas con coordenadas distintas** (`D-84`, enmendada el 2026-09-02 — los códigos **no** se
+reutilizan entre temporadas; lo que pasa es que la RFFM **reutiliza
 los códigos de competición y grupo entre temporadas**. Dos consecuencias, las dos
 con dato real detrás por primera vez:
 

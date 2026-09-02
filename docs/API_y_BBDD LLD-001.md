@@ -586,7 +586,7 @@ respuesta, así que salen de otros que sí:
 | `OpponentClub.slug` | del **nombre**, mecánicamente y sin lista de formas jurídicas. Es la regla **opuesta** a la de `NormalizedName` en el mismo texto: aquélla borra las fronteras, ésta las conserva como guiones | [D-82] |
 
 **Y una guarda antes de escribir nada: que la coordenada siga apuntando a esta competición.** La RFFM
-**reutiliza los códigos de competición y grupo entre temporadas**, medido en F5: la misma coordenada con otra
+**no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`****, medido en F5: la misma coordenada con otra
 `temporada` devuelve un calendario perfectamente parseable **de otra competición**, y **no da 404**. La
 evidencia con la que se detecta ya existía —`Competition.federation_name` ([D-72])— y ésta es la primera vez
 que se usa. Si el nombre discrepa, la pasada **se para sin escribir** ([D-84]); los dos silencios no paran
@@ -2085,12 +2085,24 @@ bloquea diseño: **los códigos de `tipo_gol` y `codigo_tipo_amonestacion`**, qu
 `Goal` y el tipo de `Card` pueden llegar del acta o siguen siendo entrada manual ([D-57]).
 
 **Antes de ingerir, comprobar que la coordenada sigue siendo de esta competición.** Es la corrección que F5
-trajo con dato delante ([D-84]): **una coordenada caducada no falla**. La RFFM reutiliza sus códigos entre
-temporadas y responde `200` con el calendario de otra competición; con `competicion`/`grupo` inexistentes
-responde `200` con `calendar: null`; y con una `temporada` inexistente responde `200` con el calendario de
-**otra temporada** e ignora el parámetro. Las tres se parecen a un fallo de formato sin serlo, así que el
-adaptador las llama por su nombre y la ingesta compara el nombre de la competición contra
-`Competition.federation_name` antes de escribir.
+trajo con dato delante ([D-84]), **con la causa enmendada el 2026-09-02** ([Anexo RFFM §F.16]): la RFFM
+**ignora `temporada`** —`competicion` + `grupo` determinan la competición por completo— y sus códigos
+**cambian cada temporada**. Así que dice que no de tres maneras y las tres son `200`:
+
+| Qué pasa | Respuesta |
+|---|---|
+| `competicion`/`grupo` inexistentes | `200` con `calendar: null` |
+| `temporada` distinta o inexistente | `200` con el calendario que digan `competicion`/`grupo` — **el parámetro se ignora** |
+| Un dígito mal en `competicion`/`grupo` | `200` con el calendario **de otra competición real**: los códigos son densos |
+
+Las tres se parecen a un fallo de formato sin serlo, así que el adaptador las llama por su nombre y la
+ingesta compara el nombre contra `Competition.federation_name` antes de escribir.
+
+**Y hay un caso que esa guarda no cubre: la coordenada que se queda vieja** —mismo nombre de competición, otro
+año—. La comprobación que parece obvia no sirve: la etiqueta de temporada que devuelve la fuente es **el eco
+del parámetro que le enviamos** (§F.16), así que compararla con `Season.label` es comparar un dato consigo
+mismo. Lo que sí es dato son **las fechas de los partidos**, que `Season` puede acotar con su ventana derivada
+(§3.2). Queda anotado en [D-84] y sin implementar.
 
 **El *canario*.** Fuera de la batería normal, tras `FEDERATION_LIVE=1`, se pasa el parser por encima de la
 respuesta **viva** y se exige que no falle. **No compara bytes** —el calendario cambia cada semana por
@@ -2775,3 +2787,4 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

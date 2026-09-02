@@ -88,16 +88,24 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   §5.6 sigue siendo **requisito**, pero por `D-55` —la clasificación de la FCF no se puede pedir hacia
   atrás—, no por la fecha. Y el `202` de `D-67`, arriba. **La lección se repite: una regla puede sobrevivir a
   su ejemplo, pero hay que ir a comprobarlo.**
-- **Una coordenada caducada no falla: devuelve el calendario de otra competición** (`D-84`). Se descubrió en
-  F5 capturando un volcado que se pedía para otra cosa: **la RFFM reutiliza los códigos de competición y grupo
-  entre temporadas**, así que `competicion=24037548&grupo=24037549` da PREFERENTE AFICIONADO con
-  `temporada=22` y PRIMERA DIVISION AUTONOMICA CADETE con `temporada=21`. Y **no da 404 nunca** en esa ruta:
+- **Una coordenada equivocada no falla: devuelve el calendario de otra competición** (`D-84`, **con enmienda
+  del 2026-09-02**). Lo que la entrada decía —que la RFFM reutiliza los códigos entre temporadas— **es falso**:
+  cada temporada recibe un bloque nuevo (PREFERENTE AFICIONADO G1 es `24037456` en 25-26 y `26737701` en
+  26-27). Lo cierto, medido: **`competicion`+`grupo` lo determinan todo y `temporada` se ignora**. La
+  conclusión no cambia —la guarda sigue haciendo falta— pero **el riesgo principal sí**: ya no es la misma
+  coordenada en otra temporada, es **la coordenada que se queda vieja**, que devuelve el calendario del año
+  pasado para siempre y sin error. Y **no da 404 nunca** en esa ruta:
   con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con una `temporada`
   inexistente responde `200` con el calendario de otra e **ignora el parámetro**. Consecuencias: confirma con
   dato la regla de §3.5 (`Competition` se identifica por `season_id` **+** `federation_group_id`); obliga a la
   ingesta a **comparar el nombre contra `Competition.federation_name` antes de escribir**; y le da al canario
   de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier adaptador de federación: **una premisa
   sobre un sistema de terceros no se hereda, se mide** — ésta llevaba escrita desde F2 y era falsa.
+- **Y medir no basta cuando la fuente te devuelve tu propio parámetro** (`D-84` enmendada,
+  [Anexo RFFM §F.16]). El `calendar.temporada` de la RFFM **es el eco de lo que le pediste**, no un dato suyo:
+  con los códigos de 2025-26 y `temporada=22` responde *"2026-2027"* y sirve los partidos de 2025-26. Así se
+  escribió mal `D-84` en F5, **midiendo**. La regla que se añade: **desconfiar de todo campo que se parezca a
+  lo que enviaste**, y buscar una señal que no pueda ser eco — aquí, las fechas de los partidos.
 - **El recorrido de la ingesta no se detiene en el primer fallo, y eso solo es seguro por dos cosas que ya
   estaban puestas** (`D-86`): la pasada es **atómica** (`D-83`) y **deja constancia** de su fallo (`D-85`). La
   unidad de aislamiento es la **competición**: abortar haría que una sola coordenada caducada —de las que
@@ -397,3 +405,4 @@ El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude 
 [Anexo FCF §C.10]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

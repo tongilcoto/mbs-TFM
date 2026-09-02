@@ -805,3 +805,56 @@ variables — con **`.JPG` en mayúsculas**, que una comparación sensible a caj
 [Anexo FCF §C.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+
+---
+
+## F.16 `temporada` no es coordenada: es un eco — **medido el 2026-09-02**
+
+**La coordenada real del calendario son dos números, no cuatro.** `competicion` + `grupo` determinan la
+competición **por completo**; `temporada` no selecciona nada.
+
+| Coordenada | Competición que devuelve |
+|---|---|
+| `temporada=22` + `26737701/26737702` | PREFERENTE AFICIONADO |
+| `temporada=21` + `24037456/24037457` | PREFERENTE AFICIONADO |
+| **`temporada=22`** + `24037456/24037457` | PREFERENTE AFICIONADO |
+| **`temporada=21`** + `26737701/26737702` | PREFERENTE AFICIONADO |
+
+**Y los códigos NO se reutilizan entre temporadas** — cada una recibe un bloque nuevo. La misma competición,
+dos años seguidos, con las URLs reales de la web:
+
+| Competición | Temporada | `competicion` / `grupo` |
+|---|---|---|
+| PREFERENTE AFICIONADO · G1 | 2026-27 | `26737701` / `26737702` |
+| PREFERENTE AFICIONADO · G1 | 2025-26 | `24037456` / `24037457` |
+| PRIMERA DIVISIÓN AUTONÓMICA CADETE · G1 | 2026-27 | `26737737` / `26737738` |
+
+> Esto **corrige** lo que [D-84] afirmaba desde F5 (*"la RFFM reutiliza los códigos entre temporadas"*). La
+> conclusión de aquella decisión —hace falta una guarda antes de escribir— se mantiene; su causa era falsa.
+
+### Lo que sí hace `temporada`, y es la trampa
+
+**Aparece en el título visible de la página y se devuelve tal cual en `calendar.temporada` del
+`__NEXT_DATA__`.** Es el **eco del parámetro**, no una propiedad de los datos. Sobre los **mismos** códigos
+de 2025-26:
+
+| Se pide | `calendar.temporada` | Fechas reales de los partidos |
+|---|---|---|
+| `temporada=21` | `2025-2026` | 01-02-2026 → 31-05-2026 |
+| `temporada=22` | **`2026-2027`** | **01-02-2026 → 31-05-2026** — *las mismas* |
+| `temporada=23` | `''` | — |
+
+**Tres consecuencias para quien escriba un adaptador:**
+
+1. **`calendar.temporada` no vale como evidencia de nada.** Cualquier comprobación que lo compare con lo que
+   nosotros enviamos **no puede fallar**: es nuestro propio parámetro de vuelta.
+2. **El `''` sí significa algo**: esa temporada no existe en su catálogo. El parser ya lo trata como
+   coordenada mala y no como formato cambiado, y sigue siendo correcto.
+3. **La señal honesta son las fechas de los partidos**, que no son eco. Es lo único del cuerpo que delata que
+   una coordenada se ha quedado vieja.
+
+**Y explica el error de F5 sin necesidad de culpar a la medición**: quien capturó los volcados vio a la
+respuesta decir *"2026-2027"* y concluyó que era otra temporada. La respuesta decía lo que se le había
+preguntado. **Una fuente que devuelve tu parámetro como si fuera un dato es una trampa que el rigor al medir
+no evita** — solo evita caer en ella saber que está ahí.
+

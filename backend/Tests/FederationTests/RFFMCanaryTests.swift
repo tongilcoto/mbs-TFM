@@ -51,7 +51,9 @@ import Testing
 /// 3. **`malformedResponse`** → **esto es el aviso**: han cambiado ellos.
 ///
 /// Y una cuarta que el diseño no había previsto (`D-84`): la respuesta llega,
-/// parsea perfectamente, y **es de otra competición**. La RFFM reutiliza los
+/// parsea perfectamente, y **es de otra competición**. La RFFM ignora el
+/// parámetro `temporada`, así que basta un dígito mal en `competicion` o `grupo`
+/// —los códigos son densos— para caer en otra competición real. Los
 /// códigos de competición y grupo entre temporadas, así que una coordenada
 /// caducada **no da 404** — se descubrió capturando los dos volcados de esta
 /// fase. Por eso el canario compara también el nombre.
@@ -183,8 +185,7 @@ struct RFFMCanaryTests {
         // caducada **no da 404**.
         #expect(calendar.competitionName == Self.expectedName, """
             La coordenada devuelve '\(calendar.competitionName ?? "sin nombre")' y se \
-            esperaba '\(Self.expectedName)'. La RFFM reutiliza los códigos entre \
-            temporadas (D-84): esto no es un cambio de formato, es que la \
+            esperaba '\(Self.expectedName)'. La RFFM ignora el parámetro `temporada` (D-84): esto no es un cambio de formato, es que la \
             coordenada apunta a otra cosa.
             """)
     }

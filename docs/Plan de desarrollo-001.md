@@ -529,12 +529,21 @@ con la batería completa en **217**. Corre en 4 s con Postgres; los de dominio y
 | ¿Dónde queda constancia de una pasada? | En una **tabla**, y escrita **fuera** de la transacción de la pasada → [D-85] |
 | ¿Sirve el volcado que había para la rama de "partido jugado"? | No, y ya no hace falta: el volcado de temporada jugada cierra el deber de §4.3 |
 
-**El hallazgo de la fase, y no se buscaba.** El volcado de temporada jugada se capturó con **la misma
-coordenada** que el anterior cambiando solo `temporada`, y devolvió **otra competición**: PREFERENTE
-AFICIONADO con `temporada=22`, PRIMERA DIVISION AUTONOMICA CADETE con `temporada=21`. **La RFFM reutiliza los
-códigos de competición y grupo entre temporadas.**
+**El hallazgo de la fase, y no se buscaba.** Capturando los volcados se vio que **una coordenada equivocada
+no falla**: devuelve `200` y un calendario perfectamente parseable **de otra competición**.
 
-Eso confirmó con dato real una regla que solo estaba razonada (§3.5: `Competition` se identifica por
+> ⚠️ **La causa que se escribió aquí era falsa, y se corrigió el 2026-09-02** —la enmienda vive en [D-84] y la
+> evidencia en [Anexo RFFM §F.16]—. Se dijo que *"la RFFM reutiliza los códigos de competición y grupo entre
+> temporadas"*. **No los reutiliza**: cada temporada recibe un bloque nuevo. Lo que pasa es que **ignora el
+> parámetro `temporada`**, y que **lo devuelve como si fuera un dato** en `calendar.temporada`. Quien capturó
+> los volcados vio a la respuesta decir *"2026-2027"* y concluyó, razonablemente, que era otra temporada.
+>
+> **Y esa es la lección que esta fase no podía dejar, porque no la sabía**: *"una premisa sobre un sistema de
+> terceros se mide"* es necesario y **no suficiente**. Se midió, y salió mal — porque la fuente **devuelve tu
+> propio parámetro** como si fuera suyo. Contra eso solo protege desconfiar de todo campo que se parezca a lo
+> que enviaste, y buscar una señal que no pueda ser eco: aquí, **las fechas de los partidos**.
+
+La conclusión, en cambio, se mantiene entera: confirmó con dato real una regla que solo estaba razonada (§3.5: `Competition` se identifica por
 `season_id` + `federation_group_id`) y **rompió una premisa de §4.4 de este plan**. Al medirlo entero, la RFFM
 **no da 404 nunca** en la ruta del calendario: dice que no de tres maneras y las tres son `200`. Sin guarda, la
 pasada habría escrito un calendario cadete dentro de una competición senior, con los equipos heredando de ella
@@ -999,4 +1008,4 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
