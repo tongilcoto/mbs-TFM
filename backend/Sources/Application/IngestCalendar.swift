@@ -55,7 +55,14 @@ public struct IngestCalendar: Sendable {
     ) async throws -> IngestionRun {
         let startedAt = clock.now()
         do {
+            // **Las marcas de tiempo las pone quien conoce los dos extremos.**
+            // `CalendarPass` construye su informe al empezar, así que si se
+            // quedara con las suyas toda pasada con éxito registraría duración
+            // cero — que es lo que hacía, y solo se vio ejecutándola contra la
+            // base de trabajo. La fallida sí se medía: la asimetría era el
+            // síntoma.
             let run = try await sync(competitionID: competitionID, actor: actor)
+                .timed(from: startedAt, to: clock.now())
             try await record(run, actor: actor)
             return run
         } catch {
@@ -71,7 +78,7 @@ public struct IngestCalendar: Sendable {
                 id: IngestionRunID(raw: ids.next()),
                 competitionID: competitionID,
                 startedAt: startedAt, finishedAt: clock.now(),
-                outcome: .failed, error: "\(type(of: error)): \(error)")
+                outcome: .failed, error: diagnosticText(for: error))
 
             // Si el registro tampoco se puede escribir, **manda el error
             // original**: es el que explica lo que pasó, y taparlo con "no pude

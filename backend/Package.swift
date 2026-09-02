@@ -168,6 +168,12 @@ let package = Package(
                 "APIContract",
                 "Application",
                 "Domain",
+                // **F6 cuelga `Federation` de `App`**, y hasta ahora no colgaba:
+                // desde F2 lo mantenía en el grafo de build su target de tests,
+                // porque el adaptador no tenía llamante. El job de ingesta es ese
+                // llamante (§2.3-b), y la raíz de composición es el único sitio
+                // donde el puerto y su implementación se conocen.
+                "Federation",
                 "HTTPAdapter",
                 "Persistence",
                 "Tenancy",
@@ -200,7 +206,7 @@ let package = Package(
         // los targets de test, así que no viaja al binario de producción.
         .target(
             name: "TestSupport",
-            dependencies: ["App", "Domain", "Persistence", "Tenancy"],
+            dependencies: ["App", "Application", "Domain", "HTTPAdapter", "Persistence", "Tenancy"],
             swiftSettings: commonSwiftSettings
         ),
 
@@ -244,6 +250,9 @@ let package = Package(
                 "Persistence",
                 "TestSupport",
                 "Tenancy",
+                // F6: los tests del disparador falsean el `FederationClient`.
+                "Application",
+                "HTTPAdapter",
                 .product(name: "VaporTesting", package: "vapor"),
             ],
             swiftSettings: commonSwiftSettings

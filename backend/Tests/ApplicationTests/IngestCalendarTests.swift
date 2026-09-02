@@ -492,7 +492,8 @@ struct IngestCalendarTests {
 
     // ── La guarda que exigió el hallazgo de los dos volcados ───────────────
 
-    /// **Capturando los volcados de esta fase se descubrió que la RFFM reutiliza
+    /// **Una coordenada equivocada devuelve un calendario de otra cosa, sin error**
+    /// (`D-84`; su causa se enmendó el 2026-09-02: la RFFM **no** reutiliza
     /// los códigos de competición y grupo entre temporadas.** La misma URL con
     /// `temporada=22` da PREFERENTE AFICIONADO y con `temporada=21` da PRIMERA
     /// DIVISION AUTONOMICA CADETE.

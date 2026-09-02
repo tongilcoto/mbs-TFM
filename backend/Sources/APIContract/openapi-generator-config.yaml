@@ -27,5 +27,7 @@ accessModifier: public
 # ─────────────────────────────────────────────────────────────────────────────
 filter:
   operations:
-    - getClub     # F0 — el esqueleto que camina
-    - updateClub  # F0 — el camino de escritura, para tener con qué practicar
+    - getClub             # F0 — el esqueleto que camina
+    - updateClub          # F0 — el camino de escritura, para tener con qué practicar
+    - listIngestionRuns   # F6 — el registro de las pasadas (D-85), para el backoffice
+    - triggerIngestion    # F6 — el disparador manual del job (D-87)

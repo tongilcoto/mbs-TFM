@@ -26,6 +26,8 @@
 | **D-01**               | Dominio independiente de frameworks, no *Active Record*                                    | §2.2, §4, §8.1                     |
 | **D-02**               | Enumerados como `text` + `CHECK`, no `ENUM` nativo de Postgres                             | §4.6                               |
 | **D-83**               | La pasada de ingesta abre tres ámbitos, y la red no está dentro de ninguno                 | §2.3, §6.2, §6.4                   |
+| **D-86**               | El recorrido de la ingesta no se detiene en el primer fallo: la unidad de aislamiento es la competición | §2.3, §5.6, §9.3      |
+| **D-87**               | La cadencia de la ingesta vive fuera del proceso; lo que el código trae es un antirrebote  | §2.3, §5.6                         |
 | **Modelo de datos**    |                                                                                            |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                    | §3.2, §3.4                         |
@@ -78,6 +80,8 @@
 | **D-79**               | La ambigüedad del paso inexacto no se resuelve: se reporta, y sin columna nueva             | §3.7, §5.1, §9                     |
 | **D-80**               | La normalización de nombres se equivoca a propósito hacia el mismo club                     | §3.7                               |
 | **D-84**               | Una coordenada caducada no da 404: devuelve el calendario de otra competición              | §3.7, §5.6                         |
+| **D-88**               | La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara — y el disparador responde 200 o 202 según el coste | §5.1, §5.6, §2.3 |
+| **D-89**               | El estado de la sincronización viaja con la competición; el registro de pasadas es el detalle, no la lista | §3.4, §5.1, §5.2, §5.6 |
 | **Contrato de la API** |                                                                                            |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                           | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos            | §5.1                               |
@@ -187,6 +191,76 @@ estaba. Comprobado contra Postgres real, no deducido.
 **Consecuencia asumida.** La competición se lee **dos veces**, una por ámbito. Es un `SELECT` por PK y evita
 mantener viva una transacción durante la latencia de un tercero; el intercambio es evidente.
 
+### D-86 · El recorrido de la ingesta no se detiene en el primer fallo
+
+**Qué hay que decidir.** [D-83] deja la pasada de **una** competición atómica, y F6 la pone dentro de dos
+bucles: por competición del club, y por club del plano de control (§4.7). La pregunta que §9.3 dejó abierta
+para las migraciones —*«¿qué pasa con los ya migrados cuando el número 30 revienta?»*— se repite aquí, y aquí
+sí hay que contestarla, porque este bucle corre solo y cada semana.
+
+**Decisión.** El recorrido **continúa**, y la **unidad de aislamiento es la competición**. Un fallo no aborta
+ni el club ni el recorrido: se apunta y se sigue con el siguiente.
+
+**Por qué aquí sí y en las migraciones no está claro.** No es la misma pregunta, aunque lo parezca:
+
+| | Migración a medias (§9.3) | Pasada a medias |
+|---|---|---|
+| Qué deja | *schemas* a distinta versión de esquema, y **nada que lo diga** | la base **exactamente como estaba** ([D-83]) |
+| Qué constancia queda | ninguna, salvo mirar `_fluent_migrations` club a club | una fila en `ingestion_runs` con el motivo ([D-85]) |
+| Se arregla | volviendo a lanzar, y hay que saber por dónde iba | **solo** con la pasada siguiente, que es automática |
+
+Es decir: las dos piezas que hacen segura esta decisión **ya estaban puestas** antes de tomarla. Sin la
+atomicidad de `D-83` continuar dejaría media competición escrita; sin el registro de `D-85` continuar sería
+callarse.
+
+**Lo que decide el coste de equivocarse.** Abortar al primer fallo hace que **una** coordenada caducada
+—de las que [D-84] demuestra que existen y que no dan error— deje sin sincronizar a todo lo que vaya detrás por
+orden alfabético. Con un club es molesto; con el recorrido por tenant, un club de una federación aún no
+soportada bloquearía a los demás.
+
+**Las dos mitades son inseparables: se continúa *y* se apunta.** Continuar sin apuntar convierte un recorrido
+con fallos en uno que parece haber ido bien, y la ingesta **no tiene a nadie delante** (§2.3-b). Por eso el
+recorrido devuelve el desenlace de cada competición **y** el comando sale con **código distinto de cero** si
+algo falló: es la única señal que ve el cron.
+
+**Lo que esto no es.** No es un reintento. Una competición que falla se vuelve a intentar en la pasada
+siguiente, y no antes; construir aquí una cola de reintentos sería adivinar un problema que el registro de
+`D-85` todavía no ha demostrado que exista.
+
+---
+
+### D-87 · La cadencia vive fuera del proceso; el código trae un antirrebote
+
+**Qué hay que decidir.** §5.6 fija un **tope semanal** como requisito —por [D-55], que es lo irrecuperable— y
+deja el intervalo exacto *"para cuando se escriba el job"*. Que es ahora.
+
+**Decisión.** La cadencia la pone **quien dispara** el comando —un cron, una *scheduled machine*—, y **no hay
+temporizador dentro del proceso**. El calendario propuesto: **lunes** (horarios confirmados de la semana
+entrante más el resultado de la jornada recién jugada) y **sábado y domingo** (marcadores). De martes a
+viernes no hay nada nuevo que traer.
+
+**Por qué no un planificador en el `serve`.** Tres razones, y la tercera es la que decide:
+
+1. Muere con el proceso, y un despliegue en PaaS reinicia sin avisar.
+2. No reintenta ni deja constancia de no haber corrido: el fallo es **silencio**, que es el modo de fallo que
+   `D-85` existe para combatir.
+3. **Ata la ingesta al ciclo de vida del servidor web**, que es justo lo que §2.3-b separa: el adaptador
+   primario de la ingesta es un `AsyncCommand` *porque* es un actor de sistema sin petición HTTP detrás.
+
+**Lo que el código sí trae, y no es lo mismo.** Un ***antirrebote*** (`--min-interval-hours`, por defecto 6):
+una competición sincronizada con éxito hace menos de eso no se vuelve a pedir. **No es el tope semanal.**
+Aquél es un **máximo** entre pasadas y lo hace cumplir el calendario de disparos; esto es un **mínimo** que
+hace inofensivo un disparo de más —un reintento del cron, dos disparadores solapados—. Seis horas está muy por
+debajo del intervalo más corto de la cadencia propuesta, de modo que **nunca suprime una pasada legítima**.
+
+**Y la competición que nunca se sincronizó entra siempre**, tenga el antirrebote el valor que tenga. Sin esa
+excepción, una competición recién dada de alta —el enganche de [D-67], que es F10— se quedaría esperando para
+siempre: nunca se sincronizó, así que nunca sería *"vieja"*, así que el cron nunca la tocaría. **Lo encontró
+la comprobación de mutación, no un rojo.**
+
+**Consecuencia sobre el tope semanal: sigue sin estar hecho cumplir por el código, y hay que decirlo.** El
+requisito de §5.6 es del calendario de disparos. Lo que este diseño sí garantiza es que **el registro permite
+comprobarlo a posteriori** — `ingestion_runs` dice cuándo se pasó por última vez.
 ---
 
 ## Modelo de datos
@@ -272,6 +346,26 @@ intercambiables:
 **Regla dura:** el identificador externo **nunca** es PK, **nunca** FK y **nunca** participa en un `JOIN`
 interno. Dentro del *schema* se une siempre por UUID. Sirve exclusivamente para que la ingesta **reconozca**
 a qué fila corresponde lo que llega de fuera.
+
+**Y el prefijo `federation_` es la marca de esa regla, no un adorno: se lee al revés.** Una columna que lo
+lleva es texto de la federación; una FK interna **no lo lleva nunca**, *aunque apunte a una entidad que sí
+tenga el suyo*. El caso que lo enseña está en la misma tabla:
+
+| Columna | Qué es | ¿Prefijo? |
+|---|---|---|
+| `teams.federation_team_id` | el `codigo_equipo` — **texto de ellos**, nunca se une | **sí** |
+| `teams.opponent_club_id` | **UUID nuestro**, FK a `opponent_clubs`, se une siempre | **no** |
+| `opponent_clubs.federation_club_id` | cómo llama la federación a **ese** club | **sí** |
+
+Renombrar la de en medio a `federation_opponent_club_id` es la tentación natural —las tres hablan del mismo
+club rival— y sería **exactamente al revés**: diría *"texto de la federación"* de un UUID que es FK, y encima
+chocaría de nombre con la de abajo, que sí lo es. Dos columnas con el mismo prefijo significando cosas
+opuestas es lo que este prefijo existe para impedir.
+
+**Corolario para el sufijo `_id`, que sí es ambiguo y se asume:** en `federation_*_id` el `_id` es *"así lo
+llaman ellos"*; en el resto es *"apunta a esa fila"*. Se deja así porque **es el prefijo el que desambigua**,
+y renombrarlos a `_code` costaría seis columnas, los dos anexos, el *spec* y la cadena de emparejamiento a
+cambio de lo que esta regla ya dice.
 
 **Por qué importa:** si la Federación cambiara su numeración, o si un endpoint dejara de traer un código, el
 modelo **sigue en pie** — se degradaría la calidad del emparejamiento, no la integridad de los datos.
@@ -1224,6 +1318,28 @@ que se le hace.
 **Es la primera tabla del modelo sin clave natural**, y es correcto: dos pasadas de la misma competición en el
 mismo minuto son un reintento, no un duplicado.
 
+**Dos precisiones que costaron una sesión de pruebas manuales**, porque la batería no podía verlas:
+
+1. **El motivo se guarda con `String(reflecting:)`, no con `"\(error)"`.** *"Texto y no un código"* solo
+   sirve si el texto dice algo, y el error **más probable** de la ingesta —una violación de restricción—
+   esconde el suyo: `PSQLError` describe *"Generic description to prevent accidental leakage of sensitive
+   data"*. Contra la base de trabajo, una pasada abortada por el `UNIQUE` de `federation_match_id` dejaba esa
+   frase y nada más; con la corrección deja `sqlState: 23505 · Key (federation_match_id)=(5374968) already
+   exists`, que **es** la respuesta a *"¿por qué falta este partido?"*. La cautela de PostgresNIO es correcta
+   para un log compartido; esto es una fila **dentro del *schema* del club**, que solo alcanza quien ya tiene
+   sus datos (§6.2).
+2. **Las marcas de tiempo las pone quien conoce los dos extremos.** El informe se construye al **empezar** la
+   pasada, así que con las suyas `started_at == finished_at` y **toda pasada con éxito registraba duración
+   cero** — mientras la fallida sí se medía, porque su registro se arma al final. La invariante del `init` no
+   lo delataba: `finishedAt >= startedAt` se cumple trivialmente. Con la cadencia fuera del proceso
+   ([D-87]), cuánto tarda una pasada es justo lo que dice si la federación se ha puesto lenta.
+
+> **Las dos son la misma lección, y es de método**: los niveles 2 y 3 usan un reloj fijo y dobles sin
+> restricciones, así que **ninguno de los dos fallos era observable en la batería**. Uno necesitaba un reloj
+> que avanzara; el otro, un `UNIQUE` reventando de verdad. Se cubren ya con `TickingClock` y con un doble que
+> imita a `PSQLError` —descripción opaca, `debugDescription` útil—, pero quien los encontró fue **ejecutar el
+> sistema y mirar la tabla**.
+
 **Lo que no trae, y es deliberado.** El `GET` para leerla desde el backoffice. Su llamante real es el job de
 F6 —hoy la única forma de generar una fila es un test—, y el recurso en el *spec* se diseña con el job
 delante.
@@ -1779,22 +1895,64 @@ precisamente para que el sesgo de esta entrada sea seguro.
 
 ### D-84 · Una coordenada caducada no da 404: devuelve el calendario de otra competición
 
-**Cómo se descubrió.** Capturando los volcados de F5. Se pidió el mismo grupo en dos temporadas cambiando
-**un** parámetro:
+> ### ⚠️ Enmienda del 2026-09-02 · la causa que esta entrada daba era falsa
+>
+> **Decía que la RFFM reutiliza los códigos de competición y grupo entre temporadas. No los reutiliza.** Lo
+> corrigió el desarrollador con tres URLs reales de la propia web:
+>
+> | Competición | Temporada | `competicion` / `grupo` |
+> |---|---|---|
+> | PREFERENTE AFICIONADO · G1 | 2026-27 | `26737701` / `26737702` |
+> | PREFERENTE AFICIONADO · G1 | **2025-26** | **`24037456` / `24037457`** |
+> | PRIMERA DIVISIÓN AUTONÓMICA CADETE · G1 | 2026-27 | `26737737` / `26737738` |
+>
+> La misma competición tiene **códigos distintos en cada temporada**, y cada temporada recibe un bloque nuevo
+> (`240374xx` → `267377xx`).
+>
+> **Lo que pasa de verdad, medido contra el servidor vivo el 2026-09-02:** `competicion` + `grupo`
+> determinan la competición **por completo**, y **`temporada` se ignora**.
+>
+> | Coordenada | Devuelve |
+> |---|---|
+> | `temporada=22` + `26737701/26737702` | PREFERENTE AFICIONADO |
+> | `temporada=21` + `24037456/24037457` | PREFERENTE AFICIONADO |
+> | **`temporada=22`** + `24037456/24037457` | PREFERENTE AFICIONADO |
+> | **`temporada=21`** + `26737701/26737702` | PREFERENTE AFICIONADO |
+>
+> **Cómo se llegó a la conclusión equivocada, y esto es lo que de verdad hay que llevarse:** *la fuente
+> respondió lo que se le preguntó*. El campo `calendar.temporada` del `__NEXT_DATA__` **es el eco del
+> parámetro**, no una propiedad del calendario devuelto. Medido el 2026-09-02 sobre los **mismos** códigos
+> `24037456/24037457`:
+>
+> | Se pide | `calendar.temporada` responde | Fechas reales de los partidos |
+> |---|---|---|
+> | `temporada=21` | `2025-2026` | 01-02-2026 → 31-05-2026 |
+> | `temporada=22` | **`2026-2027`** | **01-02-2026 → 31-05-2026** — *las mismas* |
+> | `temporada=23` | `''` (no existe) | — |
+>
+> Así que quien capturó los volcados **vio la respuesta decir «2026-2027»** y concluyó, razonablemente, que
+> era otra temporada. No lo era. **Una fuente que devuelve tu propio parámetro como si fuera un dato es una
+> trampa que ninguna cantidad de rigor al medir evita** — solo evitarla saber que está ahí. Ahora lo está.
+>
+> **Y la decisión de abajo se mantiene entera**, porque la conclusión no dependía de la causa: sigue siendo
+> cierto que **una coordenada equivocada no da 404 y devuelve un calendario perfectamente parseable de otra
+> cosa**. Solo cambia *por qué*: no porque los códigos se repitan, sino porque **`temporada` es decorativa** y
+> un dígito mal en `competicion`/`grupo` cae en otra competición real —los códigos son densos: `24037456` y
+> `24037548` existen los dos—.
+>
+> **Lo que la corrección sí cambia, y es nuevo:** el riesgo principal ya no es *"la misma coordenada en otra
+> temporada"*, es **la coordenada que se queda vieja**. Como los códigos cambian cada año, una URL del año
+> pasado sigue devolviendo el calendario del año pasado **para siempre y sin error**. Y contra eso
+> `federation_name` es una guarda **débil**, porque el nombre de una competición suele ser el mismo todos los
+> años. Ver la nota al final de esta entrada.
 
-```
-…/competicion/calendario?temporada=NN&tipojuego=1&competicion=24037548&grupo=24037549
-```
-
-| `temporada` | Lo que devuelve |
-|---|---|
-| `22` | 2026-2027 · **PREFERENTE AFICIONADO** · Grupo 1 |
-| `21` | 2025-2026 · **PRIMERA DIVISION AUTONOMICA CADETE** · Grupo 1 |
-
-**La RFFM reutiliza los códigos de competición y grupo entre temporadas.** No es un error de captura.
+**Cómo se descubrió.** Capturando los volcados de F5, al comparar dos coordenadas de competiciones distintas
+(ver la enmienda de arriba para la causa correcta).
 
 **Lo que confirma.** La regla de §3.5 de que `Competition` se identifica por (`season_id`,
-`federation_group_id`) y **nunca por el grupo a secas**. Estaba razonada; ahora tiene dato detrás.
+`federation_group_id`) y **nunca por el grupo a secas**. Con la enmienda queda **reforzada por otro camino**:
+los códigos no se repiten, así que cada temporada trae una `Competition` nueva con coordenada nueva — y
+`season_id` en la clave es lo que hace que eso sea expresable.
 
 **Lo que rompe.** La premisa del canario de Plan §4.4: *"un 404 tiene que decir una cosa y un parseo fallido
 otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y las dos son `200`:
@@ -1802,8 +1960,8 @@ otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y 
 | Coordenada mala | Respuesta |
 |---|---|
 | `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** |
-| `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. **Ignora el parámetro** |
-| Coordenada **de otra temporada**, válida | `200` con un calendario perfectamente parseable **de otra competición** |
+| `temporada` inexistente **o simplemente otra** | `200` con el calendario que digan `competicion`/`grupo`. **El parámetro se ignora siempre** (medido 2026-09-02) |
+| Coordenada **de otra competición**, válida | `200` con un calendario perfectamente parseable **de otra cosa** |
 
 La tercera es la peligrosa: no hay ningún síntoma técnico. Sin guarda, la pasada escribiría un calendario
 cadete dentro de una competición senior, y los equipos que creara heredarían de ella la categoría equivocada
@@ -1826,6 +1984,24 @@ cambiado. Solo la última es para lo que existe.
 
 **La lección, otra vez la de [D-74].** Una premisa del diseño sobre un sistema de terceros **no se hereda: se
 mide**. Ésta llevaba escrita desde F2 y era falsa; se cayó a la primera petición que se le hizo.
+
+
+**Nota abierta de la enmienda: falta una guarda, y no es la que parece.** El caso que queda sin cubrir es la
+**coordenada que se queda vieja**: mismo nombre de competición, así que `federation_name` no la caza.
+
+**La tentación es comparar la etiqueta de temporada, y sería una guarda que no puede fallar.**
+`FederationCalendar.seasonLabel` sale de `calendar.temporada`, que es **el eco del parámetro que enviamos** —y
+lo enviamos desde `Season.federation_season_id`—. Comparar eso con `Season.label` es comparar un dato consigo
+mismo: parecería protección y no lo sería. **Que quede escrito, porque es el error natural.**
+
+**La señal que sí es dato son las fechas de los partidos.** No son eco: con `temporada=22` sobre los códigos
+de 2025-26, el calendario sigue trayendo partidos del **01-02-2026 al 31-05-2026**. Y `Season` ya deriva su
+ventana de la etiqueta (§3.2, del 1 de julio al 30 de junio), así que la guarda es *"¿caen los partidos dentro
+de la temporada a la que digo que pertenece esta competición?"*.
+
+**No se implementa en esta enmienda a propósito**: corregir una afirmación falsa y añadir una regla nueva son
+dos cosas, y la segunda merece su propia entrada — con su decisión sobre qué hacer con el partido aplazado que
+se sale del rango por un día.
 
 ---
 
@@ -2022,6 +2198,10 @@ dejar abierta una cuestión pendiente y **dejarla en el camino feliz**.
 2. **`Competition`** — creada, o **reutilizada** si ya existe: dos equipos del mismo club pueden caer en el
    mismo grupo (el A y el B del mismo Infantil), y el segundo pegado no puede volver a crearla. El `preview`
    ya lo anticipa con `alreadyRegistered`.
+2.b **`TeamRegistration`** — la inscripción del equipo en esa temporada **y en esa competición** ([D-68] y su
+   enmienda). Si ya había una fila con `competition_id` nulo —el equipo creado en junio—, **se completa** en
+   vez de añadirse. Es el paso que hace que el equipo y su competición se puedan leer juntos **antes** de que
+   exista un solo `Match`.
 3. **`Team.federation_team_id`** — el enganche propiamente dicho, escrito **donde tiene sitio**. Y aquí está
    la razón de fondo para no dejarlo en la competición: `ownTeamFederationId` **no se persistía** (no hay
    columna en §3.2, no vuelve en `CompetitionResponse`). Era una instrucción de un solo uso. Mientras la
@@ -2130,7 +2310,9 @@ de firma. §3.4 conserva la composición de la competición como vista derivada,
 
 1. **El enganche de [D-67] crea la inscripción.** Su cascada gana un paso entre la `Competition` y el
    `federation_team_id`. Con eso, *«todo equipo propio que juega está inscrito»* es cierto **por
-   construcción**, y las dos fuentes del filtro no pueden contradecirse.
+   construcción**, y las dos fuentes del filtro no pueden contradecirse. **Y con la enmienda de abajo, la
+   inscripción que crea lleva la competición dentro** — que es lo que hace legible la portada del backoffice
+   desde el mismo `202`, sin esperar a la primera pasada.
 2. **`seasonId` pasa a ser obligatorio en `POST /v1/teams`: un equipo nace inscrito.** Sin esto existe el
    estado «equipo creado, inscrito en ninguna parte» — invisible en todas las pantallas, que es justo el
    fallo que esta decisión repara. Es el mismo movimiento que [D-67] hizo con `ownTeamFederationId`:
@@ -2176,6 +2358,70 @@ temporada nueva es exactamente ese gancho.
 - **Un club puede inscribir un equipo que luego no llegue a tener calendario.** El filtro lo devolverá bajo
   esa temporada sin que exista un solo partido. **No es deriva: es el dato correcto** —el club lo inscribió—
   y es justo lo que [D-27] no podía representar.
+
+#### Enmienda · la inscripción lleva también la competición
+
+*Añadida al diseñar la pantalla principal del backoffice ([D-88], §9.12). La tabla **todavía no existe** —no
+está en el juego de migraciones—, así que esto se corrige antes de que haya una sola fila que migrar.*
+
+**El agujero es el mismo de esta decisión, en el otro eje.** Arriba se tapó *"el equipo existe pero no
+pertenece a ninguna temporada"*. Queda abierto **"el equipo pertenece a una competición y el sistema no lo
+puede decir"**, y ocurre en el camino normal del administrador:
+
+1. Pega la URL del calendario en la ficha del Cadete A → la cascada de [D-67] crea `Season`, crea
+   `Competition`, escribe `Team.federation_team_id` y devuelve **202**.
+2. En ese instante **el sistema acaba de escribir que ese equipo va con esa competición**.
+3. Y no lo puede leer: la única arista equipo↔competición del modelo pasa por `Match`, y no hay ninguno
+   todavía. Si además la primera pasada falla ([D-86]), el equipo se queda sin competición hasta la semana
+   siguiente.
+
+La pantalla principal del backoffice es exactamente esa lista —equipo y su competición—, así que el agujero
+no es teórico: es la portada.
+
+**Se aplica el propio criterio de esta decisión**, que no era *"¿tiene atributos?"* sino ***"¿es
+derivable?"***. Antes del primer calendario, **no lo es**. Después sí, y coincide — igual que la inscripción
+de temporada coincide con la derivación de `Match` en cuanto empieza la liga.
+
+**Decisión.** `team_registrations` gana **`competition_id`, anulable**, y su clave única pasa a las **tres**
+columnas.
+
+| Momento | Fila |
+|---|---|
+| Junio: `POST /teams` con `seasonId` | `(equipo, temporada, **NULL**)` — inscrito, sin competición conocida |
+| El enganche de [D-67] | esa fila **se completa** con la competición |
+| Copa, enganchada aparte ([D-12]) | **segunda fila** `(equipo, temporada, copa)` |
+
+**Invariante:** a lo sumo **una** fila con `competition_id` nulo por equipo y temporada, y **desaparece en
+cuanto hay una con competición**. Sin esa regla, la portada mostraría el mismo equipo dos veces: una con liga
+y otra sin nada.
+
+**El recurso no cambia de forma, y eso importa.** Esta decisión presume de que *"el par (equipo, temporada)
+**es** el recurso"* y de que no hay `{registrationId}` que exponer —*"el síntoma que delató a `Participation`
+en su día"*—. Con tres columnas eso peligraría… si la competición entrase en la ruta. **No entra**: el
+`PUT /v1/teams/{teamId}/registrations/{seasonId}` sigue siendo el recurso y gana un **cuerpo opcional con el
+conjunto** de competiciones, que es el patrón de [D-50] —`PUT` del conjunto— ya usado dos veces en este
+contrato. Sigue sin haber id sintético y sigue siendo idempotente.
+
+**Y la incoherencia se hace irrepresentable, no se vigila.** `competition_id` y `season_id` podrían
+contradecirse —una competición de otra temporada—. En vez de una guarda que alguien tiene que recordar, la FK
+es **compuesta**: `(competition_id, season_id) → competitions(id, season_id)`, lo que exige un
+`UNIQUE(id, season_id)` en `competitions` que no cuesta nada. Es el criterio de [D-61]: la integridad en el
+sistema de tipos, no en la disciplina.
+
+**Lo que NO cambia:**
+
+- **Los rivales siguen derivándose de `Match`** ([D-27]). La unión asimétrica de arriba se mantiene; lo único
+  que gana el sumando propio es que ahora trae la competición consigo.
+- **Sigue sin ser `Participation`.** Aquélla la escribía la ingesta y era un índice de `Match`; ésta la
+  escribe **el club** y contiene lo que `Match` todavía no puede implicar. El argumento no se ha estirado: es
+  literalmente el de esta misma decisión.
+- **`Team` no se toca.** Ni `season_id` ni `competition_id` dentro ([D-28]): la competición se afirma
+  *sobre* el equipo, no *dentro* de él, y "Infantil A" sigue siendo la misma entidad año tras año.
+
+**Lo que se asume.** Un equipo puede jugar una competición que nadie enganchó —la ingesta trae partidos de
+una competición sin inscripción—. La portada seguiría sin verla. Es el caso simétrico del último punto de
+arriba y se resuelve igual: **la lectura es la unión** de la inscripción y la derivación, ya que las dos
+significan cosas distintas y ninguna miente.
 
 ---
 
@@ -2731,6 +2977,153 @@ pedirle al cliente un dato que no le corresponde para luego decirle que se equiv
 
 ---
 
+### D-88 · La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara
+
+**Qué hay que decidir.** §5.6 dice que el módulo de ingesta **no expone superficie HTTP propia**, y sigue
+siendo verdad de lo que importa: no hay descubrimiento, no hay proxy a la federación, y las entidades que la
+ingesta escribe se leen por sus recursos de siempre. Pero [D-85] dejó una tabla que **no la lee nadie** y F6
+un job que **solo se puede lanzar entrando en la máquina**. Las dos cosas hay que resolverlas juntas, porque
+la respuesta de una es la forma de mirar la otra.
+
+**Decisión.** Un recurso, `/v1/ingestion-runs`, con dos operaciones y ninguna más:
+
+| Operación | Qué hace |
+|---|---|
+| `GET ?competitionId=…&limit=…` | La cola reciente de pasadas de esa competición, de la más nueva a la más vieja |
+| `POST` | Pide que la ingesta pase. **No crea la fila** |
+
+**El `POST` no rompe la frontera de propiedad de §5.1**, aunque lo parezca. La regla —*"el BFF corrige lo que
+la ingesta trae; no crea ni borra filas emparejadas"*— habla de **escribir el dato**. Aquí el cuerpo de la
+petición no lleva ni un solo campo de la pasada: lleva **qué sincronizar**, que es exactamente lo mismo que ya
+lleva `Competition` como *entrada* de la ingesta ([D-16]). Quien escribe la fila sigue siendo el job, con la
+política de §3.7 intacta.
+
+**El cuerpo lleva una *lista* de competiciones, no un id suelto, y lo decidió la pantalla.** El backoffice
+enseña **los equipos del club con una casilla al lado** y un botón de resincronizar: marcar tres es **una**
+acción del usuario. Partirla en tres peticiones le traslada al navegador el manejo de tres respuestas, tres
+errores parciales y tres estados de carga — para un trabajo que el servidor ya sabía hacer de una vez.
+
+> **Y trae un hallazgo que no es del modelo sino del contrato, y conviene no confundirlos.** La pantalla
+> trabaja con la terna **(equipo, temporada, competición)** —lo que en el backoffice se llama *"un equipo"*—,
+> y el id que viaja en esta petición es el de la `Competition`. El **modelo** está bien: `Team` no lleva
+> temporada ([D-28]) ni competición porque la participación se **deriva** de los partidos ([D-27]), y eso es
+> lo que permite que "Infantil A" sea la misma entidad año tras año.
+>
+> Lo que falta es la **lectura**: `GET /teams?seasonId=` da los equipos sin su competición,
+> `GET /competitions?seasonId=` da las competiciones sin sus equipos, y el `competitionId` de cada equipo solo
+> aparece en sus partidos. Pintar esa lista hoy cuesta **N+1 peticiones**. **No se resuelve aquí** —este
+> endpoint recibe ids, no los descubre— pero queda anotado como cuestión abierta del contrato (§9.12), a
+> decidir cuando el backoffice tenga forma: es una **vista derivada** (§3.4), no una columna nueva.
+>
+> **Y el "N+1" ahí es de peticiones HTTP, no de coste de base de datos**: §9.12 lo mide —doce consultas
+> sueltas salen *más baratas* que el *join* único, y el `home = X OR away = X` usa los dos índices—. Quien
+> resuelva aquello no puede justificarse con el rendimiento.
+
+**Dos respuestas, y la diferencia es el coste** —el mismo argumento de [D-67], aplicado un nivel más abajo—:
+
+- **Exactamente una en `competitionIds` → 200**, con la pasada ya hecha. Es **una** petición a la federación y
+  el calendario de un grupo: cabe en una respuesta HTTP, y devolverla resuelta es lo que hace útil el botón de
+  la ficha.
+- **Dos o más, una temporada, o nada → 202**, con la lista de competiciones aceptadas. Cada una son ~240
+  partidos; meter varias en una petición síncrona es lo que [D-67] existe para evitar. El resultado se consulta
+  con el `GET`, **que es para lo que [D-85] creó la tabla**.
+
+**El código lo decide la petición, no los datos.** Con `{}` sobre un club que solo tenga una competición la
+respuesta sigue siendo **202**: que un cliente reciba 200 o 202 según cuántos equipos tenga el club sería una
+forma de respuesta imposible de programar.
+
+**Una lista vacía es 400, no "todas".** No significa *"sincronízalo todo"* — significa que el cliente no ha
+decidido, y adivinar por él aquí es lanzar el recorrido entero de un club por una casilla sin marcar. Para la
+temporada vigente entera, el campo se omite.
+
+**Y un id desconocido en la lista falla antes de empezar, no a mitad.** El plan se resuelve entero en el
+ámbito 1 de [D-83], así que quien marcó tres casillas se entera de que una estaba mal — en vez de recibir dos
+pasadas y un silencio.
+
+**El `202` planifica antes de responder, y eso no es un detalle de implementación.** Calcular qué entra es lo
+que permite decir *qué* se ha aceptado, sí — pero sobre todo es lo que hace que una `seasonId` inexistente dé
+**404 antes del 202**, en vez de un `202` seguido de un fallo en segundo plano que nadie ve. Es la lección de
+[D-84] aplicada a nuestro propio código: **sincronizar otra cosa —o nada— no es un fallo visible**.
+
+**Lo que el recurso no tiene, y por qué.** Ni `PATCH`, ni `DELETE`, ni `GET` por id. Una pasada ocurrió o no
+ocurrió: no hay nada deducido que corregir, que es [D-21] en su forma más pura. Y no se navega a una pasada
+—se mira la cola reciente de su competición—, así que un `GET /ingestion-runs/{id}` sería una ruta sin
+pregunta detrás.
+
+**Un hallazgo del contrato que conviene no repetir.** El `requestBody` se declaró `required: false`,
+describiendo que el cuerpo se podía omitir. **Era falso**: el servidor generado lo parsea igual y un `POST`
+sin nada devuelve 400. Se corrigió el *spec* —`required: true`, con **todos** los campos opcionales y `{}`
+para *"la temporada vigente"*— en vez de corregir la realidad. Es [D-65] otra vez y por tercera fase: **el
+generador emite tipos, no comportamiento**, y lo que el YAML promete hay que ir a comprobarlo con un test.
+
+**Y una consecuencia que salió del mismo test.** Un parámetro obligatorio que falta lo rechaza el código
+generado **antes** de llegar al *handler*, así que `GET /ingestion-runs` sin `competitionId` daba **500**
+aunque el *spec* declare 400. `ProblemMiddleware` traduce ahora el `ServerError` del transporte, reutilizando
+la tabla que el propio runtime ya tiene (`RuntimeError: HTTPResponseConvertible`). Lo que **no** se usa es su
+`ErrorHandlingMiddleware`: devuelve el código **sin cuerpo**, y §5.4 exige `application/problem+json` en
+*todo* error del contrato.
+
+---
+
+### D-89 · El estado de la sincronización viaja con la competición, no se pide al registro
+
+**Qué hay que decidir.** La pantalla principal del backoffice es una tabla de *(equipo, competición)* —§9.12—
+y sus dos columnas siguientes son **estado y fecha de la ingesta**. La fecha ya está servida
+(`CompetitionResponse.lastSyncedAt`, desde F1). El estado no, y hay tres sitios donde podría salir.
+
+**Lo primero, que no es evidente: el estado NO se deriva de la fecha.** `last_synced_at` es *"última
+sincronización **con éxito**"* (§3.2), y una pasada que falla hace `rollback` sin tocarlo ([D-83]). Así que:
+
+| | `lastSyncedAt` | Última pasada | Lo que la pantalla debe decir |
+|---|---|---|---|
+| A | ayer | `succeeded` | al día |
+| B | ayer | **`failed`** | **algo va mal** |
+
+Las dos filas son **idénticas** mirando solo la fecha. Y B es exactamente el caso que [D-85] y [D-86] existen
+para hacer visible: el recorrido continúa, apunta el fallo, y **no hay nadie delante**.
+
+**Las dos opciones descartadas.**
+
+| Opción | Por qué no |
+|---|---|
+| La web llama a `GET /ingestion-runs` **por competición** | Es el N+1 de §9.12 otra vez y **peor**: aquél se paga al montar la pantalla, éste **en cada recarga** |
+| Relajar `/ingestion-runs` para que `competitionId` sea opcional | Ese endpoint es el **detalle forense**, y su ámbito obligatorio es lo que le permite ir sin paginación y con orden fijo ([D-88]). *"La última de cada competición"* es otra consulta (`DISTINCT ON`), otra semántica y otro orden: sería **un segundo endpoint disfrazado del primero** |
+
+**Decisión.** `CompetitionResponse` gana **dos campos derivados**, y `/ingestion-runs` **no se toca**:
+
+- **`lastIngestionAt`** — cuándo terminó la última pasada, **con éxito o sin él**. Con `lastSyncedAt` forma
+  el par que la pantalla necesita: *"lo último que tenemos"* y *"la última vez que se intentó"*. Iguales ⇒ la
+  última fue bien.
+- **`ingestionHealth`** — `ok` · `failing` · `stale` · `never`, evaluados **en ese orden** porque se solapan.
+
+**El precedente exacto es `ClubResponse`**: lleva `federationProvidesRoundStandings` y
+`federationProvidesScorers` **derivadas del catálogo en código** ([D-17]) en vez de obligar al cliente a
+llamar a un endpoint de capacidades. Aquí es lo mismo un piso más abajo — y §3.4 ya reserva el sitio: **vistas
+derivadas, agregaciones, no tablas base**.
+
+**Por qué el `stale` lo calcula el servidor, que es la mitad que importa.** Depende del **tope semanal de
+§5.6**, que no es una constante de presentación: es la regla que [D-55] hace irrecuperable —la clasificación
+de la FCF no se puede pedir hacia atrás—. Calculado en el cliente, lo reimplementarían por separado la web,
+iOS y Android, y se desincronizarían el día que el tope cambie. **Una regla de negocio no se reparte entre
+clientes.**
+
+**Consecuencia buena: la portada es UNA petición.** Con §9.12(a) —`GET /teams?seasonId=` devolviendo cada
+equipo con sus competiciones— y estos dos campos dentro de cada competición, las cuatro columnas de la tabla
+salen de un viaje. Por dentro cuesta **una consulta más** —`DISTINCT ON (competition_id) … ORDER BY
+finished_at DESC`—, no N.
+
+**Lo que hay que vigilar, y es la trampa de siempre.** Esto es un **derivado de lectura**, no una columna. En
+cuanto alguien lo materialice en `competitions` para ahorrarse el `DISTINCT ON`, habrá **un segundo escritor**
+que mantener sincronizado con `ingestion_runs` en cada pasada — exactamente la deriva que [D-18] evita y por
+la que [D-27] eliminó `Participation`. Si algún día el volumen lo pidiera, se mide primero: §9.12 dejó
+demostrado que en este modelo la intuición de coste falla por dos órdenes de magnitud.
+
+**Lo que no trae.** Ningún cambio en `ingestion_runs` ni en el modelo. Y ningún código: `/competitions` y
+`/teams` no están generados todavía ([D-69]), así que esto es diseño — que es justo por lo que sale gratis
+hacerlo ahora.
+
+---
+
 ## Autorización
 
 ### D-59 · La autorización vive en el tenant, y el rol no viaja en el JWT
@@ -2995,7 +3388,7 @@ desmonta con una petición más, y además impediría a la UI decir nada útil.
 sencillamente **no existe** para la consulta, porque el `search_path` de §6.2 no lo alcanza. Ahí el 404 es
 literal, no una política — y por eso no filtra nada.
 
-**Qué se asume a cambio.** Si algún día las lecturas dejasen de ser abiertas —§9.10, cuentas de jugadores o
+**Qué se asume a cambio.** Si algún día las lecturas dejasen de ser abiertas —§9.11, cuentas de jugadores o
 tutores—, esta decisión hay que revisarla **entera**: con lectura restringida, el 403 sí filtraría existencia
 y volvería a tener sentido el 404.
 
@@ -3310,3 +3703,7 @@ paquete sin problema.
 [D-83]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

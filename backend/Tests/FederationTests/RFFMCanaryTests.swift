@@ -9,8 +9,12 @@ import Testing
 /// `FEDERATION_LIVE=1`.
 ///
 /// ```sh
-/// FEDERATION_LIVE=1 swift test --filter FederationCanary
+/// FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests
 /// ```
+///
+/// El filtro es el **nombre del tipo**. `--filter FederationCanary` —el rótulo de
+/// este `@Suite`— no casa con nada y devuelve `0 tests … passed`, que se lee como
+/// verde: `--filter` es una expresión regular sobre identificadores de Swift.
 ///
 /// # Qué pregunta, y por qué no es lo mismo que el volcado
 ///
@@ -47,7 +51,9 @@ import Testing
 /// 3. **`malformedResponse`** → **esto es el aviso**: han cambiado ellos.
 ///
 /// Y una cuarta que el diseño no había previsto (`D-84`): la respuesta llega,
-/// parsea perfectamente, y **es de otra competición**. La RFFM reutiliza los
+/// parsea perfectamente, y **es de otra competición**. La RFFM ignora el
+/// parámetro `temporada`, así que basta un dígito mal en `competicion` o `grupo`
+/// —los códigos son densos— para caer en otra competición real. Los
 /// códigos de competición y grupo entre temporadas, así que una coordenada
 /// caducada **no da 404** — se descubrió capturando los dos volcados de esta
 /// fase. Por eso el canario compara también el nombre.
@@ -62,25 +68,48 @@ struct RFFMCanaryTests {
     /// `competicion`/`grupo` con ella ([Anexo RFFM §F.1]), así que cablearla
     /// garantiza falsos positivos en cuanto pase la temporada. El valor por
     /// defecto es el del volcado de temporada jugada, para que el canario y el
-    /// *fixture* hablen de lo mismo.
+    /// *fixture* hablen de lo mismo. **Solo `FEDERATION_LIVE=1` es obligatoria**;
+    /// las cuatro de abajo tienen valor por defecto.
     ///
     /// ```sh
     /// FEDERATION_LIVE=1 \
     ///   FEDERATION_LIVE_SEASON=22 \
     ///   FEDERATION_LIVE_COMPETITION=… FEDERATION_LIVE_GROUP=… \
+    ///   FEDERATION_LIVE_MODALITY=futbol_7 \
     ///   FEDERATION_LIVE_NAME="PREFERENTE AFICIONADO" \
-    ///   swift test --filter FederationCanary
+    ///   swift test --filter RFFMCanaryTests
     /// ```
+    ///
+    /// - Important: el filtro es **`RFFMCanaryTests`, el nombre del tipo**.
+    ///   `--filter FederationCanary` —el rótulo del *suite*— no casa con nada y
+    ///   devuelve `0 tests … passed`, **que se lee como verde**.
     static func env(_ key: String, _ fallback: String) -> String {
         ProcessInfo.processInfo.environment[key] ?? fallback
     }
 
-    static var coordinate: FederationCoordinate {
-        FederationCoordinate(
+    static func coordinate() throws -> FederationCoordinate {
+        // La modalidad **también es coordenada**: viaja como `tipojuego` en la
+        // URL ([Anexo RFFM §F.1]) y de ella depende qué calendario devuelve la
+        // fuente.
+        //
+        // Estuvo cableada a `.futbol11` hasta que alguien preguntó por qué no
+        // estaba entre las variables, y el hueco no era cosmético: `RFFMGameType`
+        // documenta que **`3` es fútbol sala y `4` es fútbol-5**, no por orden, y
+        // con la modalidad fija esa traducción no la ejercitaba nadie contra la
+        // fuente viva. Un club de base juega alevín y benjamín en fútbol-7.
+        let raw = env("FEDERATION_LIVE_MODALITY", Modality.futbol11.rawValue)
+        let modality = try #require(
+            Modality(rawValue: raw),
+            """
+            FEDERATION_LIVE_MODALITY='\(raw)' no está en el catálogo de §3.3. \
+            Valores: \(Modality.allCases.map(\.rawValue).joined(separator: ", ")).
+            """)
+
+        return FederationCoordinate(
             federationSeasonID: env("FEDERATION_LIVE_SEASON", "21"),
             federationCompetitionID: env("FEDERATION_LIVE_COMPETITION", "24037548"),
             federationGroupID: env("FEDERATION_LIVE_GROUP", "24037549"),
-            modality: .futbol11)
+            modality: modality)
     }
 
     /// Qué competición se espera encontrar ahí (`D-84`).
@@ -94,7 +123,7 @@ struct RFFMCanaryTests {
 
         let calendar: FederationCalendar
         do {
-            calendar = try await client.fetchCalendar(Self.coordinate)
+            calendar = try await client.fetchCalendar(try Self.coordinate())
         } catch let error as FederationError {
             switch error {
             case .transportFailure(_, let reason):
@@ -156,8 +185,7 @@ struct RFFMCanaryTests {
         // caducada **no da 404**.
         #expect(calendar.competitionName == Self.expectedName, """
             La coordenada devuelve '\(calendar.competitionName ?? "sin nombre")' y se \
-            esperaba '\(Self.expectedName)'. La RFFM reutiliza los códigos entre \
-            temporadas (D-84): esto no es un cambio de formato, es que la \
+            esperaba '\(Self.expectedName)'. La RFFM ignora el parámetro `temporada` (D-84): esto no es un cambio de formato, es que la \
             coordenada apunta a otra cosa.
             """)
     }

@@ -3,87 +3,53 @@
 > Cómo levantar esto, hablar con ello a mano y ver lo que pasa por dentro.
 > El **diseño** está en [`docs/`](../docs/); esto es el **manual de a bordo**.
 >
-> Convención: `§x` remite al [LLD-001](../docs/API_y_BBDD%20LLD-001.md) y `D-nn` a la
-> [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md).
+> Convención: **`§x` remite siempre al [LLD-001](../docs/API_y_BBDD%20LLD-001.md)** y `D-nn` a la
+> [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md). Las remisiones a **este
+> fichero** van como enlace, porque los números chocan: §5.2 es *«DTOs»* en el LLD y
+> [otra cosa](#52-si-postgres-no-está-levantado) aquí.
 
 ---
 
-## 0. Qué hay montado ahora mismo
+## Índice
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**, **F1**, **F2**,
-**F3** y **F4**. **138 tests.**
-
-| Operación HTTP | Estado |
+| | |
 |---|---|
-| `GET /v1/club` | ✅ |
-| `PATCH /v1/club` | ✅ |
-| Todo lo demás del *spec* (~98 operaciones) | ⛔ No generado — ver §7 |
+| [0 · Qué hay montado](#0-qué-hay-montado) | qué responde hoy y qué no |
+| [1 · Arranque en 60 segundos](#1-arranque-en-60-segundos) | de cero a `curl` |
+| [2 · Los dos modos de ejecución](#2-los-dos-modos-de-ejecución) | nativo o todo en Docker, y la configuración |
+| [3 · Mirar la base de datos](#3-mirar-la-base-de-datos) | TablePlus y `psql` |
+| [4 · Hablar con la API a mano](#4-hablar-con-la-api-a-mano) | leer, escribir, los errores, la ingesta |
+| [5 · Los tests](#5-los-tests) | filtros, tus datos, el canario |
+| [6 · Los comandos](#6-los-comandos) | provisión, siembra e ingesta |
+| [7 · El *spec* y el código generado](#7-el-spec-y-el-código-generado) | cómo se añade un endpoint |
+| [8 · Arquitectura, en una pantalla](#8-arquitectura-en-una-pantalla) | el grafo de capas |
+| [9 · Cuando algo falla](#9-cuando-algo-falla) | los tropiezos conocidos |
 
-**Esa tabla no ha cambiado desde F0, y es lo esperado, no un descuido.** Ni F1, ni F2, ni F3, ni F4, ni F5
-tienen superficie HTTP —el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b)—,
-así que **la lista de operaciones no sirve para saber qué hay montado**: solo para saber qué se puede tocar
-con `curl`. Lo que hay:
+---
 
-| Fase   | Qué añadió                                                                                                                                                                        | Cómo se **prueba**                                                                                                                                                                                                                                                              | Cómo se **mira**                                                                     |
-| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **F0** | El esqueleto que camina: las capas, el *spec* generado, la tenancy y las dos operaciones de arriba                                                                                | `swift test --filter 'Club\|Tenancy\|Tenant'` → **36 tests** · necesita Docker                                                                                                                                                                                                  | `curl` (§4)                                                                          |
-| **F1** | `Season` y `Competition` — dominio, puertos, tablas y migraciones. **Sin HTTP**: se siembran por repositorio                                                                      | `swift test --filter 'Season\|Competition'` → **41 tests** · necesita Docker                                                                                                                                                                                                    | TablePlus sobre `tfm_test`, tras `KEEP_TEST_DATA=1 swift test` (§3, §5.2)            |
-| **F2** | El puerto `FederationClient` y el adaptador **RFFM del calendario**, contra volcados reales                                                                                       | `swift test --filter FederationTests` → **36 tests** · **sin Docker y sin red**                                                                                                                                                                                                 | los volcados de `Tests/FederationTests/Fixtures/` y sus tests (§5.4)                 |
-| **F3** | La **política de *upsert*** (§3.7): `UpsertPolicy`, `Kickoff` y `MatchResult`. Funciones puras, **sin llamante todavía**                                                          | `swift test --filter 'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` → **13 tests** · **sin Docker y sin red**                                                                                                                                          | sus tests, y solo sus tests (§5.4)                                                   |
-| **F4** | La **cadena de emparejamiento** (§3.7): `MatchingChain`, `MatchOutcome` y `NormalizedName`. También puras, y **también sin llamante**                                             | `swift test --filter 'MatchingChainTests\|NormalizedNameTests'` → **23 tests** · **sin Docker y sin red**                                                                                                                                                                       | sus tests, y solo sus tests (§5.4)                                                   |
-| **F5** | La **ingesta del calendario de punta a punta**: las cuatro entidades de salida, el caso de uso, el transporte HTTP y el **canario**. Y `IngestionRun`, el registro de cada pasada | `swift test --filter 'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` → **33 tests** sin Docker · `--filter IngestCalendarTests` → **19** sin Docker · `--filter 'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` → **18** **con** Docker | TablePlus sobre las cinco tablas nuevas, y el volcado real que entra en ellas (§5.5) |
+## 0. Qué hay montado
 
-> **Las cifras son reales: cada filtro se ha ejecutado.** Y las comillas simples **no son decorativas** — sin
-> ellas, `zsh` se come el `|` como una tubería.
->
-> `--filter` es una **expresión regular sobre los identificadores de Swift** —el nombre del tipo de la
-> *suite* y el de la función del `@Test`—, no un nombre de *target*, y eso tiene tres consecuencias que
-> sorprenden. Una: **arrastra tests de *suites* que no esperabas, y la cuenta se mueve sola al añadir una
-> fase**. El filtro de F0 se lleva un par de `SeasonPersistenceTests` porque llevan la palabra "tenant" en el
-> nombre, y desde F4 se lleva además los siete `opponentClub…` de la cadena de emparejamiento: pasó de **29 a
-> 36 sin que F0 tocase una línea**. Otra: hay que escribir **las dos** raíces, `Tenancy` y `Tenant`, porque
-> son *suites* distintas; con solo una se pierden tests. Por lo mismo, `Season` coge también `SeasonLabel`, y
-> `Federation` a secas se llevaría de propina el catálogo de federaciones y los `…ByFederationKey` de F4
-> (**43** en vez de 36).
->
-> Y la tercera, que es la que más despista porque es lo contrario de lo que parece: **el rótulo del `@Test`
-> no se filtra**. Los rótulos de este proyecto están en español y son la parte legible, así que es el primer
-> sitio donde uno busca — y no hay nada. Comprobado: `--filter reconoce` devuelve **0** aunque "se reconoce"
-> esté en **seis** rótulos de F4, y `--filter volátil` devuelve **0** mientras `--filter volatile` devuelve
-> **2**, que son las funciones. **Para buscar por el rótulo, `grep` sobre `Tests/`; `--filter` es para
-> identificadores.**
->
-> **El filtro de F3 va por nombre de *suite* por esa misma razón**, y conviene saber qué pasa si se acorta:
-> el `'Upsert|Kickoff|MatchResult'` que pide el cuerpo devuelve **17 en vez de 13**, precisamente porque lo
-> que se filtra son los **nombres de función**. Se lleva dos del parser de F2, cuyas funciones se llaman
-> `kickoff…`; uno de F4, `neitherDateNorKickoffCanEnterTheChain`; y —lo importante— **uno de Postgres**:
-> `save da de alta y luego actualiza la misma fila`, que por dentro se llama *upsert* y **necesita Docker**.
-> Con el filtro de la tabla, F3 corre sin contenedor.
->
-> **Son filtros para trabajar, no una partición del proyecto.** Para saber si algo está roto, `swift test` a
-> secas.
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **266 tests.**
+Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
+**tocar**.
 
-**Cuatro de las cinco fases no se prueban con `curl`, y no hay endpoint que tocar.** Es deliberado: el plan
-construye la ingesta antes que su superficie de alta, que es **F10**. Para F1 lo que se mira es la **base de
-datos**; para F2, F3 y F4, los **tests** — que es lo que el plan pide expresamente (§9: *"los tests son la
-especificación revisable, no el código"*).
+| Operación HTTP | |
+|---|---|
+| `GET /v1/club` · `PATCH /v1/club` | F0 |
+| `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
+| Todo lo demás del *spec* (~96 operaciones) | ⛔ no generado — §7 |
 
-> **Ni F2, ni F3, ni F4 dejan rastro en la base de datos, y no es un fallo.** F2 es *"contra fixtures, **sin
-> persistir nada**"* y F3 y F4 son *"unit puro, **cero I/O**"*: funciones y *Value Objects* que ni siquiera
-> saben que existe Postgres. Si buscas sus efectos en TablePlus no vas a encontrar ninguno.
->
-> **Y ninguna de las dos tiene llamante todavía**, que es lo que más despista al mirarlas. Son **las dos
-> mitades de §3.7** y hacen falta juntas: F4 decide **qué fila** de la base de datos es la que la fuente está
-> publicando, y F3 decide **qué se le escribe** una vez decidido. Quien las llamará a las dos es la ingesta
-> del calendario, que es **F5**. Hoy lo que las mantiene en el grafo de *build* son sus tests, igual que le
-> pasa a `Federation`.
->
-> Corolario práctico al mirar F4: **sus candidatos no son las entidades del modelo.** `TeamCandidate` y
-> `MatchCandidate` llevan **solo las claves de emparejamiento**, así que no busques ahí la fecha del partido
-> ni el marcador — no están, y esa ausencia *es* la regla de §3.7 (*"ni la fecha ni la hora entran nunca en
-> la cadena"*) hecha tipo.
+**Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
+y era el plan: el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b). Lo que
+hay debajo se mira por **la base de datos** (§3), por **los comandos** (§6) o por **los tests** (§5) — que es
+lo que el plan pide: *"los tests son la especificación revisable, no el código"* (Plan §9).
 
-**La BD vive siempre en Docker.** Lo que cambia entre los dos modos de abajo es dónde corre **la API**.
+```sh
+swift run Run --help              # todos los comandos
+swift test                        # 266 tests, ~5 s con Docker levantado
+```
+
+**La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
 
 ---
 
@@ -153,9 +119,9 @@ Todo por variables, para que CI apunte a lo suyo sin tocar código:
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm`       |                                                                                        |
 | `DOMAIN_SUFFIX`                       | `localhost` | El sufijo que se recorta del `Host` (§6.1)                                             |
 | `LOG_LEVEL`                           | `info`      | `debug` para ver cada petición y cada SQL. Vale también en `swift test`                |
-| `HTTP_TRACE`                          | apagado     | `1` vuelca los cuerpos HTTP (§2.4). Solo en `.development`/`.testing`                  |
-| `REQUIRE_DB`                          | apagado     | `1` hace que los tests de BD **fallen** en vez de omitirse (§5.2). `CI` la activa sola |
-| `KEEP_TEST_DATA` | apagado | `1` conserva los *schemas* de test para inspeccionarlos (§5.2). **Solo la mira `swift test`**: en un `swift run Run …` no hace nada |
+| `HTTP_TRACE`                          | apagado     | `1` vuelca los cuerpos HTTP ([§2.4](#24-ver-lo-que-cruza-la-frontera)). Solo en `.development`/`.testing`                  |
+| `REQUIRE_DB`                          | apagado     | `1` hace que los tests de BD **fallen** en vez de omitirse ([§5.2](#52-si-postgres-no-está-levantado)). `CI` la activa sola |
+| `KEEP_TEST_DATA` | apagado | `1` conserva los *schemas* de test para inspeccionarlos ([§5.1](#51-tus-datos-no-se-tocan)). **Solo la mira `swift test`**: en un `swift run Run …` no hace nada |
 
 ```sh
 LOG_LEVEL=debug swift run Run serve      # verás el SQL que emite Fluent
@@ -204,7 +170,7 @@ el *handler* — importante porque sus valores por defecto los aplica él a mano
 > datos personales, no un log verboso. Misma lista **blanca** que `X-Club`: un entorno nuevo nace con la
 > traza apagada.
 
-El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.3).
+El equivalente en los tests es `HTTP_TRACE=1 swift test` ([§5.3](#53-ver-los-cuerpos-que-cruzan-la-frontera)).
 
 ---
 
@@ -221,7 +187,7 @@ El equivalente en los tests es `HTTP_TRACE=1 swift test` (§5.3).
 | SSL | desactivado |
 
 **Hay una segunda base, `tfm_test`**, con las mismas credenciales y el mismo puerto: solo cambia el nombre.
-Ahí es donde corren los tests (§5.1), y por eso `swift test` no puede tocar nada de `tfm`. Merece su propia
+Ahí es donde corren los tests ([§5.1](#51-tus-datos-no-se-tocan)), y por eso `swift test` no puede tocar nada de `tfm`. Merece su propia
 conexión en TablePlus si quieres ver qué dejan los tests — pero **no hace falta para trabajar**: se crea sola
 y se puede borrar entera sin consecuencias.
 
@@ -292,14 +258,19 @@ curl -s http://atleti.localhost:8080/v1/club | jq
 ```sh
 swift run Run provision-tenant celtic -f fcf --name "Celtic de Ejemplo" --short-name Celtic
 
-curl -s http://celtic.localhost:8080/v1/club | jq '{slug, federation, federationProvidesScorers}'
+curl -s http://celtic.localhost:8080/v1/club | jq '{slug, federation, federationProvidesRoundStandings}'
 ```
 
 ```json
-{ "slug": "celtic", "federation": "fcf", "federationProvidesScorers": false }
+{ "slug": "celtic", "federation": "fcf", "federationProvidesRoundStandings": false }
 ```
 
-Las dos banderas cambiaron **sin que nadie las escribiera en la base de datos**: se derivan del catálogo de
+> **Ojo con el ejemplo que había aquí antes**, que usaba `federationProvidesScorers` y decía `false`. Es
+> falso desde el 2026-08-28: la FCF **sí** publica goleadores en su web nueva (`D-74`, Anexo FCF §C.10.7), y
+> el catálogo se corrigió entonces. La bandera que sigue distinguiendo a las dos federaciones es la de la
+> **clasificación por jornada** (`D-55`). Corregido en F6 al releer este manual.
+
+La bandera cambió **sin que nadie la escribiera en la base de datos**: se derivan del catálogo de
 federaciones, que es **código y no tabla** (§3.6, `D-17`). Mira `Sources/Domain/FederationCode.swift` — es
 el único sitio del proyecto donde aparecen las cadenas `"rffm"` y `"fcf"`.
 
@@ -364,6 +335,46 @@ que controla el cliente entero, así que aceptarla allí sería dejar abierto un
 
 ---
 
+### 4.5 La ingesta, desde `curl`
+
+Los dos endpoints que trae F6 (`D-88`). Necesitas una `Season` y una `Competition` dadas de alta — hoy se
+siembran por repositorio o por *script*, porque su `POST` no está generado todavía (§7).
+
+```sh
+# Lanzar la pasada de UNA competición: síncrona, 200, con el resultado dentro
+curl -s -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' \
+  -d '{"competitionId":"<uuid>"}' | jq
+
+# La temporada vigente entera: 202, y dice qué ha aceptado
+curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Leer el registro
+curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&limit=5" | jq
+```
+
+**Tres cosas que se aprenden más rápido probándolas que leyéndolas:**
+
+- **El cuerpo `{}` no es opcional.** Un `POST` sin cuerpo devuelve **400**: el servidor generado lo parsea
+  igual, así que el *spec* declara `required: true` con todos los campos opcionales. Es `D-65` otra vez — lo
+  que el YAML promete hay que ir a comprobarlo.
+- **200 o 202 según el coste** (`D-67` un nivel más abajo): **exactamente una** competición cabe en la
+  respuesta; dos o más, o una temporada, no. **Lo decide la petición, no los datos**: con `{}` sobre un club
+  de una sola competición sigue siendo 202, porque una respuesta que cambia de forma según cuántos equipos
+  tenga el club no se puede programar.
+- **`competitionIds` es una lista porque la pantalla lo es**: equipos con una casilla al lado. Vacía →
+  **400**; para la temporada entera, se omite. Lo que el backoffice llama *"un equipo"* es en realidad la
+  terna *(equipo, temporada, competición)*, y el id que viaja es el de la **competición** — pero **ninguna
+  lectura sirve esa terna entera** todavía: hoy costaría N+1 peticiones. Está abierto en §9.12 del LLD, y no
+  bloquea este endpoint, que recibe ids en vez de descubrirlos.
+- **Una pasada que falla también se lee.** Prueba con una coordenada mala: el `POST` devuelve **502** y el
+  `GET` te enseña la fila con `outcome: "failed"` y su motivo. Es la razón de ser entera de `D-85` — la
+  pasada que falla es la que nadie ve.
+- **Y el motivo dice algo.** Si el fallo viene de Postgres, la fila lleva el `sqlState` y la restricción que
+  reventó, no la descripción genérica que `PSQLError` da por defecto. Costó una sesión de pruebas manuales
+  descubrir que ahí no había nada legible (`D-85`).
+
 ## 5. Los tests
 
 ```sh
@@ -376,20 +387,32 @@ REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omit
 KEEP_TEST_DATA=1 swift test                 # conserva los schemas para inspeccionarlos
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --filter FederationTests         # nivel 1 — federación: sin red y sin Docker
-swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResultTests'
-                                            # nivel 1 — F3: la política de upsert (§0)
-swift test --filter 'MatchingChainTests|NormalizedNameTests'
-                                            # nivel 1 — F4: la cadena de emparejamiento (§0)
-swift test --filter 'RoundTests|OpponentClubTests|TeamTests|MatchTests|IngestionRunTests'
-                                            # nivel 1 — F5: las entidades de la ingesta
-swift test --filter IngestCalendarTests      # nivel 2 — F5: la pasada, con puertos falseados
-swift test --filter 'IngestionPersistenceTests|CalendarIngestionEndToEndTests'
-                                            # nivel 3 — F5: las tablas y la pasada real
 FEDERATION_LIVE=1 swift test --filter RFFMCanaryTests
                                             # EL CANARIO — fuera de la batería, con red (§5.5)
 swift test --no-parallel                    # en serie, útil al depurar
 swift test --disable-xctest                 # sin el ruido de XCTest (ver abajo)
 ```
+
+**Para revisar una fase, sus tests** (Plan §9: *"los tests son la especificación revisable"*). Las comillas
+simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería.
+
+| Fase | Filtro | Docker |
+|---|---|---|
+| F3 · política de *upsert* | `'UpsertPolicyTests\|KickoffTests\|KickoffMergeTests\|MatchResultTests'` | no |
+| F4 · cadena de emparejamiento | `'MatchingChainTests\|NormalizedNameTests'` | no |
+| F5 · entidades de la ingesta | `'RoundTests\|OpponentClubTests\|TeamTests\|MatchTests\|IngestionRunTests'` | no |
+| F5 · la pasada, con dobles | `IngestCalendarTests` | no |
+| F5 · las tablas y la pasada real | `'IngestionPersistenceTests\|CalendarIngestionEndToEndTests'` | **sí** |
+| F6 · el recorrido y sus argumentos | `'IngestClubCalendars\|IngestArguments'` | no |
+| F6 · el recorrido por tenant | `TenantTraversal` | **sí** |
+| F6 · los dos endpoints | `IngestionEndpoint` | **sí** |
+
+> **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
+> del `@Test`—, y de ahí salen tres sorpresas. **Arrastra tests de suites que no esperas**, así que las
+> cuentas se mueven solas al añadir una fase. **`Season` coge también `SeasonLabel`**, y `Federation` a secas
+> se lleva el catálogo entero. Y la que más despista: **el rótulo del `@Test` no se filtra** — `--filter
+> reconoce` devuelve **0** aunque "se reconoce" esté en seis rótulos. Para buscar por rótulo, `grep` sobre
+> `Tests/`. Son filtros para trabajar: **para saber si algo está roto, `swift test` a secas.**
 
 **Para estudiar, usa `--no-parallel --disable-xctest`.**
 
@@ -407,7 +430,7 @@ que hace falta para leerla:
   (`→ "cd--ejemplo" to "rechaza lo que el pattern del spec no admite"`), que es lo que quieres ver cuando
   falla uno de nueve.
 
-El paralelo no sobra —los 138 tests bajan de **3,7 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
+El paralelo no sobra —cuando se midió, los 138 tests bajaban de **3,7 s a 0,9 s**, y correrlos concurrentes **es** lo que destapó
 las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para leer, en serie.
 
 > **`Test Suite 'ClubBackendPackageTests.xctest' … Executed 0 tests` no significa que haya XCTest.** No hay
@@ -419,65 +442,42 @@ las dos carreras de §5.1, que un orden fijo habría escondido—. Pero para lee
 
 ### 5.1 Tus datos no se tocan
 
-**Los tests corren contra una base distinta, `tfm_test`.** La crean solos la primera vez; no hay que hacer
-nada. Tu trabajo manual vive en `tfm` y `swift test` no lo mira siquiera.
+**Los tests corren contra otra base, `tfm_test`**, que crean solos la primera vez. Tu trabajo manual vive en
+`tfm` y `swift test` **no la abre siquiera** — comprobado creando un `e2e_trampa` dentro de `tfm`: sigue ahí
+después de correr los tests.
 
-No siempre fue así, y el fallo merece contarse porque es del tipo que no avisa. Compartían base, y el plano
-de control (`public.tenants`) es **una sola tabla para todas**. Un test que use el *slug* `madrid`
-—perfectamente plausible como club real— borraba al terminar el registro del `madrid` que tuvieras dado de
-alta: los datos seguían en su *schema*, intactos, pero **el club dejaba de ser alcanzable**, porque la fila
-que lo enruta ya no estaba. Un `404` sobre datos que están ahí.
+> No siempre fue así, y el fallo merece recordarse porque no avisaba: compartían base, y `public.tenants` es
+> **una sola tabla**. Un test con el *slug* `madrid` borraba al terminar el registro del `madrid` que
+> tuvieras dado de alta — los datos seguían en su *schema*, pero **el club dejaba de ser alcanzable**. Un 404
+> sobre datos que están ahí.
 
-Aislar por prefijo de *slug* habría hecho la colisión improbable en vez de imposible, y una colisión
-improbable que corrompe datos es **peor** que una frecuente: aparece el día menos oportuno y nadie la
-relaciona con haber corrido los tests.
-
-```sh
-docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
-```
-
-**Y la dejan limpia.** Cada test borra su *schema* al terminar, y `swift test` **barre al arrancar** lo que
-hubiera quedado de una pasada anterior que no acabase bien:
+**Y la dejan limpia.** Cada test borra su *schema*, y `swift test` **barre al arrancar** lo que dejara una
+pasada anterior que no acabó bien — al entrar y no en un `defer`, para que la corrección no dependa del
+camino de error:
 
 | Cómo terminó la pasada | Qué queda |
 |---|---|
-| Todo verde | Limpio |
-| Un `#expect` falla | Limpio — `#expect` **no lanza**, así que la limpieza final se ejecuta igual |
-| Algo **lanza** | Queda su *schema*… hasta el siguiente `swift test`, que lo barre |
-
-**Y si quieres inspeccionar lo que dejó un test que falla**, `KEEP_TEST_DATA=1` conserva los *schemas*:
+| Todo verde, o un `#expect` que falla | Limpio (`#expect` **no lanza**: la limpieza final se ejecuta) |
+| Algo **lanza** | Su *schema*, hasta el siguiente `swift test` |
 
 ```sh
-KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests
+docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
+
+KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests      # conservarlos para mirarlos
 ```
 
-```
-⚠︎ KEEP_TEST_DATA=1 · los schemas de test NO se borrarán al terminar.
-  Míralos en la base `tfm_test`; la siguiente pasada los barre.
-```
-
-Luego los abres en TablePlus (base **`tfm_test`**) y consultas el estado exacto en que quedó la fila:
+Luego los abres en TablePlus sobre **`tfm_test`**:
 
 ```sql
 SELECT name, short_name, updated_at FROM e2e_patch1.clubs;
 ```
 
-Es la alternativa barata al *breakpoint*, y muchas veces mejor: parar el depurador dentro de un test de
-integración te deja mirando una transacción **que aún no ha confirmado**, así que lo que ves en la BD no es
-lo que verá el siguiente paso.
+Es la alternativa barata al *breakpoint*, y a menudo mejor: parar el depurador dentro de un test de
+integración te deja mirando **una transacción que aún no ha confirmado**. El barrido de arranque sigue
+corriendo con la bandera puesta, a propósito: cada pasada te deja **su** estado, no la acumulación.
 
-**El barrido de arranque sigue corriendo con la bandera puesta**, a propósito: cada pasada te deja **su**
-estado, no la acumulación de todas. Comprobado con dos pasadas seguidas — la segunda barre la primera.
-
-El barrido va al arrancar y no en un `defer` por test, por el mismo motivo que el `SET LOCAL` de §6.2: **la
-corrección no debe depender del camino de error** ni de que cada test nuevo se acuerde. Y garantiza algo más
-fuerte que limpiar al salir — pizarra limpia **al entrar**.
-
-Solo toca `tfm_test`, y no por el prefijo del *schema* sino porque **no abre `tfm` siquiera**. Comprobado
-creando un `e2e_trampa` dentro de `tfm`: sigue ahí después de correr los tests.
-
-**Los niveles 1 y 2 corren sin Docker**, y eso no es casualidad: es el dividendo de separar el Dominio de
-Fluent (`D-01`). Son los que vas a ejecutar cien veces al día.
+**Los niveles 1 y 2 corren sin Docker**, y es el dividendo de separar el Dominio de Fluent (`D-01`): son los
+que ejecutas cien veces al día.
 
 ### 5.2 Si Postgres no está levantado
 
@@ -522,112 +522,52 @@ la capa que esté.** Mandarlo a integración por estar "fuera" solo lo haría m�
 ### 5.3 Ver los cuerpos que cruzan la frontera
 
 ```sh
-HTTP_TRACE=1  swift test --filter APITests --no-parallel   # los cuerpos HTTP
-LOG_LEVEL=debug swift test --filter PersistenceTests       # el SQL que emite Fluent
+HTTP_TRACE=1 swift test --filter APITests --no-parallel     # los cuerpos HTTP
+LOG_LEVEL=debug swift test --filter PersistenceTests        # el SQL que emite Fluent
+LOG_LEVEL=debug HTTP_TRACE=1 swift test --no-parallel       # las dos cosas
 ```
 
-```
-┌─ → PATCH /v1/club
-│  X-Club: patch2
-│  content-type: application/json; charset=utf-8
-│
-│  {
-│  }
-├─ ← 400 Bad Request
-│  Content-Type: application/problem+json; charset=utf-8
-│
-│  {
-│    "code" : "EMPTY_PATCH",
-│    "detail" : "minProperties: 1",
-│    "status" : 400,
-│    "title" : "El cuerpo debe traer al menos un campo",
-│    "type" : "https://api.example.com/problems/empty-patch"
-│  }
-└─
-```
+Es **el mismo middleware** que usa el servidor, así que la salida es la de §2.4 —no la repito— y lo que ves
+en un test es exactamente lo que verías en `swift run Run serve`. Apagado por defecto para no ensuciar CI, y
+`--no-parallel` porque si no las trazas se entrelazan.
 
-Apagado por defecto, para no ensuciar CI. `--no-parallel` porque si no las trazas se entrelazan.
-
-Es **el mismo middleware** que usa el servidor (§2.4), no un trazador aparte: lo que ves en un test es
-exactamente lo que verías en `swift run Run serve`.
-
-**`LOG_LEVEL` también funciona en los tests**, y enseña el SQL que emite Fluent — que en los niveles 3 y 4 es
-justo lo que quieres ver:
+`LOG_LEVEL` enseña el SQL, que en los niveles 3 y 4 es justo lo que quieres ver:
 
 ```
 debug codes.vapor.application: sql=SET LOCAL search_path TO "test_scope-a"
 debug codes.vapor.application: sql=UPDATE "clubs" SET "name" = $1, …
 ```
 
-Las dos se combinan: `LOG_LEVEL=debug HTTP_TRACE=1 swift test --no-parallel` da el cuerpo HTTP **y** las
-consultas que provoca.
-
 ### 5.4 Cómo leer un test
 
-Cada `@Test` cita en su nombre la sección del LLD o la decisión que lo exige. Es deliberado: **revisar una
-fase es leer sus tests y comprobar que dicen lo que el diseño dice**, sin necesidad de leer el código.
-
-```swift
-@Test("un cuerpo vacío es 400: el spec lo declara pero no lo hace cumplir (D-65)")
-```
-
-Ese nombre afirma tres cosas comprobables contra la documentación: que la regla existe en el *spec*, que el
-generador **no** la aplica, y que por tanto alguien tiene que aplicarla a mano.
-
-**Dónde esto se vuelve imprescindible: F3.** Su política de *upsert* no tiene endpoint ni fila que mirar, así
-que **los tests son literalmente el entregable**. Y hay dos que se leen de dos en dos, porque dicen lo
-contrario con las mismas palabras:
-
-```swift
-@Test("sin marcador, la hora que desaparece devuelve el horario a provisional (D-30)")
-@Test("con marcador, la hora que desaparece se ignora: es pérdida de dato (D-56)")
-```
-
-Es la tabla de `D-56` hecha código: **el mismo campo vacío significa dos cosas** según el partido se haya
-jugado o no. Si al revisar solo se lee uno de los dos, la regla parece incoherente; leídos juntos, es lo que
-impide que una sincronización borre la hora a la que se jugó un partido.
+Cada `@Test` cita en su nombre la sección del LLD o la decisión que lo exige, y eso es deliberado: **revisar
+una fase es leer sus tests y comprobar que dicen lo que el diseño dice**, sin leer el código (Plan §9).
 
 ```sh
 swift test --filter 'UpsertPolicyTests|KickoffTests|KickoffMergeTests|MatchResultTests' \
            --no-parallel --disable-xctest
 ```
 
-Trece renglones, en orden de fichero, y cada uno con su `§x` o su `D-nn`. Eso **es** la revisión de la fase.
+Trece renglones, en orden de fichero, cada uno con su `§x` o su `D-nn`. Eso **es** la revisión de F3.
 
-**F4 es el mismo caso y añade dos formas de leer que conviene conocer.**
-
-```sh
-swift test --filter 'MatchingChainTests|NormalizedNameTests' --no-parallel --disable-xctest
-```
-
-Veintitrés renglones, y también aquí **hay parejas que solo tienen sentido leídas juntas** — dos reglas sobre
-el mismo escalón de la cadena que, sueltas, parecen contradecirse:
+**La destreza que hay que traer: hay parejas que solo significan algo leídas juntas.**
 
 ```swift
-@Test("la clave que no encuentra a nadie cae al paso 2, y por eso D-76 existe")
-@Test("una clave distinta descarta al candidato aunque el nombre case (§3.7)")
+@Test("sin marcador, la hora que desaparece devuelve el horario a provisional (D-30)")
+@Test("con marcador, la hora que desaparece se ignora: es pérdida de dato (D-56)")
 ```
 
-El primero **abre** el paso 2 a una fila entrante que sí trae clave —si no, la fila que nació sin clave no la
-recibiría jamás y `D-76` se quedaría sin caso—. El segundo **cierra** ese mismo hueco para el candidato cuya
-clave contradice, que es otra entidad. Juntos son `D-78`; por separado, cada uno parece la negación del otro.
+Es `D-56` hecha código — **el mismo campo vacío significa dos cosas** según el partido se haya jugado o no.
+Leído solo uno, la regla parece incoherente. F4 tiene otra pareja igual (`D-78`), y la comentan Plan §4.5 y
+§4.6.
 
-**Y dos tests que no pueden fallar, a propósito.** Éstos:
+**Y algún test no puede fallar, a propósito.** Los que sostiene **un tipo** y no una guarda —`TeamOwnership`
+no lleva nombre de club, `MatchCandidate` no tiene fecha— parecen tautologías y son lo contrario: fijan la
+decisión de modelado que hace que la regla **no se pueda desobedecer**. Es lo que hay que leer antes de
+añadirle un campo "para desempatar" a un candidato.
 
-```swift
-@Test("un equipo propio sin enganchar no lo engancha la ingesta (D-66, D-67, D-76)")
-@Test("la fecha no está en la cadena porque no está en el tipo (§3.7, D-30)")
-```
-
-No los sostiene una guarda sino **un tipo**: `TeamOwnership` es un `enum` cuyo caso `.own` no lleva nombre de
-club, y `MatchCandidate` no tiene fecha. Al leerlos parecen tautologías, y es justo lo contrario: fijan la
-**decisión de modelado** que hace que esas dos reglas de §3.7 no se puedan desobedecer. Lo que hay que leer
-antes de añadirle un campo "para desempatar" a un candidato.
-
-> **Que un test llegue en verde sin haber estado nunca en rojo es una deuda, y aquí está declarada.** Plan
-> §5.1 pide el rojo de aserción porque *"un test que nunca ha estado en rojo es un test sin probar"*. Estos
-> dos no lo tuvieron. Lo que compra la garantía en su lugar es la **comprobación de mutación**: se abre el
-> paso 2 a los equipos propios y el primero cae. Está en Plan §4.6, con las 16 mutaciones de la fase.
+> Que un test llegue en verde sin haber estado en rojo es **deuda declarada** (Plan §5.1). Lo que compra la
+> garantía en su lugar es la **comprobación de mutación**, fase por fase en Plan §4.5–§4.8.
 
 ---
 
@@ -663,86 +603,165 @@ falle, más unos invariantes baratos (que haya jornadas, que los `codacta` sigan
 | **⚠️ *"El parser ya no traga"*** | **han cambiado la forma de la respuesta** | **sí: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser** |
 
 Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de otra competición**. La RFFM
-reutiliza los códigos de competición y grupo entre temporadas (`D-84`), así que una coordenada caducada **no
+no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`** (`D-84`), así que una coordenada caducada **no
 da 404** — devuelve el calendario de otra cosa. El canario compara también el nombre.
 
-**La coordenada por defecto caduca**, así que es configurable sin tocar código:
+**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto caduca —`temporada` cambia cada
+año—, así que las otras cuatro son configurables sin tocar código:
+
+| Variable | Por defecto |
+|---|---|
+| `FEDERATION_LIVE_SEASON` | `21` |
+| `FEDERATION_LIVE_COMPETITION` | `24037548` |
+| `FEDERATION_LIVE_GROUP` | `24037549` |
+| `FEDERATION_LIVE_MODALITY` | `futbol_11` — es el `tipojuego` de la URL |
+| `FEDERATION_LIVE_NAME` | `PRIMERA DIVISION AUTONOMICA CADETE` |
+
+Son las del volcado de temporada jugada, a propósito: así el canario y el *fixture* hablan de lo mismo.
 
 ```sh
 FEDERATION_LIVE=1 \
   FEDERATION_LIVE_SEASON=22 \
   FEDERATION_LIVE_COMPETITION=26737701 \
   FEDERATION_LIVE_GROUP=26737702 \
+  FEDERATION_LIVE_MODALITY=futbol_7 \
   FEDERATION_LIVE_NAME="PREFERENTE AFICIONADO" \
   swift test --filter RFFMCanaryTests
 ```
+
+Una modalidad fuera del catálogo **falla diciendo cuáles hay**, en vez de caer a `futbol_11`: elegir por
+quien llama es lo que haría que el canario mirase otra modalidad y lo llamase verde.
 
 > **El filtro es `RFFMCanaryTests`, el nombre del tipo.** `--filter FederationCanary` —el rótulo del *suite*—
 > no casa con nada y se queda en `Test run with 0 tests … passed`, que **se lee como verde**. Es la misma
 > trampa de §5.1 con otra cara: `--filter` es una expresión regular sobre identificadores de Swift.
 
 
-## 6. Los comandos administrativos
+## 6. Los comandos
 
 ```sh
+swift run Run --help
 swift run Run migrate --yes                 # plano de control (public.tenants)
-
-# Alta de club. Los cuatro pasos de §6.3, y es idempotente: repetirla no duplica.
-swift run Run provision-tenant atleti -f rffm
-swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name "Corto"
-swift run Run provision-tenant atleti -f rffm -s mi_schema     # schema propio
-```
-
-> `--name` **no tiene forma corta**: `-n` lo reserva ConsoleKit y, si se declara, aparece en el `--help`
-> pero el valor acaba en `.unknownInput`. `-f` y `-s` sí funcionan.
-
-```sh
-swift run Run migrate-tenants               # aplica migraciones nuevas a TODOS los clubes
+swift run Run migrate-tenants               # migraciones nuevas a TODOS los clubes
 swift run Run migrate-tenants -t atleti     # solo a uno
 swift run Run migrate-tenants --revert      # revierte
-swift run Run --help
+
+# Alta de club: los cuatro pasos de §6.3, idempotente
+swift run Run provision-tenant atleti -f rffm
+swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name "Corto"
+swift run Run provision-tenant atleti -f rffm -s mi_schema
 ```
-
-> **«TODOS los clubes» son los de `tfm`, y `tfm_test` no existe para estos comandos.** Es la confusión
-> natural y conviene atajarla: `swift run Run …` trabaja **siempre** sobre tu base manual (§3.1), así que
-> `migrate-tenants` recorre lo que haya en `tfm.public.tenants` — si solo diste de alta `atleti`, la
-> respuesta correcta es `1 tenant(s) procesados`, y no falta ninguno.
->
-> **F5 añade cinco tablas, así que hay que volver a pasarlo.** Si tenías `atleti` dado de alta desde F1, su
-> *schema* se quedó en `clubs`/`seasons`/`competitions`: `swift run Run migrate-tenants` le añade
-> `opponent_clubs`, `teams`, `rounds`, `matches` e `ingestion_runs`. No hay que reaprovisionar nada — Fluent
-> aplica solo las que faltan, y las dos primeras se **intercalan antes** de `competitions` sin que eso importe:
-> ninguna FK las relaciona.
->
-> Los tenants de los tests viven en **otra base**, `tfm_test`, los crean los propios tests —**uno por test**,
-> con el *slug* diciendo qué prueban: `season-uq-label`, `comp-cascade`, `scope-a`— y los borran al terminar.
-> Ni `migrate-tenants` los ve, ni `KEEP_TEST_DATA=1` cambia nada al ejecutarlo, porque **esa variable solo la
-> lee `swift test`**. Para verlos: `KEEP_TEST_DATA=1 swift test`, y luego TablePlus sobre `tfm_test`.
-
-**El alta de un club es un comando, no un endpoint** (`D-23`, §6.3). Por eso `/club` no tiene `POST` ni
-`DELETE`. Y por eso el comando hace **cuatro** cosas, no tres:
-
-1. crea el *schema*,
-2. registra el club en `public.tenants`,
-3. le pasa el juego **completo** de migraciones,
-4. **siembra la fila de `clubs`**, que es la raíz del tenant (§4.2).
-
-El cuarto es el que se olvida, y su síntoma es un `500 TENANT_NOT_PROVISIONED` en la primera lectura: el
-*schema* existe, las tablas existen, pero el club no está dado de alta. Si el alta de un club **es**
-provisión, la provisión tiene que dejarlo dado de alta.
-
-La URL del club se le entrega al firmar el contrato (§9.10).
 
 > ⚠️ **`migrate-tenants` va siempre por conexión directa, nunca por un *pooler*** (§6.4). Se apoya en un
 > `SET` de sesión, que detrás de un *pooler* en modo transacción deja de significar lo que parece. El precio
 > de equivocarse no es leer mal: es **crear la tabla en el *schema* de otro club**, y eso no se deshace
 > reintentando.
 
+**Cuatro cosas que ahorran un rato:**
+
+- **`swift run Run …` trabaja siempre sobre `tfm`**, tu base manual. `tfm_test` no existe para estos
+  comandos: los tenants de los tests los crean y borran ellos (§5.1). Así que `1 tenant(s) procesados` es la
+  respuesta correcta si solo diste de alta `atleti`.
+- **Cuando una fase añade tablas, vuelve a pasar `migrate-tenants`.** Fluent aplica solo las que faltan y no
+  hay que reaprovisionar nada.
+- **`--name` no tiene forma corta**: `-n` lo reserva ConsoleKit y, si se declara, sale en el `--help` pero el
+  valor acaba en `.unknownInput`. `-f` y `-s` sí funcionan.
+- **El alta de un club es un comando, no un endpoint** (`D-23`), y por eso hace **cuatro** cosas: crea el
+  *schema*, registra el club en `public.tenants`, pasa el juego **completo** de migraciones y **siembra la
+  fila de `clubs`**. El cuarto es el que se olvida, y su síntoma es un `500 TENANT_NOT_PROVISIONED` en la
+  primera lectura: el *schema* existe, las tablas existen, y el club no está dado de alta.
+
+### 6.1 `seed-competition` — dar de alta lo que la ingesta necesita
+
+La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`: son su *entrada*).
+El camino de verdad es pegar la URL en la ficha del equipo (`D-67`), y eso es **F10**; hasta entonces, esto:
+
+```sh
+swift run Run seed-competition -t atleti \
+  -u "https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549" \
+  -c cadete -g masculino
+```
+
+```
+→ consultando la federación…
+  temporada:   2025/26  (temporada=21)
+  competición: PRIMERA DIVISION AUTONOMICA CADETE
+  grupo:       Grupo 1
+  jornadas:    30
+Competición lista: db679b16-f61d-42ec-b83f-3455fd67ccc6
+```
+
+Y te imprime el `ingest` y el `curl` listos para pegar.
+
+**Es una herramienta, no contrato.** `POST /v1/competitions` existe en el *spec* y no es esto — aquél es el
+camino del administrador, con su `preview` (`D-22`). Esto vive donde `provision-tenant`.
+
+**Cuatro cosas que hace y un `INSERT` a mano no:**
+
+- **Se pega la URL entera** (`D-22`), que es la mitigación contra el dígito mal tecleado. Un dígito cambiado
+  **no da error**: sincroniza otro calendario (`D-84`).
+- **Los rótulos los dice la federación** —etiqueta de temporada, nombre de la competición, grupo—, así que no
+  te los inventas tú.
+- **Pasa por el Dominio**, de modo que las fechas de la temporada se derivan de su etiqueta (§3.2) y las
+  invariantes se comprueban.
+- **Valida antes de escribir.** Coordenada inexistente o URL incompleta → falla **sin dejar fila**:
+
+```
+Error: FederationError.coordinateNotFound(detail: "la respuesta llegó sin calendario: competicion/grupo no existen")
+Error: A la URL le falta el parámetro 'grupo': …
+```
+
+`--category` y `--gender` son obligatorios y no tienen valor por defecto: el género entra en la clave única de
+cada equipo que la ingesta cree (`D-58`), así que equivocarlo no da un rótulo feo — da un 409 tres días
+después. La federación no lo publica por competición, va dentro del nombre, y **inferirlo es el `/preview` de
+F10**, no una herramienta.
+
+Repetirlo es idempotente: si la competición ya existe, la reutiliza y te devuelve su id.
+
+---
+
+### 6.2 `ingest` — la pasada de la federación
+
+El adaptador primario del módulo de ingesta (§2.3-b). **No es un endpoint** porque un job de sistema no tiene
+usuario ni JWT que validar; el botón del backoffice existe además, y llama al mismo caso de uso (§4.5).
+
+```sh
+swift run Run ingest                        # todos los clubes, temporada vigente
+swift run Run ingest -t atleti              # solo un club (o varios: -t "atleti,otro")
+swift run Run ingest -c <uuid>              # solo una competición
+swift run Run ingest -c "<uuid>,<uuid>"     # varias, en el orden pedido
+swift run Run ingest --season <uuid>        # una temporada concreta, aunque no sea la vigente
+swift run Run ingest --force                # ignora el antirrebote de 6 h
+swift run Run ingest --min-interval-hours 24
+```
+
+**Sale con código distinto de cero si algo falló**, y esa es la única señal que ve un cron (`D-86`). Un fallo
+**no detiene el recorrido**: la unidad de aislamiento es la competición, porque la pasada ya es atómica
+(`D-83`) y ya deja constancia de su fallo (`D-85`). Para leerla:
+
+```sh
+curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>" | jq
+```
+
+**Lo que este comando no trae es la cadencia** (`D-87`). No hay temporizador dentro del proceso: quien lo
+llama es un cron o una *scheduled machine*, y §5.6 pide **lunes** (horarios confirmados + resultado de la
+jornada) más **sábado y domingo** (marcadores). De martes a viernes no hay nada nuevo que traer. Lo que el
+comando sí trae es el **antirrebote**: una competición sincronizada con éxito hace menos de 6 h no se vuelve
+a pedir, para que un disparo de más no repita trabajo. **No confundirlo con el tope semanal**, que es un
+máximo y lo hace cumplir el calendario de disparos, no el código.
+
+**Una competición que nunca se sincronizó entra siempre**, tenga el antirrebote el valor que tenga — si no,
+la recién dada de alta esperaría para siempre.
+
+> **Hoy no hay cron.** Mientras no exista, la ingesta corre a mano o por el `POST` del backoffice, y el tope
+> semanal de §5.6 **no lo garantiza nada**. Está apuntado en el Plan §9 como deber del desarrollador.
+
 ---
 
 ## 7. El *spec* y el código generado
 
-El contrato está en `Sources/APIContract/openapi.yaml` — **6.184 líneas y las 20 entidades completas**. Es la
+El contrato está en `Sources/APIContract/openapi.yaml` — **6.477 líneas y las 21 entidades completas**
+(F6 añadió la 21ª, `IngestionRun`, con su recurso). Es la
 **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` que el servidor conforma
 (`D-65`).
 
@@ -759,16 +778,23 @@ entregado**:
 ```yaml
 filter:
   operations:
-    - getClub
-    - updateClub
+    - getClub             # F0
+    - updateClub          # F0
+    - listIngestionRuns   # F6
+    - triggerIngestion    # F6
 ```
 
 Añades ahí la operación → compilas → **no compila**, porque falta su método → la implementas. Ese "no
 compila" es la garantía entera de *design-first*.
 
-> **Que esa lista siga teniendo dos entradas después de tres fases es información, no abandono.** F1 y F2
-> entregaron dominio, persistencia y un adaptador de federación, y ninguna de las tres cosas pasa por HTTP.
-> La primera operación nueva la traerá **F10** (`D-67`).
+> **Esa lista estuvo congelada en dos entradas de F0 a F5, y era información, no abandono.** F1 a F5
+> entregaron dominio, persistencia, dos reglas puras y la pasada entera, y **nada de eso pasa por HTTP**: el
+> adaptador primario de la ingesta es un `AsyncCommand` (§2.3-b). **F6 es la primera que la mueve**, con las
+> dos operaciones que el módulo de ingesta sí necesita asomar (`D-88`). Las siguientes llegan en **F10**
+> (`D-67`).
+>
+> **Comprobado al añadirlas**: poner las dos en el `filter` y compilar da
+> `type 'APIHandler' does not conform to protocol 'APIProtocol'`, exactamente como promete `D-69`.
 
 ### 7.2 Dos cosas que sorprenden
 
@@ -782,7 +808,12 @@ devuelve el caso del `Output` que toque. La consecuencia es buena aunque cueste 
 error que el *spec* no declara no se puede devolver**, porque no existe como caso del enum.
 
 `ProblemMiddleware` sigue haciendo falta, pero para lo de **fuera** del transporte: resolución de tenant,
-404 de ruta.
+404 de ruta — y, desde F6, **lo que el transporte rechaza antes de llegar al *handler***. Ése es el tercer
+caso y hay que conocerlo: un **parámetro obligatorio que falta** ni siquiera llega a tu código, así que
+`GET /ingestion-runs` sin `competitionId` daba **500** aunque el *spec* declare 400. El middleware traduce
+ahora el `ServerError` del runtime reutilizando su propia tabla de códigos. Lo que **no** se usa es el
+`ErrorHandlingMiddleware` que trae `swift-openapi-runtime`: devuelve el código **sin cuerpo**, y §5.4 exige
+`application/problem+json` en *todo* error del contrato.
 
 ### 7.3 El código generado, para curiosear
 
@@ -801,14 +832,14 @@ cada compilación.
 Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (generado del spec)
             │                └─► Application
             ├─► Persistence ────► Application
+            ├─► Federation ─────► Application   (adaptadores RFFM / FCF)
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de NADA)
-
-            Federation ────────► Application    (adaptadores RFFM / FCF)
 ```
 
-`Federation` **todavía no cuelga de `App`**: su primer llamante es el job de ingesta (F6) y el `/preview`
-(F10). Hoy lo mantiene en el grafo de *build* su *target* de tests.
+**`Federation` cuelga de `App` desde F6.** De F2 a F5 no colgaba, y no era un olvido: no tenía llamante, así
+que lo mantenía en el grafo de *build* su *target* de tests. El llamante es
+[el job de ingesta](#62-ingest-la-pasada-de-la-federación), y el `/preview` de F10 será el segundo.
 
 **El grafo de `Package.swift` *es* la Regla de dependencia** (§2.2), no una convención de carpetas.
 Compruébalo tú mismo:
@@ -851,13 +882,14 @@ distintas (§2.1).
 | Síntoma | Causa casi segura |
 |---|---|
 | `Cannot find type 'Components' in scope` en Xcode | Los tipos del contrato no existen hasta que corre el plugin. Acepta el aviso de confianza y ⌘B. **La CLI es la fuente de verdad**, no el índice |
-| `connection refused` al 5434 | `docker compose up -d db`. Los tests ya lo detectan y se omiten con ese aviso (§5.2) |
+| `connection refused` al 5434 | `docker compose up -d db`. Los tests ya lo detectan y se omiten con ese aviso ([§5.2](#52-si-postgres-no-está-levantado)) |
 | `400` con `TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404` con `UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
 | `500` con `TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Vuelve a lanzar `provision-tenant <slug> -f <federación>`: es idempotente y siembra la fila |
 | Los tests petan con **señal 5** | Una `Application` destruida sin esperar a su cierre. Usa `TestEnvironment.withApp` |
 | Los tests fallan **la primera vez** y pasan a la segunda | Algo de arranque compartido en carrera entre suites paralelas. Va en `TestEnvironment.bootstrap()`, que se ejecuta una sola vez por proceso |
-| `PSQLError – Generic description…` en un test | Es a propósito, para no filtrar datos en producción. `TestEnvironment` lo reexpone con `String(reflecting:)` |
+| `PSQLError – Generic description…` | PostgresNIO esconde el detalle para no filtrarlo en logs. Se reexpone con `String(reflecting:)` — lo hacen `TestEnvironment` y, desde F6, el registro de pasadas (`D-85`), que si no guardaba una fila que no decía nada |
+| `Address already in use` (errno 48) al hacer `serve` | Ya hay un `Run serve` vivo: `lsof -nP -iTCP:8080 -sTCP:LISTEN`, y `kill <PID>` |
 | Docker no arranca | Suele ser disco lleno. Mira el log de `~/Library/Containers/com.docker.docker/Data/log/host/` |
 
 ```sh

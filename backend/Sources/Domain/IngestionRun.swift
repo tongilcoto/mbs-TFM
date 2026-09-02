@@ -103,6 +103,35 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// `true` si la pasada llegó al final. Es lo que decide si se escribió
     /// `Competition.lastSyncedAt` (§3.2).
     public var succeeded: Bool { outcome == .succeeded }
+
+    /// La misma pasada, con las marcas de tiempo **de quien conoce los dos
+    /// extremos**.
+    ///
+    /// Existe porque el informe se construye al **empezar** la pasada, cuando
+    /// todavía no se sabe cuándo va a terminar: con las suyas, toda pasada con
+    /// éxito registraba `startedAt == finishedAt` —duración cero— mientras la
+    /// fallida sí se medía. La invariante del `init` no lo delataba, porque
+    /// `finishedAt >= startedAt` se cumple trivialmente; lo destaparon las
+    /// pruebas manuales de F6 al mirar la tabla de verdad.
+    ///
+    /// Devuelve una copia y revalida por el `init`, que es lo que impide colar
+    /// aquí un par de fechas al revés.
+    public func timed(from startedAt: Date, to finishedAt: Date) throws -> IngestionRun {
+        var timed = try IngestionRun(
+            id: id, competitionID: competitionID,
+            startedAt: startedAt, finishedAt: finishedAt,
+            outcome: outcome, error: error)
+        timed.opponentClubsCreated = opponentClubsCreated
+        timed.opponentClubsUpdated = opponentClubsUpdated
+        timed.teamsCreated = teamsCreated
+        timed.teamsUpdated = teamsUpdated
+        timed.roundsCreated = roundsCreated
+        timed.roundsUpdated = roundsUpdated
+        timed.matchesCreated = matchesCreated
+        timed.matchesUpdated = matchesUpdated
+        timed.skipped = skipped
+        return timed
+    }
 }
 
 /// Identificador de `IngestionRun` (§4.1).

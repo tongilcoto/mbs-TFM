@@ -202,7 +202,7 @@ extension Competition {
     /// # `federationName` rellena hueco, no sobrescribe
     ///
     /// Es `UpsertPolicy.matching` y no `volatile`, y la razón es lo que se
-    /// descubrió capturando los volcados de F5: la RFFM **reutiliza los códigos
+    /// descubrió capturando los volcados de F5: la RFFM **ignora el parámetro `temporada`
     /// de competición y grupo entre temporadas**, así que un nombre distinto no
     /// es un rótulo que cambió — es la coordenada apuntando a otra competición.
     /// Eso no se resuelve escribiendo el nombre nuevo: se para antes, y de eso
@@ -242,7 +242,7 @@ extension Competition {
     /// El diseño daba por hecho que una coordenada caducada fallaría: Plan §4.4
     /// escribe *"un 404 tiene que decir una cosa y un parseo fallido otra"*. Al
     /// capturar los volcados de F5 se vio que **no hay tercera opción implícita**:
-    /// la RFFM reutiliza los códigos de competición y grupo entre temporadas, así
+    /// la RFFM no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`**, así
     /// que la misma coordenada con otra `temporada` devuelve un calendario
     /// **perfectamente parseable de otra competición**.
     ///

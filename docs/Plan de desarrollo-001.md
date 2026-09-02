@@ -147,7 +147,7 @@ dependen de eso.
 | **F3** ✅ | **Política de *upsert***: descriptivo / volátil / propiedad / emparejamiento (detalle en §4.5) | **unit puro, cero I/O** | §3.7, [D-56] |
 | **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
-| **F6** | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal | integración | §2.3-b, §4.7, §5.6 |
+| **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo) | unit + integración | [D-17], [D-55], Anexo FCF |
@@ -529,12 +529,21 @@ con la batería completa en **217**. Corre en 4 s con Postgres; los de dominio y
 | ¿Dónde queda constancia de una pasada? | En una **tabla**, y escrita **fuera** de la transacción de la pasada → [D-85] |
 | ¿Sirve el volcado que había para la rama de "partido jugado"? | No, y ya no hace falta: el volcado de temporada jugada cierra el deber de §4.3 |
 
-**El hallazgo de la fase, y no se buscaba.** El volcado de temporada jugada se capturó con **la misma
-coordenada** que el anterior cambiando solo `temporada`, y devolvió **otra competición**: PREFERENTE
-AFICIONADO con `temporada=22`, PRIMERA DIVISION AUTONOMICA CADETE con `temporada=21`. **La RFFM reutiliza los
-códigos de competición y grupo entre temporadas.**
+**El hallazgo de la fase, y no se buscaba.** Capturando los volcados se vio que **una coordenada equivocada
+no falla**: devuelve `200` y un calendario perfectamente parseable **de otra competición**.
 
-Eso confirmó con dato real una regla que solo estaba razonada (§3.5: `Competition` se identifica por
+> ⚠️ **La causa que se escribió aquí era falsa, y se corrigió el 2026-09-02** —la enmienda vive en [D-84] y la
+> evidencia en [Anexo RFFM §F.16]—. Se dijo que *"la RFFM reutiliza los códigos de competición y grupo entre
+> temporadas"*. **No los reutiliza**: cada temporada recibe un bloque nuevo. Lo que pasa es que **ignora el
+> parámetro `temporada`**, y que **lo devuelve como si fuera un dato** en `calendar.temporada`. Quien capturó
+> los volcados vio a la respuesta decir *"2026-2027"* y concluyó, razonablemente, que era otra temporada.
+>
+> **Y esa es la lección que esta fase no podía dejar, porque no la sabía**: *"una premisa sobre un sistema de
+> terceros se mide"* es necesario y **no suficiente**. Se midió, y salió mal — porque la fuente **devuelve tu
+> propio parámetro** como si fuera suyo. Contra eso solo protege desconfiar de todo campo que se parezca a lo
+> que enviaste, y buscar una señal que no pueda ser eco: aquí, **las fechas de los partidos**.
+
+La conclusión, en cambio, se mantiene entera: confirmó con dato real una regla que solo estaba razonada (§3.5: `Competition` se identifica por
 `season_id` + `federation_group_id`) y **rompió una premisa de §4.4 de este plan**. Al medirlo entero, la RFFM
 **no da 404 nunca** en la ruta del calendario: dice que no de tres maneras y las tres son `200`. Sin guarda, la
 pasada habría escrito un calendario cadete dentro de una competición senior, con los equipos heredando de ella
@@ -620,6 +629,137 @@ fase:
 invocación lo pasaba por `tail`, así que **el resumen final se perdió** y hubo que reconstruirlo comparando la
 lista de detectadas con la de definidas. El veredicto por código de salida siguió siendo correcto; lo que
 falló fue poder leerlo.
+
+### 4.8 F6 · El job, el recorrido por tenant y la cadencia — **entregada**
+
+La fase que **le pone llamante** a todo lo que F5 dejó suelto —hasta hoy la única forma de generar una pasada
+era un test— y la primera desde F0 que abre superficie HTTP: **9 ficheros de código** y **42 tests**, con la
+batería completa en **259**.
+
+| Bloque | Qué entrega |
+|---|---|
+| Aplicación | `IngestClubCalendars` —el recorrido de un club—, `IngestionScope`, `ClubIngestionReport` y el puerto `FederationClientProvider` |
+| App | `IngestCommand` (`swift run Run ingest`), `CatalogFederationClientProvider`, y **`Federation` colgando por fin del grafo** |
+| HTTPAdapter | `GET /v1/ingestion-runs` y `POST /v1/ingestion-runs`, más `BackgroundWork` y la traducción del `ServerError` del transporte |
+| Contrato | Dos operaciones y seis esquemas nuevos en el *spec*; el `filter` de [D-69] deja de ser el de F0 |
+
+**Qué contestó.**
+
+| Pregunta que estaba abierta | Respuesta |
+|---|---|
+| ¿Qué pasa si una competición falla en mitad del recorrido? (§9.3 repetida) | **Se continúa.** La unidad de aislamiento es la competición, porque [D-83] la hace atómica y [D-85] deja escrito el fallo → [D-86] |
+| ¿Cuál es el intervalo exacto de §5.6? | **No vive en el código.** Lunes + fin de semana, puestos por el disparador; el código trae un **antirrebote**, que no es el tope semanal → [D-87] |
+| ¿Cómo se lee el registro de pasadas, y cómo se relanza una? | Un recurso, dos operaciones, y **200 o 202 según el coste** → [D-88] |
+| ¿Y si el administrador quiere relanzar **varias** a la vez? | El cuerpo lleva **lista**, no un id: la pantalla son equipos con una casilla, y marcar tres es **una** acción → [D-88] |
+| ¿De dónde saca el backoffice la terna *(equipo, temporada, competición)*? | **De ninguna lectura entera**: hoy son N+1 peticiones. No es fallo del modelo —la participación se deriva por diseño ([D-27], [D-28])— sino una **vista derivada que falta**. Abierta en §9.12 |
+| ¿Puede el `202` prometer lo que no ha comprobado? | **No.** Planifica antes de responder, así una `seasonId` inexistente da 404 y no un 202 con un fallo invisible detrás |
+| ¿Basta la temporada vigente como alcance del recorrido? | **Como valor por defecto, sí**; como prohibición, no. `seasonId` y `competitionId` son las dos filas de la coordenada de la federación (§3.5) |
+
+**Lo que no trae, y es deliberado.** **Ninguna cola de reintentos.** Una competición que falla se vuelve a
+intentar en la pasada siguiente y no antes; construirla ahora sería adivinar un problema que el registro de
+[D-85] todavía no ha demostrado que exista. Y el `POST` **no crea filas**: pide que el job pase.
+
+**Cuatro cosas que solo se ven haciendo el bucle de §5.1, y una de ellas es un error mío:**
+
+1. **El rojo cazó un fallo que yo acababa de escribir**, y de la familia peor. Al implementar el filtro por
+   temporada salió un `scope.seasonID.flatMap { … } ?? seasons.current(…)`: una `seasonId` desconocida **caía
+   a la temporada vigente** y sincronizaba otra cosa **con cara de éxito**. Es [D-84] dentro de nuestro propio
+   código. El ciclo siguiente lo tumbó con el dato delante — `["21"]` en vez de `["20"]`.
+2. **La triangulación del antirrebote funcionó como en F3.** El esqueleto fue *"salta lo que ya se sincronizó
+   alguna vez"*, que pasa el primer test tan tranquilo; lo tumbaron los dos siguientes, y por lados distintos.
+3. **El rojo cazó un error del test, por cuarta fase seguida**: el recorrido va **ordenado por slug**, así que
+   en `["jobuno", "jobdos"]` el sano es el segundo. La aserción decía lo contrario.
+4. **Dos tests llegaron en verde y no se disimuló** (el adaptador que sale de `Club.federation`, y el club sin
+   adaptador que no deja pasadas fallidas). Los sostiene la estructura, no una línea; se verificaron con
+   mutación.
+
+**El hallazgo de arnés, y es nuevo: un test de nivel 3 puede romper los de otras suites.** El primer test del
+recorrido enumeraba **todos** los tenants de `public.tenants` — y las suites corren en paralelo, así que se
+puso a ingerir los clubes de las otras y a escribirles filas en sus *schemas*. Salió a la luz porque el
+recorrido devolvió `["e2e-sinjugar", "jobcat", "jobmad", "match-rt", "season-arch"]`. **La lección: probar una
+regla global con efectos globales, en una batería paralela, no es un test — es una carrera.** Se separó en dos:
+la regla *"sin filtro son todos"* se afirma sobre una consulta **sin efectos**, y el recorrido de verdad se
+lanza sobre una lista explícita de clubes.
+
+**Y dos hallazgos del contrato, los dos por lo mismo — que el *spec* declara y el generador no obedece**
+([D-65], tercera fase que lo cobra):
+
+1. El `requestBody` se declaró `required: false` prometiendo que el cuerpo se podía **omitir**. Es falso: el
+   servidor generado lo parsea igual y un `POST` sin nada da 400. **Se corrigió el contrato, no la realidad.**
+2. Un parámetro obligatorio que **falta** lo rechaza el código generado antes de llegar al *handler*, así que
+   `GET /ingestion-runs` sin `competitionId` daba **500** aunque el *spec* declare 400. Lo traduce ahora
+   `ProblemMiddleware`, reutilizando la tabla que el propio runtime ya tiene — y **no** su
+   `ErrorHandlingMiddleware`, que devuelve el código **sin cuerpo** y §5.4 exige `application/problem+json` en
+   todo error del contrato.
+
+**Y una sesión de pruebas manuales que encontró dos defectos que la batería no podía ver** —contra la base de
+trabajo, con la RFFM de verdad y 240 partidos reales entrando—. Los dos en `IngestionRun`, y los dos por el
+mismo motivo de método: **los niveles 2 y 3 corren con un reloj fijo y con dobles sin restricciones**.
+
+1. **El motivo de una pasada fallida era ilegible.** Un `UNIQUE` reventando deja un `PSQLError`, que esconde
+   su descripción tras *"Generic description to prevent accidental leakage of sensitive data"*. La fila que
+   existe para contestar *"¿por qué falta este partido?"* no contestaba nada. Con `String(reflecting:)` deja
+   `sqlState: 23505 · Key (federation_match_id)=(5374968) already exists`.
+2. **La pasada con éxito no medía su duración.** El informe se construye al empezar, así que
+   `started_at == finished_at`; la fallida sí se medía, y esa **asimetría era el síntoma**. Ninguna invariante
+   lo delataba, porque `finishedAt >= startedAt` se cumple trivialmente.
+
+Se cubren con dos dobles nuevos —`TickingClock` y un error opaco al estilo de `PSQLError`— y **32 mutaciones,
+32 cazadas** en total. La lección se apunta junto a las de arnés de F1, F4 y F5: **un reloj fijo y unos dobles
+sin restricciones son exactamente las dos cosas que hacen barata la batería, y exactamente las dos que ocultan
+esta clase de fallo.** Ejecutar el sistema y mirar la tabla no es opcional.
+
+> **De propina, `D-84` quedó reverificado en vivo el 2026-08-31**, y por accidente: al sembrar una segunda
+> competición con `temporada=22` la RFFM devolvió el calendario de 2025/26 — **ignoró el parámetro**, que es
+> su tercer modo de fallo. El sistema se negó a escribir un calendario cadete en una competición senior: la
+> guarda no podía disparar (primera sincronización, sin `federation_name` con qué comparar), lo paró el
+> `UNIQUE`, `D-85` dejó la fila y `D-86` siguió con lo demás. **La defensa en profundidad funcionó, y el
+> escalón que la salvó no fue el que se diseñó para eso.**
+
+**Comprobación de mutación: 30 mutaciones, 30 cazadas**, con especificidad — romper *solo* la guarda de la
+temporada desconocida tumba *solo* el test de [D-84], y romper *solo* el 502 tumba *solo* el de la pasada
+fallida. **Cinco sobrevivieron a la primera pasada, y las cinco eran «falta un test»** — ninguna era código
+que sobrara, y una de ellas era seria:
+
+| Se rompe | Lo caza |
+|---|---|
+| la vigente deja de elegirse | `solo se recorre la temporada vigente` (§3.2) |
+| una `seasonId` desconocida cae a la vigente | `no cae a la vigente: falla` ([D-84]) |
+| el antirrebote se aplica sin pedirlo / no deja pasar nunca | un test cada uno (§5.6) |
+| **la competición nunca sincronizada no entra** | *(faltaba)* `entra aunque haya intervalo mínimo` |
+| **el antirrebote no alcanza a la competición pedida por id** | *(faltaba)* `alcanza también a la pedida por id` |
+| un fallo detiene el recorrido / se continúa sin apuntarlo | los 3 de [D-86] |
+| el adaptador no sale del club · la FCF usa el de Madrid | los 2 de [D-17] |
+| el recorrido se queda en el primer club | `los dos clubes se sincronizan en la misma pasada` |
+| **el código de salida no ve los fallos** | *(faltaba)* `un club con una competición fallida no cuenta como éxito` |
+| **el rango del `limit` no se comprueba** | *(faltaba)* `un limit fuera de rango es 400` |
+| el ámbito del `GET` no se comprueba | `una competición de otro club no existe: 404` |
+| el 502 pasa a 404 · el 202 no planifica antes | los 2 de [D-88] |
+| el `ServerError` del transporte vuelve a ser 500 | `sin competitionId el registro no se sirve: 400` |
+| solo se recorre la primera de la lista · el orden se pierde | los 2 de la lista de [D-88] |
+| un id desconocido de la lista se ignora | `si una no existe, no se sincroniza ninguna` |
+| dos competiciones responden 200 · la lista vacía es "todas" | los 2 del nivel 4 |
+| **`-c` deja de partir la coma** · **el trim se cae** | *(faltaban)* los 8 de `IngestArgumentsTests` |
+
+**Y una superviviente más, encontrada al añadir la lista de [D-88]: el parseo de argumentos no lo miraba
+nadie.** Romper `--competition` para que solo cogiera el primer valor **no tumbaba ningún test** — los del
+recorrido reciben el `IngestionScope` ya construido, así que entre la cadena que teclea el operador y el
+ámbito no había ningún test. Se cerró como se cerró la del código de salida: **extrayendo la traducción a una
+función pura** (`IngestCommand.scope(season:competition:minIntervalHours:force:)`) y probándola sin Docker.
+Ahí viven además las dos precedencias que el `--help` no puede explicar: `--force` gana sobre
+`--min-interval-hours`, y una lista vacía es como no pasar ninguna.
+
+> **Y de escribir ese test salió una trampa de aserción que conviene conocer.** `#expect(scope.minInterval ==
+> 6 * 3600)` **falla**, e imprime `21600.0 == 21600` — los dos valores iguales. Un literal entero contra un
+> `TimeInterval?` no compara lo que parece; hay que escribir `Double(6 * 3600)`. Es el caso peor de la familia
+> de §5.1: no un rojo que no demuestra nada, sino una **aserción que no puede pasar** — y su gemela con `!=`
+> sería una que no puede fallar.
+
+> **La superviviente que más enseña es la tercera.** *"La competición que nunca se sincronizó no entra"* pasaba
+> todos los tests, y significa que **una competición recién dada de alta —el enganche de [D-67], que es F10—
+> se quedaría esperando para siempre**: nunca se sincronizó, así que nunca sería "vieja", así que el cron
+> nunca la tocaría. Ningún rojo la habría encontrado, porque ningún test tenía motivo para existir hasta que
+> la mutación preguntó.
 
 ---
 
@@ -790,6 +930,10 @@ cite su `§x` o su `D-nn`: sin esa trazabilidad, la revisión no es posible y el
 
 Lo que sí hace falta del desarrollador, y no puede delegarse:
 
+- **Poner en marcha el disparador de la cadencia** (`D-87`): F6 entrega el comando, pero **quién lo llama los
+  lunes y los fines de semana es una decisión de despliegue**, no de código. Hasta que exista ese cron, la
+  ingesta solo corre a mano o por el `POST` del backoffice — y el tope semanal de §5.6 no está garantizado
+  por nada.
 - **Coordenadas reales de la RFFM** para F5 en adelante — una URL de calendario de la web de la federación,
   del tipo que el administrador pegaría en `/federation-link`. Hasta F4 bastan los *fixtures* de
   `docs/Federation APIs examples/`.
@@ -862,3 +1006,6 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [Anexo RFFM §F.15]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [D-12]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
