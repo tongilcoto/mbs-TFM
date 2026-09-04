@@ -56,10 +56,12 @@ final class CalendarPass {
 
     func run(_ calendar: FederationCalendar) async throws {
         // **Lo primero de todo** (`D-84`): antes de escribir una sola fila, que
-        // la coordenada siga apuntando a esta competición. La RFFM reutiliza sus
-        // códigos entre temporadas, así que una coordenada caducada no falla —
-        // devuelve el calendario de otra competición, y se parecen lo suficiente
-        // como para que la pasada entera lo escriba sin enterarse.
+        // la coordenada siga apuntando a esta competición. La RFFM **ignora el
+        // parámetro `temporada`** y sus códigos son densos ([Anexo RFFM §F.16],
+        // que enmendó la causa que `D-84` daba), así que una coordenada
+        // equivocada o caducada no falla — devuelve el calendario de otra
+        // competición, y se parecen lo suficiente como para que la pasada entera
+        // lo escriba sin enterarse.
         try competition.requireSameSource(as: calendar.competitionName)
 
         for federationRound in calendar.rounds {

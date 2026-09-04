@@ -660,6 +660,30 @@ inventado.
 
 ### D-31 · `federation_match_id` se modela, pero la ingesta no puede depender de él
 
+> ### ⚠️ Enmienda del 2026-09-04 · la premisa sobre la FCF era falsa, y la decisión se sostiene igual
+>
+> Lo encontró el bloque `A-1` del [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md), como
+> hallazgo **H-12**. Esta entrada dice que **la FCF no tiene identificador de partido en absoluto**, citando
+> [Anexo FCF §C.3]. **Esa sección describe el sitio antiguo y está obsoleta desde [D-74].** La web nueva
+> publica `CODACTA` en **240 de 240** partidos del volcado, no vacío y **único** —y, como señala
+> [Anexo FCF §C.10.4], *"se llama igual que en la RFFM"*—.
+>
+> **La decisión de abajo se mantiene entera, y su razón mejora.** `federation_match_id` sigue siendo anulable,
+> pero ya no porque *"una de las dos federaciones no lo tenga"* —las dos lo tienen— sino por lo que esta misma
+> entrada ya decía en la frase siguiente y que se quedó en segundo plano: **es un campo de un proveedor y no
+> del contrato genérico de federación**, y *"la clave puede faltar **dentro** de la propia RFFM en respuestas
+> parciales"*. Ese argumento no dependía de Cataluña y sigue en pie. Es el mismo trato que [D-56] recibió en
+> [D-75]: la regla aguanta, lo que hay que citar para defenderla cambia.
+>
+> **Lo que sí se mueve, y es la parte útil.** El **paso 2 de la cadena de partidos** —las coordenadas
+> `(round_id, home_team_id, away_team_id)`— se justificaba como *"el camino normal en la FCF"*. No lo es: es
+> **red de seguridad para las dos**, y el caso que de verdad lo cobra es el que esta entrada ya nombraba —*"la
+> federación reubica un partido en otra jornada"*— más la respuesta parcial. Que el paso 1 resuelva en las dos
+> federaciones **no lo vuelve código muerto**: lo vuelve lo que [D-78] describe, un escalón que espera a que
+> el anterior no resuelva.
+>
+> El texto de abajo se conserva sin tocar: esto es una bitácora, se anota encima y no se reescribe ([D-26]).
+
 **El punto de partida.** Las cuatro muestras del objeto de partido traen `codacta`, el identificador del acta
 ([Anexo RFFM §F.2]), y el anexo lo tenía anotado como "candidato natural a clave externa de
 `Match`, no modelado aún". Al escribir el contrato de `Match` toca resolverlo.

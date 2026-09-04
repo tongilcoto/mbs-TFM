@@ -155,8 +155,19 @@ public enum MatchingChain {
 /// §3.7: *"los equipos ya están emparejados cuando se llega al partido"*. Es lo
 /// que hace que el paso 2 sea exacto y que no haga falta un tercer escalón.
 public struct IncomingMatch: Equatable, Sendable {
-    /// `codacta` en la RFFM. `nil` en la FCF, que **no publica identificador de
-    /// partido en absoluto** (`D-31`, [Anexo FCF §C.3]).
+    /// `codacta` en la RFFM. **Anulable porque el contrato genérico de
+    /// federación no lo garantiza** (`D-31`): es un campo de un proveedor, y
+    /// hasta dentro de la propia RFFM puede faltar en una respuesta parcial.
+    ///
+    /// **Lo que ya no es cierto es el motivo que se citaba aquí.** Decía *"`nil`
+    /// en la FCF, que no publica identificador de partido en absoluto"*, con
+    /// [Anexo FCF §C.3] detrás — y esa sección describe el sitio **antiguo** y
+    /// está obsoleta. La web nueva trae `CODACTA` en **240 de 240** partidos, no
+    /// vacío y único, y hasta se llama igual que en Madrid
+    /// ([Anexo FCF §C.10.4], `D-74`). Así que el paso 1 de esta cadena resuelve
+    /// en las dos federaciones y el paso 2 es red de seguridad, no el camino
+    /// normal de una de ellas. La anulabilidad se mantiene; su razón es la de
+    /// arriba.
     public let federationMatchID: String?
     public let roundID: RoundID
     public let homeTeamID: TeamID

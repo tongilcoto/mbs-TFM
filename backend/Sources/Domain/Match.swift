@@ -35,8 +35,13 @@ public struct Match: Identifiable, Equatable, Sendable {
     /// la fuente publique un `codigo_campo` (Plan §7.4).
     public let venue: String?
 
-    /// El `codacta` de la RFFM. **Anulable y no exigible**: la FCF no publica
-    /// identificador de partido en absoluto (`D-31`).
+    /// El `codacta` de la RFFM. **Anulable y no exigible** (`D-31`): es un campo
+    /// de un proveedor y no del contrato genérico de federación, y puede faltar
+    /// incluso dentro de la RFFM en una respuesta parcial.
+    ///
+    /// El motivo que esta línea daba —*"la FCF no publica identificador de
+    /// partido en absoluto"*— **caducó con `D-74`**: su web nueva lo trae en 240
+    /// de 240 ([Anexo FCF §C.10.4]). La anulabilidad no cambia; su defensa sí.
     public let federationMatchID: String?
 
     public let createdAt: Date

@@ -148,9 +148,10 @@ dependen de eso.
 | **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
+| **F6-bis** | **El sobre del puerto de federación**, antes de que F7 y F8 lo copien (detalle abajo) | unit puro | `A-1` · H-08, H-09, H-10 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
-| **F9** | Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo) | unit + integración | [D-17], [D-55], Anexo FCF |
+| **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
 | **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition` | E2E de contrato | [D-67], §2.3-c |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
@@ -165,6 +166,28 @@ compilador exige antes de la primera *rebanada vertical* de verdad.
 - **F10 va al final aunque sea por donde entra el usuario.** Es el único punto que necesita el
   `FederationClient` ya construido y probado, porque `/preview` lo llama **en línea y dentro de la respuesta**
   (§2.3-c). Construirlo antes obligaría a falsearlo dos veces.
+
+**Y una fase que no estaba prevista y la trajo la auditoría: F6-bis.** El bloque `A-1` del
+[plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md) hizo el ensayo en seco del adaptador de la
+FCF contra los DTOs del puerto y encontró que **`FederationMatch` y `FederationTeamRef` aguantan campo a
+campo, y el *sobre* de `FederationCalendar` no**: de sus cinco campos, el calendario de la FCF publica **uno**,
+y los dos obligatorios —`seasonLabel` y `FederationRound.label`— son justo los dos que esa fuente no tiene
+(H-08). De ahí sale una consecuencia funcional, H-09: la guarda de [D-84] compara `competitionName`, y como
+la FCF no publica nombre de competición en su calendario, **para un tenant catalán la guarda no se dispararía
+nunca**.
+
+**Va antes de F7 y no dentro de F9, y la razón es el coste de copiarla.** F7 y F8 no estrenan puerto: le
+añaden `fetchStandings` y `fetchScorers`, con sus DTOs. Y la asimetría se repite ahí — `/api/standings` y
+`/api/scorers` de la RFFM devuelven `competicion` y `grupo` ([Anexo RFFM §F.8], §F.13) y sus equivalentes de
+la FCF no ([Anexo FCF §C.10.6], §C.10.7)—, así que un sobre nuevo modelado por analogía con el de F2
+reproduce H-08 y H-09 **dos veces más** antes de que nadie escriba el adaptador catalán. Es el error de la
+abstracción validada contra un solo caso, y aquí está localizado con nombre y línea.
+
+**Qué entrega.** La forma del sobre —qué campos son opcionales y por qué—, y **dónde vive la evidencia de que
+la coordenada sigue apuntando a esta competición**, que hoy está escondida en un campo opcional del
+calendario. Las tres opciones para lo segundo están evaluadas en H-09; la que no toca puerto ni modelo es que
+el adaptador de cada federación **rellene** `competitionName` como pueda, con una segunda llamada si hace
+falta. **No implementa nada de la FCF**: eso sigue siendo F9.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
