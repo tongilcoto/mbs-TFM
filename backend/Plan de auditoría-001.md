@@ -244,6 +244,9 @@ Si es sistemática, sale también una propuesta de comprobación automatizable (
 > · **Anexo RFFM §F.3, §F.4 y §F.15** — el código de equipo, el club deducido del escudo y el volcado real.
 > · **LLD §5.6** (integración con la federación) y **§3.7** (fuentes y *provenance*).
 > · **`D-17`, `D-55`, `D-71`, `D-74`** de la bitácora.
+> · **Añadido al cerrar el bloque:** el **volcado** `docs/Federation APIs examples/FCF-partidos-temporada-jugada.txt`.
+> El ensayo en seco no se puede hacer con el anexo solo — el juego **completo** de claves del objeto de
+> partido está en el volcado y de contarlas sale H-08.
 > No hace falta nada de migraciones, tenancy, HTTP ni auth.
 
 **Pregunta.** ¿`FederationClient` abstrae *una federación*, o abstrae *la RFFM* con otro nombre?
@@ -552,8 +555,16 @@ nada** — un bloque cerrado en blanco es información, y es la mitad del valor 
 | **H-04** | A-0 | **S3** | `README.md:764` afirma que el *spec* tiene **6.477 líneas**; tiene **6.565** | `wc -l < Sources/APIContract/openapi.yaml` | **Arreglado** (`31699a0`) |
 | **H-05** | A-0 | **S4** | **La integridad de las citas es completa, y queda medido.** Las **87** referencias `D-nn` de `Sources/` y `Tests/` resuelven **todas** contra las 89 decisiones de la bitácora. Los `§x` también, **incluidos los `§9.n`** (§9.1, §9.5, §9.7, §9.8, §9.9), que **no son encabezados sino puntos de la lista numerada de *Cuestiones abiertas*** — se anota porque una comprobación automática ingenua los marcaría como roídos, y no lo están. De las 5 decisiones sin citar (`D-08`, `D-26`, `D-69`, `D-70`, `D-78`), cuatro no son citables desde el código —son decisiones de método o de modelo— y la quinta es H-02 | `comm` de las dos listas; ver el detalle en la nota de cierre de abajo | **Cerrado** |
 | **H-06** | A-0 | **S4** | **Las otras tres afirmaciones verificables se sostienen.** *"266 tests"*: exacto (`swift test --list-tests` → 266). *"`FederationCode.swift` es el único sitio donde aparecen `"rffm"` y `"fcf"`"*: se sostiene, un solo fichero. **Y los nueve filtros de la tabla de fases del README casan todos con algo** —ninguno cae en la trampa del `--filter` que el propio README documenta—, con el de F3 dando exactamente los *"trece renglones"* que §5.4 promete | `swift test --list-tests` y `grep -cE` de cada filtro | **Cerrado** |
-
 | **H-07** | **A-7** | **S2** | **Un verde omitido y un verde real son indistinguibles en la línea de resumen.** Con Postgres parado, `swift test` omite los niveles 3 y 4 y remata con `✔ Test run with 266 tests in 40 suites passed` — **el mismo texto, el mismo recuento** que cuando sí corren, porque el total sale de la lista de tests y no de lo ejecutado. La única señal es **la duración**: 0,10 s omitiendo contra 4,57 s de verdad. Los avisos de omisión existen y son buenos (§5.2 del README), pero quedan sepultados y el renglón que uno mira es el último. **Lo encontró tropezando: al cerrar A-0 se dio por verde una pasada de 0,1 s.** Anotado a A-7 porque su remedio vive ahí —CI con `REQUIRE_DB=1`— y porque refuerza su S2: la guarda está escrita y desconectada | `swift test` con `docker compose stop db` (0,10 s, «passed») frente a `REQUIRE_DB=1 swift test` en las mismas condiciones (falla y dice por qué) | **Abierto** — es de A-7 |
+| **H-08** | A-1 | **S2** · **F9**, y condiciona F7/F8 | **El sobre de `FederationCalendar` está cortado a la medida de la RFFM, y los dos campos obligatorios son justo los dos que la FCF no publica.** El calendario de la FCF —`/api/competition/partidos?grupId=…`, la **única** llamada de su ingesta ([Anexo FCF §C.10.4])— trae **21 claves y ninguna de sobre**: ni nombre de competición, ni etiqueta de temporada, ni rótulo de jornada. De los cinco campos que el puerto pide, publica **uno**.<br><br>· `seasonLabel: SeasonLabel` — **obligatorio** · RFFM: `calendar.temporada` · FCF: **no existe**<br>· `competitionName: String?` — opcional · RFFM: `calendar.competicion` · FCF: **no existe**<br>· `groupLabel: String?` — opcional · RFFM: `calendar.grupo` · FCF: **`GRUPO: "GRUP 1"`** ✅<br>· `currentRound: Int?` — opcional · RFFM: `pageProps.currentRound` · FCF: no existe (derivable de `CERRADA`)<br>· `FederationRound.label: String` — **obligatorio** · RFFM: `"1 (13-09-2026)"` · FCF: **no existe**<br><br>**La opcionalidad está invertida respecto al valor probatorio**: obligatorio es el eco (`seasonLabel`, §F.16) y opcional el dato (`competitionName`). Y `FederationRound.label` es obligatorio, solo la RFFM lo puede llenar y **no lo lee nadie** — su única aparición fuera del `init` es `self.label = label`. El puerto declara de sí mismo que *"casi todo sea opcional — un `nil` aquí significa «la fuente no lo dijo»"* (`FederationClient.swift:82-84`); estos dos campos son la excepción y no está razonada | `grep -o '"[A-Z_0-9]*":' "docs/Federation APIs examples/FCF-partidos-temporada-jugada.txt" \| sort -u` → 21 claves, ninguna de sobre. Contra la estructura de [Anexo RFFM §F.15]. Y `grep -rn '\.label' backend/Sources backend/Tests` → ninguna lectura de `FederationRound.label` | **Abierto** — **F6-bis** (Plan §4.1) |
+| **H-09** | A-1 | **S2** · **F9** — *la que más cuesta descubrir tarde* | **La guarda de `D-84` se apaga sola en la FCF, sin error y sin aviso.** `Competition.requireSameSource(as:)` compara `Competition.federationName` contra `calendar.competitionName`, y sus dos silencios **no paran nada** a propósito (`Competition.swift:265-268`): *"si la fuente no publica nombre, callar no es contradecir"*. Pero el calendario de la FCF **no publica nombre de competición nunca** (H-08), así que para un tenant de la FCF `incoming` es `nil` en **todas** las pasadas y la guarda hace `return` siempre. §5.6 la llama *"una guarda antes de escribir nada"* y `D-84` dice que la pasada *"se para sin escribir"*: en Cataluña no se pararía jamás. **Hoy no rompe nada** —`CatalogFederationClientProvider` devuelve `nil` para `.fcf`, así que no hay pasada— y por eso no es S1: rompe **el día que F9 aterrice**, escribiendo un calendario de otro grupo dentro de la competición equivocada, que es el desenlace que `Competition.swift:249-252` describe como irreversible (`Team` sin `PATCH` de categoría, `Match` sin `PATCH`).<br><br>**Y la salida no es gratis, por eso se decide y no se parchea.** `groupLabel` sí lo publican las dos, pero es campo **descriptivo y editable por el BFF** (`Competition.swift:135`), así que como evidencia vale menos que `federationName`, que es `UpsertPolicy.matching`. Las tres opciones, para F9: (a) comparar `groupLabel` y aceptar que el administrador puede desarmar la guarda editándolo; (b) columna de evidencia nueva —`federation_group_name`—, que es migración y por tanto **A-5**; (c) segunda llamada en el adaptador de la FCF (`grupos?competicioId=…`) para traer el nombre y llenar `competitionName`, que es la que **no toca el puerto ni el modelo** | Juego de claves de H-08 (no hay nombre de competición) contra `Competition.swift:266`: `guard let federationName, let incoming, …` — con `incoming == nil` el `guard` cae al `return` | **Abierto** — **F6-bis** (Plan §4.1) |
+| **H-10** | A-1 | **S3** | **Un campo que solo lee una herramienta de CLI puede tirar todas las pasadas de todos los clubes.** `FederationCalendar.seasonLabel` no es `String?` como el resto del sobre: es un *Value Object* del Dominio con invariante dura, construido en `RFFMCalendarParser.swift:70` **dentro** de la expresión que devuelve el calendario. Si `calendar.temporada` llegara con dos años no consecutivos —`"2026-2028"`—, `RFFMSeasonLabel.parse` delega en `SeasonLabel`, que lanza `DomainError`, y **se cae el `fetchCalendar` entero** con sus 34 jornadas ya parseadas detrás. Su único lector en todo el backend es `SeedCompetitionCommand` (líneas 91 y 112), que es *"HERRAMIENTA, no contrato"* (`AGENTS.md`). La ingesta no lo usa: `CalendarPass` no lo menciona. El comportamiento **está probado y es deliberado** en nivel 1 (`RFFMSeasonLabelTests.swift:69`, *"rechaza años no consecutivos, delegando en la invariante del dominio"*); lo que no está escrito en ningún sitio es su consecuencia a nivel de pasada | `grep -rn 'seasonLabel' backend/Sources` → tres aciertos: el `init` del puerto, la construcción en el parser y `SeedCompetitionCommand`. Ninguno en `CalendarPass` ni en `IngestCalendar` | **Abierto** — **F6-bis** (Plan §4.1) |
+| **H-11** | **A-0** | **S2** | **El buscar-y-reemplazar de H-01 tiene cuatro víctimas más, y A-0 se cerró contándolas como cinco.** Eran nueve, y **tres están en `Sources/`**: `Domain/Competition.swift:245` se contradice en una línea (*"la RFFM **no ignora** el parámetro `temporada` … **y ignora el parámetro `temporada`**"*), `Domain/Competition.swift:205-207` quedó sin sentido gramatical y falso (*"ignora el parámetro `temporada` **de competición y grupo entre temporadas**"*, donde el original decía *"reutiliza los códigos de competición y grupo"*), y `Federation/FederationTransport.swift:20` tiene una oración empalmada a mitad. La cuarta está en el LLD §3.7, línea 589, con la misma doble negación.<br><br>**Y hay un sitio que debió tocar y no tocó, que es el peor de los cinco:** `Application/CalendarPass.swift:59-60` sigue afirmando *"La RFFM reutiliza sus códigos entre temporadas"* — la premisa que [Anexo RFFM §F.16] **refuta con dato** (*"los códigos **NO** se reutilizan entre temporadas: cada una recibe un bloque nuevo"*). Es el comentario que explica por qué existe la guarda de `D-84`, encima de la línea que la llama. La conclusión sobrevive; la causa escrita es falsa. Anotado a A-0 porque **su renglón de §7 dice «cerrado» y no lo está** | `grep -rn "no ignora el parámetro" backend/Sources docs/` → `Competition.swift:245` y `LLD-001.md:589`. `grep -n "reutiliza" backend/Sources/Application/CalendarPass.swift` → línea 59, contra §F.16 | **Arreglado** (`cc288cd`) |
+| **H-12** | A-1 | **S3** | **El Dominio afirma dos veces que la FCF no publica identificador de partido, citando un anexo obsoleto.** `Domain/MatchingChain.swift:158-159` dice *"`nil` en la FCF, que **no publica identificador de partido en absoluto** (`D-31`, [Anexo FCF §C.3])"* y `Domain/Match.swift:38` repite *"la FCF no publica…"*. **§C.3 describe el sitio antiguo y está marcado obsoleto**; la web nueva trae `CODACTA` en **240 de 240** partidos, no vacío y **único**, y §C.10.4 remata que *"se llama igual que en la RFFM"*. §C.10.8 ya dejó apuntado que *"el 2.º paso de la cadena existe porque la FCF no tiene id de partido → el id **existe**; la cadena sigue siendo buena red de seguridad, pero su motivo era éste"*. Es la clase exacta de `D-56`: la regla aguanta, su justificación hay que rehacerla — y `D-56` ya recibió ese trato en `D-75`, así que hay precedente y forma. `D-31` no lo ha recibido | `grep -c '"CODACTA": "[0-9][0-9]*"' "docs/Federation APIs examples/FCF-partidos-temporada-jugada.txt"` → **240**; `… \| sort -u \| wc -l` → **240** únicos, sobre 240 `CODGRUPO` | **Arreglado** (`cc288cd`) |
+| **H-13** | A-1 | **S3** | **El puerto explica tres campos nombrando el mecanismo de la RFFM, y en uno la explicación es además una trampa.** `FederationTeamRef.federationClubID` (`FederationClient.swift:212-213`) justifica su opcionalidad con *"en la RFFM se infiere del nombre del fichero del escudo"*; `crestURL` (216-217) con *"compuesta con el host que publica la propia respuesta"*, que es un campo de la RFFM (`calendar.host`, §F.15) y la FCF no tiene; y `letter` (209) con *"la letra que iba embebida en el nombre"*, que es la gramática de Madrid. La **forma** de los tres es correcta —el concepto es genérico y la opcionalidad es la unión honesta de las dos fuentes—, así que esto no es cambio de puerto: es que el comentario documenta **cómo lo obtiene una fuente** en vez de **qué es el dato**, y el puerto es lo que F9 va a leer.<br><br>**La trampa, que es lo que sube esto de nota al pie a hallazgo:** el patrón `00100_<10 dígitos>_<texto>` existe en las dos federaciones (§C.10.4 lo señala como prueba de plataforma común), pero **en la FCF ese número no es el club**. `00100_0001223396_MANLLEU.png` convive con `CODCLUB_CASA: "1023"`, y divergen en los cuatro casos mirados. Quien generalice `RFFMValue.federationClubID(fromCrestPath:)` por parecido de formato escribirá en `OpponentClub.federation_club_id` un número que no es la clave de club de esa federación — y la cadena de §3.7 empareja por ella | `grep -o '"ESCUDO_CASA": "[^"]*"' … \| head -4` frente a `grep -o '"CODCLUB_CASA": "[0-9]*"' … \| head -4` sobre el volcado FCF: `0001223396`/`1023`, `0001162525`/`2899`, `0000574621`/`1033`, `0000959029`/`1049` | **Arreglado** (`cc288cd`) |
+| **H-14** | A-1 | **S4** | **Las cuatro sospechas del plan, contestadas — y dos salen bien.** **Sospecha 2 (la letra): correcta.** La extrae el **adaptador**, en `RFFMValue.teamName` (`RFFMValue.swift:167-181`), y `NormalizedName.swift:26-27` lo deja escrito (*"la letra no llega aquí: quien la separa es el adaptador"*). F9 no hereda la gramática de nombres de Madrid. **Sospecha 4 (la coordenada): correcta, tres códigos bastan.** La FCF **no necesita un cuarto eje** y de hecho necesita menos: `partidos?grupId=…` toma **un solo parámetro** ([Anexo FCF §C.10.1]), así que `federationSeasonID` y `modality` le sobran. El `disciplinaId` que colapsa (modalidad, género) de §C.10.3 **no entra en la ruta de ingesta** —solo en el descubrimiento, que §5.6 declara inexistente—, así que el género que la FCF sabe con certeza no le hace falta al calendario. Queda un hueco, y es de **F10**: el `/preview` de `D-58` tendrá *"dos caminos"* (§C.10.3) y hoy ni `FederationCoordinate` ni `FederationCalendar` pueden transportar *"la fuente sabe el género"*. **Sospecha 3 (`field` como coordenada del cuerpo): sobrevive.** La FCF es JSON desde `D-74`, y `field` es `String`: si volviese a HTML cabe una coordenada de raspado. **Sospecha 1: parcialmente** → H-13.<br><br>**Y una confirmación para F7/F8: la coordenada no hay que rehacerla.** `/api/standings?idGroup=…&round=9` (§F.8) y `/api/scorers?idGroup=…&idCompetition=…` (§F.13) **no piden `temporada` ni `tipojuego`**, y sus equivalentes de la FCF piden `grupId` (+`temporada` en goleadores, §C.10.1). `FederationCoordinate` es superconjunto suficiente para los cuatro: la jornada de F7 va como **parámetro del método**, no como campo de la coordenada — meterla ahí volvería la coordenada dependiente de la operación, y la FCF la ignora por `D-55` | `grep -rn 'teamName' backend/Sources`; §C.10.1 y §C.10.3 del Anexo FCF; §F.8 y §F.13 del Anexo RFFM | **Cerrado** |
+| **H-15** | **A-6** | **S2** · **F10** | **`FederationError` tiene cuatro casos con semántica cuidada y en producción no los distingue nadie.** El propio fichero justifica la taxonomía en su cabecera: *"un caso de uso tiene que poder distinguir «la fuente no contesta» de «la fuente contesta algo que no entiendo»"*, y la ingesta *"reacciona distinto a cada uno"*. No lo hace: se **lanza** solo dentro de `Sources/Federation/` y se **discrimina** solo en `Tests/`. `IngestCalendar.swift:68-81` captura `any Error` y lo aplana con `diagnosticText(for:)`, que es `String(reflecting:)`. Y `ProblemMiddleware` —el `switch` exhaustivo de `DomainError` que existe para que un error nuevo no compile hasta decidir su HTTP— **no contempla `FederationError`**. Hoy no se nota porque el `202` responde antes de llamar a la federación (`D-88`); **F10 sí llama dentro de la petición** (§2.3-c, el `/preview`), y ahí las cuatro señales acabarían en el mismo 500. Anotado a A-6, que es el bloque de las costuras | `grep -rn 'FederationError' backend/Sources backend/Tests \| grep -v '^backend/Sources/Application/FederationError.swift'` → todos los `throw` en `Sources/Federation/`, todos los `case` en `Tests/`. Ninguno en `Application/`, `HTTPAdapter/` ni `App/` | **Abierto** — es de A-6 |
+| **H-16** | **A-0** | **S3** | **`Plan de desarrollo-001.md:153` sigue vendiendo F9 como *scraping*.** La fila dice *"Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo)"*, y `D-74` cerró que la FCF publica API JSON y que el calendario entero cuesta **una** petición. Es la cifra de coste de la fase que viene después de F8: quien planifique F9 con esa fila delante presupuesta un raspador con control de concurrencia y *backoff*. La misma premisa caducada asoma en `Federation/FederationTransport.swift:23`, que cita *"[Anexo FCF §C.6]"* —sección obsoleta— para *"concurrencia y backoff"* | `sed -n '153p' "docs/Plan de desarrollo-001.md"` contra `D-74` y [Anexo FCF §C.10.4] | **Arreglado** (`cc288cd`) |
 
 ### Nota de cierre de A-0 · ¿la deriva es puntual o sistemática?
 
@@ -576,6 +587,65 @@ A-7: automatizar el recuento, **y no pretender que eso cubra la revisión**.
 *fixture* HTML, produce `D-266`). Los tres "roídos" del primer barrido eran artefactos del patrón, no
 hallazgos. **Verificar de dónde sale cada coincidencia antes de anotarla.**
 
+### Nota de cierre de A-1 · ¿abstrae una federación o abstrae la RFFM?
+
+**Abstrae bien el partido y mal el sobre, y la línea que los separa no es casual.**
+
+- **Lo de dentro está genérico, y sobrevive al ensayo en seco entero.** `FederationMatch` y
+  `FederationTeamRef` recorren campo a campo el volcado de la FCF sin un hueco: `CODACTA`→`federationMatchID`,
+  `CODEQUIPO_*`→`federationTeamID`, `CODCLUB_*`→`federationClubID`, `CAMPO`/`CODIGO_CAMPO`→`venue`/`venueCode`,
+  `COMIENZO1` partido en `date`+`kickoff` (`D-30`), y las **dos trampas al revés** de §C.10.5 —el `"0"` que
+  significa *"sin jugar"* y el `CERRADA`/`ESTADO` que lo desambigua— caen **dentro del adaptador**, que es
+  donde §C.10.5 pide que caigan: *"cada adaptador decide qué es «no hay marcador»; el puerto recibe `nil`"*.
+  `MatchResult.swift:10-11` y `UpsertPolicy.swift:73-74` ya lo tienen escrito con las dos federaciones
+  nombradas. **Lo único de la FCF que no tiene sitio es `LATITUD`/`LONGITUD`**, y no debe tenerlo: `Match.venue`
+  es texto libre (§3.2) y el campo con entidad propia está declarado fuera de alcance en §F.5.
+- **Lo de fuera está cortado a la medida de Madrid.** Los cinco campos de sobre son cinco campos del
+  `__NEXT_DATA__` de la RFFM, uno por uno, y la FCF publica **uno** (H-08). No es que falte un campo: es que
+  el sobre **no existe** en la otra fuente, porque en la FCF la identidad de la coordenada vive en llamadas
+  distintas de la del calendario. Y de ahí sale la única consecuencia funcional del bloque, H-09.
+
+**Por qué la deriva se concentró ahí, que es la lección transferible.** El partido se diseñó **contra dos
+anexos** —`FederationClient.swift` cita §F.3, §F.4, §F.5, §F.11 y §C.10.5 en el mismo fichero— y el sobre se
+diseñó **contra el volcado que había delante**, que era el de la RFFM: §F.15 es de 2026-08-28 y es literalmente
+la estructura del sobre, campo por campo, en el mismo orden. **El puerto es genérico exactamente donde el
+diseño tuvo dos fuentes a la vista**, y eso es `D-74` otra vez: *"con el anexo delante, no de memoria"* funciona,
+y funciona **solo para la parte que se miró con los dos anexos abiertos**.
+
+**Y la premisa de §1 aguanta: A-0 y A-1 juntos dan cero hallazgos S1.** Esto sigue siendo una auditoría y no
+una fase de reparación previa. Los cinco S2 tienen fase asignada —F9 en H-08 y H-09, F10 en H-15, y H-11 es
+reabrir A-0—, que es lo que §6-bis exige para que no cuenten como S1.
+
+### Lo que A-1 entrega: la forma del puerto antes de que F7 y F8 le añadan dos métodos
+
+Cuatro reglas, y son la respuesta a *"qué se mueve al adaptador"*:
+
+1. **Los DTOs de F7 y F8 no copian el sobre de `FederationCalendar`.** Es la trampa que el §4 del plan temía
+   —*"ese supuesto se habrá copiado ya dos veces más"*—, y aquí es concreta: `/api/standings` y `/api/scorers`
+   de la RFFM **también** devuelven `competicion` y `grupo` (§F.8, §F.13) y sus equivalentes de la FCF **no**
+   (§C.10.6, §C.10.7). Si `FederationStandings` nace con un `competitionName` opcional y un rótulo
+   obligatorio, H-08 y H-09 se reproducen dos veces más antes de que nadie escriba el adaptador catalán.
+2. **La coordenada no se toca** (H-14). Tres códigos más `modality`, y la **jornada de F7 va como parámetro
+   del método** —`fetchStandings(_ coordinate:, round:)`— porque es de la operación y no de la competición, y
+   porque la FCF la ignora por `D-55`: ese `round` que se manda y no se usa **es** la capacidad
+   `providesRoundStandings` vista desde el puerto, y el sitio donde se decide qué hacer con él es el caso de
+   uso, que ya lee el catálogo del Dominio.
+3. **La identidad de la coordenada se diseña una vez, no por método.** H-09 no es *"a `FederationCalendar` le
+   falta un campo"*: es que **la evidencia de que la coordenada sigue apuntando a esto** —lo que `D-84` exige
+   antes de escribir— no es homogénea entre fuentes, y hoy vive escondida en un campo opcional del calendario.
+   Decidirlo en F9 con las tres opciones de H-09 sobre la mesa, y decidirlo **antes** de escribir el segundo
+   adaptador, no dentro.
+4. **Los comentarios del puerto se reescriben en términos del dato, no del mecanismo** (H-13). Es lo más
+   barato de la lista y lo que más rinde: el puerto es el fichero que F9 abrirá primero.
+
+**Lo que este bloque necesitó y no estaba en su «Leer antes»**, para el que venga: los **volcados** de
+`docs/Federation APIs examples/FCF-*.txt`. El ensayo en seco de §C.10 contra los DTOs no se puede hacer con el
+anexo solo —el juego de claves completo del objeto de partido está en el volcado, no en el anexo, y H-08 sale
+de contarlas—. Añadir a la lista: `FCF-partidos-temporada-jugada.txt`. **No hizo falta** nada de
+`CalendarPass` más allá de comprobar qué campos consume, ni ningún test más allá de contar sitios de
+construcción de los DTOs (**7 `FederationCalendar`, 4 de cada uno de los demás, en 10 ficheros**) — que es la
+cifra que dice lo que cuesta hoy cambiar la forma, y por eso está aquí.
+
 ---
 
 ## 6-bis. La puerta: cuándo se puede arrancar F7
@@ -586,7 +656,7 @@ bloquee**. Escrito como condición comprobable y no como intención:
 | Condición | Cómo se comprueba |
 |---|---|
 | **Cero hallazgos S1 abiertos** | Ninguna fila S1 de §6 sin `sha` en la columna «Estado» |
-| **Cada S2 tiene fase asignada** | Su fila dice en qué fase se arregla — F7, F8, F9, F10 o *"después de la ingesta"* |
+| **Cada S2 tiene fase asignada** | Su fila dice en qué fase se arregla — **F6-bis**, F7, F8, F9, F10 o *"después de la ingesta"* |
 | **Los S3 documentales, corregidos** | Por la excepción de §2: no se aplazan |
 | **La batería en verde y el recuento al día** | `swift test` y, si A-7 lo entrega, el comprobador de cifras |
 
@@ -599,14 +669,41 @@ olvidada con buena letra.
 
 | Bloque | Estado | Sesión | Hallazgos |
 |---|---|---|---|
-| **A-0** · La vara de medir | ● **cerrado**, hallazgos corregidos | 2026-09-03 / 09-04 | H-01 · H-02 · H-03 · H-04 · H-05 · H-06 |
-| **A-1** · El puerto de federación | ○ pendiente | — | — |
-| **A-2** · La regla que destruye datos | ○ pendiente | — | — |
+| **A-0** · La vara de medir | ● **cerrado de nuevo** — se reabrió por H-11 y H-16, hallados desde A-1, y los dos están corregidos (`cc288cd`) | 2026-09-03 / 09-04 | H-01 · H-02 · H-03 · H-04 · H-05 · H-06 · H-11 · H-16 |
+| **A-1** · El puerto de federación | ● **cerrado**; documentales corregidos (`cc288cd`) y la forma del sobre elevada a **F6-bis** | 2026-09-04 | H-08 · H-09 · H-10 · H-12 · H-13 · H-14 (+ H-15, que es de A-6) |
+| **A-2** · La regla que destruye datos | ◐ **siguiente** | — | — |
 | **A-3** · Lo que sobrevive a un fallo | ○ pendiente | — | — |
 | **A-4** · El `202` y el TaskLocal | ○ pendiente | — | — |
 | **A-5** · Las migraciones | ○ pendiente | — | — |
-| **A-6** · Las costuras de §7 | ○ pendiente | — | — |
+| **A-6** · Las costuras de §7 | ○ pendiente | — | H-15 (apuntado desde A-1) |
 | **A-7** · El arnés | ○ pendiente | — | H-07 (apuntado desde A-0) |
+
+### La ronda de arreglos de A-1, y qué enseñó del método
+
+**Cuatro hallazgos corregidos, tres elevados a fase, y la válvula de §3 regla 2 disparó por primera vez.**
+
+- **Corregidos** (`cc288cd`): H-11, H-12, H-13 y H-16. Los cuatro son comentarios y prosa de diseño; ninguno
+  cambia comportamiento, así que **ninguno tuvo rojo previo** — la regla 3 (*"el test primero, y el rojo de
+  aserción"*) no aplica a un comentario, y decirlo es más honesto que fingir un ciclo. La verificación fue
+  `swift build --build-tests` y la batería.
+- **Elevados a F6-bis**: H-08, H-09 y H-10. La válvula de la regla 2 —*"un arreglo que toca más de un target
+  o cambia una API pública no es una corrección de auditoría: es una mini-fase y va al Plan de desarrollo con
+  su nombre"*— es exactamente este caso: volver opcionales `seasonLabel` y `FederationRound.label` cambia dos
+  `init` públicos y toca `Application`, `Federation`, `App` y diez ficheros de test. **Sin la válvula, esta
+  ronda se habría convertido en un refactor del puerto sin que nadie lo decidiera**, que es la frase que la
+  regla usa para justificarse.
+- **Y lo que la válvula no cubre y hubo que resolver a mano:** una mini-fase aplazada deja el hallazgo escrito
+  en un plan que F7 no tiene por qué leer. Así que el aviso va **también en el puerto**, que es el fichero que
+  F7 abrirá primero. La lección, para las rondas que vengan: **un hallazgo aplazado necesita un ancla en el
+  código que la fase siguiente va a tocar**, no solo una fila en un plan.
+
+**La ronda se cerró con la regla 4**, y la duración es el testigo que H-07 exige:
+
+```
+REQUIRE_DB=1 swift test  →  266 tests in 40 suites passed after 4.543 seconds
+```
+
+**4,54 s y no 0,1 s**, así que los niveles 3 y 4 corrieron de verdad.
 
 ---
 
