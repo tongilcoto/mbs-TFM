@@ -115,8 +115,8 @@ struct MatchingChainTests {
     /// de una fila que nació sin ella"*— sin un solo caso en el que aplicarse.
     ///
     /// Así que el *"si no"* es **"si el paso anterior no resolvió"**, no *"si el
-    /// dato no viene"*.
-    @Test("la clave que no encuentra a nadie cae al paso 2, y por eso D-76 existe")
+    /// dato no viene"* — que es `D-78`, y este test es el que la sostiene.
+    @Test("la clave que no encuentra a nadie cae al paso 2, y por eso D-76 existe (D-78)")
     func opponentClubFallsThroughWhenTheKeyFindsNobody() {
         let nacidoSinClave = OpponentClubCandidate(
             id: OpponentClubID(raw: UUID()),

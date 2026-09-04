@@ -37,7 +37,7 @@ Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§
 |---|---|
 | `GET /v1/club` · `PATCH /v1/club` | F0 |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
-| Todo lo demás del *spec* (~96 operaciones) | ⛔ no generado — §7 |
+| Todo lo demás del *spec* (79 de sus 83 operaciones) | ⛔ no generado — §7 |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
 y era el plan: el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b). Lo que
@@ -761,7 +761,8 @@ la recién dada de alta esperaría para siempre.
 
 ## 7. El *spec* y el código generado
 
-El contrato está en `Sources/APIContract/openapi.yaml` — **6.477 líneas y las 21 entidades completas**
+El contrato está en `Sources/APIContract/openapi.yaml` — **6.565 líneas, 83 operaciones en 45 rutas y las
+21 entidades completas**
 (F6 añadió la 21ª, `IngestionRun`, con su recurso). Es la
 **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` que el servidor conforma
 (`D-65`).

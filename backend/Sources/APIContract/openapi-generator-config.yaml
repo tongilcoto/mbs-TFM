@@ -14,8 +14,8 @@ accessModifier: public
 # EL FILTRO ES EL TRINQUETE DEL ALCANCE.
 #
 # `APIProtocol` declara un método por operación generada, y conformarlo obliga a
-# implementarlas TODAS. Con las ~100 operaciones del spec completo, la fase F0
-# tendría que escribir 99 stubs que lanzan "no implementado" — ruido que además
+# implementarlas TODAS. Con las 83 operaciones del spec completo, la fase F0
+# tendría que escribir 81 stubs que lanzan "no implementado" — ruido que además
 # apaga la garantía de D-65, porque un stub compila igual de bien que un handler.
 #
 # En su lugar se genera **solo lo implementado**. Cada fase del plan de
