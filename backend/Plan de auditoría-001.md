@@ -32,7 +32,7 @@ copia en vez de descubrirse.
 
 **El tamaño de lo que se audita**, para calibrar el esfuerzo: ~8.760 líneas en `Sources/` (de las que 428 son
 `TestSupport`) y ~7.620 en `Tests/`. Nueve *targets*, nueve migraciones, cuatro operaciones HTTP generadas de
-las ~100 del *spec*.
+las **83** del *spec* (medidas en A-0, H-03).
 
 ---
 
@@ -58,31 +58,61 @@ La severidad **no** es susto ni tamaño: es **qué cuesta arreglarlo si se arreg
 |---|---|---|---|
 | **S1** | **Cimiento** | Arreglarlo después obliga a **rehacer código ya entregado** | **Antes de seguir con F7** |
 | **S2** | **Coste creciente** | Cuesta en proporción a lo que se haya construido encima | En la fase que lo toque, y se apunta cuál |
-| **S3** | **Local** | Se arregla donde está, sin arrastrar nada | Cuando se pase por ahí |
+| **S3** | **Local** | Se arregla donde está, sin arrastrar nada | Al cerrar el bloque. **Si es documental, en el acto** — ver abajo |
 | **S4** | **Nota** | Cierto, comprobado, y no hay que hacer nada hoy | Nunca; queda escrito para que no se vuelva a descubrir |
 
 Un hallazgo **S4 no es un hallazgo fallido**. La mitad del valor de este ejercicio es convertir *"creo que
 esto está bien"* en *"esto está comprobado y aquí está cómo"*, que es exactamente lo que `D-84` demostró que
 faltaba cuando una premisa de F2 sobrevivió tres fases siendo falsa.
 
+**Y una excepción que la primera pasada de A-0 obligó a escribir: el S3 *documental* se arregla en el acto.**
+Para código, *"se arregla cuando se pase por ahí"* funciona: alguien pasa. Por una cifra desfasada del README
+**no pasa nadie nunca** — que es precisamente cómo H-03 y H-04 llegaron a estar desfasadas. Anotar una cita
+roída o un número viejo cuesta más que corregirlo, así que no se anota para después: se corrige y se anota
+como corregido.
+
 ---
 
 ## 3. Las reglas del juego
 
-Cinco, y las cinco salen de métodos que este proyecto ya usa:
+Seis, y las seis salen de métodos que este proyecto ya usa — la 4ª la añadió el cierre de A-0:
 
 1. **Un hallazgo sin reproducción no es un hallazgo.** Va con el comando, el `curl`, el test o la consulta
    que lo enseña. Si no se puede reproducir, se escribe como *sospecha* y se dice que lo es. (`D-84`: una
    premisa sobre un sistema ajeno **se mide**; una sobre el propio código, también.)
-2. **El arreglo no va en la misma sesión que el hallazgo**, salvo que sea S3 trivial. Auditar y reparar a la
-   vez es cómo una auditoría se convierte en un refactor sin control.
+2. **Se audita un bloque, se cierra, y *entonces* se arregla.** El ciclo es
+   **auditar A-n → corregir sus hallazgos → auditar A-n+1**, no auditar y reparar entrelazados dentro de la
+   misma sesión, que es cómo una auditoría se convierte en un refactor sin control. Reparar **entre** bloques
+   además favorece al siguiente: si A-1 cambia la forma del puerto, A-2 audita el cableado definitivo y no
+   uno que está a punto de moverse. Con tres condiciones:
+   - **Auditoría y arreglo van en commits separados.** Mezclados se pierde el diff de *"qué encontró"* frente
+     a *"qué cambié"*, y con él la posibilidad de revisar cualquiera de los dos.
+   - **Un arreglo que crece deja de ser un arreglo.** Si toca más de un *target*, cambia una API pública o
+     mueve los dobles de varias *suites*, **no** es una corrección de auditoría: es una mini-fase y va al
+     Plan de desarrollo con su nombre. Sin esta válvula, la auditoría se convierte en reescritura sin que
+     nadie lo haya decidido.
+   - **El libro de hallazgos es el traspaso.** Cada bloque corre en sesión nueva, así que la de A-3 no sabrá
+     lo que A-1 arregló salvo que esté en §6 con su `sha`. Por eso §6 va en la base común de §4-bis.
 3. **Todo arreglo entra por el bucle de Plan §5.1**: el test primero, con esqueleto, y el rojo tiene que ser
    **de aserción y no de compilación**. Un arreglo de auditoría sin test es un hallazgo que volverá.
-4. **Si el código y el diseño discrepan, el hallazgo dice cuál de los dos está mal.** No siempre es el
+4. **Una ronda de arreglos se cierra corriendo la batería, y se corre con `REQUIRE_DB=1`.**
+
+   ```sh
+   REQUIRE_DB=1 swift test          # y no `swift test` a secas
+   ```
+
+   **La bandera no es celo, y esto se aprendió fallando:** con Postgres parado, `swift test` **omite** los
+   niveles 3 y 4 (§5.2 del README) y su renglón final dice
+   `✔ Test run with 266 tests in 40 suites passed` — **exactamente el mismo texto** que cuando sí corren.
+   El recuento tampoco delata nada, porque el total sale de la lista y no de lo ejecutado. **Lo único que
+   cambia es la duración**: 0,1 s omitiendo contra 4,6 s de verdad. Un verde de 0,1 s significa *"no se probó
+   nada que toque la base"*. Con `REQUIRE_DB=1`, en cambio, falla y dice por qué.
+   Ver **H-07**, que es este mismo tropiezo anotado para A-7.
+5. **Si el código y el diseño discrepan, el hallazgo dice cuál de los dos está mal.** No siempre es el
    código: `D-84` y `D-74` son dos casos en que el documento era el equivocado. Y si el que cambia es el
    documento, va a la bitácora como entrada `D-nn` nueva o enmienda, según la tabla de *"dónde va cada cosa"*
    de `AGENTS.md`.
-5. **La auditoría no amplía el alcance.** No añade endpoints, ni entidades, ni entra en el `filter` de
+6. **La auditoría no amplía el alcance.** No añade endpoints, ni entidades, ni entra en el `filter` de
    `openapi-generator-config.yaml` (`D-69`). Lo que descubra que falta, lo apunta para su fase.
 
 ---
@@ -188,7 +218,7 @@ gusto), **qué sale** y su **«Leer antes»** — la lectura mínima de §4-bis,
 - Cada `D-nn` citado en `Sources/` y `Tests/` **existe** en la bitácora. Cada `§x` existe en el LLD.
 - Al revés: cada `D-nn` que la bitácora marque como *implementada* tiene código o test que la cite.
 - Las afirmaciones **verificables** de `AGENTS.md` y `backend/README.md`, una por una. Tres para empezar,
-  porque las tres se pueden comprobar en un comando: *"266 tests"*, *"~96 operaciones no generadas"*, y
+  porque las tres se pueden comprobar en un comando: *"266 tests"*, *"las operaciones no generadas"*, y
   *"`FederationCode.swift` es el único sitio del proyecto donde aparecen las cadenas `"rffm"` y `"fcf"`"*.
 - Los cuatro rótulos de fase (*"entregada"*) contra lo que hay en `Sources/`.
 
@@ -517,6 +547,51 @@ nada** — un bloque cerrado en blanco es información, y es la mitad del valor 
 | # | Bloque | Severidad | Hallazgo | Reproducción | Estado |
 |---|---|---|---|---|---|
 | **H-01** | A-0 | **S2** | Un buscar-y-reemplazar mal aplicado al enmendar `D-84` dejó **cinco** sitios tocados: tres en `README.md` (una frase que se contradecía a sí misma, más dos que atribuían la caducidad de la coordenada a `temporada`, que es justo el parámetro que la RFFM ignora) y dos en `RFFMCanaryTests.swift` (una frase sin verbo, y el mensaje de `coordinateNotFound` anunciando un **404** que `FederationError` documenta que **nunca ocurre**) | `git show` del 2026-09-03; el mensaje del canario contra `FederationError.swift:26-31` | **Arreglado** el 2026-09-03. `swift build --build-tests` y `FederationTests` (48) en verde |
+| **H-02** | A-0 | **S3** | **`D-78` no lo cita ningún test**, y sí está probada: `MatchingChainTests.swift:107-119` explica su argumento entero en prosa —*"el «si no» es «si el paso anterior no resolvió»"*— pero el rótulo del `@Test` cita `D-76`, la decisión vecina. Quien audite `D-78` por el método que `AGENTS.md` prescribe —`grep` de la cita— concluye **"regla sin test"**, y es falso. Es la segunda instancia de la clase de H-01: la regla sobrevive, su rastro no | `grep -r "D-78" backend/` → 0 aciertos en `Tests/`. Contrastar con `MatchingChainTests.swift:107-119` | **Arreglado** (`31699a0`) |
+| **H-03** | A-0 | **S3** | **La cifra de operaciones del *spec* está desfasada en tres sitios, y uno es este mismo plan.** El *spec* tiene **83** operaciones, no ~96 ni ~100: `README.md:40` dice *"~96 operaciones"* no generadas (son **79**); `openapi-generator-config.yaml:17-18` dice *"~100 operaciones"* y *"99 stubs"* (son **83** y **79**); y `Plan de auditoría-001.md:191` repite el ~96 | Dos vías independientes: `grep -c "operationId:"` → **83**, y `grep -cE "^    (get\|post\|put\|patch\|delete):"` → **83**, en **45** rutas | **Arreglado** (`31699a0`) |
+| **H-04** | A-0 | **S3** | `README.md:764` afirma que el *spec* tiene **6.477 líneas**; tiene **6.565** | `wc -l < Sources/APIContract/openapi.yaml` | **Arreglado** (`31699a0`) |
+| **H-05** | A-0 | **S4** | **La integridad de las citas es completa, y queda medido.** Las **87** referencias `D-nn` de `Sources/` y `Tests/` resuelven **todas** contra las 89 decisiones de la bitácora. Los `§x` también, **incluidos los `§9.n`** (§9.1, §9.5, §9.7, §9.8, §9.9), que **no son encabezados sino puntos de la lista numerada de *Cuestiones abiertas*** — se anota porque una comprobación automática ingenua los marcaría como roídos, y no lo están. De las 5 decisiones sin citar (`D-08`, `D-26`, `D-69`, `D-70`, `D-78`), cuatro no son citables desde el código —son decisiones de método o de modelo— y la quinta es H-02 | `comm` de las dos listas; ver el detalle en la nota de cierre de abajo | **Cerrado** |
+| **H-06** | A-0 | **S4** | **Las otras tres afirmaciones verificables se sostienen.** *"266 tests"*: exacto (`swift test --list-tests` → 266). *"`FederationCode.swift` es el único sitio donde aparecen `"rffm"` y `"fcf"`"*: se sostiene, un solo fichero. **Y los nueve filtros de la tabla de fases del README casan todos con algo** —ninguno cae en la trampa del `--filter` que el propio README documenta—, con el de F3 dando exactamente los *"trece renglones"* que §5.4 promete | `swift test --list-tests` y `grep -cE` de cada filtro | **Cerrado** |
+
+| **H-07** | **A-7** | **S2** | **Un verde omitido y un verde real son indistinguibles en la línea de resumen.** Con Postgres parado, `swift test` omite los niveles 3 y 4 y remata con `✔ Test run with 266 tests in 40 suites passed` — **el mismo texto, el mismo recuento** que cuando sí corren, porque el total sale de la lista de tests y no de lo ejecutado. La única señal es **la duración**: 0,10 s omitiendo contra 4,57 s de verdad. Los avisos de omisión existen y son buenos (§5.2 del README), pero quedan sepultados y el renglón que uno mira es el último. **Lo encontró tropezando: al cerrar A-0 se dio por verde una pasada de 0,1 s.** Anotado a A-7 porque su remedio vive ahí —CI con `REQUIRE_DB=1`— y porque refuerza su S2: la guarda está escrita y desconectada | `swift test` con `docker compose stop db` (0,10 s, «passed») frente a `REQUIRE_DB=1 swift test` en las mismas condiciones (falla y dice por qué) | **Abierto** — es de A-7 |
+
+### Nota de cierre de A-0 · ¿la deriva es puntual o sistemática?
+
+**Las dos cosas, y la línea que las separa es útil.**
+
+- **Las citas están intactas: 87 de 87.** No hay una sola referencia cruzada roída en el código, y eso con 89
+  decisiones y ~16.400 líneas entre fuentes y tests. El mecanismo de control de Plan §9 funciona.
+- **Las cifras derivan, y sistemáticamente.** Los tres hallazgos S3 (H-02 aparte) son **cantidades que eran
+  ciertas cuando se escribieron**: operaciones del *spec*, líneas del *spec*. Nadie las volvió a contar
+  porque contar no es gratis a mano — y por eso se desfasan solas con cada fase.
+
+**Lo que se deriva para A-7**, que es donde vive el arnés: **las cifras son automatizables y la prosa no.**
+Un comprobador que cuente operaciones, tests y líneas y falle si el documento dice otra cosa habría cazado
+H-03 y H-04 el día que nacieron, y cuesta veinte líneas. **Pero no habría cazado H-01** —la frase que se
+contradecía— **ni H-02** —la cita ausente—, que son las dos que de verdad engañan al lector. Conclusión para
+A-7: automatizar el recuento, **y no pretender que eso cubra la revisión**.
+
+**Y una advertencia de método para los bloques que vienen**, que este bloque se ha ganado en carne propia:
+`grep -oE "D-[0-9]+"` produce **falsos positivos** (`LLD-001` contiene `D-001`; `U+266D-266F`, dentro de un
+*fixture* HTML, produce `D-266`). Los tres "roídos" del primer barrido eran artefactos del patrón, no
+hallazgos. **Verificar de dónde sale cada coincidencia antes de anotarla.**
+
+---
+
+## 6-bis. La puerta: cuándo se puede arrancar F7
+
+La auditoría no termina cuando los ocho bloques están cerrados: termina cuando **el libro no tiene deuda que
+bloquee**. Escrito como condición comprobable y no como intención:
+
+| Condición | Cómo se comprueba |
+|---|---|
+| **Cero hallazgos S1 abiertos** | Ninguna fila S1 de §6 sin `sha` en la columna «Estado» |
+| **Cada S2 tiene fase asignada** | Su fila dice en qué fase se arregla — F7, F8, F9, F10 o *"después de la ingesta"* |
+| **Los S3 documentales, corregidos** | Por la excepción de §2: no se aplazan |
+| **La batería en verde y el recuento al día** | `swift test` y, si A-7 lo entrega, el comprobador de cifras |
+
+Un S2 sin fase asignada **cuenta como S1**: una deuda sin fecha no es una deuda planificada, es una deuda
+olvidada con buena letra.
 
 ---
 
@@ -524,14 +599,14 @@ nada** — un bloque cerrado en blanco es información, y es la mitad del valor 
 
 | Bloque | Estado | Sesión | Hallazgos |
 |---|---|---|---|
-| **A-0** · La vara de medir | ◐ empezado (H-01) | 2026-09-03 | H-01 |
+| **A-0** · La vara de medir | ● **cerrado**, hallazgos corregidos | 2026-09-03 / 09-04 | H-01 · H-02 · H-03 · H-04 · H-05 · H-06 |
 | **A-1** · El puerto de federación | ○ pendiente | — | — |
 | **A-2** · La regla que destruye datos | ○ pendiente | — | — |
 | **A-3** · Lo que sobrevive a un fallo | ○ pendiente | — | — |
 | **A-4** · El `202` y el TaskLocal | ○ pendiente | — | — |
 | **A-5** · Las migraciones | ○ pendiente | — | — |
 | **A-6** · Las costuras de §7 | ○ pendiente | — | — |
-| **A-7** · El arnés | ○ pendiente | — | — |
+| **A-7** · El arnés | ○ pendiente | — | H-07 (apuntado desde A-0) |
 
 ---
 
