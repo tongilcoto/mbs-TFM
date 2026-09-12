@@ -374,7 +374,19 @@ tierra la razón de ser de `D-85`.
 > vive fuera del proceso) y **`D-67`** (el `202` de F10, que hereda lo que se decida aquí) · **LLD §6.1**
 > (resolución del tenant y el `@TaskLocal`) y **§2.3-c** · del **README, §4.5** — los dos endpoints desde
 > `curl`, con las tres cosas *"que se aprenden más rápido probándolas"*.
-> Es el bloque más corto: **son 41 líneas de `BackgroundWork.swift` y tres preguntas.**
+> · **Añadido el 2026-09-12, al llegar el deber que A-3 le deja** (§7, cierre de A-3): **`D-86` enmendada** y
+> los hallazgos **H-23** y **H-24** de §6 — y con ellos lo que `4d66aa0` dejó **nuevo en el camino que corre
+> detrás del `202`**: los dos casos de `ApplicationError` (`databaseUnavailable`, `runNotRecorded`), la sonda
+> de `IngestClubCalendars.swift` y los `case` que `ProblemMiddleware` les puso. **La ruta del `202` cambió de
+> comportamiento el mismo día en que este bloque pasó a ser el siguiente**, así que la pregunta 4 se audita
+> contra el código de hoy y no contra el que F6 entregó.
+> · **Y lo que hay que tener montado antes de sentarse, que el bloque daba por hecho:** el `202` **solo sale
+> con `seasonId`** en el cuerpo —con `competitionIds` la respuesta es `200` (`IngestionHandler.swift:92-98`)—,
+> así que hace falta un tenant provisionado **con una temporada y al menos una competición sembrada**:
+> `docker compose up -d` · `migrate --yes` · `provision-tenant` · `migrate-tenants` · `seed-competition`. Ese
+> último **habla con la RFFM** (`SeedCompetitionCommand.swift:87-88`), o sea **red y una URL de calendario
+> viva**. Es medio bloque de montaje dentro de un bloque de media sesión: tenerlo antes, no al llegar.
+> Es el bloque más corto: **son 41 líneas de `BackgroundWork.swift` y cuatro preguntas.**
 
 **Pregunta.** La ruta que corre en producción cuando el `POST` devuelve `202`, ¿la ejercita algo?
 
@@ -395,13 +407,17 @@ ningún test**, y las dos difieren justo en lo que puede fallar.
 | 1 | Cuando el trabajo corre **después** de la respuesta, ¿sigue vivo el *pool* del tenant y se puede abrir un ámbito nuevo? | En línea nunca se comprueba: la respuesta aún no ha salido |
 | 2 | ¿Qué pasa con un `SIGTERM` a mitad? Fly.io despliega así | El comentario dice *"si el proceso muere no hay reintento, y no hace falta"* porque la pasada es atómica. Puede que la respuesta sea **"sí, y basta"** — pero entonces es **S4 comprobada**, no una suposición |
 | 3 | El `202` *"planifica antes de responder"* (`D-88`) para que una `seasonId` inexistente dé 404. ¿Dónde acaba la planificación y empieza la ejecución? | Es la frontera exacta que F10 va a heredar |
+| 4 | **Heredada de A-3.** Cuando la base se cae **detrás** de un `202`, ¿se entera alguien? El recorrido ahora **se para** y lanza `ApplicationError.databaseUnavailable` (H-23, `D-86` enmendada) — dentro del trabajo de fondo, donde **no hay respuesta que devolver** porque el `202` ya salió, **no hay fila en `ingestion_runs`** porque es justo lo que no se puede escribir, y el código de salida distinto de cero es del **comando**, no del servidor | Las otras tres preguntas son del camino bueno; ésta es la única del camino de fallo. Y `GET /v1/ingestion-runs` —la forma que `D-88` prevé para enterarse— es precisamente la que se queda sin dato. Anotado aquí, y no solo en §7, porque **§7 no está en la base común de §4-bis**: la sesión que ejecute el bloque no lo leería |
 
 **Cómo se decide.** Con `LOG_TRACE`/`LOG_LEVEL=debug` y el servidor de verdad: `curl` con `{}`, respuesta
 inmediata, y mirar en la base si la fila de `IngestionRun` aparece después. Si aparece, la ruta de producción
-funciona y queda **probada a mano y escrita**.
+funciona y queda **probada a mano y escrita**. Para la **4**, el mismo experimento con la base parada entre el
+`202` y el trabajo —`docker compose stop db`—, que es como A-3 midió H-23; y mirando **las dos** salidas que
+quedan vivas: lo que el logger saca a `stderr` y lo que `GET /v1/ingestion-runs` contesta después.
 
-**Qué sale.** La respuesta escrita a las tres, y —si hace falta— la forma de un test que cubra la ruta de
-producción sin arbitrar una carrera. **F10 devuelve `202` en `/federation-link` (`D-67`)**: lo que se decida
+**Qué sale.** La respuesta escrita a las cuatro, y —si hace falta— la forma de un test que cubra la ruta de
+producción sin arbitrar una carrera. De la 4 sale además **qué señal le queda al que disparó el `202`**, que
+hoy no es ninguna de las del job. **F10 devuelve `202` en `/federation-link` (`D-67`)**: lo que se decida
 aquí, lo hereda.
 
 ---
@@ -818,7 +834,7 @@ olvidada con buena letra.
 | **A-1** · El puerto de federación | ● **cerrado**; documentales corregidos (`cc288cd`) y la forma del sobre elevada a **F6-bis** | 2026-09-04 | H-08 · H-09 · H-10 · H-12 · H-13 · H-14 (+ H-15, que es de A-6) |
 | **A-2** · La regla que destruye datos | ● **cerrado**; el S1 era **la ausencia de la medición** y está escrita (`4564617`). H-21 elevado a su fase | 2026-09-05 · arreglos y cierre commiteados el 09-12 | H-17 · H-18 · H-19 · H-20 · H-21 · H-22 |
 | **A-3** · Lo que sobrevive a un fallo | ● **cerrado**; aguantaba el fallo de datos y no el de infraestructura, y ya aguanta los dos (`4d66aa0`) | 2026-09-12 | H-23 · H-24 · H-25 · H-26 |
-| **A-4** · El `202` y el TaskLocal | ◐ **siguiente** | — | **la ruta del `202` con la base caída**, apuntado desde A-3 |
+| **A-4** · El `202` y el TaskLocal | ◐ **siguiente** | — | **la ruta del `202` con la base caída**, apuntado desde A-3 — y **bajado a §5 como pregunta 4** del bloque el 2026-09-12, porque §7 no viaja con la sesión (ver el renglón de abajo) |
 | **A-5** · Las migraciones | ○ pendiente | — | — |
 | **A-6** · Las costuras de §7 | ○ pendiente | — | H-15 (apuntado desde A-1) |
 | **A-7** · El arnés | ○ pendiente | — | H-07 (desde A-0) · la nota de cierre de A-2 · las **tres condiciones** que le deja la ronda de A-2: `$? == 0`, `skipped == 0` y **no leer el resumen de texto**, que no existe |
@@ -995,6 +1011,33 @@ REQUIRE_DB=1 swift test  →  276 tests (7+55+50+98+48+18), 0 fallos, 1 omitido 
 
 **272 → 276**, cuatro tests nuevos: tres de nivel 2 y uno de nivel 3. `AGENTS.md` y las dos apariciones del
 `README` al día.
+
+### El canal de traspaso, y el agujero que se vio al ir a arrancar A-4
+
+**Lo que A-3 le dejó a A-4 estaba escrito, y aun así no le habría llegado.** Al preparar la sesión de A-4 se
+vio que el deber —*la ruta del `202` con la base caída*— vivía en **dos sitios y los dos dentro de §7**: la
+columna «Hallazgos» de su fila en la tabla de estado, y el apartado *«lo que A-3 le deja a los bloques que
+vienen»*. Y **§7 no está en la base común de §4-bis**, que es *«este fichero, §0 a §4 y §6»*; en la plantilla
+del prompt, §7 aparece una sola vez y como sitio donde **escribir** al terminar, nunca donde leer. La sesión
+de A-4 habría abierto el plan, leído **tres** preguntas, contestado tres, y cerrado el bloque en falso — que
+es la forma de H-11, esta vez vista antes de que ocurriera.
+
+**Por qué se escapó, teniendo el plan un canal justo para esto.** La regla 2 de §3 lo tiene resuelto —*«el
+libro de hallazgos es el traspaso … por eso §6 va en la base común»*— pero lo resuelve **para hallazgos**. Lo
+que A-3 traspasó no es un hallazgo: no tiene `H-nn`, ni severidad, ni reproducción. **Es una pregunta**, no
+cabía en §6, y acabó en el único sitio donde cabía, que está fuera del canal.
+
+**La regla que se añade, y es la de A-1 un piso más abajo.** A-1 dejó escrito que *«un hallazgo aplazado
+necesita un ancla en el código que la fase siguiente va a tocar»*; esto es lo mismo entre bloques: **una
+pregunta heredada necesita un ancla en el bloque que la va a ejecutar** —una fila más en su tabla de §5— **y
+no solo un renglón en la tabla de estado**. Cuesta diez líneas y se hace al cerrar el bloque que la lega, no
+al abrir el que la recibe.
+
+**Y lo segundo que la preparación destapó: un «Leer antes» caduca.** El de A-4 se escribió el 2026-09-03 y
+`4d66aa0` cambió el 09-12 el comportamiento del camino que corre detrás del `202`. Los «Leer antes» se han
+venido ampliando *al cerrar* un bloque —*«lo que este bloque necesitó y no estaba en su lista»*—; éste es el
+primer caso de la ampliación contraria: **el código se movió debajo de un bloque que aún no ha corrido**. Al
+cerrar una ronda de arreglos, mirar qué bloques pendientes tocan los ficheros que la ronda cambió.
 
 ---
 
