@@ -586,7 +586,8 @@ respuesta, así que salen de otros que sí:
 | `OpponentClub.slug` | del **nombre**, mecánicamente y sin lista de formas jurídicas. Es la regla **opuesta** a la de `NormalizedName` en el mismo texto: aquélla borra las fronteras, ésta las conserva como guiones | [D-82] |
 
 **Y una guarda antes de escribir nada: que la coordenada siga apuntando a esta competición.** La RFFM
-**no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`****, medido en F5: la misma coordenada con otra
+**ignora el parámetro `temporada`** y sus códigos **no** se reutilizan entre temporadas —cada una recibe un
+bloque nuevo— ([D-84] enmendada con la causa corregida, [Anexo RFFM §F.16]): la misma coordenada con otra
 `temporada` devuelve un calendario perfectamente parseable **de otra competición**, y **no da 404**. La
 evidencia con la que se detecta ya existía —`Competition.federation_name` ([D-72])— y ésta es la primera vez
 que se usa. Si el nombre discrepa, la pasada **se para sin escribir** ([D-84]); los dos silencios no paran

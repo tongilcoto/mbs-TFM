@@ -108,8 +108,17 @@ public enum RFFMValue {
     /// —`"… MARTIN TEMIÑO (HB)(HB)"`— y aparece **en medio** —`"… PEDREGAL 2 (HA)
     /// ANT. DEHESA VIEJA"`—. Así que se quita la marca **esté donde esté**, y se
     /// recolocan los espacios que deja.
+    ///
+    /// **Empieza por `sanitised` como las otras tres, y eso lo arregló H-20 del
+    /// plan de auditoría.** Antes se defendía sola con `isEmpty` más el colapso de
+    /// espacios, que cubre `""` y `"   "` y **deja pasar las dos formas de callar
+    /// de §F.11**: `venue("&nbsp;")` devolvía el texto literal `"&nbsp;"` y un
+    /// espacio duro suelto devolvía `" "`. `venue` es **volátil** (§3.7), así que
+    /// eso se escribía encima del nombre bueno del campo — y `Match` no tiene
+    /// `PATCH` con el que reponerlo (`D-75`). El colapso de después sigue haciendo
+    /// falta: es lo que recoge los huecos que deja la marca.
     public static func venue(_ raw: String?) -> String? {
-        guard var text = raw, !text.isEmpty else { return nil }
+        guard var text = sanitised(raw) else { return nil }
         for marker in ["(HA)", "(HB)", "(H.A.)", "(H.B.)"] {
             text = text.replacingOccurrences(of: marker, with: " ")
         }
@@ -187,6 +196,12 @@ public enum RFFMValue {
     ///
     /// El `&nbsp;` sin descodificar dentro de campos numéricos está observado en
     /// §F.11; el espacio duro `\u{00A0}` es lo mismo ya descodificado.
+    ///
+    /// **La tienen que llamar las cuatro coerciones de campo volátil, no tres.**
+    /// `UpsertPolicy.volatile` declara que la frontera entre *"la fuente calla"* y
+    /// *"la fuente dice que no hay"* se aplica **en el adaptador**, así que un
+    /// campo que se salte esta función no lo caza ninguna regla del Dominio: llega
+    /// como valor y se escribe. Es lo que le pasaba a `venue` (H-20).
     private static func sanitised(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let cleaned = raw

@@ -293,6 +293,44 @@ struct IngestCalendarTests {
             ids: SequentialUUIDProvider())
     }
 
+    // ── H-24: cuando lo único que falla es apuntar ──────────────────────────
+
+    /// **Una pasada que se escribió no puede registrarse como fallida.**
+    ///
+    /// Los tres ámbitos de `D-83` son leer, escribir y apuntar. Si falla el
+    /// tercero, el segundo **ya comprometió**: los partidos están y
+    /// `last_synced_at` está puesto. Registrar eso como `failed` deja tres
+    /// testigos diciendo cosas distintas de la misma pasada —la columna dice
+    /// *"sincronizada"*, la fila dice *"falló"* y el recorrido la cuenta como
+    /// fallo— y encima guarda como motivo el fallo **al apuntar**, que no habla
+    /// de la pasada y manda a depurar al sitio equivocado.
+    ///
+    /// Lo correcto es decir lo que pasó: la pasada está, el registro no.
+    @Test("una pasada que sí se escribió no se registra como fallida (H-24)")
+    func aWrittenPassIsNotRecordedAsFailed() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        await store.seed(seasons: [season], competitions: [competition])
+        let actor = ActorContext(clubSlug: try Slug("atleti"), isSystem: true)
+
+        let useCase = IngestCalendar(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: store), failOn: 3),
+            federation: SpyFederationClient(
+                returning: try Self.calendar(matches: [Self.match()])),
+            clock: FixedClock(instant: Self.syncInstant),
+            ids: SequentialUUIDProvider())
+
+        await #expect(throws: ApplicationError.self) {
+            try await useCase.execute(competitionID: competition.id, actor: actor)
+        }
+
+        // El ámbito 2 comprometió, y eso no se deshace por no poder apuntarlo.
+        #expect(await store.matches.count == 1)
+        // Y no queda una fila diciendo que falló, porque no falló.
+        #expect(await store.ingestionRuns.isEmpty)
+    }
+
     // ── Idempotencia: la propiedad que hace segura la cadencia semanal ──────
 
     /// §5.6 fija **una pasada por semana como mínimo**, así que la misma
@@ -385,6 +423,62 @@ struct IngestCalendarTests {
         #expect(clubs.first?.name == "C.D. GALAPAGAR")
         #expect(report.opponentClubsCreated == 1)
         #expect(report.teamsCreated == 1)
+    }
+
+    // ── Lo que sostiene el emparejamiento de un club ya corregido ──────────
+
+    /// **Lo trajo `A-2` (H-21), y lo que fija es cuál de los dos escalones
+    /// aguanta.**
+    ///
+    /// Las dos mitades de §3.7 se rozan aquí. La política dice que `name` es
+    /// **descriptivo**: lo corrige el administrador y la fuente no lo vuelve a
+    /// escribir nunca. La cadena dice que el **paso 2** empareja por
+    /// `NormalizedName(name)`. En cuanto la corrección cambia la forma
+    /// normalizada del nombre —y corregir *"C.D. GALAPAGAR"* a *"Club Deportivo
+    /// Galapagar"* la cambia—, **el paso 2 deja de reconocer a ese club para
+    /// siempre**: `NormalizedName` borra acentos, puntuación y caja, no palabras.
+    ///
+    /// Lo que lo sostiene entonces es **el paso 1**, y este test es el que lo fija:
+    /// con `federation_club_id` guardado, la clave resuelve y la corrección
+    /// sobrevive sin duplicar nada. Es también la razón de ser de `D-76` vista
+    /// desde otro lado — rellenar el hueco no es cosmética, es lo que mantiene
+    /// vivo el único escalón que una corrección no puede romper.
+    ///
+    /// **El caso en que el paso 1 tampoco está queda medido en H-21 y no tiene
+    /// test**, porque su arreglo es una decisión de diseño y no un parche.
+    @Test("un club con el nombre corregido se reconoce por su clave, no por el nombre (H-21)")
+    func aRenamedClubIsMatchedByItsFederationKey() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let renamed = try OpponentClub(
+            id: OpponentClubID(raw: UUID()),
+            name: "Club Deportivo Galapagar",
+            shortName: "Galapagar",
+            slug: try Slug(derivedFrom: "C.D. GALAPAGAR"),
+            federationClubID: "0011078749",
+            createdAt: Date(), updatedAt: Date())
+        let rival = try Team(
+            id: TeamID(raw: UUID()), opponentClubID: renamed.id,
+            category: .cadete, letter: "B", gender: .masculino, modality: .futbol11,
+            federationTeamID: "304468", createdAt: Date(), updatedAt: Date())
+
+        let store = IngestionStore()
+        await store.seed(opponentClubs: [renamed], teams: [rival])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(), store: store)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let clubs = await store.opponentClubs
+        // El de Galapagar sigue siendo **uno**, con su nombre corregido intacto.
+        #expect(clubs.filter { $0.slug.value.hasPrefix("c-d-galapagar") }.count == 1)
+        #expect(clubs.first { $0.id == renamed.id }?.name == "Club Deportivo Galapagar")
+        // Y solo se crea el club del otro equipo, que la pasada no había visto.
+        #expect(report.opponentClubsCreated == 1)
+        #expect(report.skipped.isEmpty)
     }
 
     // ── D-79: dos candidatos no se resuelven, se reportan ──────────────────

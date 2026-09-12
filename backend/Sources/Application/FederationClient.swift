@@ -26,6 +26,26 @@ public import enum Domain.Modality
 /// Clasificación (F7), goleadores (F8) y acta (`D-57`). Se añaden cuando su fase
 /// los pida, no antes: una firma inventada hoy se escribiría contra un anexo y no
 /// contra un volcado.
+///
+/// > ⚠️ **Antes de añadir el segundo método, leer F6-bis del Plan de desarrollo.**
+/// > El bloque `A-1` de la auditoría midió este puerto contra el volcado de la FCF
+/// > y el resultado se parte en dos: `FederationMatch` y `FederationTeamRef`
+/// > aguantan **campo a campo**, y el **sobre** de `FederationCalendar` está
+/// > cortado a la medida de la RFFM —de sus cinco campos esa fuente publica
+/// > **uno**, y los dos obligatorios son justo los dos que no tiene (H-08)—.
+/// >
+/// > **No copiar la forma del sobre en los DTOs de F7 y F8.** La asimetría se
+/// > repite ahí: `/api/standings` y `/api/scorers` de la RFFM devuelven
+/// > `competicion` y `grupo` ([Anexo RFFM §F.8], §F.13) y sus equivalentes de la
+/// > FCF no ([Anexo FCF §C.10.6], §C.10.7). Un sobre nuevo modelado por analogía
+/// > reproduce el problema dos veces más antes de que exista el segundo adaptador.
+/// >
+/// > **La coordenada, en cambio, no hay que tocarla** (H-14): ninguno de los
+/// > cuatro endpoints pide un cuarto eje, y **la jornada de F7 va como parámetro
+/// > del método** —`fetchStandings(_:round:)`— porque es de la operación y no de
+/// > la competición. La FCF la ignora, y eso **es** `providesRoundStandings`
+/// > (`D-55`) visto desde aquí: quien decide qué hacer con ella es el caso de uso,
+/// > que ya lee el catálogo del Dominio.
 public protocol FederationClient: Sendable {
     /// El calendario completo del grupo, tal y como lo publica la federación.
     ///
@@ -206,15 +226,41 @@ public struct FederationTeamRef: Equatable, Sendable {
     /// administrador (§3.7).
     public let name: String
 
-    /// La letra que iba embebida en el nombre. Opcional: hay clubes sin filial.
+    /// La letra que distingue al *"Infantil A"* del *"Infantil B"* del mismo
+    /// club, ya separada del nombre. Opcional: hay clubes sin filial.
+    ///
+    /// **Cómo se separe es del adaptador**, y cada fuente la escribe a su manera
+    /// —la RFFM la embebe entre comillas simples al final del nombre
+    /// ([Anexo RFFM §F.5])—. Lo que este campo promete es que **aquí ya viene
+    /// suelta**: el Dominio no parsea nombres (`NormalizedName`), y la letra
+    /// entra en la clave única de `Team` (`D-77`), así que no es cosmética.
     public let letter: String?
 
-    /// El **club**, no el equipo. En la RFFM se infiere del nombre del fichero del
-    /// escudo, así que puede faltar y la ingesta degrada ([Anexo RFFM §F.4], §3.7).
+    /// El **club**, no el equipo. `nil` cuando la fuente no lo da o el adaptador
+    /// no logra sacarlo: §3.7 exige que la ingesta **tolere el fallo y degrade**,
+    /// y el paso 2 de la cadena de emparejamiento existe para eso.
+    ///
+    /// **De dónde sale es del adaptador, y no es lo mismo en las dos fuentes.**
+    /// La FCF lo publica como campo propio (`CODCLUB_*`, [Anexo FCF §C.10.4]); la
+    /// RFFM no tiene campo de club y hay que inferirlo del nombre del fichero del
+    /// escudo ([Anexo RFFM §F.4]), que es una inferencia y no un contrato — de ahí
+    /// que este campo sea anulable.
+    ///
+    /// > ⚠️ **El patrón del escudo es el mismo en las dos y el número no
+    /// > significa lo mismo.** `00100_<10 dígitos>_<texto>` existe en ambas
+    /// > ([Anexo FCF §C.10.4] lo señala como prueba de plataforma común), pero en
+    /// > la FCF ese número **no es el club**: `00100_0001223396_MANLLEU.png`
+    /// > convive con `CODCLUB_CASA: "1023"`. Generalizar la inferencia de Madrid
+    /// > por parecido de formato escribiría aquí un número que no es la clave de
+    /// > club de esa federación — y la cadena de §3.7 empareja por ella.
     public let federationClubID: String?
 
-    /// URL absoluta del escudo, compuesta con el *host* que publica la propia
-    /// respuesta ([Anexo RFFM §F.15]).
+    /// URL **absoluta** del escudo, ya compuesta por el adaptador.
+    ///
+    /// Absoluta y no relativa porque el *host* no es constante nuestra: la RFFM lo
+    /// publica dentro de la propia respuesta ([Anexo RFFM §F.15]) y cada fuente lo
+    /// resuelve como pueda. Lo que el puerto entrega es algo de lo que se pueda
+    /// descargar sin saber de quién vino.
     ///
     /// El modelo **no guarda esta URL**: descarga el fichero y guarda la clave del
     /// objeto en Storage (`crest_key`, `D-19`). Aquí es de dónde bajarlo.

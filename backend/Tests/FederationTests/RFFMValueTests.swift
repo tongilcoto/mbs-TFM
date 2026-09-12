@@ -112,6 +112,32 @@ struct RFFMValueTests {
         #expect(RFFMValue.venue("   ") == nil)
     }
 
+    /// **H-20 del plan de auditoría.** `venue` era la única de las cuatro
+    /// coerciones de campo volátil que **no pasaba por `sanitised`**, que es la
+    /// función que aplica *"vacío no es un valor"* (`D-56`). Se defendía sola con
+    /// `isEmpty` y el colapso de espacios, lo que cubre `""` y `"   "` y deja
+    /// fuera **las dos formas de callar que §F.11 documenta**: el `&nbsp;` sin
+    /// descodificar y el espacio duro `\u{00A0}`.
+    ///
+    /// Importa porque `venue` es **volátil** (§3.7): lo que esta función devuelva
+    /// se escribe encima del nombre bueno del campo de juego, y `Match` no tiene
+    /// `PATCH` con el que reponerlo (`D-75`).
+    @Test("un campo hecho solo de &nbsp; o de espacios duros es silencio (D-56, §F.11)")
+    func venueMadeOfHardSpacesIsSilence() {
+        #expect(RFFMValue.venue("&nbsp;") == nil)
+        #expect(RFFMValue.venue("\u{00A0}") == nil)
+        #expect(RFFMValue.venue(" &nbsp;\u{00A0} ") == nil)
+    }
+
+    /// El reverso, y es lo que impide arreglar lo de arriba a martillazos: un
+    /// nombre **con** un espacio duro dentro sigue siendo un nombre. El duro se
+    /// vuelve espacio normal, igual que en los campos numéricos.
+    @Test("un espacio duro dentro del nombre del campo no lo invalida (§F.11)")
+    func hardSpacesInsideAVenueBecomeOrdinaryOnes() {
+        #expect(RFFMValue.venue("CANAL\u{00A0}ISABEL II") == "CANAL ISABEL II")
+        #expect(RFFMValue.venue("CANAL&nbsp;ISABEL II (HA)") == "CANAL ISABEL II")
+    }
+
     // ── Identificador de club, desde la ruta del escudo ───────────────────────
 
     /// §F.4: no hay campo de club en el objeto de partido; la clave es el

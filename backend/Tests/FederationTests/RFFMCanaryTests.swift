@@ -53,10 +53,11 @@ import Testing
 /// Y una cuarta que el diseño no había previsto (`D-84`): la respuesta llega,
 /// parsea perfectamente, y **es de otra competición**. La RFFM ignora el
 /// parámetro `temporada`, así que basta un dígito mal en `competicion` o `grupo`
-/// —los códigos son densos— para caer en otra competición real. Los
-/// códigos de competición y grupo entre temporadas, así que una coordenada
-/// caducada **no da 404** — se descubrió capturando los dos volcados de esta
-/// fase. Por eso el canario compara también el nombre.
+/// —los códigos son densos— para caer en otra competición real. Y los códigos de
+/// competición y grupo **cambian cada temporada, pero los viejos siguen sirviendo
+/// su calendario**, así que una coordenada caducada **no da 404** — se descubrió
+/// capturando los dos volcados de esta fase. Por eso el canario compara también
+/// el nombre.
 @Suite("FederationCanary · Plan §4.4 · el parser contra la respuesta viva",
        .enabled(if: ProcessInfo.processInfo.environment["FEDERATION_LIVE"] == "1",
                 "canario: exige FEDERATION_LIVE=1 y conexión a internet"))
@@ -135,11 +136,22 @@ struct RFFMCanaryTests {
                     Motivo: \(reason)
                     """)
                 return
-            case .coordinateNotFound(let url):
+            case .coordinateNotFound(let detail):
+                // **No dice "404" a propósito**: medido contra la RFFM, nunca lo
+                // es (`FederationError.coordinateNotFound`). El detalle es texto
+                // porque quien lo levanta no siempre sabe a qué URL fue.
+                //
+                // Y **nombra las tres variables, incluida `_SEASON`**, aunque hoy
+                // la fuente ignore `temporada` (`D-84`): eso es una observación
+                // sobre un sistema ajeno, no un contrato. Si la RFFM lo hace
+                // cumplir, la receta que omitiera la temporada mandaría a buscar
+                // por el sitio equivocado — y esto se lee justo el día en que algo
+                // cambió de su lado.
                 Issue.record("""
-                    404 en \(url). La coordenada ha caducado — `temporada` cambia \
-                    cada año ([Anexo RFFM §F.1]). **No es un cambio de la fuente**: \
-                    pásale otra con FEDERATION_LIVE_SEASON / _COMPETITION / _GROUP.
+                    La coordenada no designa nada: \(detail). Ha caducado — \
+                    `competicion`/`grupo` reciben un bloque nuevo cada temporada \
+                    ([Anexo RFFM §F.1]). **No es un cambio de la fuente**: pásale \
+                    otra con FEDERATION_LIVE_SEASON / _COMPETITION / _GROUP.
                     """)
                 return
             case .unexpectedStatus(let status, let url):

@@ -124,6 +124,14 @@ public struct IngestCommand: AsyncCommand {
                     scope: scope,
                     actor: ActorContext(clubSlug: try Slug(slug), isSystem: true))
                 outcomes.append(TenantIngestion(slug: slug, report: report, error: nil))
+
+                // **La caída de la base no está aislada por club** (H-23). El
+                // aislamiento de `D-86` es por competición, y lo hereda el club
+                // porque cada uno tiene su *schema*; pero el *pool*, la conexión y
+                // el Postgres son **uno solo** (§6.4). Así que cuando un club se
+                // detiene por esto, probar con el siguiente no es resiliencia: son
+                // N recorridos que tampoco van a poder dejar constancia.
+                if report.abortedByInfrastructure { break }
             } catch {
                 // **Un club que revienta no detiene a los demás** (`D-86`), igual
                 // que una competición dentro de un club. Aquí caen los fallos que
@@ -133,6 +141,11 @@ public struct IngestCommand: AsyncCommand {
                     TenantIngestion(
                         slug: slug, report: nil,
                         error: diagnosticText(for: error)))
+
+                // La excepción a lo anterior, y por lo mismo que arriba: si el que
+                // falló fue el ámbito 1 del club porque la base no está, los demás
+                // clubes no tienen nada que intentar.
+                if case ApplicationError.databaseUnavailable = error { break }
             }
         }
         return outcomes

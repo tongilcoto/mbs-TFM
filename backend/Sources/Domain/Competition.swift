@@ -202,11 +202,12 @@ extension Competition {
     /// # `federationName` rellena hueco, no sobrescribe
     ///
     /// Es `UpsertPolicy.matching` y no `volatile`, y la razón es lo que se
-    /// descubrió capturando los volcados de F5: la RFFM **ignora el parámetro `temporada`
-    /// de competición y grupo entre temporadas**, así que un nombre distinto no
-    /// es un rótulo que cambió — es la coordenada apuntando a otra competición.
-    /// Eso no se resuelve escribiendo el nombre nuevo: se para antes, y de eso
-    /// se encarga `requireSameSource(as:)`.
+    /// descubrió capturando los volcados de F5: la RFFM **ignora el parámetro
+    /// `temporada`** y sus códigos de competición y grupo son **densos**
+    /// ([Anexo RFFM §F.16]), así que un nombre distinto no es un rótulo que
+    /// cambió — es la coordenada apuntando a otra competición. Eso no se
+    /// resuelve escribiendo el nombre nuevo: se para antes, y de eso se encarga
+    /// `requireSameSource(as:)`.
     ///
     /// # Y no lanza por `isSynced`
     ///
@@ -242,9 +243,19 @@ extension Competition {
     /// El diseño daba por hecho que una coordenada caducada fallaría: Plan §4.4
     /// escribe *"un 404 tiene que decir una cosa y un parseo fallido otra"*. Al
     /// capturar los volcados de F5 se vio que **no hay tercera opción implícita**:
-    /// la RFFM no ignora el parámetro `temporada` (`D-84` enmendada) —cada una recibe un bloque nuevo— y **ignora el parámetro `temporada`**, así
-    /// que la misma coordenada con otra `temporada` devuelve un calendario
-    /// **perfectamente parseable de otra competición**.
+    /// la RFFM **ignora el parámetro `temporada`** ([Anexo RFFM §F.16], que
+    /// enmendó la causa de `D-84`: los códigos **no** se reutilizan entre
+    /// temporadas, cada una recibe un bloque nuevo), así que la misma coordenada
+    /// con otra `temporada` devuelve un calendario **perfectamente parseable de
+    /// otra competición**.
+    ///
+    /// Y con la causa corregida, el riesgo principal se movió: ya no es *"la
+    /// misma coordenada en otra temporada"* sino **la coordenada que se queda
+    /// vieja** — como los códigos cambian cada año, una URL del año pasado
+    /// devuelve el calendario del año pasado para siempre y sin error. Contra
+    /// eso esta guarda es **débil**, porque el nombre de una competición suele
+    /// ser el mismo todos los años; lo que sí delata la caducidad son las fechas
+    /// de los partidos, y está anotado en `D-84` sin implementar.
     ///
     /// Sin esto, esa pasada escribiría un calendario cadete dentro de una
     /// competición senior, y los equipos que creara heredarían de ella la

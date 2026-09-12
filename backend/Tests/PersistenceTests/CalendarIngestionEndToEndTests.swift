@@ -191,7 +191,15 @@ struct CalendarIngestionEndToEndTests {
     ///
     /// Es la diferencia entre "el caso de uso cree que no duplica" y "no
     /// duplica", y es la razón por la que F5 tiene los dos niveles.
-    @Test("la segunda pasada no choca con ninguna restricción de §3.5")
+    ///
+    /// **Y los cuatro `…Updated` a cero, que los añadió `A-2` (H-19).** Sin ellos
+    /// el test decía *"no se creó nada"*, que es más flojo de lo que parece: si
+    /// cualquiera de las columnas volátiles no diese la vuelta fiel —el `date` de
+    /// Postgres contra el `Date` en UTC, el `HH:mm` como texto, el `venue` vuelto
+    /// a limpiar—, `merged != existing` sería cierto en las **240** filas y la
+    /// pasada del lunes reescribiría el calendario entero sin que el verde se
+    /// moviese. Con los contadores, una sola columna que derive tumba esto.
+    @Test("la segunda pasada no choca con ninguna restricción de §3.5, y no escribe")
     func secondPassIsIdempotentAgainstRealConstraints() async throws {
         try await Self.withTenant("e2e-idem") { tenant in
             let (useCase, competitionID) = try await Self.prepare(
@@ -206,6 +214,14 @@ struct CalendarIngestionEndToEndTests {
             #expect(second.opponentClubsCreated == 0)
             #expect(second.teamsCreated == 0)
             #expect(second.skipped.isEmpty)
+
+            // Lo que no se crea **ni se reescribe**: el mismo volcado dos veces
+            // deja la base byte a byte igual, y eso es lo que hace barata la
+            // cadencia semanal de §5.6.
+            #expect(second.matchesUpdated == 0)
+            #expect(second.roundsUpdated == 0)
+            #expect(second.opponentClubsUpdated == 0)
+            #expect(second.teamsUpdated == 0)
 
             let stored = try await tenant.scope { repositories in
                 (matches: try await repositories.matches.list(competitionID: competitionID),
@@ -337,6 +353,91 @@ struct CalendarIngestionEndToEndTests {
         }
     }
 
+    /// **El fallo que de verdad ocurre en producción, y que hasta H-26 no
+    /// ejercitaba nada.**
+    ///
+    /// Los dos tests de arriba provocan el fallo con un `DomainError` —un equipo
+    /// contra sí mismo—, que salta **antes** de que se emita la sentencia: la
+    /// transacción se deshace sin que Postgres haya rechazado nada y la conexión
+    /// **nunca entra en `25P02`**. Pero §3.5 son siete `UNIQUE` y una FK
+    /// compuesta, así que el fallo probable es el otro, y trae dos preguntas que
+    /// el de Swift no contesta: si el tercer ámbito llega a escribir cuando el
+    /// segundo lo abortó **Postgres**, y de qué conexión sale — porque si el
+    /// *pool* devolviera la de la transacción abortada, la fila de `D-85` no se
+    /// escribiría y el fallo se tragaría a sí mismo.
+    ///
+    /// El vehículo es `uq:matches.federation_match_id`, que es **global al
+    /// *schema*** mientras los candidatos de la cadena se cargan **filtrados por
+    /// competición** (`CalendarPass`): un acta que ya existe en otra competición
+    /// es invisible para ésta, así que intenta el `INSERT` y choca de verdad.
+    @Test("una restricción violada de verdad deja su fila, y con su motivo (D-85, H-26)")
+    func aRealConstraintViolationIsRecordedWithItsRealReason() async throws {
+        try await Self.withTenant("e2e-23505") { tenant in
+            let (first, second) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-23505"), isSystem: true)
+
+            // La primera deja el acta escrita.
+            _ = try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                .execute(competitionID: first, actor: actor)
+
+            // La segunda trae la misma, y Postgres la rechaza.
+            await #expect(throws: (any Error).self) {
+                try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                    .execute(competitionID: second, actor: actor)
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(
+                    competitionID: second, limit: 10),
+                 rounds: try await repositories.rounds.list(competitionID: second),
+                 matches: try await repositories.matches.list(competitionID: second),
+                 competition: try await repositories.competitions.find(second))
+            }
+
+            // El ámbito 3 se ejecutó **y escribió**: el `rollback` de la
+            // transacción abortada deja la conexión limpia antes de soltarla, así
+            // que el `25P02` no sobrevive al cierre del ámbito.
+            #expect(after.runs.count == 1)
+            #expect(after.runs.first?.outcome == .failed)
+            // Y guarda el motivo **verdadero**, no un 25P02 sobre otra cosa. Es lo
+            // que hace depurable una pasada que nadie vio fallar (D-85).
+            let reason = try #require(after.runs.first?.error)
+            #expect(reason.contains("federation_match_id"))
+            #expect(reason.contains("23505"))
+
+            // Y `D-83` aguanta: lo de esta pasada, deshecho entero.
+            #expect(after.rounds.isEmpty)
+            #expect(after.matches.isEmpty)
+            #expect(after.competition?.lastSyncedAt == nil)
+        }
+    }
+
+    /// Dos competiciones en la misma temporada. Existe para que una pueda chocar
+    /// contra una restricción que la otra ya ocupó.
+    static func seedTwoEntries(_ tenant: TenantFixture) async throws
+        -> (first: CompetitionID, second: CompetitionID)
+    {
+        let season = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+            federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+        func competition(_ group: String) throws -> Competition {
+            try Competition(
+                id: CompetitionID(raw: UUID()), seasonID: season.id,
+                modality: .futbol11, gender: .masculino,
+                federationCompetitionID: "24037548", federationGroupID: group,
+                ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
+                groupLabel: "Grupo \(group)", createdAt: Date(), updatedAt: Date())
+        }
+        let first = try competition("24037549")
+        let second = try competition("24037550")
+        try await tenant.scope {
+            try await $0.seasons.save(season)
+            try await $0.competitions.save(first)
+            try await $0.competitions.save(second)
+        }
+        return (first.id, second.id)
+    }
+
     /// Ida y vuelta del registro con **descartes dentro**, que es donde vive el
     /// `jsonb`.
     ///
@@ -381,6 +482,297 @@ struct CalendarIngestionEndToEndTests {
                 reason: .missingMatchDate,
                 detail: "[2] E.F.M.O. BOADILLA - LAS ROZAS C.F.")])
         }
+    }
+
+    // ── §3.7 contra la columna: lo que una pasada muda NO hace ─────────────
+    //
+    // Los tres tests de aquí abajo los trajo el bloque `A-2` del plan de
+    // auditoría (H-17). Lo que les faltaba al proyecto no era una regla: era la
+    // **medición** de que la regla llega a la columna.
+    //
+    // El nivel 1 prueba las cuatro clases de campo de §3.7 en milisegundos, y el
+    // nivel 2 recorre el sentido bueno —la fuente calla primero y habla después—.
+    // El sentido que **destruye datos** no lo probaba nada: ni con dobles ni
+    // contra Postgres. Y es el único fallo del sistema que pierde algo que no
+    // vuelve, porque `Match` no tiene `PATCH` (`D-75`).
+    //
+    // **Dos decisiones de forma, y las dos son de §6.2.** Se lee **en crudo y
+    // fuera del ámbito**, porque lo que se comprueba es la columna y no el
+    // `Record` que la mapea; y se afirma sobre **los cuatro contadores de
+    // `IngestionRun`**, porque *«no se creó nada»* no es *«no se escribió
+    // nada»* — un `UPDATE` que pisa un dato bueno no crea filas, no rompe
+    // ninguna restricción y no mueve ningún recuento.
+
+    /// **La pasada muda, que es la del lunes siguiente a que la fuente se calle.**
+    ///
+    /// Primera pasada: la fuente lo dice todo —marcador, hora, campo, `codacta`,
+    /// clave de club—. Luego el administrador corrige lo que §5.1 le deja
+    /// corregir. Y segunda pasada con **el mismo calendario mudo**: sin marcador,
+    /// sin hora, sin campo, sin `codacta`.
+    ///
+    /// Lo que tiene que pasar es **nada**: ni un `INSERT`, ni un `UPDATE`, ni un
+    /// valor movido. Si `volatile` se convirtiera en *"pisar siempre"* —la
+    /// implementación que `D-56` existe para prohibir—, aquí se caerían siete
+    /// aserciones de columna y cuatro de contador.
+    ///
+    /// La clave de club **sí** va en la segunda pasada, y no es descuido: sin ella
+    /// el paso 2 de la cadena tendría que emparejar por el nombre *corregido*, que
+    /// es el caso de **H-21** y no lo que este test mide.
+    @Test("una pasada muda no borra nada de lo que la anterior escribió (D-56, D-75)")
+    func aSilentPassDestroysNothing() async throws {
+        try await Self.withTenant("e2e-muda") { tenant in
+            let competitionID = try await Self.seedEntry(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-muda"), isSystem: true)
+
+            _ = try await Self.useCase(tenant, Self.calendar(
+                homeScore: 3, awayScore: 1,
+                kickoff: WallClockTime(hour: 10, minute: 45),
+                venue: "CANAL ISABEL II",
+                federationMatchID: "5374968")
+            ).execute(competitionID: competitionID, actor: actor)
+
+            // La corrección del administrador (§5.1) sobre los tres campos
+            // **descriptivos** del club, `crest_key` incluido. El nombre sale del
+            // `slug` porque `name` lleva `UNIQUE` (§3.5) y los dos clubes se
+            // corrigen en el mismo ámbito: repetirlo aborta la transacción entera.
+            try await tenant.scope { repositories in
+                for club in try await repositories.opponentClubs.list() {
+                    try await repositories.opponentClubs.save(try OpponentClub(
+                        id: club.id,
+                        name: "Corregido \(club.slug.value)",
+                        shortName: "Corregido",
+                        slug: club.slug,
+                        federationClubID: club.federationClubID,
+                        crestKey: "clubs/\(club.slug.value)/crest.png",
+                        createdAt: club.createdAt, updatedAt: club.updatedAt))
+                }
+            }
+
+            // La fuente se calla en todo lo que puede callar.
+            let second = try await Self.useCase(tenant, Self.calendar())
+                .execute(competitionID: competitionID, actor: actor)
+
+            // (a) La pasada muda no escribe. Los ocho contadores a cero.
+            #expect(second.matchesCreated == 0)
+            #expect(second.matchesUpdated == 0)
+            #expect(second.roundsCreated == 0)
+            #expect(second.roundsUpdated == 0)
+            #expect(second.teamsCreated == 0)
+            #expect(second.teamsUpdated == 0)
+            #expect(second.opponentClubsCreated == 0)
+            #expect(second.opponentClubsUpdated == 0)
+            #expect(second.skipped.isEmpty)
+
+            // (b) Las columnas volátiles del partido, tal como las dejó la
+            // primera. **Se descodifican como opcionales a propósito**: si la
+            // regla se rompiera, la columna vendría `NULL` y un tipo obligatorio
+            // daría un rojo de descodificación en vez de uno de aserción — que es
+            // justo lo que Plan §5.1 no quiere, porque no dice qué se perdió.
+            let match = try #require(try await tenant.raw.raw("""
+                SELECT home_score, away_score, kickoff_time, venue,
+                       federation_match_id, status, match_date::text AS day
+                FROM \(ident: tenant.schema).\(ident: "matches")
+                """).first())
+            #expect(try match.decode(column: "home_score", as: Int?.self) == 3)
+            #expect(try match.decode(column: "away_score", as: Int?.self) == 1)
+            #expect(try match.decode(column: "kickoff_time", as: String?.self) == "10:45")
+            #expect(try match.decode(column: "venue", as: String?.self) == "CANAL ISABEL II")
+            #expect(try match.decode(column: "federation_match_id", as: String?.self)
+                    == "5374968")
+            #expect(try match.decode(column: "status", as: String?.self) == "finalizado")
+            #expect(try match.decode(column: "day", as: String?.self) == "2025-09-27")
+
+            // (c) Lo descriptivo del club y su clave de emparejamiento.
+            let clubs = try await tenant.scope { try await $0.opponentClubs.list() }
+            #expect(clubs.count == 2)
+            #expect(clubs.allSatisfy { $0.name.hasPrefix("Corregido ") })
+            #expect(clubs.allSatisfy { $0.shortName == "Corregido" })
+            #expect(clubs.allSatisfy { $0.crestKey?.hasSuffix("/crest.png") == true })
+            #expect(clubs.allSatisfy { $0.federationClubID != nil })
+
+            // (d) Y la clave de emparejamiento del equipo, que la pasada muda
+            // tampoco publica.
+            let teams = try await tenant.scope { try await $0.teams.list() }
+            #expect(teams.count == 2)
+            #expect(teams.allSatisfy { $0.federationTeamID != nil })
+        }
+    }
+
+    /// **La otra mitad, sin la cual la anterior pasaría con un fallo peor.**
+    ///
+    /// Un test que solo compruebe *"no borra"* lo aprobaría también una regla que
+    /// **nunca** escriba `nil`, y eso rompería `D-30`: una suspensión tiene que
+    /// poder devolver el horario a provisional. Lo que desambigua es el marcador
+    /// **fusionado** (`D-56`), así que aquí el partido sigue sin jugarse en las dos
+    /// pasadas y la hora que desaparece **sí** se escribe.
+    ///
+    /// Se comprueba con `IS NULL` en crudo: por el mapeo, una cadena vacía y un
+    /// `NULL` volverían los dos como `nil` y son cosas distintas en la columna.
+    @Test("sin marcador, la hora que desaparece sí vacía la columna (D-30, D-56)")
+    func withoutAScoreTheVanishingKickoffClearsTheColumn() async throws {
+        try await Self.withTenant("e2e-provisional") { tenant in
+            let competitionID = try await Self.seedEntry(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-provisional"), isSystem: true)
+
+            _ = try await Self.useCase(tenant, Self.calendar(
+                kickoff: WallClockTime(hour: 12, minute: 0),
+                federationMatchID: "5374968")
+            ).execute(competitionID: competitionID, actor: actor)
+
+            let second = try await Self.useCase(tenant, Self.calendar(
+                federationMatchID: "5374968")
+            ).execute(competitionID: competitionID, actor: actor)
+
+            // Esta vez sí hay `UPDATE`: la hora se va, que es el dato real.
+            #expect(second.matchesUpdated == 1)
+
+            let match = try #require(try await tenant.raw.raw("""
+                SELECT kickoff_time IS NULL AS sin_hora, status,
+                       home_score IS NULL AS sin_marcador,
+                       match_date::text AS day
+                FROM \(ident: tenant.schema).\(ident: "matches")
+                """).first())
+            #expect(try match.decode(column: "sin_hora", as: Bool.self))
+            // Y lo que **no** se mueve: la fecha sigue, y el estado con ella.
+            #expect(try match.decode(column: "sin_marcador", as: Bool.self))
+            #expect(try match.decode(column: "status", as: String.self) == "programado")
+            #expect(try match.decode(column: "day", as: String.self) == "2025-09-27")
+        }
+    }
+
+    /// **El hueco que se rellena, contra las restricciones de verdad** (`D-76`).
+    ///
+    /// El espejo de la regla volátil: la clave de emparejamiento no se sobrescribe
+    /// nunca, pero **sí llega donde no había nada**. Sin esto, una fila que nació
+    /// sin clave —porque la inferencia sobre el nombre del escudo falló
+    /// ([Anexo RFFM §F.4])— se quedaría emparejándose por el paso inexacto para
+    /// siempre.
+    ///
+    /// Y contra Postgres tiene una mitad que el nivel 1 no puede tener: las tres
+    /// claves que se rellenan están bajo `UNIQUE` (§3.5), incluida la de `codacta`.
+    /// Rellenar el hueco es el único momento en que la ingesta **escribe** una de
+    /// esas columnas sobre una fila que ya existe.
+    ///
+    /// La primera pasada empareja por el paso 2 en los tres niveles —equipo, club
+    /// y partido— porque no hay clave con la que hacerlo por el paso 1. Eso es
+    /// `D-78` ejecutándose: el *"si no"* es *"si el escalón anterior no
+    /// resolvió"*.
+    @Test("la clave que faltaba se rellena en la pasada siguiente (D-76, D-78)")
+    func theMatchingHoleIsFilledOnTheNextPass() async throws {
+        try await Self.withTenant("e2e-hueco") { tenant in
+            let competitionID = try await Self.seedEntry(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-hueco"), isSystem: true)
+
+            // Pasada 1: la fuente no publica ninguna de las tres claves.
+            let first = try await Self.useCase(tenant, Self.calendar(
+                federationMatchID: nil,
+                federationClubIDs: false,
+                federationTeamIDs: false)
+            ).execute(competitionID: competitionID, actor: actor)
+            #expect(first.matchesCreated == 1)
+            #expect(first.opponentClubsCreated == 2)
+            #expect(first.teamsCreated == 2)
+
+            // Pasada 2: ahora sí. Ni se duplica nada ni se crea nada.
+            let second = try await Self.useCase(tenant, Self.calendar(
+                federationMatchID: "5374968")
+            ).execute(competitionID: competitionID, actor: actor)
+            #expect(second.matchesCreated == 0)
+            #expect(second.opponentClubsCreated == 0)
+            #expect(second.teamsCreated == 0)
+            #expect(second.matchesUpdated == 1)
+            #expect(second.opponentClubsUpdated == 2)
+            #expect(second.teamsUpdated == 2)
+            #expect(second.skipped.isEmpty)
+
+            let stored = try await tenant.scope { repositories in
+                (matches: try await repositories.matches.list(competitionID: competitionID),
+                 teams: try await repositories.teams.list(),
+                 clubs: try await repositories.opponentClubs.list())
+            }
+            #expect(stored.matches.count == 1)
+            #expect(stored.matches.first?.federationMatchID == "5374968")
+            #expect(stored.teams.count == 2)
+            #expect(stored.teams.compactMap(\.federationTeamID).sorted() == ["304468", "821"])
+            #expect(stored.clubs.count == 2)
+            #expect(stored.clubs.compactMap(\.federationClubID).sorted()
+                    == ["0010940034", "0011078749"])
+        }
+    }
+
+    // ── Andamiaje de los tres de arriba ────────────────────────────────────
+
+    /// Siembra la **entrada** de la ingesta (`D-16`) y devuelve su competición.
+    ///
+    /// Es `prepare` sin el volcado: estos tests necesitan **dos** calendarios
+    /// distintos sobre el mismo tenant, así que el cliente de federación se monta
+    /// aparte con `useCase(_:_:)`.
+    static func seedEntry(_ tenant: TenantFixture) async throws -> CompetitionID {
+        let season = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+            federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+        let competition = try Competition(
+            id: CompetitionID(raw: UUID()), seasonID: season.id,
+            modality: .futbol11, gender: .masculino,
+            federationCompetitionID: "24037548", federationGroupID: "24037549",
+            ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
+            groupLabel: "Grupo 1", createdAt: Date(), updatedAt: Date())
+        try await tenant.scope {
+            try await $0.seasons.save(season)
+            try await $0.competitions.save(competition)
+        }
+        return competition.id
+    }
+
+    /// Una pasada cableada contra Postgres que devuelve **este** calendario.
+    static func useCase(
+        _ tenant: TenantFixture, _ calendar: FederationCalendar
+    ) -> IngestCalendar {
+        IngestCalendar(
+            unitOfWork: FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control)),
+            federation: StubFederationClient(returning: calendar),
+            clock: FixedInstantClock(instant: syncInstant),
+            ids: SystemUUIDProvider())
+    }
+
+    /// El 27-09-2025, construido **en UTC** por lo mismo que `RFFMValue.matchDate`:
+    /// la columna es `date` y con huso local la medianoche caería el día anterior.
+    static let matchDay = Date(timeIntervalSince1970: 1_758_931_200)
+
+    /// Un calendario de una jornada y un partido, **con todo lo que la fuente
+    /// puede decir como parámetro** — que es lo que permite repetirlo mudo.
+    ///
+    /// Los valores por defecto son el silencio: así una segunda pasada se escribe
+    /// como `Self.calendar()` y se lee como *"la fuente no dijo nada"*.
+    static func calendar(
+        homeScore: Int? = nil,
+        awayScore: Int? = nil,
+        kickoff: WallClockTime? = nil,
+        venue: String? = nil,
+        federationMatchID: String? = nil,
+        federationClubIDs: Bool = true,
+        federationTeamIDs: Bool = true
+    ) -> FederationCalendar {
+        func ref(_ teamID: String, _ clubID: String, _ name: String) -> FederationTeamRef {
+            FederationTeamRef(
+                federationTeamID: federationTeamIDs ? teamID : nil,
+                name: name, letter: "A",
+                federationClubID: federationClubIDs ? clubID : nil,
+                crestURL: nil)
+        }
+        return FederationCalendar(
+            seasonLabel: try! SeasonLabel("2025/26"),
+            competitionName: "PRIMERA DIVISION AUTONOMICA CADETE",
+            groupLabel: "Grupo 1", currentRound: 1,
+            rounds: [FederationRound(number: 1, label: "1 (27-09-2025)", matches: [
+                FederationMatch(
+                    federationMatchID: federationMatchID,
+                    home: ref("821", "0010940034", "CELTIC CASTILLA C.F."),
+                    away: ref("304468", "0011078749", "C.D. GALAPAGAR"),
+                    homeScore: homeScore, awayScore: awayScore,
+                    date: matchDay, kickoff: kickoff,
+                    venue: venue, venueCode: "103"),
+            ])])
     }
 
     /// Una jornada con un partido bueno y otro **sin fecha**, que la pasada deja

@@ -54,6 +54,7 @@ public struct IngestCalendar: Sendable {
         competitionID: CompetitionID, actor: ActorContext
     ) async throws -> IngestionRun {
         let startedAt = clock.now()
+        let run: IngestionRun
         do {
             // **Las marcas de tiempo las pone quien conoce los dos extremos.**
             // `CalendarPass` construye su informe al empezar, así que si se
@@ -61,10 +62,8 @@ public struct IngestCalendar: Sendable {
             // cero — que es lo que hacía, y solo se vio ejecutándola contra la
             // base de trabajo. La fallida sí se medía: la asimetría era el
             // síntoma.
-            let run = try await sync(competitionID: competitionID, actor: actor)
+            run = try await sync(competitionID: competitionID, actor: actor)
                 .timed(from: startedAt, to: clock.now())
-            try await record(run, actor: actor)
-            return run
         } catch {
             // `D-85`: **la pasada que falla es la que nadie ve**, porque no hay
             // usuario esperando una respuesta (§2.3-b). Es la que más falta hace
@@ -87,6 +86,26 @@ public struct IngestCalendar: Sendable {
 
             throw error
         }
+
+        // **El registro del camino de éxito va fuera del `do` de arriba, y eso lo
+        // arregló H-24.** Estando dentro, un fallo **solo al apuntar** caía en el
+        // `catch` de la pasada fallida y se registraba como `failed` una pasada
+        // cuyo ámbito 2 **ya había comprometido**: los datos escritos,
+        // `last_synced_at` puesto, y la fila diciendo lo contrario. Tres testigos
+        // de la misma pasada dando tres respuestas, y el motivo guardado hablando
+        // del apunte y no de la pasada — justo lo que manda a depurar al sitio
+        // equivocado.
+        //
+        // Lo que se hace en su lugar es decir exactamente lo que ocurrió. Quien lo
+        // reciba tiene que saber que **la ingesta sí se hizo**, o la repetirá.
+        do {
+            try await record(run, actor: actor)
+        } catch {
+            throw ApplicationError.runNotRecorded(
+                competitionID: "\(competitionID.raw)",
+                reason: diagnosticText(for: error))
+        }
+        return run
     }
 
     /// El registro va en **su propio ámbito**, fuera de la transacción de la

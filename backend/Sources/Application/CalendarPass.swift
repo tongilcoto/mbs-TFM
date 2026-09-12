@@ -56,10 +56,12 @@ final class CalendarPass {
 
     func run(_ calendar: FederationCalendar) async throws {
         // **Lo primero de todo** (`D-84`): antes de escribir una sola fila, que
-        // la coordenada siga apuntando a esta competición. La RFFM reutiliza sus
-        // códigos entre temporadas, así que una coordenada caducada no falla —
-        // devuelve el calendario de otra competición, y se parecen lo suficiente
-        // como para que la pasada entera lo escriba sin enterarse.
+        // la coordenada siga apuntando a esta competición. La RFFM **ignora el
+        // parámetro `temporada`** y sus códigos son densos ([Anexo RFFM §F.16],
+        // que enmendó la causa que `D-84` daba), así que una coordenada
+        // equivocada o caducada no falla — devuelve el calendario de otra
+        // competición, y se parecen lo suficiente como para que la pasada entera
+        // lo escriba sin enterarse.
         try competition.requireSameSource(as: calendar.competitionName)
 
         for federationRound in calendar.rounds {
@@ -110,6 +112,17 @@ final class CalendarPass {
         // rótulo y sería tentador usarla, pero eso es **inventar el dato de un
         // partido concreto** a partir del de otro — justo lo que `D-75` dice que
         // no se corrige nunca.
+        //
+        // **Este `guard` está antes de la cadena, y eso tiene una consecuencia que
+        // conviene tener escrita** (H-18 del plan de auditoría): a un partido **ya
+        // guardado** cuya fecha la fuente deja de publicar no se le conserva la
+        // fecha y se le actualiza el resto —que es lo que la rama volátil de
+        // `Kickoff.merging` describiría—, sino que **se descarta entero**, y con
+        // él el marcador, la hora y el campo que trajera esta pasada. Es el lado
+        // **recuperable** de `D-75`: la pasada siguiente lo repone en cuanto la
+        // fuente vuelva a decir la fecha. Y es el precio de no tener que decidir
+        // aquí si un partido sin fecha es una fila nueva o una que ya está: sin
+        // fecha no hay `INSERT` posible, así que el `UPDATE` tampoco se intenta.
         guard let date = federationMatch.date else {
             report.skipped.append(IngestionSkip(
                 reason: .missingMatchDate, detail: describe(federationMatch)))

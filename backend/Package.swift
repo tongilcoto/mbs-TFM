@@ -72,6 +72,16 @@ let package = Package(
         // el framework web ni el ORM; un cliente HTTP de servidor es justo lo que
         // un adaptador secundario que habla con una API ajena necesita.
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.36.0"),
+        // A-4/H-27: lo que corre detrás de un `202` no tiene otra salida que el
+        // log — la respuesta ya salió, la fila de `D-85` vive en la base (que es
+        // justo lo que falla en el caso malo) y el código de salida de `D-86` es
+        // del comando, no del servidor.
+        //
+        // Igual que `async-http-client` arriba: **ya estaba en el grafo** —Vapor
+        // depende de él y además lo re-exporta— y aun así se declara. Dos razones,
+        // y la segunda es la de siempre: `MemberImportVisibility` no acepta
+        // miembros llegados por re-export, y cada target declara lo que importa.
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.0"),
     ],
     targets: [
         // ── Núcleo ────────────────────────────────────────────────────────────
@@ -114,6 +124,8 @@ let package = Package(
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIVapor", package: "swift-openapi-vapor"),
                 .product(name: "Vapor", package: "vapor"),
+                // H-27: la única salida del trabajo que sobrevive a su respuesta.
+                .product(name: "Logging", package: "swift-log"),
             ],
             swiftSettings: commonSwiftSettings
         ),

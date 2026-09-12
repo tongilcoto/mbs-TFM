@@ -34,4 +34,27 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// No es un fallo de la pasada —no llega a haber pasada— y por eso no deja
     /// fila en `ingestion_runs`: es un club que aún no se puede sincronizar.
     case federationAdapterMissing(federation: String)
+
+    /// **La base no responde** (H-23, `D-86` enmendada).
+    ///
+    /// No es el fallo de una competición: es el fallo del sitio donde se apuntan
+    /// los fallos. `D-86` continúa el recorrido *"solo cuando el fallo deja
+    /// constancia"*, y con la base caída no la deja — así que este error es la
+    /// señal de que **no se continúa**.
+    ///
+    /// Se distingue de los demás **preguntándole a la base**, no clasificando el
+    /// error que llegó: un `PSQLError` de conexión, un *pool* agotado y un relevo
+    /// del *pooler* (§6.4) llegan de formas distintas, y una lista de códigos
+    /// sería una premisa sobre un sistema ajeno — que es lo que `D-84` enseñó a
+    /// no heredar.
+    case databaseUnavailable
+
+    /// **La pasada se escribió y no se pudo apuntar** (H-24).
+    ///
+    /// El ámbito 2 comprometió —los datos están, `last_synced_at` está puesto— y
+    /// el ámbito 3 falló. Lo que **no** se hace entonces es registrar la pasada
+    /// como fallida: sería escribir una mentira sobre unos datos que sí están, y
+    /// dejar tres testigos contradiciéndose. Se lanza esto, que dice exactamente
+    /// lo que pasó.
+    case runNotRecorded(competitionID: String, reason: String)
 }

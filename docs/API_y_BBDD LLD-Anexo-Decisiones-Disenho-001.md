@@ -193,6 +193,44 @@ mantener viva una transacción durante la latencia de un tercero; el intercambio
 
 ### D-86 · El recorrido de la ingesta no se detiene en el primer fallo
 
+> ### ⚠️ Enmienda del 2026-09-12 · «se continúa **y** se apunta» no se cumplía cuando la que falla es la base
+>
+> **La decisión se sostiene; lo que era falso es que sus dos mitades fueran inseparables por construcción.** Lo
+> midió el bloque `A-3` del plan de auditoría (H-23), parando el contenedor de Postgres a mitad de recorrido
+> con tres competiciones:
+>
+> | | Lo que esta entrada prometía | Lo medido con la base caída |
+> |---|---|---|
+> | Se continúa | sí | **sí** — las tres se intentaron |
+> | Se apunta | una fila por competición | **una fila en total**, la de la que fue bien |
+>
+> La razón es de forma y no de descuido: el **tercer ámbito de [D-83]** —el que escribe la constancia— usa
+> **el mismo recurso que acaba de fallar**. Cuando lo que se rompe es la base, la red de seguridad está hecha
+> del material que se rompió, y `IngestCalendar` se traga ese segundo fallo a propósito (*"manda el error
+> original"*). Así que el recorrido seguía adelante haciendo justo lo que esta entrada declara inseguro:
+> continuar **sin** dejar constancia.
+>
+> **Lo que cambia, y es la condición que ya estaba escrita aquí, ahora hecha cumplir.** El recorrido continúa
+> ante un fallo **de datos** —una coordenada caducada, una restricción violada, una invariante— y **se detiene**
+> ante un fallo de la base. La distinción no se hace clasificando el error, sino **preguntándole a la base si
+> sigue ahí** después de cada fallo: un `PSQLError` de conexión, un *pool* agotado y un relevo del *pooler*
+> (§6.4) llegan de formas distintas, y una lista de códigos sería una premisa sobre un sistema ajeno — lo que
+> [D-84] enseñó a no heredar. La sonda cuesta una consulta y **solo en el camino de error**.
+>
+> **Y se detiene también el recorrido de los clubes que faltan**, porque el aislamiento por competición lo
+> hereda el club a través de su *schema*, pero el *pool*, la conexión y el Postgres son **uno solo** (§6.4):
+> una caída no está aislada por club, y probar con el siguiente no es resiliencia, son N recorridos que tampoco
+> van a poder apuntar nada.
+>
+> **Lo que no se pierde al parar:** las competiciones que no se llegaron a intentar **no han movido su
+> `last_synced_at`**, así que entran enteras en el disparo siguiente. Parar no aplaza trabajo, solo deja de
+> hacerlo a ciegas.
+>
+> **Lo que queda como riesgo aceptado, y conviene que esté escrito:** la constancia de [D-85] vale *"mientras la
+> base responda"*. Con la base caída, la única señal que sobrevive es el **código de salida** del comando y su
+> informe por consola. Convertir eso en un aviso que alguien lea es la misma decisión de despliegue que el cron
+> de §5.6, que sigue pendiente.
+
 **Qué hay que decidir.** [D-83] deja la pasada de **una** competición atómica, y F6 la pone dentro de dos
 bucles: por competición del club, y por club del plano de control (§4.7). La pregunta que §9.3 dejó abierta
 para las migraciones —*«¿qué pasa con los ya migrados cuando el número 30 revienta?»*— se repite aquí, y aquí
@@ -659,6 +697,30 @@ inventado.
 ---
 
 ### D-31 · `federation_match_id` se modela, pero la ingesta no puede depender de él
+
+> ### ⚠️ Enmienda del 2026-09-04 · la premisa sobre la FCF era falsa, y la decisión se sostiene igual
+>
+> Lo encontró el bloque `A-1` del [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md), como
+> hallazgo **H-12**. Esta entrada dice que **la FCF no tiene identificador de partido en absoluto**, citando
+> [Anexo FCF §C.3]. **Esa sección describe el sitio antiguo y está obsoleta desde [D-74].** La web nueva
+> publica `CODACTA` en **240 de 240** partidos del volcado, no vacío y **único** —y, como señala
+> [Anexo FCF §C.10.4], *"se llama igual que en la RFFM"*—.
+>
+> **La decisión de abajo se mantiene entera, y su razón mejora.** `federation_match_id` sigue siendo anulable,
+> pero ya no porque *"una de las dos federaciones no lo tenga"* —las dos lo tienen— sino por lo que esta misma
+> entrada ya decía en la frase siguiente y que se quedó en segundo plano: **es un campo de un proveedor y no
+> del contrato genérico de federación**, y *"la clave puede faltar **dentro** de la propia RFFM en respuestas
+> parciales"*. Ese argumento no dependía de Cataluña y sigue en pie. Es el mismo trato que [D-56] recibió en
+> [D-75]: la regla aguanta, lo que hay que citar para defenderla cambia.
+>
+> **Lo que sí se mueve, y es la parte útil.** El **paso 2 de la cadena de partidos** —las coordenadas
+> `(round_id, home_team_id, away_team_id)`— se justificaba como *"el camino normal en la FCF"*. No lo es: es
+> **red de seguridad para las dos**, y el caso que de verdad lo cobra es el que esta entrada ya nombraba —*"la
+> federación reubica un partido en otra jornada"*— más la respuesta parcial. Que el paso 1 resuelva en las dos
+> federaciones **no lo vuelve código muerto**: lo vuelve lo que [D-78] describe, un escalón que espera a que
+> el anterior no resuelva.
+>
+> El texto de abajo se conserva sin tocar: esto es una bitácora, se anota encima y no se reescribe ([D-26]).
 
 **El punto de partida.** Las cuatro muestras del objeto de partido traen `codacta`, el identificador del acta
 ([Anexo RFFM §F.2]), y el anexo lo tenía anotado como "candidato natural a clave externa de
@@ -1286,6 +1348,32 @@ sería inventar identidad, y esa identidad acaba en una clave de Storage ([D-19]
 ---
 
 ### D-85 · El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción
+
+> ### ⚠️ Enmienda del 2026-09-12 · el alcance real de la garantía, y el caso en que el registro mentía
+>
+> **La decisión no cambia. Lo que se acota es lo que promete, y se corrige un caso en que decía lo contrario de
+> la verdad.** Las dos cosas las midió el bloque `A-3` del plan de auditoría.
+>
+> **1 · La garantía es más pequeña de lo que esta entrada daba a entender (H-23).** El ámbito que escribe la
+> constancia usa **el mismo recurso que acaba de fallar**, así que lo que se garantiza no es *"la pasada fallida
+> deja constancia"* sino *"...**mientras la base responda**"*. Ante un fallo **de datos** se cumple entera, y
+> está medido: con una violación real de `uq:matches.federation_match_id`, el tercer ámbito se ejecuta, escribe,
+> y guarda **el motivo verdadero** —el `23505` con su clave duplicada dentro, no un `25P02` sobre otra cosa—.
+> El `rollback` que emite la transacción al propagarse la excepción deja la conexión limpia antes de soltarla al
+> *pool*, así que la conexión envenenada que se temía no existe. Ante un fallo **de la base**, no se cumple, y
+> la respuesta está en la enmienda de [D-86]: se deja de continuar.
+>
+> **2 · El registro podía decir `failed` de una pasada que había ido bien (H-24).** Si el ámbito 2 comprometía
+> —datos escritos, `last_synced_at` puesto— y fallaba **solo** el ámbito 3, el fallo caía en el mismo `catch`
+> que la pasada fallida y se escribía una fila `failed`, con el motivo del **apunte** y no de la pasada. Tres
+> testigos de la misma pasada dando tres respuestas distintas, y el que depura mandado al sitio equivocado —
+> justo lo contrario de para lo que existe esta tabla.
+>
+> **Lo que se hace ahora:** no se registra nada, y se lanza un error que dice exactamente eso — *la pasada se
+> escribió y no se pudo apuntar*. Quien lo reciba tiene que saber que **la ingesta sí se hizo**, o la repetirá.
+> La asimetría es deliberada y se apoya en `last_synced_at`: una fila de registro que falta es un hueco
+> visible; una fila que miente es un dato falso, y de los dos errores el segundo es el caro — el mismo criterio
+> con el que [D-75] eligió entre ignorar un vacío y escribir un silencio.
 
 **Qué hay que decidir.** La cadena de §3.7 devuelve por qué escalón se supo cada emparejamiento, y [D-79]
 cerró que la *"marca para revisión"* **no es una columna**. Pero eso deja abierta otra pregunta: ese resultado
