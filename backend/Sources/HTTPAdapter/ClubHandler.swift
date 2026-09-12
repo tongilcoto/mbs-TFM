@@ -2,6 +2,7 @@ public import APIContract
 public import Application
 import Domain
 import Foundation
+import Logging
 import Tenancy
 import Vapor
 
@@ -27,18 +28,34 @@ public struct APIHandler: APIProtocol {
     let ids: any UUIDProvider
     let background: any BackgroundWork
 
+    /// **La única salida que tiene el trabajo que sobrevive a su respuesta**
+    /// (H-27). Lo que corre detrás de un `202` no puede contar nada por la
+    /// respuesta —ya salió— ni por `ingestion_runs` cuando la que falla es la
+    /// base (H-23), ni por un código de salida, que es del comando y no del
+    /// servidor. Queda el log, que va a `stderr` y sale del proceso.
+    ///
+    /// **Se inyecta para poder afirmarlo en un test**: un `Logger` creado aquí
+    /// dentro sería un efecto que ninguna aserción alcanza (§4.3, el mismo
+    /// argumento que el reloj y el `UUIDProvider`). El valor por omisión sale del
+    /// `LoggingSystem.bootstrap` de `main.swift`, así que en producción escribe
+    /// por el mismo sitio y con el mismo nivel que el resto del servidor; la
+    /// etiqueta propia es para poder filtrarlo.
+    let logger: Logger
+
     public init(
         unitOfWork: any TenantUnitOfWork,
         federationClients: any FederationClientProvider,
         clock: any Clock = SystemClock(),
         ids: any UUIDProvider = SystemUUIDProvider(),
-        background: any BackgroundWork = DetachedBackgroundWork()
+        background: any BackgroundWork = DetachedBackgroundWork(),
+        logger: Logger = Logger(label: "ingestion")
     ) {
         self.unitOfWork = unitOfWork
         self.federationClients = federationClients
         self.clock = clock
         self.ids = ids
         self.background = background
+        self.logger = logger
     }
 
     public func getClub(_ input: Operations.getClub.Input) async throws

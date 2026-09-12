@@ -385,4 +385,218 @@ struct IngestionEndpointTests {
             }
         }
     }
+
+    @Test("lo que el 202 aceptó y no llegó a hacerse se dice por el log (H-27)")
+    func acceptedWorkThatVanishesIsReported() async throws {
+        try await Self.withSeededClub { app, seasonID, competitionID, otherID in
+            // El ámbito 1 —el del plan, el que decide el `202`— pasa; el
+            // siguiente no. Es la forma exacta de H-27 medida a mano: el cliente
+            // recibe su `202` y la base se cae detrás. El mismo patrón que A-3
+            // usó para H-24, y por lo mismo: parar el contenedor desde un test de
+            // esta suite se lo llevaría por delante a las demás.
+            let spy = LogSpy()
+            let handler = APIHandler(
+                unitOfWork: CollapsingUnitOfWork(
+                    inner: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+                    collapse: Collapse(failsFromScope: 2)),
+                federationClients: StubProvider(failing: false),
+                clock: FixedClock(instant: Self.syncInstant),
+                background: InlineBackgroundWork(),
+                logger: Logger(label: "test") { _ in CapturingLogHandler(spy: spy) })
+
+            let tenant = try await TenantResolver(database: app.db(.control))
+                .resolve(slug: Self.slug)
+            let output = try await TenantContext.$current.withValue(tenant) {
+                try await handler.triggerIngestion(
+                    .init(body: .json(.init(seasonId: seasonID.raw.uuidString.lowercased()))))
+            }
+
+            // **El `202` se mantiene, y es lo correcto**: la planificación sí
+            // ocurrió y el cliente no tiene culpa de lo que pase después. Lo que
+            // se audita es que el fallo no se quede sin contar.
+            guard case .accepted = output else {
+                Issue.record("se esperaba 202, llegó \(output)")
+                return
+            }
+
+            // La ingesta no dejó fila —la base es lo que falló (H-23)—, así que el
+            // log es la única señal posible. Sin esto, el trabajo aceptado
+            // desaparece y `ingestionHealth` sigue diciendo `ok` (`D-89`).
+            let errors = spy.messages(at: .error)
+            #expect(errors.count == 1)
+            #expect(errors.first?.contains("no se hizo") == true)
+            // Y dice **cuáles**: los dos ids que el `202` prometió.
+            #expect(errors.first?.contains(competitionID.raw.uuidString.lowercased()) == true)
+            #expect(errors.first?.contains(otherID.raw.uuidString.lowercased()) == true)
+        }
+    }
+
+    @Test("el recorrido que se para a mitad detrás de un 202 también se dice (H-27, H-23)")
+    func anAbortedTraversalBehindA202IsReported() async throws {
+        try await Self.withSeededClub { app, seasonID, _, _ in
+            // La base aguanta la primera competición y se cae al ir por la
+            // segunda: es `abortedByInfrastructure`, la bandera que A-3 creó para
+            // que el llamante pudiera distinguir *"falló una"* de *"el recorrido
+            // no siguió"*. Por la ruta del `202` ese llamante es un `Task { }`, y
+            // antes de esto la bandera se tiraba sin leerla.
+            let collapse = Collapse()
+            let spy = LogSpy()
+            let handler = APIHandler(
+                unitOfWork: CollapsingUnitOfWork(
+                    inner: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+                    collapse: collapse),
+                federationClients: CollapsingProvider(
+                    collapse: collapse, fetches: Collapse(failsFromScope: 2)),
+                clock: FixedClock(instant: Self.syncInstant),
+                background: InlineBackgroundWork(),
+                logger: Logger(label: "test") { _ in CapturingLogHandler(spy: spy) })
+
+            let tenant = try await TenantResolver(database: app.db(.control))
+                .resolve(slug: Self.slug)
+            _ = try await TenantContext.$current.withValue(tenant) {
+                try await handler.triggerIngestion(
+                    .init(body: .json(.init(seasonId: seasonID.raw.uuidString.lowercased()))))
+            }
+
+            // **`error` y no `warning`**: de esto no queda constancia en ningún
+            // otro sitio. La fila de `D-85` no se pudo escribir —la base es lo que
+            // falló— así que si esto no se dice, no se dice en ninguna parte.
+            let errors = spy.messages(at: .error)
+            #expect(errors.count == 1)
+            #expect(errors.first?.contains("se paró") == true)
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dobles de este fichero. No van a `TestSupport` a propósito: los usa una sola
+// suite y moverlos allí sería API compartida por un caso (§3, regla 2).
+
+/// Cuenta ámbitos de tenant y deja de abrirlos a partir del que se le diga.
+///
+/// Es *"la base se cae detrás del `202`"* sin tocar el contenedor: las suites
+/// corren en paralelo y `docker compose stop db` desde aquí sería una carrera
+/// contra las demás — la lección de arnés que F6 dejó escrita.
+struct CollapsingUnitOfWork: TenantUnitOfWork {
+    let inner: any TenantUnitOfWork
+    let collapse: Collapse
+
+    struct DatabaseIsGone: Error {}
+
+    func withRepositories<T: Sendable>(
+        actor: ActorContext,
+        _ work: @escaping @Sendable (any Repositories) async throws -> T
+    ) async throws -> T {
+        guard !collapse.openScope() else { throw DatabaseIsGone() }
+        return try await inner.withRepositories(actor: actor, work)
+    }
+}
+
+/// El momento de la caída, con **dos gatillos** porque las dos ramas de H-27
+/// necesitan momentos distintos.
+///
+/// - `failsFromScope` — *"la base ya no está cuando vuelva a abrirse un ámbito"*.
+///   Sirve para el fallo **antes de empezar**: el plan del `202` pasa (ámbito 1)
+///   y el del recorrido, no.
+/// - `force()` — *"cáete ahora"*, llamado desde el doble de la federación entre
+///   una competición y la siguiente. Es el fallo **a mitad**, y es la forma
+///   literal del experimento con que A-3 midió H-23.
+final class Collapse: @unchecked Sendable {
+    private let lock = NSLock()
+    private var scopes = 0
+    private var forced = false
+    private let failsFromScope: Int?
+
+    init(failsFromScope: Int? = nil) {
+        self.failsFromScope = failsFromScope
+    }
+
+    func force() {
+        lock.lock()
+        defer { lock.unlock() }
+        forced = true
+    }
+
+    /// `true` si este ámbito ya no se puede abrir.
+    func openScope() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        scopes += 1
+        if forced { return true }
+        if let failsFromScope { return scopes >= failsFromScope }
+        return false
+    }
+}
+
+/// Tumba la base **entre una competición y la siguiente**, desde el sitio donde
+/// A-3 la tumbó: justo antes de devolver el calendario.
+struct CollapsingProvider: FederationClientProvider {
+    let collapse: Collapse
+    /// Su propio contador, con su propio umbral: **el del test, no uno estático**.
+    /// Un contador compartido entre casos sería estado global en una batería
+    /// paralela, que es la lección de arnés de F6.
+    let fetches: Collapse
+
+    func client(for code: FederationCode) -> (any FederationClient)? {
+        CollapsingClient(collapse: collapse, fetches: fetches)
+    }
+}
+
+struct CollapsingClient: FederationClient {
+    let collapse: Collapse
+    let fetches: Collapse
+
+    func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+        // `openScope` cuenta llamadas y dice si toca caerse; aquí las llamadas son
+        // *fetches*, que es lo mismo con otro nombre.
+        if fetches.openScope() { collapse.force() }
+        return IngestionEndpointTests.emptyCalendar
+    }
+}
+
+/// Recoge lo que se registra, para que una aserción pueda mirarlo.
+///
+/// **Con *lock* y no `actor`**, aunque el proyecto prefiera `actor`: `LogHandler.log`
+/// es síncrono, así que desde dentro no se puede `await`. Un `Task { }` para
+/// entregarle el mensaje dejaría la aserción corriendo contra él — que es
+/// exactamente la carrera que este bloque vino a no arbitrar.
+final class LogSpy: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [(Logger.Level, String)] = []
+
+    func record(_ level: Logger.Level, _ message: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.append((level, message))
+    }
+
+    func messages(at level: Logger.Level) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.filter { $0.0 == level }.map(\.1)
+    }
+}
+
+struct CapturingLogHandler: LogHandler {
+    let spy: LogSpy
+    var metadata = Logger.Metadata()
+    var logLevel = Logger.Level.trace
+
+    subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+        get { metadata[key] }
+        set { metadata[key] = newValue }
+    }
+
+    func log(
+        level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?,
+        source: String, file: String, function: String, line: UInt
+    ) {
+        // El mensaje y los metadatos se aplanan juntos: lo que se afirma es
+        // *qué se dijo*, y los ids de competición viajan en los metadatos.
+        let flattened = ((metadata ?? [:]).merging(self.metadata) { a, _ in a })
+            .map { "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: " ")
+        spy.record(level, "\(message) \(flattened)")
+    }
 }

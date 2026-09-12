@@ -2,6 +2,7 @@ public import APIContract
 public import Application
 import Domain
 import Foundation
+import Logging
 
 /// `GET /v1/ingestion-runs` y `POST /v1/ingestion-runs` (§5.6, `D-85`, `D-87`).
 ///
@@ -165,7 +166,8 @@ extension APIHandler {
             // 404 aquí y no un `202` seguido de un fallo que nadie ve.
             let planned = try await useCase.plannedCompetitions(scope: scope, actor: actor)
             await background.enqueue {
-                _ = try? await useCase.execute(scope: scope, actor: actor)
+                await self.runAccepted(
+                    useCase, scope: scope, actor: actor, planned: planned)
             }
             return .accepted(.init(body: .json(.init(
                 competitionIds: planned.map { $0.raw.uuidString.lowercased() }))))
@@ -185,6 +187,79 @@ extension APIHandler {
                 Self.problem(status: 501, code: "FEDERATION_ADAPTER_MISSING",
                              title: "Federación todavía sin adaptador",
                              detail: "No hay adaptador de ingesta para '\(federation)'."))))
+        }
+    }
+
+    /// El trabajo que el `202` prometió, con la **única salida que le queda**
+    /// (H-27).
+    ///
+    /// # Por qué esto no puede ser `_ = try? await …`
+    ///
+    /// Así estaba, y así el `202` aceptaba dos competiciones, no hacía ninguna y
+    /// **nadie se enteraba jamás**. Las tres formas de enterarse se caen a la vez
+    /// en este camino: la **respuesta** ya salió; la fila de `ingestion_runs`
+    /// (`D-85`) se escribe *en la base*, que es justo lo que falla en el caso malo
+    /// (H-23); y el **código de salida** de `D-86` es del comando `ingest`, no de
+    /// un servidor, que no termina. Queda el log.
+    ///
+    /// # Qué se registra y qué no
+    ///
+    /// - **El recorrido abortado** y **el error que sale del caso de uso** son
+    ///   `error`: de esos dos no queda constancia en ningún otro sitio.
+    /// - **Las competiciones que fallaron** con la base viva son `warning`, y a
+    ///   propósito más flojo: cada una **ya tiene su fila** con su motivo
+    ///   (`D-85`), así que esto es una miga para el que lee el log, no la fuente.
+    ///
+    /// **Y lo que esto no arregla, para que nadie lo confunda con la solución:**
+    /// un log lo lee el operador, no el backoffice. Que la pantalla se entere
+    /// —sin *push*, que es como es— necesita que quede **fila** desde el instante
+    /// en que se acepta; hoy `IngestionOutcome` solo tiene `succeeded` y `failed`,
+    /// así que el `202` no deja ni un hueco donde mirar y `ingestionHealth`
+    /// (`D-89`) sigue diciendo `ok`. Eso es modelo, contrato y una enmienda a
+    /// `D-88` —que hoy dice *"el `POST` no crea la fila"*—: va a **F10**, con el
+    /// `202` de `D-67`.
+    func runAccepted(
+        _ useCase: IngestClubCalendars,
+        scope: IngestionScope,
+        actor: ActorContext,
+        planned: [CompetitionID]
+    ) async {
+        let ids: @Sendable ([CompetitionID]) -> String = { list in
+            list.map { $0.raw.uuidString.lowercased() }.joined(separator: ", ")
+        }
+        do {
+            let report = try await useCase.execute(scope: scope, actor: actor)
+            let attempted = Set(report.entries.map(\.competitionID))
+            let untouched = planned.filter { !attempted.contains($0) }
+
+            if report.abortedByInfrastructure {
+                // El mensaje **no** afirma que quedara algo detrás: cuando la que
+                // se cae es la última, no queda nada, y decirlo igual sería el
+                // tipo de imprecisión que hace desconfiar de un log.
+                logger.error(
+                    "El recorrido aceptado con 202 se paró: la base dejó de responder",
+                    metadata: [
+                        "club": .string(actor.clubSlug.value),
+                        "intentadas": .string("\(report.entries.count)"),
+                        "sin-intentar": .string(
+                            untouched.isEmpty ? "ninguna" : ids(untouched)),
+                    ])
+            } else if report.hasFailures {
+                logger.warning(
+                    "Alguna competición del recorrido aceptado con 202 falló",
+                    metadata: [
+                        "club": .string(actor.clubSlug.value),
+                        "detalle": .string("en ingestion_runs"),
+                    ])
+            }
+        } catch {
+            logger.error(
+                "El trabajo aceptado con 202 no se hizo",
+                metadata: [
+                    "club": .string(actor.clubSlug.value),
+                    "aceptadas": .string(ids(planned)),
+                    "motivo": .string(diagnosticText(for: error)),
+                ])
         }
     }
 
