@@ -137,10 +137,25 @@ public struct IngestClubCalendars: Sendable {
     ///
     /// El precio es leer la coordenada dos veces. Es el mismo intercambio que
     /// `D-83` ya aceptó por otro motivo, y por menos.
+    ///
+    /// **Y comprueba el adaptador, que es lo que hace que la promesa del `202` sea
+    /// del mismo tamaño por las dos puertas** (H-28). `plan` lee la federación del
+    /// club para poder elegir cliente, así que el dato está en la mano **antes** de
+    /// responder: dejar la comprobación en `execute` hacía que el mismo club
+    /// contestara `501` si se le pedía una competición y `202` si se le pedía la
+    /// temporada, con las dos aceptadas y ninguna hecha. Es exactamente lo que
+    /// `D-88` dice que planificar antes de responder existe para evitar — *"un
+    /// `202` seguido de un fallo que nadie ve"*—, y detrás del `202` no lo ve nadie
+    /// literalmente (H-27).
     public func plannedCompetitions(
         scope: IngestionScope = IngestionScope(), actor: ActorContext
     ) async throws -> [CompetitionID] {
-        try await plan(scope: scope, actor: actor).competitions.map(\.id)
+        let plan = try await plan(scope: scope, actor: actor)
+        guard federationClients.client(for: plan.federation) != nil else {
+            throw ApplicationError.federationAdapterMissing(
+                federation: plan.federation.rawValue)
+        }
+        return plan.competitions.map(\.id)
     }
 
     /// Qué se va a sincronizar, resuelto en **un solo ámbito** y antes de tocar

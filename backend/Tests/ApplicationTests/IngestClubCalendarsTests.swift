@@ -579,4 +579,28 @@ struct IngestClubCalendarsTests {
         let runs = await store.ingestionRuns
         #expect(runs.isEmpty)
     }
+
+    @Test("la federación sin adaptador se rechaza al planificar, no después del 202 (D-88, H-28)")
+    func theMissingAdapterIsRejectedWhilePlanning() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club(federation: .fcf))
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        await store.seed(
+            seasons: [current], competitions: [try Self.competition(seasonID: current.id)])
+
+        let useCase = Self.useCase(
+            store: store, federation: SpyFederationClient(returning: Self.calendar), code: .rffm)
+
+        // **La planificación es lo que decide el código de la respuesta** (`D-88`):
+        // lo que no se compruebe aquí se comprueba detrás del `202`, donde ya no
+        // hay a quién contárselo (H-27). Y este dato está en la mano: `plan()` lee
+        // la federación del club para elegir el adaptador, una línea antes de
+        // responder.
+        //
+        // Sin esto, el mismo club contesta **501** si se pide una competición y
+        // **202** si se pide la temporada — con las dos aceptadas y ninguna hecha.
+        await #expect(throws: ApplicationError.federationAdapterMissing(federation: "fcf")) {
+            try await useCase.plannedCompetitions(scope: IngestionScope(), actor: Self.actor)
+        }
+    }
 }
