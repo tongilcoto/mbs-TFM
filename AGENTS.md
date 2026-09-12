@@ -110,7 +110,15 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   estaban puestas** (`D-86`): la pasada es **atómica** (`D-83`) y **deja constancia** de su fallo (`D-85`). La
   unidad de aislamiento es la **competición**: abortar haría que una sola coordenada caducada —de las que
   `D-84` demuestra que existen y que no dan error— dejara sin sincronizar a todo lo que va detrás. Las dos
-  mitades son inseparables: **se continúa y se apunta**, y el comando sale con código distinto de cero. Ojo al
+  mitades son inseparables: **se continúa y se apunta**, y el comando sale con código distinto de cero.
+  **Y eso vale para el fallo de datos, no para el de la base** (`D-86` enmendada el 2026-09-12, H-23): el
+  ámbito que escribe la constancia usa **el mismo recurso que acaba de fallar**, así que con la base caída el
+  recorrido continuaba sin apuntar nada — exactamente lo que `D-86` declara inseguro. Ahora se **para**, y para
+  distinguir un caso del otro **se le pregunta a la base si sigue ahí** en vez de clasificar el error: los
+  códigos de un `PSQLError`, un *pool* agotado y un relevo del *pooler* son una premisa sobre un sistema ajeno
+  (`D-84`). Se para también el recorrido de los clubes que faltan, porque el *pool* y el Postgres son **uno
+  solo** (§6.4) y la caída no está aislada por club. Lo que **no** se aplaza al parar: las competiciones sin
+  intentar no han movido su `last_synced_at` y entran enteras en el disparo siguiente. Ojo al
   copiar esto a las migraciones por tenant (§9.3): **no es la misma pregunta** — una migración a medias deja
   *schemas* a distinta versión y nada que lo diga.
 - **La cadencia de la ingesta vive fuera del proceso; lo que el código trae es un antirrebote** (`D-87`). No
@@ -202,7 +210,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**272 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**276 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16

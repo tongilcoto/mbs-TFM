@@ -367,6 +367,72 @@ struct IngestClubCalendarsTests {
         #expect(federation.received.map(\.federationGroupID) == ["222", "333"])
     }
 
+    // ── H-23: la otra mitad de `D-86`, la que el fallo de datos no enseña ──────
+
+    /// Tres competiciones de la temporada vigente, en orden de grupo.
+    static func storeWithThreeCompetitions() async throws
+        -> (store: IngestionStore, competitions: [Competition])
+    {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        let competitions = try ["111", "222", "333"].map {
+            try Self.competition(seasonID: current.id, federationGroupID: $0)
+        }
+        await store.seed(seasons: [current], competitions: competitions)
+        return (store, competitions)
+    }
+
+    /// **`D-86` continúa, pero no cuando el que falla es el sitio donde se
+    /// apunta.** Su criterio escrito es *"continuar solo es seguro cuando el
+    /// fallo deja constancia"*, y con la base caída no la deja: el tercer ámbito
+    /// de `D-83` tampoco puede escribir, y `IngestCalendar` se traga ese fallo a
+    /// propósito. Así que el recorrido seguiría dejando **cero** rastro de cada
+    /// competición que va tirando.
+    ///
+    /// La base se cae **desde la llamada a la federación**, que es el único punto
+    /// que corre fuera de los tres ámbitos y por tanto el único sitio donde la
+    /// caída puede pillar a la pasada por medio.
+    @Test("si el que falla es la base, el recorrido se para (D-86 enmendada, H-23)")
+    func aDatabaseOutageStopsTheTraversal() async throws {
+        let power = DatabaseSwitch()
+        let (store, _) = try await Self.storeWithThreeCompetitions()
+        let federation = OutageInducingClient(
+            returning: Self.calendar, power: power, outageOnCall: 2)
+
+        let report = try await IngestClubCalendars(
+            unitOfWork: SwitchableUnitOfWork(store: store, power: power),
+            federationClients: FakeFederationClientProvider([.rffm: federation]),
+            clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider()
+        ).execute(scope: IngestionScope(), actor: Self.actor)
+
+        // Se dice, que es lo que permite al llamante distinguirlo de `hasFailures`.
+        #expect(report.abortedByInfrastructure)
+        // Y se para: la tercera **ni se intenta**. Sin esto serían tres entradas,
+        // tres fallos y ninguna fila en `ingestion_runs` que lo contara.
+        #expect(report.entries.count == 2)
+    }
+
+    /// El reverso, y es la mitad que no se puede perder al arreglar H-23: con la
+    /// base **sana**, una competición que falla sigue sin detener el recorrido.
+    /// Si la guarda nueva se pasara de celosa, `D-86` dejaría de cumplirse por el
+    /// otro lado — una coordenada caducada volvería a llevarse por delante todo
+    /// lo que va detrás.
+    @Test("con la base sana, un fallo de datos sigue sin detener el recorrido (D-86, H-23)")
+    func aDataFailureWithAHealthyDatabaseStillContinues() async throws {
+        let (store, competitions) = try await Self.storeWithThreeCompetitions()
+        let federation = FlakyFederationClient(
+            returning: Self.calendar, failingGroups: ["222"])
+
+        let report = try await Self.useCase(store: store, federation: federation)
+            .execute(scope: IngestionScope(), actor: Self.actor)
+
+        #expect(report.abortedByInfrastructure == false)
+        #expect(report.entries.map(\.competitionID) == competitions.map(\.id))
+        #expect(report.hasFailures)
+    }
+
     @Test("el recorrido dice cuál falló y por qué (D-86)")
     func theReportNamesTheFailure() async throws {
         let (store, broken, healthy) = try await Self.storeWithABrokenFirstCompetition()

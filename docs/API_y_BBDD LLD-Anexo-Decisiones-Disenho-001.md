@@ -193,6 +193,44 @@ mantener viva una transacción durante la latencia de un tercero; el intercambio
 
 ### D-86 · El recorrido de la ingesta no se detiene en el primer fallo
 
+> ### ⚠️ Enmienda del 2026-09-12 · «se continúa **y** se apunta» no se cumplía cuando la que falla es la base
+>
+> **La decisión se sostiene; lo que era falso es que sus dos mitades fueran inseparables por construcción.** Lo
+> midió el bloque `A-3` del plan de auditoría (H-23), parando el contenedor de Postgres a mitad de recorrido
+> con tres competiciones:
+>
+> | | Lo que esta entrada prometía | Lo medido con la base caída |
+> |---|---|---|
+> | Se continúa | sí | **sí** — las tres se intentaron |
+> | Se apunta | una fila por competición | **una fila en total**, la de la que fue bien |
+>
+> La razón es de forma y no de descuido: el **tercer ámbito de [D-83]** —el que escribe la constancia— usa
+> **el mismo recurso que acaba de fallar**. Cuando lo que se rompe es la base, la red de seguridad está hecha
+> del material que se rompió, y `IngestCalendar` se traga ese segundo fallo a propósito (*"manda el error
+> original"*). Así que el recorrido seguía adelante haciendo justo lo que esta entrada declara inseguro:
+> continuar **sin** dejar constancia.
+>
+> **Lo que cambia, y es la condición que ya estaba escrita aquí, ahora hecha cumplir.** El recorrido continúa
+> ante un fallo **de datos** —una coordenada caducada, una restricción violada, una invariante— y **se detiene**
+> ante un fallo de la base. La distinción no se hace clasificando el error, sino **preguntándole a la base si
+> sigue ahí** después de cada fallo: un `PSQLError` de conexión, un *pool* agotado y un relevo del *pooler*
+> (§6.4) llegan de formas distintas, y una lista de códigos sería una premisa sobre un sistema ajeno — lo que
+> [D-84] enseñó a no heredar. La sonda cuesta una consulta y **solo en el camino de error**.
+>
+> **Y se detiene también el recorrido de los clubes que faltan**, porque el aislamiento por competición lo
+> hereda el club a través de su *schema*, pero el *pool*, la conexión y el Postgres son **uno solo** (§6.4):
+> una caída no está aislada por club, y probar con el siguiente no es resiliencia, son N recorridos que tampoco
+> van a poder apuntar nada.
+>
+> **Lo que no se pierde al parar:** las competiciones que no se llegaron a intentar **no han movido su
+> `last_synced_at`**, así que entran enteras en el disparo siguiente. Parar no aplaza trabajo, solo deja de
+> hacerlo a ciegas.
+>
+> **Lo que queda como riesgo aceptado, y conviene que esté escrito:** la constancia de [D-85] vale *"mientras la
+> base responda"*. Con la base caída, la única señal que sobrevive es el **código de salida** del comando y su
+> informe por consola. Convertir eso en un aviso que alguien lea es la misma decisión de despliegue que el cron
+> de §5.6, que sigue pendiente.
+
 **Qué hay que decidir.** [D-83] deja la pasada de **una** competición atómica, y F6 la pone dentro de dos
 bucles: por competición del club, y por club del plano de control (§4.7). La pregunta que §9.3 dejó abierta
 para las migraciones —*«¿qué pasa con los ya migrados cuando el número 30 revienta?»*— se repite aquí, y aquí
@@ -1310,6 +1348,32 @@ sería inventar identidad, y esa identidad acaba en una clave de Storage ([D-19]
 ---
 
 ### D-85 · El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción
+
+> ### ⚠️ Enmienda del 2026-09-12 · el alcance real de la garantía, y el caso en que el registro mentía
+>
+> **La decisión no cambia. Lo que se acota es lo que promete, y se corrige un caso en que decía lo contrario de
+> la verdad.** Las dos cosas las midió el bloque `A-3` del plan de auditoría.
+>
+> **1 · La garantía es más pequeña de lo que esta entrada daba a entender (H-23).** El ámbito que escribe la
+> constancia usa **el mismo recurso que acaba de fallar**, así que lo que se garantiza no es *"la pasada fallida
+> deja constancia"* sino *"...**mientras la base responda**"*. Ante un fallo **de datos** se cumple entera, y
+> está medido: con una violación real de `uq:matches.federation_match_id`, el tercer ámbito se ejecuta, escribe,
+> y guarda **el motivo verdadero** —el `23505` con su clave duplicada dentro, no un `25P02` sobre otra cosa—.
+> El `rollback` que emite la transacción al propagarse la excepción deja la conexión limpia antes de soltarla al
+> *pool*, así que la conexión envenenada que se temía no existe. Ante un fallo **de la base**, no se cumple, y
+> la respuesta está en la enmienda de [D-86]: se deja de continuar.
+>
+> **2 · El registro podía decir `failed` de una pasada que había ido bien (H-24).** Si el ámbito 2 comprometía
+> —datos escritos, `last_synced_at` puesto— y fallaba **solo** el ámbito 3, el fallo caía en el mismo `catch`
+> que la pasada fallida y se escribía una fila `failed`, con el motivo del **apunte** y no de la pasada. Tres
+> testigos de la misma pasada dando tres respuestas distintas, y el que depura mandado al sitio equivocado —
+> justo lo contrario de para lo que existe esta tabla.
+>
+> **Lo que se hace ahora:** no se registra nada, y se lanza un error que dice exactamente eso — *la pasada se
+> escribió y no se pudo apuntar*. Quien lo reciba tiene que saber que **la ingesta sí se hizo**, o la repetirá.
+> La asimetría es deliberada y se apoya en `last_synced_at`: una fila de registro que falta es un hueco
+> visible; una fila que miente es un dato falso, y de los dos errores el segundo es el caro — el mismo criterio
+> con el que [D-75] eligió entre ignorar un vacío y escribir un silencio.
 
 **Qué hay que decidir.** La cadena de §3.7 devuelve por qué escalón se supo cada emparejamiento, y [D-79]
 cerró que la *"marca para revisión"* **no es una columna**. Pero eso deja abierta otra pregunta: ese resultado

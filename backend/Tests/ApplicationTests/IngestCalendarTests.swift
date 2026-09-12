@@ -293,6 +293,44 @@ struct IngestCalendarTests {
             ids: SequentialUUIDProvider())
     }
 
+    // ── H-24: cuando lo único que falla es apuntar ──────────────────────────
+
+    /// **Una pasada que se escribió no puede registrarse como fallida.**
+    ///
+    /// Los tres ámbitos de `D-83` son leer, escribir y apuntar. Si falla el
+    /// tercero, el segundo **ya comprometió**: los partidos están y
+    /// `last_synced_at` está puesto. Registrar eso como `failed` deja tres
+    /// testigos diciendo cosas distintas de la misma pasada —la columna dice
+    /// *"sincronizada"*, la fila dice *"falló"* y el recorrido la cuenta como
+    /// fallo— y encima guarda como motivo el fallo **al apuntar**, que no habla
+    /// de la pasada y manda a depurar al sitio equivocado.
+    ///
+    /// Lo correcto es decir lo que pasó: la pasada está, el registro no.
+    @Test("una pasada que sí se escribió no se registra como fallida (H-24)")
+    func aWrittenPassIsNotRecordedAsFailed() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        await store.seed(seasons: [season], competitions: [competition])
+        let actor = ActorContext(clubSlug: try Slug("atleti"), isSystem: true)
+
+        let useCase = IngestCalendar(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: store), failOn: 3),
+            federation: SpyFederationClient(
+                returning: try Self.calendar(matches: [Self.match()])),
+            clock: FixedClock(instant: Self.syncInstant),
+            ids: SequentialUUIDProvider())
+
+        await #expect(throws: ApplicationError.self) {
+            try await useCase.execute(competitionID: competition.id, actor: actor)
+        }
+
+        // El ámbito 2 comprometió, y eso no se deshace por no poder apuntarlo.
+        #expect(await store.matches.count == 1)
+        // Y no queda una fila diciendo que falló, porque no falló.
+        #expect(await store.ingestionRuns.isEmpty)
+    }
+
     // ── Idempotencia: la propiedad que hace segura la cadencia semanal ──────
 
     /// §5.6 fija **una pasada por semana como mínimo**, así que la misma

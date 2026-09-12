@@ -353,6 +353,91 @@ struct CalendarIngestionEndToEndTests {
         }
     }
 
+    /// **El fallo que de verdad ocurre en producción, y que hasta H-26 no
+    /// ejercitaba nada.**
+    ///
+    /// Los dos tests de arriba provocan el fallo con un `DomainError` —un equipo
+    /// contra sí mismo—, que salta **antes** de que se emita la sentencia: la
+    /// transacción se deshace sin que Postgres haya rechazado nada y la conexión
+    /// **nunca entra en `25P02`**. Pero §3.5 son siete `UNIQUE` y una FK
+    /// compuesta, así que el fallo probable es el otro, y trae dos preguntas que
+    /// el de Swift no contesta: si el tercer ámbito llega a escribir cuando el
+    /// segundo lo abortó **Postgres**, y de qué conexión sale — porque si el
+    /// *pool* devolviera la de la transacción abortada, la fila de `D-85` no se
+    /// escribiría y el fallo se tragaría a sí mismo.
+    ///
+    /// El vehículo es `uq:matches.federation_match_id`, que es **global al
+    /// *schema*** mientras los candidatos de la cadena se cargan **filtrados por
+    /// competición** (`CalendarPass`): un acta que ya existe en otra competición
+    /// es invisible para ésta, así que intenta el `INSERT` y choca de verdad.
+    @Test("una restricción violada de verdad deja su fila, y con su motivo (D-85, H-26)")
+    func aRealConstraintViolationIsRecordedWithItsRealReason() async throws {
+        try await Self.withTenant("e2e-23505") { tenant in
+            let (first, second) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-23505"), isSystem: true)
+
+            // La primera deja el acta escrita.
+            _ = try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                .execute(competitionID: first, actor: actor)
+
+            // La segunda trae la misma, y Postgres la rechaza.
+            await #expect(throws: (any Error).self) {
+                try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                    .execute(competitionID: second, actor: actor)
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(
+                    competitionID: second, limit: 10),
+                 rounds: try await repositories.rounds.list(competitionID: second),
+                 matches: try await repositories.matches.list(competitionID: second),
+                 competition: try await repositories.competitions.find(second))
+            }
+
+            // El ámbito 3 se ejecutó **y escribió**: el `rollback` de la
+            // transacción abortada deja la conexión limpia antes de soltarla, así
+            // que el `25P02` no sobrevive al cierre del ámbito.
+            #expect(after.runs.count == 1)
+            #expect(after.runs.first?.outcome == .failed)
+            // Y guarda el motivo **verdadero**, no un 25P02 sobre otra cosa. Es lo
+            // que hace depurable una pasada que nadie vio fallar (D-85).
+            let reason = try #require(after.runs.first?.error)
+            #expect(reason.contains("federation_match_id"))
+            #expect(reason.contains("23505"))
+
+            // Y `D-83` aguanta: lo de esta pasada, deshecho entero.
+            #expect(after.rounds.isEmpty)
+            #expect(after.matches.isEmpty)
+            #expect(after.competition?.lastSyncedAt == nil)
+        }
+    }
+
+    /// Dos competiciones en la misma temporada. Existe para que una pueda chocar
+    /// contra una restricción que la otra ya ocupó.
+    static func seedTwoEntries(_ tenant: TenantFixture) async throws
+        -> (first: CompetitionID, second: CompetitionID)
+    {
+        let season = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+            federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+        func competition(_ group: String) throws -> Competition {
+            try Competition(
+                id: CompetitionID(raw: UUID()), seasonID: season.id,
+                modality: .futbol11, gender: .masculino,
+                federationCompetitionID: "24037548", federationGroupID: group,
+                ageCategory: .cadete, divisionLabel: "Primera División Autonómica",
+                groupLabel: "Grupo \(group)", createdAt: Date(), updatedAt: Date())
+        }
+        let first = try competition("24037549")
+        let second = try competition("24037550")
+        try await tenant.scope {
+            try await $0.seasons.save(season)
+            try await $0.competitions.save(first)
+            try await $0.competitions.save(second)
+        }
+        return (first.id, second.id)
+    }
+
     /// Ida y vuelta del registro con **descartes dentro**, que es donde vive el
     /// `jsonb`.
     ///

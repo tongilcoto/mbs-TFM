@@ -39,7 +39,20 @@ public struct IngestClubCalendars: Sendable {
     public func execute(
         scope: IngestionScope = IngestionScope(), actor: ActorContext
     ) async throws -> ClubIngestionReport {
-        let plan = try await plan(scope: scope, actor: actor)
+        // El plan es el **ámbito 1** del club, y también puede ser el primero en
+        // enterarse de que la base no está. Si lo es, se dice con su nombre en vez
+        // de dejar salir un error de conexión en crudo: el llamante que recorre
+        // clubes necesita distinguir *"este club ha fallado"* de *"no hay base"*,
+        // porque la segunda no se arregla probando con el siguiente (H-23).
+        let plan: (federation: FederationCode, competitions: [Competition])
+        do {
+            plan = try await self.plan(scope: scope, actor: actor)
+        } catch {
+            if await !databaseResponds(actor: actor) {
+                throw ApplicationError.databaseUnavailable
+            }
+            throw error
+        }
 
         guard let client = federationClients.client(for: plan.federation) else {
             throw ApplicationError.federationAdapterMissing(
@@ -71,9 +84,48 @@ public struct IngestClubCalendars: Sendable {
                     ClubIngestionReport.Entry(
                         competitionID: competition.id,
                         outcome: .failed(diagnosticText(for: error))))
+
+                // **Y se para si el que ha fallado es el sitio donde se apunta**
+                // (H-23). `D-86` continúa porque `D-85` deja constancia; cuando la
+                // base no responde, la constancia no se escribe —el tercer ámbito
+                // de `D-83` usa el mismo recurso que acaba de fallar— y seguir
+                // sería hacer exactamente lo que `D-86` declara inseguro: recorrer
+                // el resto sin dejar rastro de ninguna.
+                //
+                // **Se le pregunta a la base en vez de clasificar el error**, y es
+                // deliberado: un `PSQLError` de conexión, un *pool* agotado y un
+                // relevo del *pooler* (§6.4) llegan de formas distintas, así que
+                // una lista de códigos sería una premisa sobre un sistema ajeno —
+                // lo que `D-84` enseñó a no heredar. Preguntar cuesta una consulta
+                // y **solo en el camino de error**, que es raro por definición.
+                //
+                // Si la sonda se equivoca, se equivoca hacia el lado barato: se
+                // aborta un recorrido cuyas competiciones **no han movido su
+                // `last_synced_at`** y entran enteras en el disparo siguiente.
+                if await !databaseResponds(actor: actor) {
+                    report.abortedByInfrastructure = true
+                    break
+                }
             }
         }
         return report
+    }
+
+    /// ¿Sigue ahí la base? La consulta más barata que cruza las tres cosas que
+    /// pueden fallar: el *pool*, la conexión y el ámbito de tenant (§6.2).
+    ///
+    /// No distingue *"caída"* de *"saturada"* **a propósito**: para la decisión
+    /// que toma el llamante —seguir o parar— las dos significan lo mismo, que es
+    /// que la pasada siguiente tampoco va a poder dejar constancia.
+    private func databaseResponds(actor: ActorContext) async -> Bool {
+        do {
+            _ = try await unitOfWork.withRepositories(actor: actor) { repositories in
+                try await repositories.clubs.current()
+            }
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Qué competiciones entrarían en este recorrido, **sin ejecutarlo**.
@@ -226,6 +278,19 @@ public struct ClubIngestionReport: Sendable, Equatable {
     public let clubSlug: Slug
     public let federation: FederationCode
     public var entries: [Entry] = []
+
+    /// **El recorrido se paró porque la base dejó de responder** (H-23).
+    ///
+    /// No es lo mismo que `hasFailures`, y la diferencia es la que `D-86`
+    /// enmendada establece: `hasFailures` son competiciones que fallaron **y el
+    /// recorrido siguió**, que es la resiliencia que `D-86` quería; esto es que
+    /// el recorrido **no** siguió, porque continuar sin poder dejar constancia es
+    /// justo lo que `D-86` declara inseguro.
+    ///
+    /// Las entradas que haya son las competiciones que llegaron a intentarse; las
+    /// que faltan **ni se intentaron**, y entran en el disparo siguiente porque su
+    /// `last_synced_at` no se ha movido.
+    public var abortedByInfrastructure: Bool = false
 
     public init(clubSlug: Slug, federation: FederationCode, entries: [Entry] = []) {
         self.clubSlug = clubSlug

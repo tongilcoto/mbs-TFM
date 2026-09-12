@@ -289,3 +289,80 @@ struct OpaqueFailingClient: FederationClient {
         throw OpaqueError(detail: detail)
     }
 }
+
+// ── H-23: la base que se cae a mitad de recorrido ──────────────────────────
+
+/// El interruptor de la base. Lo baja el doble de la federación **desde fuera de
+/// todo ámbito**, que es donde de verdad ocurre: la red es lo único que corre
+/// entre transacción y transacción (`D-83`).
+actor DatabaseSwitch {
+    private(set) var isDown = false
+    func bringDown() { isDown = true }
+}
+
+/// Un error de infraestructura, indistinguible de los demás por su tipo — que es
+/// justo la premisa de H-23: **no se clasifica el error, se le pregunta a la
+/// base**.
+struct FakeOutage: Error, Equatable {}
+
+/// El ámbito de tenant que deja de funcionar cuando el interruptor está bajado.
+///
+/// Sigue contando ámbitos como `FakeUnitOfWork`, porque los tests de atomicidad
+/// miran esa cuenta.
+struct SwitchableUnitOfWork: TenantUnitOfWork {
+    let store: IngestionStore
+    let power: DatabaseSwitch
+
+    func withRepositories<T: Sendable>(
+        actor: ActorContext,
+        _ work: @escaping @Sendable (any Repositories) async throws -> T
+    ) async throws -> T {
+        if await power.isDown { throw FakeOutage() }
+        await store.openScope()
+        return try await work(FakeRepositories(store: store))
+    }
+}
+
+/// Devuelve el calendario y **tira la base** en la N-ésima llamada.
+final class OutageInducingClient: FederationClient, @unchecked Sendable {
+    private let calendar: FederationCalendar
+    private let power: DatabaseSwitch
+    private let outageOnCall: Int
+    private(set) var calls = 0
+
+    init(returning calendar: FederationCalendar, power: DatabaseSwitch, outageOnCall: Int) {
+        self.calendar = calendar
+        self.power = power
+        self.outageOnCall = outageOnCall
+    }
+
+    func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+        calls += 1
+        if calls == outageOnCall { await power.bringDown() }
+        return calendar
+    }
+}
+
+// ── H-24: falla solo el ámbito del registro ────────────────────────────────
+
+/// Deja pasar todos los ámbitos menos el **N-ésimo**, que es el que escribe el
+/// registro del camino de éxito (`IngestCalendar`: leer, escribir, **apuntar**).
+final class FailOnNthScope: TenantUnitOfWork, @unchecked Sendable {
+    private let wrapped: any TenantUnitOfWork
+    private let failOn: Int
+    private var calls = 0
+
+    init(wrapping wrapped: any TenantUnitOfWork, failOn: Int) {
+        self.wrapped = wrapped
+        self.failOn = failOn
+    }
+
+    func withRepositories<T: Sendable>(
+        actor: ActorContext,
+        _ work: @escaping @Sendable (any Repositories) async throws -> T
+    ) async throws -> T {
+        calls += 1
+        if calls == failOn { throw FakeOutage() }
+        return try await wrapped.withRepositories(actor: actor, work)
+    }
+}

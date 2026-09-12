@@ -132,6 +132,30 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Federación todavía sin adaptador",
                                detail: "No hay adaptador de ingesta para '\(federation)'.",
                                base: typeBaseURI, slug: "federation-adapter-missing")
+
+            case .databaseUnavailable:
+                // **503 y no 500** (H-23): 500 dice *"me he roto"* y 503 dice *"no
+                // estoy disponible ahora"*, que es la verdad y además la única de
+                // las dos ante la que un cliente hace lo correcto — reintentar más
+                // tarde en vez de abrir una incidencia. Es la misma distinción que
+                // `federationAdapterMissing` hace con el 501.
+                return Problem(status: .serviceUnavailable, code: "DATABASE_UNAVAILABLE",
+                               title: "La base de datos no responde",
+                               detail: "El recorrido se detuvo sin dejar constancia (D-86).",
+                               base: typeBaseURI, slug: "database-unavailable")
+
+            case .runNotRecorded(let competitionID, let reason):
+                // **500, y es el caso raro en que el 500 es exacto**: la petición
+                // estaba bien y los datos **sí se escribieron**, pero la operación
+                // no terminó como el contrato dice —la pasada de `D-88` responde
+                // con su `IngestionRun`, y esa fila no existe—. Lo importante es
+                // el `detail`: sin él, quien lo reciba creerá que la ingesta no se
+                // hizo y la repetirá, cuando lo que falta es el apunte.
+                return Problem(status: .internalServerError, code: "RUN_NOT_RECORDED",
+                               title: "La pasada se escribió y no se pudo registrar",
+                               detail: "Competición \(competitionID): los datos están escritos; "
+                                   + "falló el registro de D-85 (\(reason)).",
+                               base: typeBaseURI, slug: "run-not-recorded")
             }
 
         // ── Tenancy (§6.1) ───────────────────────────────────────────────────
