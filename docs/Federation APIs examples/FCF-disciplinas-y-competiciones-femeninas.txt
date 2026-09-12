@@ -1,0 +1,816 @@
+Volcado capturado el 2026-09-12 de la API de la web NUEVA de la FCF (www.fcf.cat).
+Complementa a FCF-temporadas-y-disciplinas.txt, del 2026-08-28, y es la evidencia de
+la seccion C.11 del Anexo FCF: el eje de disciplinas y los codigos entre temporadas.
+
+Se capturo para decidir una inferencia que C.10.3 habia dejado marcada como [I]:
+si disciplinaId=19308237 "Futbol Femeni" era futbol-11 femenino. No lo es.
+
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/disciplines
+
+Nota
+SIN el parametro temporadaId. La tabla de C.10.1 lista temporadaId como su
+parametro; las tres variantes de abajo devuelven el MISMO cuerpo, 307 bytes,
+md5 ec0db4e54d66e5f889ccaf2cb039d233. El endpoint lo acepta y lo IGNORA.
+
+Response
+[
+    {
+        "value": "19308233",
+        "label": "Futbol 11"
+    },
+    {
+        "value": "19308235",
+        "label": "Futbol 7"
+    },
+    {
+        "value": "24885364",
+        "label": "Futbol 5"
+    },
+    {
+        "value": "19308236",
+        "label": "Futbol Sala"
+    },
+    {
+        "value": "19308237",
+        "label": "Futbol Femení"
+    },
+    {
+        "value": "24694879",
+        "label": "Futbol Sala Femení"
+    },
+    {
+        "value": "19308239",
+        "label": "Futbol Platja"
+    }
+]
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/disciplines?temporadaId=21
+
+Nota
+Identico al anterior (mismo md5).
+
+Response
+[
+    {
+        "value": "19308233",
+        "label": "Futbol 11"
+    },
+    {
+        "value": "19308235",
+        "label": "Futbol 7"
+    },
+    {
+        "value": "24885364",
+        "label": "Futbol 5"
+    },
+    {
+        "value": "19308236",
+        "label": "Futbol Sala"
+    },
+    {
+        "value": "19308237",
+        "label": "Futbol Femení"
+    },
+    {
+        "value": "24694879",
+        "label": "Futbol Sala Femení"
+    },
+    {
+        "value": "19308239",
+        "label": "Futbol Platja"
+    }
+]
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/disciplines?temporadaId=22
+
+Nota
+Identico a los dos anteriores (mismo md5).
+
+Response
+[
+    {
+        "value": "19308233",
+        "label": "Futbol 11"
+    },
+    {
+        "value": "19308235",
+        "label": "Futbol 7"
+    },
+    {
+        "value": "24885364",
+        "label": "Futbol 5"
+    },
+    {
+        "value": "19308236",
+        "label": "Futbol Sala"
+    },
+    {
+        "value": "19308237",
+        "label": "Futbol Femení"
+    },
+    {
+        "value": "24694879",
+        "label": "Futbol Sala Femení"
+    },
+    {
+        "value": "19308239",
+        "label": "Futbol Platja"
+    }
+]
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/competicions?disciplinaId=19308237&temporada=21
+
+Nota
+48 competiciones. 6 dicen F11 en el nombre, 10 dicen F7, 32 NO dicen la
+modalidad. El cajon femenino cruza modalidades: no es (modalidad, genero).
+
+Response
+[
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54819589",
+        "label": "COPA LLEIDA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323056",
+        "label": "PRIMERA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323057",
+        "label": "SEGONA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323058",
+        "label": "TERCERA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322975",
+        "label": "PREFERENT FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54518718",
+        "label": "COPA CATALUNYA FEMENINA 24/25"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323053",
+        "label": "COPA CATALUNYA FEMENINA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322976",
+        "label": "PRIMERA DIVISIÓ FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322977",
+        "label": "SEGONA DIVISIO FEMENI"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58113451",
+        "label": "TRIANGULAR FINAL COPA TERRES DE L EBRE FEMENI F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57902340",
+        "label": "COPA TERRES DE L EBRE FEMENI F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322978",
+        "label": "FEMENÍ AMATEUR F-7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57768420",
+        "label": "FEMENÍ AMATEUR F-7 - Segona Fase"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322979",
+        "label": "PREFERENT FEMENÍ JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323123",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322980",
+        "label": "PRIMERA DIVISIÓ FEMENÍ JUVENIL "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57830821",
+        "label": "COPA PLATA GIRONA FEMENÍ JUVENIL SEGONA DIVISIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57830778",
+        "label": "COPA OR GIRONA FEMENÍ JUVENIL SEGONA DIVISIÓ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322981",
+        "label": "SEGONA DIVISIÓ FEMENÍ JUVENIL "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54892944",
+        "label": "PRIMERA DIVISIÓ FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57989242",
+        "label": "Torneig- SEGONA DIVISIÓ FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "56241228",
+        "label": "SEGONA DIVISIÓ FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57850309",
+        "label": "COPA PLATA GIRONA FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322982",
+        "label": "FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323110",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57850307",
+        "label": "COPA OR GIRONA FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322983",
+        "label": "FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323124",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322984",
+        "label": "PREFERENT FEMENÍ INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323125",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322985",
+        "label": "PRIMERA DIVISIÓ FEMENÍ INFANTIL "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57858835",
+        "label": "SEGONA FASE INFANTIL FEMENI LLEIDA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322986",
+        "label": "SEGONA DIVISIÓ FEMENÍ INFANTIL "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58059421",
+        "label": "Torneig Complementari - FEMENÍ INFANTIL F7"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323010",
+        "label": "FEMENÍ INFANTIL F11"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323126",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ ALEVÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54323055",
+        "label": "PREFERENT FEMENÍ ALEVÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322987",
+        "label": "PRIMERA DIVISIÓ FEMENI ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57850351",
+        "label": "COPA PLATA GIRONA SEGONA DIVISIÓ FEMENÍ ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57850342",
+        "label": "COPA OR GIRONA SEGONA DIVISIÓ FEMENÍ ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322988",
+        "label": "SEGONA DIVISIÓ FEMENÍ ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58011427",
+        "label": "SEGONA FASE FEMENÍ ALEVÍ LLEIDA"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58059498",
+        "label": "Torneig Complementari - SEGONA DIVISIÓ FEMENÍ ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "57962981",
+        "label": "COPA GIRONA FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322989",
+        "label": "FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "1",
+        "value": "54323127",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "58066729",
+        "label": "Torneig Complementari - FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "21",
+        "TIPO_COMPETICION": "2",
+        "value": "54322990",
+        "label": "FEMENI 7 TARRAGONA"
+    }
+]
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/competicions?disciplinaId=19308237&temporada=22
+
+Nota
+44 competiciones. 4 dicen F11, 6 dicen F7, 11 son de FUTBOL PLATJA y 23 no
+dicen la modalidad. El futbol playa femenino vive AQUI, no bajo Futbol Platja.
+
+Response
+[
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58964376",
+        "label": "COPA LLEIDA"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162840",
+        "label": "PRIMERA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162842",
+        "label": "SEGONA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162844",
+        "label": "TERCERA FEDERACIÓ FUTBOL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163261",
+        "label": "COPA CATALUNYA FEMENINA 24/25"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162314",
+        "label": "PREFERENT FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58162834",
+        "label": "COPA CATALUNYA FEMENINA"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162316",
+        "label": "PRIMERA DIVISIÓ FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162319",
+        "label": "SEGONA DIVISIO FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162327",
+        "label": "FEMENÍ AMATEUR F-7"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "59602348",
+        "label": "VETERANES F7 FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163285",
+        "label": "FEMENÍ AMATEUR F-7 - Segona Fase"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163221",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162333",
+        "label": "PREFERENT FEMENÍ JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162335",
+        "label": "PRIMERA DIVISIÓ FEMENÍ JUVENIL "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162339",
+        "label": "SEGONA DIVISIÓ FEMENÍ JUVENIL "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163263",
+        "label": "PRIMERA DIVISIÓ FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162352",
+        "label": "FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163163",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ CADET F7"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162360",
+        "label": "FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163223",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ CADET F11"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163225",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162361",
+        "label": "PREFERENT FEMENÍ INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162363",
+        "label": "PRIMERA DIVISIÓ FEMENÍ INFANTIL "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162368",
+        "label": "SEGONA DIVISIÓ FEMENÍ INFANTIL "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162547",
+        "label": "FEMENÍ INFANTIL F11"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162838",
+        "label": "PREFERENT FEMENÍ ALEVÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163227",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ ALEVÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162388",
+        "label": "PRIMERA DIVISIÓ FEMENI ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162393",
+        "label": "SEGONA DIVISIÓ FEMENÍ ALEVÍ "
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58163229",
+        "label": "CAMPIONAT DE CATALUNYA FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162408",
+        "label": "FEMENÍ BENJAMÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162418",
+        "label": "FEMENI 7 TARRAGONA"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58003617",
+        "label": "FUTBOL PLATJA SENIOR FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "54322931",
+        "label": "FUTBOL PLATJA JUVENIL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58161855",
+        "label": "FUTBOL PLATJA JUVENIL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126265",
+        "label": "FASE FINAL FP JUVENIL FEMENÍ"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126271",
+        "label": "FASE FINAL FP CADET FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163312",
+        "label": "FUTBOL PLATJA CADET FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003618",
+        "label": "FUTBOL PLATJA CADET FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003619",
+        "label": "FUTBOL PLATJA INFANTIL FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163313",
+        "label": "FUTBOL PLATJA INFANTIL FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003620",
+        "label": "FUTBOL PLATJA ALEVI FEMENI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163314",
+        "label": "FUTBOL PLATJA ALEVI FEMENI"
+    }
+]
+
+==============================================================================
+
+Request URL
+https://www.fcf.cat/api/competition/competicions?disciplinaId=19308239&temporada=22
+
+Nota
+16 competiciones de Futbol Platja y NINGUNA con FEMEN en el nombre: es el
+reciproco que cierra la observacion anterior.
+
+Response
+[
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "54323000",
+        "label": "FUTBOL PLATJA SENIOR"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126280",
+        "label": "FASE FINAL FP SENIOR"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162440",
+        "label": "FUTBOL PLATJA SENIOR"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "54322999",
+        "label": "FUTBOL PLATJA JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "1",
+        "value": "58162439",
+        "label": "FUTBOL PLATJA JUVENIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003614",
+        "label": "FUTBOL PLATJA CADET"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126277",
+        "label": "FASE FINAL FP CADET"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163309",
+        "label": "FUTBOL PLATJA CADET"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003615",
+        "label": "FUTBOL PLATJA INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126274",
+        "label": "FASE FINAL FP  INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163310",
+        "label": "FUTBOL PLATJA INFANTIL"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "54323001",
+        "label": "FUTBOL PLATJA ALEVI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58126268",
+        "label": "FASE FINAL FP  ALEVI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58162441",
+        "label": "FUTBOL PLATJA ALEVI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58003616",
+        "label": "FUTBOL PLATJA  BENJAMI"
+    },
+    {
+        "CODTEMPORADA": "22",
+        "TIPO_COMPETICION": "2",
+        "value": "58163311",
+        "label": "FUTBOL PLATJA  BENJAMI"
+    }
+]
