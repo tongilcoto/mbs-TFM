@@ -565,6 +565,12 @@ nada** — un bloque cerrado en blanco es información, y es la mitad del valor 
 | **H-14** | A-1 | **S4** | **Las cuatro sospechas del plan, contestadas — y dos salen bien.** **Sospecha 2 (la letra): correcta.** La extrae el **adaptador**, en `RFFMValue.teamName` (`RFFMValue.swift:167-181`), y `NormalizedName.swift:26-27` lo deja escrito (*"la letra no llega aquí: quien la separa es el adaptador"*). F9 no hereda la gramática de nombres de Madrid. **Sospecha 4 (la coordenada): correcta, tres códigos bastan.** La FCF **no necesita un cuarto eje** y de hecho necesita menos: `partidos?grupId=…` toma **un solo parámetro** ([Anexo FCF §C.10.1]), así que `federationSeasonID` y `modality` le sobran. El `disciplinaId` que colapsa (modalidad, género) de §C.10.3 **no entra en la ruta de ingesta** —solo en el descubrimiento, que §5.6 declara inexistente—, así que el género que la FCF sabe con certeza no le hace falta al calendario. Queda un hueco, y es de **F10**: el `/preview` de `D-58` tendrá *"dos caminos"* (§C.10.3) y hoy ni `FederationCoordinate` ni `FederationCalendar` pueden transportar *"la fuente sabe el género"*. **Sospecha 3 (`field` como coordenada del cuerpo): sobrevive.** La FCF es JSON desde `D-74`, y `field` es `String`: si volviese a HTML cabe una coordenada de raspado. **Sospecha 1: parcialmente** → H-13.<br><br>**Y una confirmación para F7/F8: la coordenada no hay que rehacerla.** `/api/standings?idGroup=…&round=9` (§F.8) y `/api/scorers?idGroup=…&idCompetition=…` (§F.13) **no piden `temporada` ni `tipojuego`**, y sus equivalentes de la FCF piden `grupId` (+`temporada` en goleadores, §C.10.1). `FederationCoordinate` es superconjunto suficiente para los cuatro: la jornada de F7 va como **parámetro del método**, no como campo de la coordenada — meterla ahí volvería la coordenada dependiente de la operación, y la FCF la ignora por `D-55` | `grep -rn 'teamName' backend/Sources`; §C.10.1 y §C.10.3 del Anexo FCF; §F.8 y §F.13 del Anexo RFFM | **Cerrado** |
 | **H-15** | **A-6** | **S2** · **F10** | **`FederationError` tiene cuatro casos con semántica cuidada y en producción no los distingue nadie.** El propio fichero justifica la taxonomía en su cabecera: *"un caso de uso tiene que poder distinguir «la fuente no contesta» de «la fuente contesta algo que no entiendo»"*, y la ingesta *"reacciona distinto a cada uno"*. No lo hace: se **lanza** solo dentro de `Sources/Federation/` y se **discrimina** solo en `Tests/`. `IngestCalendar.swift:68-81` captura `any Error` y lo aplana con `diagnosticText(for:)`, que es `String(reflecting:)`. Y `ProblemMiddleware` —el `switch` exhaustivo de `DomainError` que existe para que un error nuevo no compile hasta decidir su HTTP— **no contempla `FederationError`**. Hoy no se nota porque el `202` responde antes de llamar a la federación (`D-88`); **F10 sí llama dentro de la petición** (§2.3-c, el `/preview`), y ahí las cuatro señales acabarían en el mismo 500. Anotado a A-6, que es el bloque de las costuras | `grep -rn 'FederationError' backend/Sources backend/Tests \| grep -v '^backend/Sources/Application/FederationError.swift'` → todos los `throw` en `Sources/Federation/`, todos los `case` en `Tests/`. Ninguno en `Application/`, `HTTPAdapter/` ni `App/` | **Abierto** — es de A-6 |
 | **H-16** | **A-0** | **S3** | **`Plan de desarrollo-001.md:153` sigue vendiendo F9 como *scraping*.** La fila dice *"Adaptador **FCF** (*scraping*, ~34 peticiones, capacidades del catálogo)"*, y `D-74` cerró que la FCF publica API JSON y que el calendario entero cuesta **una** petición. Es la cifra de coste de la fase que viene después de F8: quien planifique F9 con esa fila delante presupuesta un raspador con control de concurrencia y *backoff*. La misma premisa caducada asoma en `Federation/FederationTransport.swift:23`, que cita *"[Anexo FCF §C.6]"* —sección obsoleta— para *"concurrencia y backoff"* | `sed -n '153p' "docs/Plan de desarrollo-001.md"` contra `D-74` y [Anexo FCF §C.10.4] | **Arreglado** (`cc288cd`) |
+| **H-17** | **A-2** | **S1** | **La política de §3.7 es la regla del UPDATE, y contra Postgres no hay ni una aserción sobre un UPDATE.** El fichero del Dominio lo dice de sí mismo —*"todas las funciones de aquí son la regla del **UPDATE**, que es donde se destruyen datos"* (`UpsertPolicy.swift:21-24`)—, y la pregunta exacta que A-2 traía escrita (*"¿existe un test de nivel 3 que haga dos pasadas, la segunda con el campo vacío, y lea la columna después?"*) tiene respuesta: **no**. No es que falte contra Postgres: **el sentido que destruye datos no lo prueba nada por encima del nivel 1**, ni con dobles.<br><br>· **Nivel 3** — la única pasada doble del proyecto es `CalendarIngestionEndToEndTests.swift:201-202`, y repite **el mismo volcado**, así que ningún campo volátil llega nunca a `nil` en la segunda. La cabecera de la otra *suite* declara la omisión a propósito: *"lo que se prueba aquí es el **mapeo** y las **restricciones**, no la política de §3.7 — ésa ya la cubrió el nivel 1 … volver a probarla contra Postgres sería pagarla dos veces"* (`IngestionPersistenceTests.swift:14-19`).<br>· **Nivel 2** — `secondPassUpdatesInsteadOfDuplicating` (`IngestCalendarTests.swift:306`) recorre el sentido bueno, `nil` → valor: primera pasada sin marcador ni hora, segunda con los dos. **El sentido malo, valor → `nil`, no lo recorre nadie.**<br>· Y el testigo mecánico: **`grep -rn "Updated" Tests/PersistenceTests Tests/APITests` da cero aciertos**. Los cuatro contadores de `IngestionRun` que cuentan filas *actualizadas* no aparecen en los niveles 3 y 4 — se comprueba lo que se **crea**, nunca lo que se **reescribe**.<br><br>**Lo que no es este hallazgo, y conviene decirlo:** no es un fallo demostrado. La lectura del cableado sale bien y queda medida en H-21 — la trampa que el plan temía (*"un `Optional` de Fluent puesto a `nil` escribe `NULL`"*) está estructuralmente fuera de alcance. Lo que falta es **la medición**, y falta justo donde `D-75` dice que el error *"pierde el dato"* y `Match` no tiene `PATCH`. **F7 trae `StandingRow`, que se escribe con esta misma política**, así que la medición se paga una vez o tres | `grep -rn "Updated" backend/Tests/PersistenceTests backend/Tests/APITests` → 0. `grep -rn "\.execute(" backend/Tests/PersistenceTests` → 7 llamadas, y las dos consecutivas (201-202) con el mismo *fixture* | **Arreglado** (`4564617`) — tres tests de nivel 3 nuevos, con su mutación (§7) |
+| **H-18** | A-2 | **S3** | **La rama `date == nil` del horario es inalcanzable desde el camino real, y lo que la pasada hace en su lugar no es lo que la rama describe.** `CalendarPass.swift:115` descarta el partido **antes** de la cadena y antes de fusionar (*"`guard let date = federationMatch.date else { report.skipped.append(…); return }"*), así que `Match.merging(date:)` y `Kickoff.merging(date:)` **nunca reciben `nil` en producción**: el `Date?` de las dos firmas es opcional solo para los tests. El nivel 1 demuestra *"la fecha se mueve con la fuente, pero su silencio no la vacía"* (`UpsertPolicyTests.swift:133`) y `Kickoff.swift:61-64` lo razona como *"`volatile` de §3.7 sobre una columna `NOT NULL`"*; lo que de verdad ocurre con un partido **ya guardado** cuya fecha la fuente deja de publicar es que **se descarta entero**, y con él el marcador, la hora y el campo de esa pasada. Es el lado **recuperable** de `D-75` —la pasada siguiente lo repone— así que no destruye nada y no sube de S3. Lo que no está escrito en ningún sitio es que la rama no se ejercita nunca y que el que protege la fecha es el `guard`, no la política | `grep -n "federationMatch.date" backend/Sources/Application/CalendarPass.swift` → un solo `guard`, en 115, **antes** del `merging` de 129-132. Ninguna otra llamada a `Match.merging` en `Sources/` | **Arreglado** (`4564617`) — escrito en los dos sitios: el `guard` de `CalendarPass` y la rama de `Kickoff.merging` |
+| **H-19** | A-2 | **S3** | **El test de idempotencia de nivel 3 no comprueba que la segunda pasada no escriba.** `secondPassIsIdempotentAgainstRealConstraints` (`CalendarIngestionEndToEndTests.swift:194-217`) afirma `matchesCreated == 0`, `roundsCreated == 0`, `opponentClubsCreated == 0`, `teamsCreated == 0` y `skipped.isEmpty` — **ninguno de los cuatro `…Updated`**. Su rótulo es honesto (habla de restricciones), pero el hueco importa: si cualquiera de las columnas volátiles no diese la vuelta fiel —el `date` de Postgres contra el `Date` de UTC, el `HH:mm` de texto, el `venue` vuelto a limpiar—, `merged != existing` sería cierto en las **240** filas, la pasada del lunes reescribiría el calendario entero y **el verde no se movería**. Es la aserción más barata de todo el bloque, y la única que cubre a la vez las tres coerciones y el ida-y-vuelta del mapeo | `grep -n "expect" backend/Tests/PersistenceTests/CalendarIngestionEndToEndTests.swift` líneas 204-215: cinco aserciones, ninguna sobre `…Updated` | **Arreglado** (`4564617`) — los cuatro `…Updated == 0` añadidos, y el rótulo del test dice ahora *"y no escribe"* |
+| **H-20** | A-2 | **S3** | **`RFFMValue.venue` es la única coerción de campo volátil que no pasa por la función que aplica «vacío no es un valor».** `sanitised` existe exactamente para eso —*"quita espacios, espacios duros y `&nbsp;`, y devuelve `nil` si no queda nada. **Vacío no es un valor** (`D-56`): esta es la función que lo aplica"* (`RFFMValue.swift:185-197`)— y la llaman `score`, `matchDate` y `kickoff`. `venue` (111-118) no: se defiende sola con `!text.isEmpty` más el colapso de espacios, lo que cubre `""` y `"   "` (sus dos tests de nivel 1, `RFFMValueTests.swift:109-113`) y **deja fuera las dos formas de callar que §F.11 documenta**: el `&nbsp;` sin descodificar y el espacio duro `\u{00A0}`. Un `campo` que solo trajera `&nbsp;` volvería como el texto literal `"&nbsp;"`, y `venue` es **volátil** (§3.7): se escribiría encima del nombre bueno del campo de juego. **Es reachability no observada** —§F.11 documenta el `&nbsp;` dentro de campos **numéricos**, no en `campo`—, así que la explotación concreta es *sospecha*; la asimetría de la frontera no lo es, y la frontera es justo lo que `UpsertPolicy.swift:72-76` declara que vive en el adaptador | `grep -n "sanitised\|public static func" backend/Sources/Federation/RFFMValue.swift` → tres de las cuatro coerciones la llaman; `venue` es la que no. **Y medido con el rojo del arreglo**: `venue("&nbsp;") → "&nbsp;"` y `venue("\u{00A0}") → " "` — una cadena de un espacio duro, que no es vacía y por tanto se escribía | **Arreglado** (`4564617`) — `venue` empieza por `sanitised` como las otras tres, con dos tests de nivel 1: el silencio y su reverso (un espacio duro **dentro** de un nombre no lo invalida) |
+| **H-21** | A-2 | **S2** · ***después de la ingesta***, en la fase que abra la **corrección de `OpponentClub`** en el BFF — y **decidido antes de abrirla**, no dentro | **Las dos mitades de §3.7 se contradicen en un punto, y ahí la pasada da de alta un club duplicado sin reportarlo.** La política clasifica `OpponentClub.name` como **descriptivo**: lo corrige el administrador y la fuente **no lo reescribe nunca** (`D-18`). La cadena empareja clubes por el **paso 2** con `NormalizedName(name)`. Y `matchingName` lo justificaba afirmando que *"`NormalizedName` existe precisamente para que esa corrección no rompa el emparejamiento"* (`OpponentClub.swift:71-79`) — **es falso**: `NormalizedName` quita acentos, puntuación y caja (`D-80`), **no palabras**. Corregir `"C.D. GALAPAGAR"` a `"Club Deportivo Galapagar"` produce otra clave y el paso 2 deja de reconocer ese club **para siempre**.<br><br>**Con el paso 1 disponible no pasa nada** —`federation_club_id` resuelve y la corrección sobrevive; tiene test nuevo—, así que el caso vivo es *club sin clave de federación* **+** *nombre corregido*, y `D-76` deja de ser cosmética: rellenar el hueco es lo que mantiene vivo el único escalón que una corrección no rompe. Sin clave, la cadena cae al **paso 3** y crea. **Y nada lo para ni lo cuenta**: el `UNIQUE(name)` de §3.5 no lo ve —son dos nombres distintos—, y el desempate de `freeSlug` **le pone `-2` y lo deja pasar**, porque no puede distinguirlo del caso legítimo que existe para servir (*"dos clubes distintos con el mismo nombre"*, `CalendarPass.swift:391-399`). **Medido: 3 filas de club donde había 2, `opponentClubsCreated: 2`, y `skipped` vacío** — el informe de la pasada la describe como un día normal. El duplicado nace **huérfano** (el equipo no se reasigna, por `owned`), lo que lo hace menos grave y más difícil de ver; el siguiente equipo nuevo de ese club sí se le engancharía, y ahí la plantilla del club queda partida en dos filas.<br><br>**Por qué S2 y no S1: hoy no hay por dónde disparar el gatillo.** El `filter` de `openapi-generator-config.yaml` son cuatro operaciones y ninguna corrige un `OpponentClub`, así que el nombre solo puede cambiarlo un `UPDATE` a mano. **Las tres salidas, para la fase que lo abra:** (a) comparar por `slug`, que es inmutable y se deriva del nombre **original** — barato y sin migración, pero `D-82` hizo el *slug* y `NormalizedName` reglas **opuestas** a propósito, así que cambia la semántica del emparejamiento; (b) una columna de nombre de emparejamiento sembrada en el `INSERT` y nunca corregida — es lo correcto y es migración, o sea **A-5**; (c) aceptarlo y **reportar** el alta como sospechosa cuando el club se crea con un *slug* desempatado, que no arregla el duplicado pero lo hace visible. Ninguna es un parche: por eso no se arregla en esta ronda (§3, regla 2) | Nivel 2, `IngestionStore` sembrado con un club de nombre corregido y `federationClubID: nil` más su equipo rival con `federationTeamID`, y un calendario que trae ese equipo sin clave de club. Salida: `clubes: 3`, `nombres: ["Club Deportivo Galapagar", "CELTIC CASTILLA C.F.", "C.D. GALAPAGAR"]`, `slugs: [… "c-d-galapagar", "c-d-galapagar-2"]`, `creados: 2`, `descartes: []`. El camino que sí aguanta quedó como test permanente: `aRenamedClubIsMatchedByItsFederationKey` | **Abierto** — documental corregido (`4564617`); la decisión, a su fase |
+| **H-22** | A-2 | **S4** | **El cableado de la regla sale bien, y queda medido en tres puntos.** **(1) `merging` siempre fusiona sobre valores de la base, y en el mismo ámbito.** `IngestCalendar.swift:124-135` abre el ámbito 2, y **dentro** `CalendarPass.init` carga los cuatro candidatos (`CalendarPass.swift:47-50`) y `run` escribe. `existing` no puede ser una copia en memoria de otra transacción ni un blanco recién construido. **(2) El `UPDATE` reescribe la fila entera desde la entidad ya fusionada**, columna por columna (`FluentIngestionRepositories.swift:211-224` y sus tres hermanos): nadie construye nunca un `Record` a partir del *payload* entrante, así que la trampa que A-2 venía a buscar —*"un `Optional` de Fluent puesto a `nil` escribe `NULL` en la columna, no se la salta"*— **no tiene por dónde ocurrir**. No es que esté defendida: es que no hay ese camino. **(3) `UpsertPolicy.owned` con `incoming != nil` es inalcanzable en producción**: el único llamante pasa `nil` literal siempre (`CalendarPass.swift:265-266`), y el comentario de arriba lo dice. La protección de `D-20` la dan **las dos cosas**, y con que quede una sigue en pie.<br><br>**Y dos divergencias entidad↔columna que no son de §3.7 pero se ven desde aquí y conviene no volver a descubrir.** `merging` conserva el `updatedAt` viejo (`Match.swift:147`) y `apply()` no toca ni `created_at` ni `updated_at`: los dos son `@Timestamp` de Fluent (`MatchRecord.swift:39-40`), así que **la columna la sella el driver y el valor del Dominio se descarta al escribir**. Consecuencia: el `Clock` inyectado **no** gobierna esas dos columnas —sí `last_synced_at`, que es campo de dominio— y la entidad devuelta por un `merging` lleva un `updatedAt` caducado hasta que se relee. Ninguna de las dos cosas rompe nada hoy; las dos sorprenden si se descubren depurando | Las tres, por lectura de los ficheros y líneas citadas. La (3) además con `grep -n "owned" backend/Sources` → un llamante | **Cerrado** |
 
 ### Nota de cierre de A-0 · ¿la deriva es puntual o sistemática?
 
@@ -646,6 +652,78 @@ de contarlas—. Añadir a la lista: `FCF-partidos-temporada-jugada.txt`. **No h
 construcción de los DTOs (**7 `FederationCalendar`, 4 de cada uno de los demás, en 10 ficheros**) — que es la
 cifra que dice lo que cuesta hoy cambiar la forma, y por eso está aquí.
 
+### Nota de cierre de A-2 · ¿es la que corre de verdad contra Postgres?
+
+**Sí, y no hay nada que lo diga.** Es la respuesta menos cómoda de las dos posibles, porque no deja arreglo que
+enseñar: el cableado está bien y el hallazgo es que **nadie lo había comprobado**.
+
+- **La regla llega intacta a la base, y por una razón de forma y no de cuidado.** La política se aplica en el
+  Dominio sobre valores **leídos de la base en el mismo ámbito**, y el adaptador reescribe la fila **entera**
+  desde la entidad ya fusionada. Nadie construye nunca una fila a partir de lo que llega de la fuente, así que
+  la trampa que este bloque venía a buscar —el `nil` que se convierte en `NULL` porque el `UPDATE` se armó con
+  el *payload*— **no tiene camino** (H-22). Eso es mejor que estar defendida: no hace falta acordarse.
+- **Y la comprobación de mutación de F3 no cubría esto, exactamente como §5 sospechaba.** 11/11 demuestra que
+  la regla es correcta y que sus tests la cazan. Lo que este bloque añade es que **el cableado tampoco lo medía
+  el nivel 2**: sus dobles tienen el sentido bueno probado y el malo no, así que romper el cableado del sentido
+  destructivo **no tumbaba nada por encima del nivel 1**.
+
+**La asimetría que lo explica, y que es la lección transferible.** Los tres tests de nivel 3 que existían
+—idempotencia, *rollback*, registro— comprueban **lo que se crea** y **lo que se deshace**. Ninguno comprobaba
+**lo que se conserva**, que es una propiedad negativa y no tiene contador: no aparece en el informe, no rompe
+ninguna restricción y no cambia ningún recuento. Un `UPDATE` que borra un dato bueno **pasaba por verde en los
+cuatro niveles** — literalmente el único fallo que ningún mecanismo del proyecto vigilaba.
+
+> Dicho en el vocabulario de §2: los niveles 3 y 4 no tenían **ni una** aserción sobre un `…Updated`. La regla
+> que el propio Dominio declara *"la del UPDATE, que es donde se destruyen datos"* estaba probada solo donde no
+> hay `UPDATE`.
+
+**Lo que se deriva para A-7**, que es el bloque de la calidad de los tests: **«no se creó nada» no es «no se
+escribió nada»**, y la segunda es la que hace segura la cadencia semanal de §5.6. Los cuatro contadores de
+`IngestionRun` ya existían; usarlos en las aserciones cuesta una línea por test y es lo que convierte el nivel
+3 en una comprobación de la política y no solo del esquema. Va a la lista de A-7 junto a su tercer punto
+—*"aserciones sobre el doble en vez de sobre el efecto"*—, del que esto es la variante de nivel 3: **aserciones
+sobre lo que aparece en vez de sobre lo que sobrevive**.
+
+**Lo que este bloque necesitó y no estaba en su «Leer antes»**, para el que venga:
+
+- **`Sources/Application/IngestCalendar.swift`.** El plan lo manda a A-3, pero A-2 no puede contestar su propia
+  pregunta sin él: que la carga de candidatos y la escritura compartan **el mismo** ámbito de tenant es la
+  mitad de lo que hace que la política se aplique sobre el dato de la base y no sobre un blanco.
+- **Los cuatro `…Record.swift` de `Sources/Persistence/`.** El «dónde mirar» solo lista
+  `FluentIngestionRepositories.swift`, y ahí está el `apply()`; pero lo que decide el bloque —que se escriben
+  **todas** las columnas y que las dos marcas de tiempo son `@Timestamp` y no dato de dominio— está en los
+  modelos.
+- **`Sources/Federation/RFFMValue.swift`.** `UpsertPolicy.volatile` documenta que *"la frontera se aplica en el
+  adaptador"*, así que **la mitad de la regla vive en `Federation` y no en `Domain`**. Auditar §3.7 sin abrir
+  ese fichero deja la regla pareciendo completa, y de mirarlo sale H-20.
+
+**No hizo falta** nada de `MatchingChain` más allá de qué desenlace lleva a qué `merging` —la cadena es A-1 y
+F4—, ni nada de *tenancy* más que el aviso de §6.2 que el propio bloque ya citaba.
+
+### Lo que A-2 entrega: el mapa rama-a-test de las tres reglas
+
+Las cuatro clases de campo de §3.7 contra los niveles que las prueban, **ya con la ronda de arreglos dentro**.
+«Sorteada» significa que el camino real no llega a esa rama; «—» que no hay test en ese nivel y no hace falta.
+Los tres nombres en **negrita** son los que no existían antes de este bloque.
+
+| Clase (§3.7) | Rama | Nivel 1 | Nivel 2 (dobles) | Nivel 3 (Postgres) |
+|---|---|---|---|---|
+| **descriptivo** | la corrección del administrador sobrevive | `OpponentClubTests` ×3 | `aRenamedClubIsMatched…` | **`aSilentPassDestroysNothing`** |
+| **volátil** | la fuente dice algo y gana | `UpsertPolicyTests` | `secondPassUpdates…` | `ingestsAPlayedSeason` |
+| **volátil** | la fuente calla y **no borra** | `UpsertPolicyTests`, `MatchTests` ×2, `RoundTests` | — | **`aSilentPassDestroysNothing`** |
+| **volátil** (`match_date`) | el silencio conserva la fecha | `UpsertPolicyTests:133` | — | **sorteada** (H-18) |
+| **volátil** (`kickoff_time`) | sin marcador, vuelve a provisional | `UpsertPolicyTests`, `MatchTests` | — | **`withoutAScoreTheVanishing…`** |
+| **volátil** (`kickoff_time`) | con marcador, se ignora | `UpsertPolicyTests`, `MatchTests` | — | **`aSilentPassDestroysNothing`** |
+| **de propiedad** | la ingesta no reasigna el club | `UpsertPolicyTests`, `TeamTests` ×2 | `engagedOwnTeam…` | **sorteada** (H-22) |
+| **de emparejamiento** | no sobrescribe la clave que hay | `UpsertPolicyTests`, `MatchTests`, `TeamTests`, `OpponentClubTests` | — | **`aSilentPassDestroysNothing`** |
+| **de emparejamiento** | rellena el hueco (`D-76`) | los mismos cuatro | — | **`theMatchingHoleIsFilled…`** |
+| **la composición de dos clases** | el nombre corregido y el emparejamiento por nombre | — | `aRenamedClubIsMatched…` | **abierto** (H-21) |
+
+Y **la regla de forma que F7 hereda**, que es lo que este bloque compra para la fase siguiente: `StandingRow`
+se escribe con esta misma política, así que su rebanada de nivel 3 nace con **dos pasadas y la segunda muda**,
+no con una sola. El coste de escribirla así desde el principio es una función auxiliar; el de descubrirlo
+después es el de H-17.
+
 ---
 
 ## 6-bis. La puerta: cuándo se puede arrancar F7
@@ -671,12 +749,12 @@ olvidada con buena letra.
 |---|---|---|---|
 | **A-0** · La vara de medir | ● **cerrado de nuevo** — se reabrió por H-11 y H-16, hallados desde A-1, y los dos están corregidos (`cc288cd`) | 2026-09-03 / 09-04 | H-01 · H-02 · H-03 · H-04 · H-05 · H-06 · H-11 · H-16 |
 | **A-1** · El puerto de federación | ● **cerrado**; documentales corregidos (`cc288cd`) y la forma del sobre elevada a **F6-bis** | 2026-09-04 | H-08 · H-09 · H-10 · H-12 · H-13 · H-14 (+ H-15, que es de A-6) |
-| **A-2** · La regla que destruye datos | ◐ **siguiente** | — | — |
-| **A-3** · Lo que sobrevive a un fallo | ○ pendiente | — | — |
+| **A-2** · La regla que destruye datos | ● **cerrado**; el S1 era **la ausencia de la medición** y está escrita (`4564617`). H-21 elevado a su fase | 2026-09-05 · arreglos y cierre commiteados el 09-12 | H-17 · H-18 · H-19 · H-20 · H-21 · H-22 |
+| **A-3** · Lo que sobrevive a un fallo | ◐ **siguiente** | — | — |
 | **A-4** · El `202` y el TaskLocal | ○ pendiente | — | — |
 | **A-5** · Las migraciones | ○ pendiente | — | — |
 | **A-6** · Las costuras de §7 | ○ pendiente | — | H-15 (apuntado desde A-1) |
-| **A-7** · El arnés | ○ pendiente | — | H-07 (apuntado desde A-0) |
+| **A-7** · El arnés | ○ pendiente | — | H-07 (desde A-0) · la nota de cierre de A-2 · las **tres condiciones** que le deja la ronda de A-2: `$? == 0`, `skipped == 0` y **no leer el resumen de texto**, que no existe |
 
 ### La ronda de arreglos de A-1, y qué enseñó del método
 
@@ -704,6 +782,85 @@ REQUIRE_DB=1 swift test  →  266 tests in 40 suites passed after 4.543 seconds
 ```
 
 **4,54 s y no 0,1 s**, así que los niveles 3 y 4 corrieron de verdad.
+
+### La ronda de arreglos de A-2, y qué enseñó del método
+
+**Cuatro hallazgos corregidos, uno elevado, y la primera vez que el bloque encuentra algo que no venía a
+buscar.**
+
+- **Corregidos:** H-17 (los tres tests de nivel 3 que faltaban, más los cuatro `…Updated` de H-19), H-18 y H-20.
+  Solo **H-20 tuvo rojo previo de verdad**, y salió como se pedía —de aserción y no de compilación—:
+  `RFFMValue.venue("&nbsp;") → "&nbsp;"` y `venue("\u{00A0}") → " "`. Los otros dos son comentarios.
+- **Elevado:** H-21, a la fase que abra la corrección de `OpponentClub`. La válvula de la regla 2 vuelve a
+  disparar, y esta vez no por tamaño sino por **clase**: elegir otra clave de comparación para el paso 2 de la
+  cadena es una decisión de diseño con tres salidas evaluadas, y una de ellas es migración. Lo que sí se
+  corrigió en el acto es su mitad documental —el comentario de `matchingName` afirmaba lo contrario de lo
+  medido—, y ahí queda el **ancla en el código** que A-1 dejó dicho que hace falta.
+
+**Los tres tests de nivel 3 llegaron en verde**, que es deuda declarada (Plan §5.1), así que la garantía la da
+la mutación. **Tres mutaciones, tres cazadas, y cada una por un test distinto:**
+
+| Se rompe | Lo caza | Cómo se ve |
+|---|---|---|
+| `volatile` → `incoming` (pisar siempre) | `aSilentPassDestroysNothing` | `second.matchesUpdated → 1` y `home_score` a `NULL` |
+| `descriptive` → `incoming ?? existing` | `aSilentPassDestroysNothing` | `opponentClubsUpdated → 2`, y el nombre, el corto y el escudo revertidos |
+| `matching` → `existing` (sin relleno) | `theMatchingHoleIsFilledOnTheNextPass` | las tres claves a `nil` y los tres contadores a 0 |
+
+**Y una superviviente con lectura**, que conviene dejar escrita: `matching` → `incoming ?? existing` —la
+mutación *"la fuente pisa la clave"*— **no la caza ninguno de los tres nuevos**, porque en los dos casos que
+recorren, `existing` e `incoming` nunca son los dos distintos a la vez. La caza el nivel 1
+(*"un codacta distinto no reescribe el que ya emparejaba"*). No es un hueco: es que **esa rama no necesita
+Postgres**, y pretender que el nivel 3 cubra todo lo que cubre el 1 es pagar dos veces por lo mismo — que es,
+literalmente, el argumento con el que la *suite* de nivel 3 se había dejado fuera la política entera. La
+diferencia está en cuál de las dos mitades se salta: **la que escribe un valor nuevo** vive en el tipo y el
+nivel 1 la cierra; **la que conserva el que hay** cruza cuatro capas y solo se ve en la columna.
+
+**Y el tropiezo de la ronda, que es información sobre §3.5 y no sobre el arreglo:** el primer intento de
+`aSilentPassDestroysNothing` corregía los dos clubes con el **mismo** nombre y reventó contra
+`uq:opponent_clubs.name` — con el `25P02` de rigor, porque las dos correcciones iban en el mismo ámbito. El
+propio andamiaje lo tenía avisado (`TenantFixture`, punto 2), y aun así se cayó en él. Es la tercera vez que
+esta advertencia se cobra algo.
+
+**La ronda se cerró con la batería entera, y el testigo esta vez no es la duración:**
+
+```
+353 tests: 352 passed, 0 failed, 1 skipped        (plan de test de Xcode, con Postgres arriba)
+```
+
+El **1 omitido es el canario** —fuera de la batería por diseño (§5.5)—, así que **ningún test de BD se
+omitió**: los niveles 3 y 4 corrieron. Es una señal más directa que la de H-07, porque el recuento de
+omitidos sí distingue *"no probado"* de *"probado"*, y conviene anotarlo **como insumo para A-7**: el arnés que
+ese bloque proponga puede exigir `skipped == 0` en vez de mirar el reloj.
+
+**Los 353 no contradicen los 272 de `--list-tests`**: Xcode cuenta **un renglón por caso** de un `@Test`
+parametrizado y `swift test --list-tests` cuenta **uno por función**. Los dos recuentos son correctos y miden
+cosas distintas — apuntado aquí porque es exactamente la clase de cifra que H-03 y H-04 dejaron desfasarse.
+
+**Y la regla 4, cumplida al pie de la letra** — el detalle que quedó pendiente en la primera redacción de este
+renglón (la batería se había corrido desde el plan de test de Xcode y no desde la CLI) se cerró el
+**2026-09-12**, antes de arrancar A-3:
+
+```
+REQUIRE_DB=1 swift test  →  6 test runs, 272 tests, 0 fallos, 1 omitido (el canario)
+                            los dos targets de BD: 5,871 s y 2,799 s
+```
+
+**Ningún test de BD se omitió**, y las duraciones lo confirman por la vía de H-07: 5,87 s y 2,80 s, no 0,1 s.
+
+> **Y la pasada de CLI destapó algo que H-07 no recoge, y es insumo para A-7.** Desde la CLI **no hay un
+> renglón de resumen**: `swift test` imprime **seis**, uno por *target* de tests —7, 54, 50, 98, 45 y 18—, y el
+> total de **272** hay que sumarlo a mano. H-07 está escrito como *"el renglón final dice lo mismo corriendo
+> que omitiendo"*, y resulta que el problema es anterior: **ese renglón final no existe**. El `✔ Test run with
+> 266 tests` que H-07 cita es el de un *target* suelto, no el de la batería. Consecuencia para el arnés que
+> A-7 proponga: **la señal de "verde" no se puede leer del último renglón de la salida** —ni a ojo ni con
+> `tail`—, y el `$?` sí es fiable. Junto al `skipped == 0` que ya le dejó apuntado esta ronda, son las dos
+> condiciones que un CI debería exigir en vez de mirar texto.
+
+**Y una cifra que esta ronda movió y se corrige en el acto** (§2, excepción documental): los tests pasan de
+**266** a **272** —seis nuevos: tres de nivel 3, dos de nivel 1 y uno de nivel 2—, así que `AGENTS.md` y las
+dos apariciones del `README` quedan al día. Las de **este** fichero **no** se tocan: son la foto del día en que
+se midieron (H-06) o la reproducción de un hallazgo (H-07), y una bitácora se anota encima, no se reescribe
+(`D-26`).
 
 ---
 
