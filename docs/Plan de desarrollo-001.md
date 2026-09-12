@@ -148,7 +148,7 @@ dependen de eso.
 | **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
-| **F6-bis** | **El sobre del puerto de federación**, antes de que F7 y F8 lo copien (detalle abajo) | unit puro | `A-1` · H-08, H-09, H-10 |
+| **F6-bis** | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** (pendiente) y **la resiliencia del recorrido** (**entregada**, `4d66aa0`). Detalle abajo | unit puro · niveles 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
@@ -188,6 +188,41 @@ la coordenada sigue apuntando a esta competición**, que hoy está escondida en 
 calendario. Las tres opciones para lo segundo están evaluadas en H-09; la que no toca puerto ni modelo es que
 el adaptador de cada federación **rellene** `competitionName` como pueda, con una segunda llamada si hace
 falta. **No implementa nada de la FCF**: eso sigue siendo F9.
+
+#### F6-bis, segunda mitad · la resiliencia del recorrido — **entregada** (`4d66aa0`, 2026-09-12)
+
+**Esta mitad se ejecutó dentro de la ronda de arreglos del bloque `A-3`, y se registra aquí a posteriori**
+porque por la regla 2 de §3 del plan de auditoría era una mini-fase y le tocaba estar en esta tabla: toca tres
+*targets* —`Application`, `App` y `HTTPAdapter`— y añade dos casos a una enumeración pública. Se hizo dentro de
+la ronda porque la decisión de diseño que esa válvula existe para forzar **ya estaba tomada por el
+desarrollador**, con las tres salidas de H-23 y sus costes delante. El apunte va aquí para que el registro de
+fases diga lo que de verdad pasó; la lectura de método está en §7 del plan de auditoría.
+
+**Por qué es hermana de la otra mitad y no una fase aparte.** Las dos son *"arréglalo antes de que F7 y F8 lo
+copien"*. La primera lo dice de la **forma del puerto**; ésta, de la **forma del recorrido**: `StandingRow` y
+`LeagueScorer` se sincronizan por el mismo `IngestClubCalendars` y con un `execute` de la misma forma que
+`IngestCalendar`, así que una garantía rota ahí se hereda tres veces en vez de una.
+
+**Qué entregó:**
+
+- **El recorrido se detiene cuando el que falla es la base** (H-23). [D-86] continúa ante un fallo *de datos*
+  porque [D-85] deja constancia; con la base caída no la dejaba —el tercer ámbito de [D-83] usa el mismo
+  recurso que acaba de fallar—, así que continuaba haciendo justo lo que [D-86] declara inseguro. Y la
+  distinción **no se hace clasificando el error**: se le **pregunta a la base si sigue ahí** después de cada
+  fallo. Una lista de códigos de `PSQLError`, *pool* y *pooler* sería una premisa sobre un sistema ajeno, que
+  es lo que [D-84] enseñó a no heredar. Se detiene también el recorrido de los clubes que faltan: el *pool* y
+  el Postgres son **uno solo** (§6.4).
+- **Una pasada escrita ya no se registra como fallida** (H-24): si lo único que falla es el apunte, se lanza
+  `runNotRecorded` y **no se escribe fila**, en vez de dejar tres testigos contradiciéndose.
+- **El test de nivel 3 con un fallo real de Postgres** (H-26), que hasta entonces no existía: los dos que
+  guardaban [D-83] y [D-85] usaban un `DomainError`, que salta antes de emitir la sentencia.
+
+Enmendadas [D-85] y [D-86] en la bitácora, las dos porque prometían más de lo que cumplían. Cinco mutaciones,
+cinco cazadas. **272 → 276 tests.**
+
+**Lo que esta mitad dejó fuera a propósito**, para que no parezca hecho: el **código de salida numérico
+distinto** para *"falló la infraestructura"*, que exige un `exit(n)` en el *target* `Run` y va con la decisión
+de **montar el cron** — el deber de despliegue que sigue pendiente desde F6 (§9).
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
