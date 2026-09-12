@@ -152,7 +152,7 @@ dependen de eso.
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
-| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition` | E2E de contrato | [D-67], §2.3-c |
+| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo) | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -166,6 +166,26 @@ compilador exige antes de la primera *rebanada vertical* de verdad.
 - **F10 va al final aunque sea por donde entra el usuario.** Es el único punto que necesita el
   `FederationClient` ya construido y probado, porque `/preview` lo llama **en línea y dentro de la respuesta**
   (§2.3-c). Construirlo antes obligaría a falsearlo dos veces.
+
+**Y F10 llega con un deber heredado de la auditoría** (`A-4`, H-27), que conviene tener delante **antes** de
+escribir el `202` de [D-67] y no después: **una pasada aceptada no deja hoy ninguna huella hasta que termina.**
+`IngestionOutcome` solo tiene `succeeded` y `failed`, así que entre el `202` y el final del trabajo **no existe
+fila ninguna** — y si el trabajo muere ahí en medio, no queda un hueco: queda el estado anterior, intacto y con
+cara de sano. Medido en A-4: el cliente recibe su `202` con dos competiciones, se pierden las dos, y
+`GET /v1/ingestion-runs` sigue devolviendo una pasada `succeeded` **anterior a la propia petición**, con lo que
+`ingestionHealth` ([D-89]) evalúa **`ok`**.
+
+El arreglo de A-4 tapó la ceguera del **operador** —el fallo se registra en el log, `77b2056`— pero **no la del
+backoffice**, y no puede: no hay *push*, así que la pantalla solo sabe lo que pueda **leer**. Las dos salidas,
+a decidir en F10 con [D-67] delante:
+
+- **Escribir la fila al aceptar**, con un desenlace nuevo (`running`/`accepted`) que la pasada cierra. Es lo que
+  hace que el backoffice se entere leyendo lo que ya lee, y lo que convierte *"lleva veinte minutos en curso"*
+  en una frase que la pantalla puede decir. Toca **Dominio, migración y contrato**, y obliga a **enmendar
+  [D-88]**, que hoy dice *"el `POST` no crea la fila"* — la enmienda es de alcance, no de dirección: seguiría
+  sin llevar ni un dato de la pasada.
+- **Que el cliente compare marcas de tiempo** —*"¿ha aparecido una pasada más nueva que mi petición?"*—, que no
+  toca nada del backend y es el N+1 por recarga que [D-89] descartó **a propósito**.
 
 **Y una fase que no estaba prevista y la trajo la auditoría: F6-bis.** El bloque `A-1` del
 [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md) hizo el ensayo en seco del adaptador de la
