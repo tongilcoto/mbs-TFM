@@ -112,6 +112,17 @@ final class CalendarPass {
         // rótulo y sería tentador usarla, pero eso es **inventar el dato de un
         // partido concreto** a partir del de otro — justo lo que `D-75` dice que
         // no se corrige nunca.
+        //
+        // **Este `guard` está antes de la cadena, y eso tiene una consecuencia que
+        // conviene tener escrita** (H-18 del plan de auditoría): a un partido **ya
+        // guardado** cuya fecha la fuente deja de publicar no se le conserva la
+        // fecha y se le actualiza el resto —que es lo que la rama volátil de
+        // `Kickoff.merging` describiría—, sino que **se descarta entero**, y con
+        // él el marcador, la hora y el campo que trajera esta pasada. Es el lado
+        // **recuperable** de `D-75`: la pasada siguiente lo repone en cuanto la
+        // fuente vuelva a decir la fecha. Y es el precio de no tener que decidir
+        // aquí si un partido sin fecha es una fila nueva o una que ya está: sin
+        // fecha no hay `INSERT` posible, así que el `UPDATE` tampoco se intenta.
         guard let date = federationMatch.date else {
             report.skipped.append(IngestionSkip(
                 reason: .missingMatchDate, detail: describe(federationMatch)))

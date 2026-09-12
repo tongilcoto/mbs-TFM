@@ -71,11 +71,36 @@ public struct OpponentClub: Identifiable, Equatable, Sendable {
     /// El nombre reducido a clave de comparación, para el **paso 2** de la
     /// cadena de §3.7.
     ///
-    /// Se deriva de `name` —el de la fuente— y no de `shortName`, aunque el
-    /// administrador corrija los dos: `NormalizedName` existe precisamente para
-    /// que esa corrección no rompa el emparejamiento, así que da igual cuál de
-    /// los dos se normalice mientras sea **siempre el mismo**. `name` es el que
-    /// la fuente vuelve a mandar cada semana.
+    /// Se deriva de `name` y no de `shortName` porque `name` es el campo que la
+    /// fuente siembra, así que las dos formas normalizadas coinciden **mientras
+    /// nadie corrija**.
+    ///
+    /// # Y una advertencia que hay que leer entera (H-21)
+    ///
+    /// La redacción anterior de este comentario decía que `NormalizedName`
+    /// *"existe precisamente para que la corrección del administrador no rompa el
+    /// emparejamiento"*. **Es falso, y lo midió el bloque `A-2` del plan de
+    /// auditoría.** `NormalizedName` quita acentos, puntuación y caja (`D-80`) —
+    /// **no palabras**: corregir `"C.D. GALAPAGAR"` a `"Club Deportivo
+    /// Galapagar"` produce otra clave, y el paso 2 deja de reconocer a ese club.
+    ///
+    /// Es el roce de las dos mitades de §3.7: la política clasifica `name` como
+    /// **descriptivo** —la fuente no lo reescribe nunca (`D-18`)—, así que a
+    /// partir de la corrección lo que hay guardado **ya no es lo que la fuente
+    /// manda cada semana**, que es exactamente el supuesto sobre el que el paso 2
+    /// se apoya.
+    ///
+    /// **Lo que hoy lo sostiene es el paso 1**, y por eso `D-76` no es cosmética:
+    /// con `federation_club_id` guardado la clave resuelve y nada de esto importa.
+    /// Sin él —§F.4 avisa de que la inferencia puede fallar— la pasada cae al paso
+    /// 3 y **da de alta un club duplicado sin reportarlo**, porque ni el
+    /// `UNIQUE(name)` de §3.5 lo ve (son dos nombres distintos) ni el desempate de
+    /// *slug* lo distingue del caso legítimo. Medido: 3 filas donde había 2.
+    ///
+    /// **No se parchea aquí**: elegir otra clave de comparación es una decisión de
+    /// la cadena, y sus tres opciones están en H-21. Lo que no puede pasar es que
+    /// se decida **después** de abrir el `PATCH` que corrige el nombre — hoy no
+    /// existe, y esa es toda la razón por la que esto no es urgente.
     public var matchingName: NormalizedName { NormalizedName(name) }
 
     /// La proyección a candidato de la cadena de §3.7 (F4).

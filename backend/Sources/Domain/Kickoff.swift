@@ -61,6 +61,14 @@ extension Kickoff {
             // `volatile` de §3.7 sobre una columna `NOT NULL`: la fuente gana
             // cuando dice algo y su silencio deja lo que había. No hay tercera
             // rama, porque «vacío» no es un valor válido para `match_date`.
+            //
+            // **Y el `date == nil` de aquí no lo ejercita la ingesta** (H-18 del
+            // plan de auditoría): `CalendarPass` descarta el partido sin fecha
+            // **antes** de llamar a este método, así que en producción `date`
+            // siempre viene con valor y esta rama solo la recorren los tests. Se
+            // conserva porque el opcional es la forma honesta del parámetro —lo
+            // que la fuente puede callar se declara callable— y porque quien
+            // llame de otro sitio no tiene por qué repetir el `guard`.
             date: date ?? self.date,
             // Las dos filas de la tabla de `D-56`, y la única línea de toda la
             // fase donde escribir `nil` es lo correcto:
