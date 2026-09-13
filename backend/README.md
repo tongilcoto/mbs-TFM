@@ -744,7 +744,12 @@ swift run Run ingest --force                # ignora el antirrebote de 6 h
 swift run Run ingest --min-interval-hours 24
 ```
 
-**Sale con código distinto de cero si algo falló**, y esa es la única señal que ve un cron (`D-86`). Un fallo
+**Sale con código `1` si algo falló**, y esa es la única señal que ve un cron (`D-86`). Hasta el 2026-09-13
+salía con **133** —el `SIGTRAP` de un `Fatal error: Error raised at top level`—, que también es distinto de
+cero pero es la firma de un programa que se ha caído: en un log de despliegue no se distinguía *"falló la
+sincronización de un club"* de *"el binario se ha roto"*. Lo arregló `A-5`/H-39 en el punto de entrada, así
+que vale para **los cinco comandos**: el comando decide **si** falló lanzando, y `Run/main.swift` decide
+**cómo se cuenta**. Un fallo
 **no detiene el recorrido**: la unidad de aislamiento es la competición, porque la pasada ya es atómica
 (`D-83`) y ya deja constancia de su fallo (`D-85`). Para leerla:
 

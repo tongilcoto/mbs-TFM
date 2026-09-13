@@ -315,8 +315,11 @@ swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -c <uuid>         solo esa competición
                                           #   --season <uuid>   esa temporada, aunque no sea la vigente
                                           #   --force           ignora el antirrebote de 6 h
-                                          # Sale con código != 0 si algo falló: es la
-                                          # única señal que ve el cron (`D-86`)
+                                          # Sale con código 1 si algo falló: es la
+                                          # única señal que ve el cron (`D-86`).
+                                          # Antes salía 133 —el SIGTRAP de un
+                                          # `throw` en el nivel superior—, que no
+                                          # se distingue de un crash (`A-5`/H-39)
 swift run Run serve
 curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
 curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>"   # el registro (D-85)
