@@ -148,7 +148,7 @@ dependen de eso.
 | **F4** ✅ | **Cadena de emparejamiento**: 3 pasos para equipos y clubes, 2 para partidos (detalle en §4.6) | **unit puro, cero I/O** | §3.7, [D-31] |
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
-| **F6-bis** | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** (pendiente) y **la resiliencia del recorrido** (**entregada**, `4d66aa0`). Detalle abajo | unit puro · niveles 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 |
+| **F6-bis** ✅ | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** —y con él la guarda de temporada ([D-91])— y **la resiliencia del recorrido** (`4d66aa0`). Detalle abajo | unit puro · niveles 1, 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 · [D-91] |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo) | unit + integración | [D-15], [D-55], `A-5` · H-31 |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
@@ -238,6 +238,22 @@ abstracción validada contra un solo caso, y aquí está localizado con nombre y
 
 **No implementa nada de la FCF**: eso sigue siendo F9, y allí queda solo la mitad *"otra competición"* de
 H-09.
+
+**Entregada el 2026-09-13.** Lo que quedó escrito, en orden de valor:
+
+- **La guarda de [D-91]**, en el Dominio (`Season.requireOwnsCalendar(matchDates:)`) y llamada por la pasada
+  justo detrás de la de [D-84]. **Siete tests de nivel 1 y uno de nivel 2, con 7 mutaciones cazadas** — y
+  tres de esas mutaciones son exactamente las tres alternativas que la decisión descartó (*"todas dentro"*,
+  *"que solapen"*, bordes exclusivos), así que los tests no solo protegen la regla: **documentan por qué es
+  ésa**.
+- **El sobre**: `FederationRound.label` fuera y `seasonLabel` opcional, con el parser degradando a `nil`
+  en vez de tumbar 34 jornadas ya parseadas (H-10, con su test y su mutación).
+- **Y lo primero que cazó la guarda nueva fue el arnés**: el *fixture* de nivel 3 sembraba `2025/26` para
+  **los dos** volcados, y el de *"temporada sin jugar"* es de **26-27**. Llevaba así desde F5 —una
+  competición apuntando a un calendario de otro año— y **nada lo decía**. Es el mejor argumento a favor de la
+  decisión: el error que `D-91` describe no es hipotético, estaba dentro de la propia batería.
+
+**293 tests** (284 → 293).
 
 #### F6-bis, segunda mitad · la resiliencia del recorrido — **entregada** (`4d66aa0`, 2026-09-12)
 

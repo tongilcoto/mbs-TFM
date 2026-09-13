@@ -235,7 +235,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**284 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**293 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -395,14 +395,16 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6 entregadas, **lo inmediato no es F7: es la mitad que le queda a F6-bis** —la fase que no estaba
-prevista y que trajo la auditoría—. **Va antes de F7 y está escrito así en el Plan**, porque F7 y F8 no
-estrenan puerto: le añaden `fetchStandings` y `fetchScorers` **con sus DTOs**, y el sobre de
-`FederationCalendar` está cortado a la medida de la RFFM (`A-1` · H-08, H-09, H-10). Un sobre nuevo modelado
-por analogía con el de F2 **reproduce el problema dos veces más** antes de que nadie escriba el adaptador
-catalán. La otra mitad de F6-bis —la resiliencia del recorrido— **ya está entregada** (`4d66aa0`).
+Con F0–F6 y **F6-bis** entregadas —la fase que no estaba prevista y que trajo la auditoría—, lo inmediato es
+**F7**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
+recorrido** (`4d66aa0`) y **el sobre del puerto**, que dejó `FederationRound.label` fuera —no lo leía nadie— y
+`seasonLabel` **opcional** —la FCF no la publica y en la RFFM es el eco de nuestro propio parámetro—, más la
+guarda de temporada de `D-91`. Al añadirle `fetchStandings` y `fetchScorers`: **no copiar la forma del
+sobre**. `/api/standings` y `/api/scorers` de la RFFM traen `competicion` y `grupo` y sus equivalentes de la
+FCF no, así que un DTO modelado por analogía reproduce H-08 y H-09 **dos veces más** antes de que exista el
+adaptador catalán.
 
-Después viene **F7: `StandingRow`, con la clasificación histórica de la RFFM y el
+**F7: `StandingRow`, con la clasificación histórica de la RFFM y el
 *fallback* calculado desde `Match`** (`D-15`, `D-55`). **Los tres deberes que F6 arrastraba están hechos**: el
 recorrido continúa tras un fallo y la unidad de aislamiento es la competición (`D-86`), la cadencia vive fuera
 del proceso y el código trae un antirrebote que no es el tope semanal (`D-87`), y el registro tiene su `GET`
@@ -415,7 +417,7 @@ de §5.6 **no lo garantiza nada**.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
 11/11 mutaciones), F4 lo repitió con **16/16**, F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre
-**35 ciclos**, y F6 con **23/23** — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
+**35 ciclos**, y F6 con **23/23**, y F6-bis con **8/8** —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
 test"**, una de ellas seria: *"la competición que nunca se sincronizó no entra"* pasaba toda la batería, y
 significaba que una competición recién dada de alta se quedaría esperando para siempre. Ningún rojo la habría
 encontrado, porque ningún test tenía motivo para existir hasta que la mutación preguntó. F5 aportó una lectura que no se había dado: una mutación superviviente son *"falta un test"* o
