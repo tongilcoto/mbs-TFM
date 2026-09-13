@@ -102,15 +102,30 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   del 2026-09-02**). Lo que la entrada decía —que la RFFM reutiliza los códigos entre temporadas— **es falso**:
   cada temporada recibe un bloque nuevo (PREFERENTE AFICIONADO G1 es `24037456` en 25-26 y `26737701` en
   26-27). Lo cierto, medido: **`competicion`+`grupo` lo determinan todo y `temporada` se ignora**. La
-  conclusión no cambia —la guarda sigue haciendo falta— pero **el riesgo principal sí**: ya no es la misma
-  coordenada en otra temporada, es **la coordenada que se queda vieja**, que devuelve el calendario del año
-  pasado para siempre y sin error. Y **no da 404 nunca** en esa ruta:
-  con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con una `temporada`
-  inexistente responde `200` con el calendario de otra e **ignora el parámetro**. Consecuencias: confirma con
-  dato la regla de §3.5 (`Competition` se identifica por `season_id` **+** `federation_group_id`); obliga a la
-  ingesta a **comparar el nombre contra `Competition.federation_name` antes de escribir**; y le da al canario
-  de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier adaptador de federación: **una premisa
-  sobre un sistema de terceros no se hereda, se mide** — ésta llevaba escrita desde F2 y era falsa.
+  conclusión no cambia —la guarda sigue haciendo falta— pero **el riesgo principal sí**. Y ojo con cómo se
+  cuenta, que es fácil contarlo mal: **los códigos no caducan solos con el tiempo.** Siguen apuntando
+  exactamente a lo mismo —*"Primera Cadete Grupo 4 **de 25-26**"*—, y servir eso es correcto. Lo que pasa es
+  que **la coordenada lleva la temporada dentro y nada en la respuesta lo dice**, así que el fallo lo comete
+  un humano en el alta: al llegar la temporada nueva se copian los códigos del año pasado y la ingesta
+  sincroniza 2025 en una competición marcada como 2026, sin un solo error. Y **no da 404 nunca** en esa ruta:
+  con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con otra `temporada`
+  responde `200` con el calendario **de los mismos códigos** e **ignora el parámetro**. Consecuencias:
+  confirma con dato la regla de §3.5 (`Competition` se identifica por `season_id` **+**
+  `federation_group_id`); obliga a la ingesta a **comparar el nombre contra `Competition.federation_name`
+  antes de escribir**; y le da al canario de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier
+  adaptador de federación: **una premisa sobre un sistema de terceros no se hereda, se mide** — ésta llevaba
+  escrita desde F2 y era falsa.
+- **Y el nombre no distingue temporadas, así que hacen falta dos guardas y no una** (`D-91`,
+  [Anexo RFFM §F.17], medido el 2026-09-13 sobre PRIMERA CADETE G4). Los rótulos `competicion` y `grupo` son
+  **idénticos** en 25-26 y 26-27, de modo que la guarda del nombre caza *"me equivoqué de competición"* y es
+  **ciega** al error que ocurre cada verano, *"me traje los códigos del año pasado"*. La señal que no puede
+  ser eco son **las fechas**, que se van un año entero: la pasada exige que **la mediana** de las fechas del
+  calendario caiga en la ventana de la `Season`. **Mediana** y no *"todas dentro"* —un aplazado a julio
+  tumbaría la competición para siempre— ni *"que solapen"* —un solo aplazado la haría pasar—. Las dos guardas
+  son complementarias, y **la de las fechas vale también para la FCF**, que no publica nombre pero sí fecha.
+  Y una lección de método que ya va por la tercera vez: **el dato estaba medido desde el 2026-09-02 y la
+  conclusión que se sacó de él era incompleta** — la tabla de §F.16 ya mostraba el mismo nombre en las cuatro
+  filas. *Hay que volver a leer una medición cuando se construya algo encima.*
 - **Y medir no basta cuando la fuente te devuelve tu propio parámetro** (`D-84` enmendada,
   [Anexo RFFM §F.16]). El `calendar.temporada` de la RFFM **es el eco de lo que le pediste**, no un dato suyo:
   con los códigos de 2025-26 y `temporada=22` responde *"2026-2027"* y sirve los partidos de 2025-26. Así se
@@ -441,3 +456,4 @@ El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude 
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

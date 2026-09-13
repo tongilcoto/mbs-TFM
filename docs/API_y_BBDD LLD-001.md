@@ -585,13 +585,19 @@ respuesta, así que salen de otros que sí:
 | `Round.start_date` / `end_date` | **mínimo y máximo** de las fechas de los partidos de la jornada. En la temporada jugada eso da sábado→domingo en 26 de 30 y recoge los 4 partidos entre semana; sin arrancar, colapsa en un día | [D-81] |
 | `OpponentClub.slug` | del **nombre**, mecánicamente y sin lista de formas jurídicas. Es la regla **opuesta** a la de `NormalizedName` en el mismo texto: aquélla borra las fronteras, ésta las conserva como guiones | [D-82] |
 
-**Y una guarda antes de escribir nada: que la coordenada siga apuntando a esta competición.** La RFFM
-**ignora el parámetro `temporada`** y sus códigos **no** se reutilizan entre temporadas —cada una recibe un
-bloque nuevo— ([D-84] enmendada con la causa corregida, [Anexo RFFM §F.16]): la misma coordenada con otra
-`temporada` devuelve un calendario perfectamente parseable **de otra competición**, y **no da 404**. La
-evidencia con la que se detecta ya existía —`Competition.federation_name` ([D-72])— y ésta es la primera vez
-que se usa. Si el nombre discrepa, la pasada **se para sin escribir** ([D-84]); los dos silencios no paran
-nada, porque sin nombre guardado es la primera pasada y una fuente que calla no contradice ([D-56]).
+**Y dos guardas antes de escribir nada, porque son dos errores distintos.** La RFFM **ignora el parámetro
+`temporada`**, sus códigos **no** se reutilizan entre temporadas —cada una recibe un bloque nuevo— y **nunca
+da 404**: una coordenada equivocada devuelve un calendario perfectamente parseable ([D-84] con su causa
+enmendada, [Anexo RFFM §F.16] y [Anexo RFFM §F.17]).
+
+| Error del administrador | Qué llega | Guarda |
+|---|---|---|
+| Códigos de **otra competición** | Otro calendario, con otro nombre | **El nombre**: si `Competition.federation_name` ([D-72]) discrepa del que publica la fuente, la pasada **se para sin escribir** ([D-84]). Los dos silencios no paran nada: sin nombre guardado es la primera pasada, y una fuente que calla no contradice ([D-56]) |
+| Códigos de **la temporada pasada**, misma competición | El calendario **del año pasado**, con el mismo nombre y el mismo rótulo de grupo | **Las fechas**: la **mediana** de las fechas del calendario tiene que caer dentro del rango de la `Season` ([D-91]). El nombre aquí **no sirve** —es idéntico entre temporadas, medido— y la etiqueta de temporada tampoco: es el **eco** del parámetro que enviamos ([Anexo RFFM §F.16]) |
+
+**La segunda vale también para la FCF y la primera no**, y eso está asumido: la FCF no publica nombre de
+competición en su calendario, pero sí fecha en todos sus partidos ([Anexo FCF §C.10.4]). Un calendario
+**vacío** no tiene mediana y la guarda no opina: no es evidencia de nada ([D-91]).
 
 **La pasada es atómica, y su registro no.** Todo lo que una pasada escribe va en **un** ámbito de tenant
 —o la competición queda sincronizada o no queda tocada ([D-83])—, y la llamada a la federación queda **fuera**
@@ -2104,11 +2110,13 @@ trajo con dato delante ([D-84]), **con la causa enmendada el 2026-09-02** ([Anex
 Las tres se parecen a un fallo de formato sin serlo, así que el adaptador las llama por su nombre y la
 ingesta compara el nombre contra `Competition.federation_name` antes de escribir.
 
-**Y hay un caso que esa guarda no cubre: la coordenada que se queda vieja** —mismo nombre de competición, otro
-año—. La comprobación que parece obvia no sirve: la etiqueta de temporada que devuelve la fuente es **el eco
-del parámetro que le enviamos** (§F.16), así que compararla con `Season.label` es comparar un dato consigo
-mismo. Lo que sí es dato son **las fechas de los partidos**, que `Season` puede acotar con su ventana derivada
-(§3.2). Queda anotado en [D-84] y sin implementar.
+**Y el caso que esa guarda no cubre —códigos de la temporada pasada— lo cubre la segunda** ([D-91]). El
+nombre no sirve ahí: es **idéntico** entre temporadas, medido sobre PRIMERA CADETE G4 ([Anexo RFFM §F.17]). Y la
+comprobación que parece obvia tampoco: la etiqueta de temporada que devuelve la fuente es **el eco del
+parámetro que le enviamos** ([Anexo RFFM §F.16]), así que compararla con `Season.label` es comparar un dato consigo
+mismo. Lo que sí es dato son **las fechas de los partidos**, y la regla es que **su mediana** caiga dentro de
+la ventana derivada de la `Season` (§3.2) — mediana y no *"todas dentro"*, porque un partido aplazado a julio
+no puede tumbar la competición entera, ni *"que solapen"*, porque un solo aplazado la haría pasar ([D-91]).
 
 **El *canario*.** Fuera de la batería normal, tras `FEDERATION_LIVE=1`, se pasa el parser por encima de la
 respuesta **viva** y se exige que no falle. **No compara bytes** —el calendario cambia cada semana por
@@ -2807,8 +2815,16 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-81]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-82]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-83]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

@@ -858,3 +858,51 @@ respuesta decir *"2026-2027"* y concluyó que era otra temporada. La respuesta d
 preguntado. **Una fuente que devuelve tu parámetro como si fuera un dato es una trampa que el rigor al medir
 no evita** — solo evita caer en ella saber que está ahí.
 
+---
+
+## F.17 El nombre tampoco distingue temporadas — **medido el 2026-09-13**
+
+Todo esto es **[C]**: cinco peticiones reales, con el volcado en
+[`RFFM-temporada-no-la-distingue-el-nombre.txt`](./Federation%20APIs%20examples/RFFM-temporada-no-la-distingue-el-nombre.txt).
+La competición y las dos URLs las aportó el desarrollador: **PRIMERA CADETE, Grupo 4**, un año cada una.
+
+**Por qué existe esta sección.** §F.16 dejó cerrado que `temporada` es un eco y que *"la señal honesta son
+las fechas"*. Lo que no dejó escrito —y **estaba en su propia tabla**— es la consecuencia para la guarda que
+`D-84` monta encima: si el nombre de la competición es **el mismo** en las dos temporadas, comparar nombres
+no puede detectar una coordenada de la temporada pasada.
+
+| Caso | `temporada` | códigos | `calendar.temporada` | `competicion` / `grupo` | Fechas de los partidos |
+|---|---|---|---|---|---|
+| **A** | 22 | `26737751`/`26737755` (26-27) | `2026-2027` | PRIMERA CADETE · Grupo 4 | 26-09-2026 → 22-05-2027 |
+| **B** | 21 | `24037562`/`24037566` (25-26) | `2025-2026` | PRIMERA CADETE · Grupo 4 | 27-09-2025 → 24-05-2026 |
+| **C** | **22** | `24037562`/`24037566` (25-26) | **`2026-2027`** ← miente | PRIMERA CADETE · Grupo 4 | **27-09-2025 → 24-05-2026** |
+| **D** | **21** | `26737751`/`26737755` (26-27) | **`2025-2026`** ← miente | PRIMERA CADETE · Grupo 4 | **26-09-2026 → 22-05-2027** |
+| **E** | 99 | `26737751`/`26737755` (26-27) | `''` | PRIMERA CADETE · Grupo 4 | 26-09-2026 → 22-05-2027 |
+
+Las columnas de rótulo son **idénticas en las cinco filas**. El `codacta` confirma que C sirve exactamente
+los partidos de B y D los de A: `5416238` y `5601639`.
+
+### Las tres consecuencias, y la tercera es la que faltaba
+
+1. **§F.16 sale reconfirmada** con una competición distinta: manda `competicion`+`grupo`, y `temporada` solo
+   tiñe la etiqueta. Con una temporada inexistente la etiqueta va **vacía**, que sigue siendo señal útil.
+2. **Los códigos no se reutilizan** (`26737751` ≠ `24037562` para la misma PRIMERA CADETE G4), igual que en
+   PREFERENTE AFICIONADO. Así que una `Competition` que conserve los códigos del año pasado **sigue
+   sincronizando el año pasado**, indefinidamente y sin error.
+3. **Y el nombre no lo delata.** La guarda de `D-84` compara `Competition.federation_name` contra el
+   `competitionName` del calendario, y en las cinco filas ese texto es el mismo. Frente a *"me traje los
+   códigos de la temporada pasada"* —el error que ocurre **cada verano**, y el que `D-67` hace más probable
+   al permitir pegar una URL— **la guarda no salta**. Solo caza el error grueso: códigos de **otra**
+   competición.
+
+> **Lo que sí discrimina, y está en el cuerpo desde F2: las fechas.** Un año entero de diferencia entre A y
+> B. La guarda que cierra el hueco es comparar las fechas del calendario contra el rango de la `Season`
+> (`start_date`/`end_date`, derivados de la etiqueta, §3.2) — **sin columna nueva, sin llamada extra y válida
+> también para la FCF**, que publica `COMIENZO1` en todos sus partidos ([Anexo FCF §C.10.4]).
+>
+> **La lección de método, que es la tercera vez que asoma en este proyecto** (H-11, H-12 y ésta): *el dato
+> estaba medido y la conclusión que se sacó de él era incompleta.* La tabla de §F.16 ya mostraba el mismo
+> nombre en las cuatro filas el 2026-09-02 y nadie lo leyó como *"entonces el nombre no sirve de evidencia
+> de temporada"*. **Medir no es lo último que hay que hacer con un dato: hay que volver a leerlo cuando se
+> construya algo encima.**
+

@@ -29,6 +29,7 @@
 | **D-86**               | El recorrido de la ingesta no se detiene en el primer fallo: la unidad de aislamiento es la competición | §2.3, §5.6, §9.3      |
 | **D-87**               | La cadencia de la ingesta vive fuera del proceso; lo que el código trae es un antirrebote  | §2.3, §5.6                         |
 | **D-90**               | Una migración aplicada es inmutable: lo que se corrige va en una migración nueva            | §4.6, §4.7, §9.3                   |
+| **D-91**               | La temporada de un calendario la prueban las fechas de sus partidos, no su etiqueta ni su nombre | §3.7, §5.6                    |
 | **Modelo de datos**    |                                                                                            |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                    | §3.2, §3.4                         |
@@ -2131,7 +2132,66 @@ de la temporada a la que digo que pertenece esta competición?"*.
 
 **No se implementa en esta enmienda a propósito**: corregir una afirmación falsa y añadir una regla nueva son
 dos cosas, y la segunda merece su propia entrada — con su decisión sobre qué hacer con el partido aplazado que
-se sale del rango por un día.
+se sale del rango por un día. **Esa entrada ya existe: es [D-91]**, escrita el 2026-09-13 cuando F6-bis fue a
+decidir dónde vive la evidencia de la coordenada.
+
+---
+
+### D-91 · La temporada de un calendario la prueban sus fechas, no su etiqueta ni su nombre
+
+*Escrita el 2026-09-13, al preparar la primera mitad de F6-bis. Cierra la nota abierta que dejó la enmienda
+de [D-84] y su evidencia es [Anexo RFFM §F.17].*
+
+**Qué hay que decidir.** [D-84] paró la pasada cuando el **nombre** de la competición no coincide con
+`Competition.federation_name`. Eso caza *"me he equivocado de competición"*. Lo que no caza —y es el error
+que ocurre **cada verano**— es *"me he traído los códigos de la temporada pasada"*, porque la coordenada de
+la RFFM **lleva la temporada dentro** (cada año es un bloque nuevo, §F.16) y **nada en la respuesta lo dice**.
+
+**El dato que lo cierra, medido el 2026-09-13 sobre PRIMERA CADETE Grupo 4** (§F.17): los rótulos
+`competicion` y `grupo` son **idénticos** en 25-26 y 26-27, así que la guarda del nombre **no puede** detectar
+el desfase de un año. Las fechas, en cambio, se van **un año entero**: 27-09-2025 → 24-05-2026 contra
+26-09-2026 → 22-05-2027.
+
+| Candidato a evidencia | Sirve | Por qué |
+|---|---|---|
+| `calendar.temporada` / `seasonLabel` | **No** | Es el **eco** de nuestro propio parámetro (§F.16). Comparar eso con `Season.label` es comparar un dato consigo mismo: una guarda que no puede fallar |
+| Nombre de competición o de grupo | **No para esto** | Idénticos entre temporadas (§F.17). Sí sirven para *otra competición*, que es lo que ya hace [D-84] |
+| Una columna de evidencia nueva | **No haría falta** | Guardaría un nombre, y el nombre es justo lo que no distingue. Migración a cambio de nada |
+| **Las fechas de los partidos** | **Sí** | No son eco, las publican **las dos** federaciones (`fecha` en la RFFM, `COMIENZO1` en la FCF) y `Season` ya tiene su ventana derivada de la etiqueta (§3.2) |
+
+**Decisión.** Antes de escribir, la pasada comprueba que **la fecha mediana del calendario cae dentro del
+rango de la `Season`** a la que pertenece esa `Competition`. Si no cae, se para sin escribir, igual que con
+[D-84], y el motivo va a `IngestionRun.error` ([D-85]).
+
+**Por qué la mediana, que es la parte que la nota abierta dejó sin decidir.** El problema era *"¿qué hago con
+el partido aplazado que se sale del rango por un día?"*, y las alternativas obvias fallan por los dos lados:
+
+- **Todas las fechas dentro** → un solo partido aplazado a julio tumba la sincronización de la competición
+  entera, **y para siempre**, porque el aplazamiento no se va a deshacer.
+- **Que los rangos se solapen** (mínimo y máximo contra la ventana) → tolera el aplazado, pero es
+  **sensible a un solo valor**: un calendario de 25-26 con un partido reprogramado en julio de 2026 solapa
+  con la temporada 26-27 y pasaría la guarda.
+- **Un umbral** (*"el 80% dentro"*) → hay que justificar el número, y no hay dato que lo justifique.
+
+La mediana no tiene umbral que discutir y es **inmune a los extremos**: un desfase de temporada mueve la
+mitad del calendario doce meses, y un puñado de aplazados no la mueve. La regla se lee en una frase: **la
+temporada de un calendario es la de la mitad de sus partidos.**
+
+**Dónde vive.** En el **Dominio**, junto a `requireSameSource` de [D-84] —son la misma clase de guarda, con
+la evidencia distinta— y la llama la pasada antes de escribir. **No añade columnas, no añade llamadas de red
+y no toca el puerto**: `FederationMatch.date` ya está ahí desde F2.
+
+**Las dos guardas son complementarias, no alternativas**, y conviene tenerlo escrito porque cubren errores
+distintos:
+
+| Error del administrador | Quién lo caza | En la FCF |
+|---|---|---|
+| Códigos de **otra competición**, misma temporada | El nombre ([D-84]) | **Ciega**: su calendario no publica nombre (`A-1`/H-09) |
+| Códigos de **la temporada pasada**, misma competición | **Las fechas (esta decisión)** | **Funciona igual**: publica fecha en todos sus partidos |
+
+**Consecuencia asumida.** Un calendario **vacío** —competición recién publicada, sin jornadas— no tiene
+mediana, y ahí la guarda **no opina**: no es evidencia de nada, y parar la primera pasada de una competición
+nueva sería el mismo error que [D-56] evita al no tratar un silencio como un dato.
 
 ---
 
@@ -3803,6 +3863,7 @@ paquete sin problema.
 [Anexo RFFM §F.12]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.14]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
@@ -3837,3 +3898,4 @@ paquete sin problema.
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

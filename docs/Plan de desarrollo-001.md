@@ -220,11 +220,24 @@ la FCF no ([Anexo FCF §C.10.6], §C.10.7)—, así que un sobre nuevo modelado 
 reproduce H-08 y H-09 **dos veces más** antes de que nadie escriba el adaptador catalán. Es el error de la
 abstracción validada contra un solo caso, y aquí está localizado con nombre y línea.
 
-**Qué entrega.** La forma del sobre —qué campos son opcionales y por qué—, y **dónde vive la evidencia de que
-la coordenada sigue apuntando a esta competición**, que hoy está escondida en un campo opcional del
-calendario. Las tres opciones para lo segundo están evaluadas en H-09; la que no toca puerto ni modelo es que
-el adaptador de cada federación **rellene** `competitionName` como pueda, con una segunda llamada si hace
-falta. **No implementa nada de la FCF**: eso sigue siendo F9.
+**Qué entrega, y las dos mitades están ya decididas** (2026-09-13):
+
+1. **La forma del sobre.** `FederationRound.label` **se elimina** —no lo lee nadie: su única aparición en
+   todo el backend es `self.label = label`— y `seasonLabel` pasa a **opcional**, que es lo que el puerto
+   promete de sí mismo (*"un `nil` significa «la fuente no lo dijo»"*) y lo que cierra H-10 de paso: un
+   rótulo raro deja el campo vacío en vez de tumbar un `fetchCalendar` con sus 30 jornadas ya parseadas. Su
+   único lector es `seed-competition`, que es herramienta y no contrato. **Coste medido: 6 ficheros** —el
+   parser y cinco de test— y dos `init` públicos.
+2. **Dónde vive la evidencia de la coordenada: en las fechas, no en el nombre** ([D-91]). Aquí la respuesta
+   cambió al ir a medirla, y es lo más valioso de esta mitad: las tres opciones que H-09 traía evaluadas
+   giraban alrededor **del nombre**, y el nombre **es idéntico entre temporadas** ([Anexo RFFM §F.17]:
+   `PRIMERA CADETE` / `Grupo 4` en 25-26 y en 26-27). O sea que ninguna cubría el error que ocurre cada
+   verano —copiar los códigos del año pasado—, tampoco en Madrid. La guarda que sí lo cubre compara **la
+   mediana de las fechas del calendario** contra la ventana de la `Season`: sin columna nueva, sin llamada
+   extra, y **funciona igual en la FCF**, que no publica nombre pero sí fecha.
+
+**No implementa nada de la FCF**: eso sigue siendo F9, y allí queda solo la mitad *"otra competición"* de
+H-09.
 
 #### F6-bis, segunda mitad · la resiliencia del recorrido — **entregada** (`4d66aa0`, 2026-09-12)
 
@@ -1111,3 +1124,5 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

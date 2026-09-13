@@ -1,0 +1,77 @@
+RFFM · El nombre de la competición NO distingue temporadas
+Capturado el 2026-09-13 · evidencia de [Anexo RFFM §F.17] y de la enmienda de [D-84]
+
+Competición usada: PRIMERA CADETE, Grupo 4 — la aportó el desarrollador con las
+dos URLs reales de la web, una por temporada:
+
+  26-27: https://www.rffm.es/competicion/calendario?temporada=22&tipojuego=1&competicion=26737751&grupo=26737755
+  25-26: https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037562&grupo=24037566
+
+Nótese que los códigos son distintos: los bloques no se reutilizan entre
+temporadas (ya medido en §F.16 con PREFERENTE AFICIONADO).
+
+── Cómo se reprodujo ────────────────────────────────────────────────────────────
+
+Se piden las cuatro combinaciones cruzadas + una temporada inexistente, y de
+cada respuesta se extrae el sobre del `__NEXT_DATA__` (`calendar.temporada`,
+`competicion`, `grupo`) y la PRIMERA y ÚLTIMA fecha de partido de todas las
+jornadas (`calendar.rounds[].equipos[].fecha`), más el primer `codacta`:
+
+  curl -s "https://www.rffm.es/competicion/calendario?temporada=<T>&tipojuego=1&competicion=<C>&grupo=<G>"
+    | python3 -c "extraer <script id='__NEXT_DATA__'> → props.pageProps.calendar"
+
+── Resultado ────────────────────────────────────────────────────────────────────
+
+A · 26-27 con SUS códigos (temporada=22, 26737751/26737755)
+    calendar.temporada  : 2026-2027
+    calendar.competicion: PRIMERA CADETE
+    calendar.grupo      : Grupo 4
+    jornadas            : 30
+    fechas              : 26-09-2026 → 22-05-2027
+    1er codacta         : 5601639
+
+B · 25-26 con SUS códigos (temporada=21, 24037562/24037566)
+    calendar.temporada  : 2025-2026
+    calendar.competicion: PRIMERA CADETE
+    calendar.grupo      : Grupo 4
+    jornadas            : 30
+    fechas              : 27-09-2025 → 24-05-2026
+    1er codacta         : 5416238
+
+C · códigos de 25-26 pidiendo temporada=22   ← LA TRAMPA
+    calendar.temporada  : 2026-2027          ← MIENTE (eco del parámetro)
+    calendar.competicion: PRIMERA CADETE     ← idéntico a A
+    calendar.grupo      : Grupo 4            ← idéntico a A
+    jornadas            : 30
+    fechas              : 27-09-2025 → 24-05-2026   ← los partidos de 25-26
+    1er codacta         : 5416238                   ← el mismo que B
+
+D · códigos de 26-27 pidiendo temporada=21   ← la simétrica
+    calendar.temporada  : 2025-2026          ← MIENTE
+    calendar.competicion: PRIMERA CADETE
+    calendar.grupo      : Grupo 4
+    jornadas            : 30
+    fechas              : 26-09-2026 → 22-05-2027   ← los partidos de 26-27
+    1er codacta         : 5601639                   ← el mismo que A
+
+E · códigos de 26-27 pidiendo temporada=99 (inexistente)
+    calendar.temporada  : ''                 ← vacía, no eco
+    calendar.competicion: PRIMERA CADETE
+    calendar.grupo      : Grupo 4
+    fechas              : 26-09-2026 → 22-05-2027
+
+── Lo que esto demuestra ────────────────────────────────────────────────────────
+
+1. Manda `competicion`+`grupo`; `temporada` solo tiñe la etiqueta (C y D).
+   Confirma §F.16 con una competición distinta.
+
+2. **`competicion` y `grupo` (los rótulos) son IDÉNTICOS entre temporadas.**
+   O sea: la guarda de [D-84], que compara `Competition.federation_name` con el
+   nombre que trae el calendario, NO puede detectar "me he traído los códigos de
+   la temporada pasada" — que es el error que de verdad ocurre cada verano. Solo
+   detecta "me he traído los códigos de OTRA competición".
+
+3. **Las fechas de los partidos son la única señal honesta**, y discriminan sin
+   ambigüedad: un año entero de diferencia entre A y B. §F.16 ya lo decía como
+   principio; aquí está el dato que lo convierte en guarda implementable contra
+   `Season.start_date`/`end_date`.
