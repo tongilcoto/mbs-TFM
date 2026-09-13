@@ -380,7 +380,14 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6 entregadas, lo inmediato es **F7: `StandingRow`, con la clasificación histórica de la RFFM y el
+Con F0–F6 entregadas, **lo inmediato no es F7: es la mitad que le queda a F6-bis** —la fase que no estaba
+prevista y que trajo la auditoría—. **Va antes de F7 y está escrito así en el Plan**, porque F7 y F8 no
+estrenan puerto: le añaden `fetchStandings` y `fetchScorers` **con sus DTOs**, y el sobre de
+`FederationCalendar` está cortado a la medida de la RFFM (`A-1` · H-08, H-09, H-10). Un sobre nuevo modelado
+por analogía con el de F2 **reproduce el problema dos veces más** antes de que nadie escriba el adaptador
+catalán. La otra mitad de F6-bis —la resiliencia del recorrido— **ya está entregada** (`4d66aa0`).
+
+Después viene **F7: `StandingRow`, con la clasificación histórica de la RFFM y el
 *fallback* calculado desde `Match`** (`D-15`, `D-55`). **Los tres deberes que F6 arrastraba están hechos**: el
 recorrido continúa tras un fallo y la unidad de aislamiento es la competición (`D-86`), la cadencia vive fuera
 del proceso y el código trae un antirrebote que no es el tope semanal (`D-87`), y el registro tiene su `GET`

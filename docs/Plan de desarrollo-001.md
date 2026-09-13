@@ -258,8 +258,13 @@ Enmendadas [D-85] y [D-86] en la bitácora, las dos porque prometían más de lo
 cinco cazadas. **272 → 276 tests.**
 
 **Lo que esta mitad dejó fuera a propósito**, para que no parezca hecho: el **código de salida numérico
-distinto** para *"falló la infraestructura"*, que exige un `exit(n)` en el *target* `Run` y va con la decisión
-de **montar el cron** — el deber de despliegue que sigue pendiente desde F6 (§9).
+distinto** para *"falló la infraestructura"*, que va con la decisión de **montar el cron** — el deber de
+despliegue que sigue pendiente desde F6 (§9). **Lo que sí cambió después, y deja el terreno preparado**
+(`A-5`/H-39, `3fed005`): el punto de entrada ya no propaga el error sino que hace **`exit(1)`**, porque un
+`throw` en el nivel superior de un ejecutable es un `fatalError` y salía **133** —indistinguible de un
+*crash*—. Así que el sitio donde vivirá ese `exit(n)` ya existe y ya es el dueño de la cuenta: **el comando
+decide si falló lanzando; `Run/main.swift` decide cómo se cuenta.** Lo que falta es solo **qué número** para
+cada clase de fallo, y eso lo pide el cron, no el código.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
