@@ -189,9 +189,14 @@ struct RFFMCanaryTests {
         let actas = calendar.rounds.flatMap { $0.matches.compactMap(\.federationMatchID) }
         #expect(Set(actas).count == actas.count, "los codacta han dejado de ser únicos")
 
-        // `SeasonLabel` ya validó la forma al construirse (`D-71`); llegar aquí
-        // significa que la etiqueta sigue teniendo el formato del que se deriva.
-        #expect(!calendar.seasonLabel.value.isEmpty)
+        // **El sobre la trae opcional desde F6-bis** (H-08: la FCF no la
+        // publica), pero **la RFFM sí**, así que aquí un `nil` es señal de las
+        // que este canario existe para dar: o cambiaron el formato de
+        // `calendar.temporada` o dejaron de mandarlo. `SeasonLabel` ya validó la
+        // forma al construirse (`D-71`); llegar con valor significa que la
+        // etiqueta sigue siendo derivable.
+        #expect(calendar.seasonLabel != nil,
+                "la RFFM dejó de publicar una `temporada` con formato AAAA-BBBB")
 
         // `D-84`: parsea, pero ¿es la competición que creemos? La coordenada
         // caducada **no da 404**.

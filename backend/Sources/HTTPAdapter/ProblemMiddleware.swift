@@ -27,6 +27,17 @@ public struct ProblemMiddleware: AsyncMiddleware {
     /// PostgreSQL o una traza filtran estructura interna al cliente.
     private let exposesInternalDetail: Bool
 
+    /// Fechas de los problemas en ISO y en UTC (`D-91`). El Dominio entrega
+    /// `Date` sin formatear porque no conoce zona ni idioma (§5.4); el formato
+    /// es cosa de la frontera, y aquí es el mismo que usa el contrato.
+    private static let isoDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     public init(typeBaseURI: String = "https://api.example.com/problems",
                 exposesInternalDetail: Bool) {
         self.typeBaseURI = typeBaseURI
@@ -81,6 +92,22 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "La coordenada apunta a otra competición",
                                detail: "se esperaba '\(expected)' y la fuente devolvió '\(found)'",
                                base: typeBaseURI, slug: "federation-source-mismatch")
+
+            case .federationSeasonMismatch(let seasonLabel, let median):
+                // **502, igual que su hermano de arriba y por la misma razón**
+                // (`D-91`): la coordenada es válida, la fuente contesta, y lo que
+                // devuelve es el calendario de **otra temporada**. El cliente no
+                // ha mandado nada mal; lo que está mal es la coordenada guardada,
+                // y eso no lo arregla reintentar con otro cuerpo.
+                //
+                // **La fecha se formatea aquí y no en el Dominio** (§5.4): en ISO
+                // y en UTC, que es como viaja todo en el contrato, y no en el
+                // idioma ni la zona de quien lea el problema.
+                return Problem(status: .badGateway, code: "FEDERATION_SEASON_MISMATCH",
+                               title: "El calendario es de otra temporada",
+                               detail: "la temporada es '\(seasonLabel)' y el calendario "
+                                   + "tiene su mitad en \(Self.isoDay.string(from: median))",
+                               base: typeBaseURI, slug: "federation-season-mismatch")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────

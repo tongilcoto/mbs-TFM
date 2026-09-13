@@ -30,15 +30,26 @@ public import enum Domain.Modality
 /// > ⚠️ **Antes de añadir el segundo método, leer F6-bis del Plan de desarrollo.**
 /// > El bloque `A-1` de la auditoría midió este puerto contra el volcado de la FCF
 /// > y el resultado se parte en dos: `FederationMatch` y `FederationTeamRef`
-/// > aguantan **campo a campo**, y el **sobre** de `FederationCalendar` está
+/// > aguantan **campo a campo**, y el **sobre** de `FederationCalendar` estaba
 /// > cortado a la medida de la RFFM —de sus cinco campos esa fuente publica
-/// > **uno**, y los dos obligatorios son justo los dos que no tiene (H-08)—.
+/// > **uno**, y los dos obligatorios eran justo los dos que no tiene (H-08)—.
 /// >
-/// > **No copiar la forma del sobre en los DTOs de F7 y F8.** La asimetría se
-/// > repite ahí: `/api/standings` y `/api/scorers` de la RFFM devuelven
-/// > `competicion` y `grupo` ([Anexo RFFM §F.8], §F.13) y sus equivalentes de la
-/// > FCF no ([Anexo FCF §C.10.6], §C.10.7). Un sobre nuevo modelado por analogía
+/// > **F6-bis ya arregló el sobre de este método**: `FederationRound.label`
+/// > **desapareció** (no lo leía nadie) y `seasonLabel` es **opcional**. Lo que
+/// > queda vivo es la regla para los que vienen: **no copiar la forma del sobre
+/// > en los DTOs de F7 y F8.** La asimetría se repite ahí: `/api/standings` y
+/// > `/api/scorers` de la RFFM devuelven `competicion` y `grupo`
+/// > ([Anexo RFFM §F.8], §F.13) y sus equivalentes de la FCF no
+/// > ([Anexo FCF §C.10.6], §C.10.7). Un sobre nuevo modelado por analogía
 /// > reproduce el problema dos veces más antes de que exista el segundo adaptador.
+/// >
+/// > **Y la evidencia de la coordenada no vive en el sobre** (`D-91`): ni la
+/// > etiqueta de temporada —que en la RFFM es el **eco** de lo que enviamos— ni
+/// > el nombre de la competición —que es **idéntico entre temporadas**
+/// > ([Anexo RFFM §F.17])— prueban de qué año es un calendario. Lo prueban las
+/// > **fechas de los partidos**, y esas ya están en `FederationMatch`. Un DTO de
+/// > F7 o F8 que quiera ser verificable necesita traer **algo que no pueda ser
+/// > eco**; si no lo tiene, la verificación se apoya en el calendario.
 /// >
 /// > **La coordenada, en cambio, no hay que tocarla** (H-14): ninguno de los
 /// > cuatro endpoints pide un cuarto eje, y **la jornada de F7 va como parámetro
@@ -108,7 +119,25 @@ public struct FederationCoordinate: Hashable, Sendable {
 public struct FederationCalendar: Equatable, Sendable {
     /// Ya en el formato del modelo (`"2026/27"`), reformateada por el adaptador
     /// (`D-71`): el Dominio no conoce el rótulo de ninguna federación.
-    public let seasonLabel: SeasonLabel
+    ///
+    /// **Opcional desde F6-bis** (`A-1`/H-08, H-10), y por tres razones que se
+    /// refuerzan:
+    ///
+    /// 1. **La FCF no la publica.** Su calendario trae 21 claves y ninguna de
+    ///    sobre: ni temporada, ni nombre de competición, ni rótulo de jornada
+    ///    ([Anexo FCF §C.10.4]). Un campo obligatorio que una de las dos fuentes
+    ///    no puede llenar obliga a inventarlo en el adaptador, que es lo que
+    ///    este puerto dice de sí mismo que no hay que hacer.
+    /// 2. **Era un *Value Object* con invariante dura en medio del sobre.** Si
+    ///    la RFFM devolviera `"2026-2028"`, `SeasonLabel` lanzaba y se caía el
+    ///    `fetchCalendar` **entero**, con sus 30 jornadas ya parseadas detrás —
+    ///    y su único lector en todo el backend es `seed-competition`, que es
+    ///    herramienta y no contrato (H-10).
+    /// 3. **En la RFFM es el eco de nuestro propio parámetro** ([Anexo RFFM
+    ///    §F.16]), así que como evidencia vale **cero**: quien compare esto con
+    ///    `Season.label` estará comparando un dato consigo mismo. La evidencia de
+    ///    temporada son **las fechas** (`D-91`).
+    public let seasonLabel: SeasonLabel?
 
     /// El nombre **literal** que la federación da a la competición.
     ///
@@ -128,7 +157,7 @@ public struct FederationCalendar: Equatable, Sendable {
     public let rounds: [FederationRound]
 
     public init(
-        seasonLabel: SeasonLabel,
+        seasonLabel: SeasonLabel?,
         competitionName: String?,
         groupLabel: String?,
         currentRound: Int?,
@@ -143,21 +172,33 @@ public struct FederationCalendar: Equatable, Sendable {
 }
 
 /// Una jornada.
+///
+/// # Lo que este tipo **tenía** y se quitó en F6-bis
+///
+/// Llevaba un `label: String` **obligatorio** con el rótulo de la RFFM tal cual
+/// (`"1 (13-09-2026)"`), conservado *"porque lleva dentro la fecha nominal de la
+/// jornada"*. Se quita por dos motivos medidos (`A-1`/H-08):
+///
+/// - **No lo leía nadie.** Su única aparición en todo el backend era
+///   `self.label = label`. La fecha nominal que justificaba guardarlo no la usa
+///   ninguna regla: `D-81` calcula el rango de la jornada **de las fechas de sus
+///   partidos**, que es dato y no rótulo.
+/// - **La FCF no tiene equivalente**, así que el adaptador catalán tendría que
+///   fabricarlo — un `"Jornada 3"` compuesto por nosotros con pinta de venir de
+///   la fuente, que es la clase de eco del que avisa [Anexo RFFM §F.16].
+///
+/// Si algún día hace falta esa fecha nominal, está en el volcado y se añade
+/// **cuando exista el lector**, no antes.
 public struct FederationRound: Equatable, Sendable {
     /// El número, **del campo `codjornada`**. Ni del índice del array (que es lo
     /// que hacía la app heredada) ni del campo `jornada`, que es un rótulo
     /// ([Anexo RFFM §F.15]).
     public let number: Int
 
-    /// El rótulo tal cual: `"1 (13-09-2026)"`. Se conserva porque lleva dentro la
-    /// **fecha nominal de la jornada**, que no está en ningún otro campo.
-    public let label: String
-
     public let matches: [FederationMatch]
 
-    public init(number: Int, label: String, matches: [FederationMatch]) {
+    public init(number: Int, matches: [FederationMatch]) {
         self.number = number
-        self.label = label
         self.matches = matches
     }
 }

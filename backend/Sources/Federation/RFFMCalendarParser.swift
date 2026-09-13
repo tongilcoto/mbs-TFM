@@ -67,7 +67,19 @@ public enum RFFMCalendarParser {
             : (calendar.host ?? "")
 
         return FederationCalendar(
-            seasonLabel: try RFFMSeasonLabel.parse(calendar.temporada),
+            // **`try?` y no `try`, desde F6-bis** (`A-1`/H-10). Esta etiqueta es
+            // campo de **sobre**, no de dato: la lee una herramienta de CLI
+            // (`seed-competition`) y la ingesta no la mira. Con un `try` en esta
+            // línea, una temporada con dos años no consecutivos —`"2026-2028"`—
+            // hacía que `SeasonLabel` lanzara y se cayera el `fetchCalendar`
+            // **entero**, con sus 30 jornadas y sus 240 partidos ya parseados
+            // detrás. Ahora degrada a `nil`, que es lo que el resto del sobre
+            // significa: *"la fuente no lo dijo (o no se entendió)"*.
+            //
+            // Lo que **no** se degrada es la temporada **vacía**: eso lo trata el
+            // `guard` de arriba como coordenada mala (`D-84`), porque una
+            // `temporada` que no existe en su catálogo sí es señal.
+            seasonLabel: try? RFFMSeasonLabel.parse(calendar.temporada),
             competitionName: calendar.competicion,
             groupLabel: calendar.grupo,
             currentRound: payload.props.pageProps.currentRound.flatMap { Int($0) },
@@ -89,9 +101,11 @@ public enum RFFMCalendarParser {
                 reason: #"se esperaba un entero, llegó "\#(raw.codjornada)""#
             )
         }
+        // El rótulo `raw.jornada` —`"1 (13-09-2026)"`— **ya no se transporta**
+        // (F6-bis, H-08): no lo leía nadie, y `D-81` calcula el rango de la
+        // jornada de las fechas de sus partidos, que son dato y no rótulo.
         return FederationRound(
             number: number,
-            label: raw.jornada,
             matches: try raw.equipos.map { try match($0, host: host) }
         )
     }

@@ -60,7 +60,7 @@ struct IngestCalendarTests {
             currentRound: 1,
             rounds: [
                 FederationRound(
-                    number: 1, label: "1 (27-09-2025)",
+                    number: 1,
                     matches: matches ?? [Self.match()])
             ])
     }
@@ -609,6 +609,44 @@ struct IngestCalendarTests {
         let season = try Self.season()
         let competition = try Self.competition(
             seasonID: season.id, federationName: "PREFERENTE AFICIONADO")
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(
+                competitionName: "PRIMERA DIVISION AUTONOMICA CADETE"))
+
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        #expect(await store.opponentClubs.isEmpty)
+        #expect(await store.teams.isEmpty)
+        #expect(await store.rounds.isEmpty)
+        #expect(await store.matches.isEmpty)
+        #expect(await store.competitions.first?.lastSyncedAt == nil)
+    }
+
+    /// **El error que la guarda del nombre no puede ver** (`D-91`): se da de alta
+    /// la temporada nueva y se pegan los códigos de la anterior.
+    ///
+    /// La fuente responde `200`, **el nombre coincide** —los rótulos de
+    /// competición y grupo son idénticos entre temporadas, medido sobre PRIMERA
+    /// CADETE Grupo 4 ([Anexo RFFM §F.17])— y el calendario es del año pasado.
+    /// `requireSameSource` calla, porque no tiene nada que objetar; lo único que
+    /// delata el desfase son **las fechas de los partidos**, que se van doce
+    /// meses y no pueden ser eco del parámetro que enviamos (§F.16).
+    ///
+    /// Se para y **no escribe nada**, igual que `D-84`.
+    @Test("un calendario del año pasado para la pasada, aunque el nombre coincida (D-91)")
+    func abortsWhenTheCalendarBelongsToAnotherSeason() async throws {
+        // La temporada es la 2026/27 y el calendario de `Self.calendar()` trae
+        // partidos del 27-09-2025: un año entero de desfase.
+        let season = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2026/27"),
+            federationSeasonID: "22", createdAt: Date(), updatedAt: Date())
+        let competition = try Self.competition(
+            seasonID: season.id, federationName: "PRIMERA DIVISION AUTONOMICA CADETE")
         let (useCase, store, _) = await Self.pass(
             competition: competition, season: season,
             calendar: try Self.calendar(
