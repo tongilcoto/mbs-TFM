@@ -897,6 +897,11 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 *N* veces por *schema*, dedicado 1 vez por proyecto) sin tratamiento especial por tipo Postgres.
 
 **Convención de migraciones:**
+- **Una migración aplicada es inmutable** ([D-90]): `_fluent_migrations` guarda el **nombre**, no el
+  contenido, así que un *schema* que ya la aplicó **no recibe jamás** una edición posterior de su `prepare`
+  — y nada lo dice. Lo que haya que corregir va en una migración **nueva**. Es la única vía por la que el
+  esquema de un club puede acabar dependiendo de cuándo se dio de alta: medido, los dos caminos de §4.7
+  convergen byte a byte, y esto no.
 - Una `AsyncMigration` por entidad (`CreateTeam`, `CreateMatch`, …), cada una con su `prepare(on:)`
   (`schema(...).id().field(...).unique(on:).create()`) y `revert(on:)` simétrico.
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
@@ -2523,17 +2528,34 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    subió mucho menos de lo temido — pico de 1,54 → 1,76 GiB (§8.2). De la implementación salió además una
    decisión que esta cuestión no anticipaba: **se genera filtrado** ([D-69]).
 2. Forma exacta del tier dedicado (proyecto Supabase vs despliegue completo) y su provisión.
-3. Estrategia de automatización de migraciones por tenant — **estrechada**. El mecanismo y la idempotencia
+3. Estrategia de automatización de migraciones por tenant — **casi cerrada**. El mecanismo y la idempotencia
    por club están resueltos y comprobados (§4.7, §6.4): registro dinámico de `DatabaseID`, `_fluent_migrations`
-   por *schema*, juego completo en las altas, y la restricción de ir por conexión directa. Queda abierto el
-   **fallo a mitad de recorrido** (qué pasa con los clubes ya migrados cuando el número 30 revienta) y el
-   **paralelismo** entre clubes, que a 50 clubes deja de ser una cuestión estética.
+   por *schema*, juego completo en las altas, y la restricción de ir por conexión directa.
 
    > **La misma pregunta sobre la ingesta sí está contestada** ([D-86]): el recorrido **continúa** y la unidad
    > de aislamiento es la competición. Y no se traslada aquí sin más, porque **no es la misma pregunta**: una
    > pasada a medias deja la base exactamente como estaba ([D-83]) y una fila que lo explica ([D-85]); una
    > migración a medias deja *schemas* a distinta versión y **nada que lo diga**. Lo que sí se puede copiar es
    > el criterio: **continuar solo es seguro cuando el fallo deja constancia y no deja estado a medias.**
+
+   **Las dos mitades quedan decididas con dato** por el bloque `A-5` del
+   [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md), y una de ellas cambia de pregunta:
+
+   - **Fallo a mitad: se para, y eso es lo correcto.** Aplicado el criterio de arriba, ninguna de sus dos
+     condiciones se cumple aquí —una migración a medias **es** estado a medias y no hay dónde apuntarlo—, así
+     que el recorrido **no** debe continuar, al contrario que la ingesta. Ya se paraba; lo que faltaba era
+     decir **de qué club** (medido: el error crudo del driver no lo nombraba), y eso está hecho.
+   - **Lo que sigue pendiente es la constancia *durable***: tras un fallo, saber en qué versión quedó cada
+     club exige abrir `_fluent_migrations` de cada *schema* a mano. Medido con cinco clubes y el tercero
+     saboteado: 8/8, 6/8, 0/8 y dos sin intentar. A dos clubes es estético; a cincuenta es la única forma de
+     saber qué pasó anoche. **Decidido que hace falta**; su forma —bandera del comando, o un comando de
+     estado— se implementa cuando el número de clubes lo pida.
+   - **El paralelismo no es el problema, y medirlo lo invierte.** 25 clubes y 160 migraciones tardan
+     **1,82 s**: por tiempo no hace falta. Lo que sí escala mal es el ***pool* por tenant**, que se registra y
+     **no se suelta** —pico medido de **25 conexiones simultáneas**, una por club—, y por §6.4 son conexiones
+     del puerto **directo**, que es el recurso escaso. Así que **se descarta paralelizar** (multiplicaría
+     justo lo que escasea para ahorrar segundos que no duelen) y lo que queda por hacer es **cerrar el *pool*
+     de cada club al terminar con él**.
 4. Estrategia de retención (RGPD, datos de menores): política de **archivado** (`Season.archived_at`, reversible, §5) frente a **erasure** físico (`DELETE ?cascade=true`) — plazos de conservación y "derecho al olvido" por decidir. El *mecanismo* ya está ([D-24]); falta la **política**.
 5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el
    `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado. **Sigue abierta,
@@ -2788,4 +2810,5 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

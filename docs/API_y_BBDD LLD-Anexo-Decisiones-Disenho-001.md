@@ -28,6 +28,7 @@
 | **D-83**               | La pasada de ingesta abre tres ámbitos, y la red no está dentro de ninguno                 | §2.3, §6.2, §6.4                   |
 | **D-86**               | El recorrido de la ingesta no se detiene en el primer fallo: la unidad de aislamiento es la competición | §2.3, §5.6, §9.3      |
 | **D-87**               | La cadencia de la ingesta vive fuera del proceso; lo que el código trae es un antirrebote  | §2.3, §5.6                         |
+| **D-90**               | Una migración aplicada es inmutable: lo que se corrige va en una migración nueva            | §4.6, §4.7, §9.3                   |
 | **Modelo de datos**    |                                                                                            |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                    | §3.2, §3.4                         |
@@ -154,6 +155,47 @@ persistencia), no la disciplina de quien escribe.
 
 **Decisión:** `text` + `CHECK`. Se prioriza que **añadir un valor a un enumerado sea una migración uniforme**
 en los dos tiers, sin tratamiento especial por tipo Postgres.
+
+---
+
+### D-90 · Una migración aplicada es inmutable: lo que se corrige va en una migración nueva
+
+*Añadida el 2026-09-13, del bloque `A-5` del [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md)
+(H-31). Es la continuación natural de [D-02] y la única forma real que tiene el esquema de este proyecto de
+divergir entre clubes.*
+
+**Qué hay que decidir.** §4.7 monta las migraciones por tenant sobre `_fluent_migrations`, una tabla de
+control **por *schema***. Esa tabla guarda **el nombre** de cada migración aplicada, no su contenido. La
+pregunta que nadie había hecho: ¿qué le pasa a un club que ya aplicó `CreateClub` si mañana se edita el
+`prepare` de `CreateClub`?
+
+**Respuesta medida: nada, y eso es el problema.** No recibe el cambio **nunca**, y no hay error, ni aviso, ni
+columna que lo diga. El comando dice *"nada que aplicar"* con toda la razón. Y ya ocurrió una vez en este
+repositorio: `CreateClub.prepare` se editó el 2026-08-25 (`8550bcb`) —un día después de nacer— para derivar
+su `CHECK` de `FederationCode.sqlValueList` en vez de tenerlo teclado, que es exactamente lo que [D-02]
+prescribe. **Hoy no se nota por dos casualidades:** los valores eran los mismos y el único tenant vivo nació
+un día después de la edición.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **Migración aplicada inmutable** | Un `CHECK` mal puesto se arregla con una migración nueva que lo reemplace (`DROP CONSTRAINT` + `ADD CONSTRAINT`), que es exactamente lo que [D-02] eligió poder hacer | **Elegida** |
+| Editar el `prepare` y confiar | Funciona para el desarrollador, que borra su base cuando quiere. **No** para un club en producción: su *schema* se queda en la versión vieja para siempre | Descartada |
+| Huella del contenido en la tabla de control | Detectaría la deriva, pero hay que implementarla en Fluent —no es nuestra tabla— y obliga a decidir qué se hace al detectarla | Descartada: el coste es alto y la regla, gratis |
+
+**Decisión.** Una vez que una migración se ha aplicado **en cualquier entorno que no sea desechable**, su
+`prepare` no se toca. Lo que haya que corregir entra por una migración nueva, al final de la lista que le
+corresponda por FK (§4.6).
+
+**Y la contrapartida, que es la razón de que esto sea una decisión y no una buena práctica:** la única
+excepción legítima es *"todavía no se ha aplicado en ningún sitio que importe"*, y eso **no se puede
+comprobar desde el código**. Depende de qué bases existen, que es información de operación. Así que la regla
+se escribe donde la va a leer quien añada la migración siguiente: §4.6, la cabecera de `TenantMigrations` y
+aquí.
+
+**Lo que esta decisión no arregla, y queda apuntado en §9.3:** saber *después* en qué versión quedó cada
+club. El recorrido **se para** cuando uno falla —correcto por [D-86], porque una migración a medias es estado
+a medias— y desde `A-5` dice también **de quién** era el fallo (H-33), pero no deja constancia durable: la
+única fuente sigue siendo el `_fluent_migrations` de cada *schema*, consultado a mano.
 
 ---
 

@@ -71,6 +71,16 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   el eje de la temporada, tapado ahora en el de la competición. **No es `Participation`** (`D-27`): la
   escribe el club, no la ingesta. Al tocarla: el `UNIQUE` de tres columnas va con **`NULLS NOT DISTINCT`**, y
   la coherencia con la temporada es una **FK compuesta**, no una guarda.
+- **Una migración aplicada es inmutable, y el esquema de un club no depende de cuándo se dio de alta**
+  (`D-90`, §4.6). Lo segundo está **medido** y es la buena noticia: un alta limpia y un club migrado en tres
+  lotes de tres días dan el mismo esquema **byte a byte** —cuatro caminos, un solo `md5`—, y no por
+  disciplina: `provision-tenant` no tiene juego propio, llama a la misma función que `migrate-tenants`. Lo
+  primero es la única vía que queda para romperlo, y **ya pasó una vez**: `_fluent_migrations` guarda el
+  **nombre** de la migración, no su contenido, así que un *schema* que ya la aplicó **no recibe jamás** una
+  edición posterior de su `prepare`, sin error y sin aviso. Al añadir una tabla en F7/F8/F10: se añade al
+  final de la lista **que le toque por FK**, y lo que haya que corregir de una vieja va en una migración
+  **nueva**. Y si el recorrido encuentra un club roto **se para** —correcto por `D-86`: una migración a
+  medias *es* estado a medias— diciendo de quién era.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
@@ -210,7 +220,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**279 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**284 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -285,7 +295,14 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy: clubs -> seasons -> competitions
+                                          # hoy son OCHO migraciones por tenant:
+                                          #   clubs -> seasons -> opponent_clubs ->
+                                          #   teams -> competitions -> rounds ->
+                                          #   matches -> ingestion_runs
+                                          #   --revert exige --yes: borra las tablas de
+                                          #   TODOS (o del que diga -t). Si uno falla, el
+                                          #   recorrido SE PARA y el error dice de qué
+                                          #   club fue (`D-86`, §9.3)
 swift run Run seed-competition -t atleti -u "<URL del calendario>" \
                                -c cadete -g masculino
                                           # HERRAMIENTA, no contrato: da de alta la

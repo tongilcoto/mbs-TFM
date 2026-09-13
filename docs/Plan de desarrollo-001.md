@@ -149,10 +149,10 @@ dependen de eso.
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
 | **F6-bis** | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** (pendiente) y **la resiliencia del recorrido** (**entregada**, `4d66aa0`). Detalle abajo | unit puro · niveles 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 |
-| **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` | unit + integración | [D-15], [D-55] |
+| **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo) | unit + integración | [D-15], [D-55], `A-5` · H-31 |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
-| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo) | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27 |
+| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36) | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -186,6 +186,23 @@ a decidir en F10 con [D-67] delante:
   sin llevar ni un dato de la pasada.
 - **Que el cliente compare marcas de tiempo** —*"¿ha aparecido una pasada más nueva que mi petición?"*—, que no
   toca nada del backend y es el N+1 por recarga que [D-89] descartó **a propósito**.
+
+**Y F7 llega con otro deber heredado, éste de una línea** (`A-5`, H-31 → [D-90]): **no se edita una
+migración ya aplicada.** F7, F8 y F10 añaden tres tablas a un esquema que ya tiene clubes con historia, y
+`_fluent_migrations` guarda el **nombre** de cada migración, no su contenido — así que un `CHECK` corregido
+*a posteriori* sobre un `prepare` viejo llega a la base del desarrollador (que la recrea) y **no** a la de un
+club (que no). Ya ocurrió una vez, con `CreateClub`. Lo que se corrige va en una migración nueva, al final de
+la lista **que le toque por FK**. La buena noticia del bloque es la otra mitad, y está medida: **el esquema de
+un club no depende de cuándo se dio de alta** —cuatro caminos distintos, un solo `md5`—, y desde `A-5` eso lo
+guarda un test (H-38) en vez de depender de que alguien lo repita a mano.
+
+**Los dos deberes de A-5 que no son de fase sino de operación**, apuntados aquí para que no se pierdan y
+decididos en §9.3 del LLD: **cerrar el *pool* de cada club** al terminar con él —hoy se registra uno por
+tenant y no se suelta: 25 clubes, 25 conexiones **directas** simultáneas, medido— y **poder preguntar en qué
+versión quedó cada club** tras un fallo, que hoy exige abrir `_fluent_migrations` *schema* a *schema*. El
+recorrido ya se para y ya dice de quién fue el fallo (H-33); lo que falta es la constancia durable. Ninguno
+de los dos bloquea a F7: los dos empiezan a doler con el número de clubes, que es exactamente cuándo hay que
+tenerlos hechos.
 
 **Y una fase que no estaba prevista y la trajo la auditoría: F6-bis.** El bloque `A-1` del
 [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md) hizo el ensayo en seco del adaptador de la
@@ -1086,4 +1103,6 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
-[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
