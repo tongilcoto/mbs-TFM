@@ -396,7 +396,12 @@ Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-0
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
 Con F0–F6 y **F6-bis** entregadas —la fase que no estaba prevista y que trajo la auditoría—, lo inmediato es
-**F7**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
+**F6-ter**, y después F7. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su último
+bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter es una función y su test**: extraer de
+`IngestCommand` la pregunta *"¿este resultado detiene el recorrido?"*, porque `D-86` enmendada tiene **dos**
+frenos y el del recorrido de **clubes** empareja un caso de error entre dos *targets* sin que nada lo
+compruebe (`A-7`/H-45). Va antes de F7 por el mismo argumento que F6-bis: F7 y F8 **no estrenan recorrido, le
+cuelgan trabajo**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
 recorrido** (`4d66aa0`) y **el sobre del puerto**, que dejó `FederationRound.label` fuera —no lo leía nadie— y
 `seasonLabel` **opcional** —la FCF no la publica y en la RFFM es el eco de nuestro propio parámetro—, más la
 guarda de temporada de `D-91`. Al añadirle `fetchStandings` y `fetchScorers`: **no copiar la forma del
@@ -411,9 +416,16 @@ del proceso y el código trae un antirrebote que no es el tope semanal (`D-87`),
 —más un `POST` que dispara la pasada, que no estaba previsto y lo pidió el desarrollador para controlarlo
 desde la web (`D-88`)—.
 
-**Queda un deber que no es de código y conviene no perderlo**: **montar el cron**. F6 entrega el comando, pero
-quién lo llama los lunes y los fines de semana es una decisión de despliegue; hasta que exista, el tope semanal
-de §5.6 **no lo garantiza nada**.
+**Quedan dos deberes que no son de código, van juntos y conviene no perderlos**: **montar el cron** y **montar
+el CI**. F6 entrega el comando, pero quién lo llama los lunes y los fines de semana es una decisión de
+despliegue; hasta que exista, el tope semanal de §5.6 **no lo garantiza nada**. Y **no hay CI de ningún tipo**,
+con el agravante de que el código sí está preparado: la guarda de `DatabaseAvailability` falla con `CI` o
+`REQUIRE_DB` definidas y **nadie las define**, así que hoy un verde puede significar *"no se probó nada que
+toque la base"* — el texto de la salida es **idéntico** corriendo y omitiendo, y lo único que cambia es la
+duración: 5,70 s contra 0,002 s (`A-7`/H-07, medido). Al correr la batería a mano: **`REQUIRE_DB=1 swift test`,
+nunca `swift test` a secas**. Y si hace falta una señal legible por máquina, `--xunit-output` trae los
+recuentos por *target* y el motivo de cada omitido. Los dos deberes son la misma decisión de despliegue,
+porque el canario necesita exactamente lo mismo que el cron.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
 11/11 mutaciones), F4 lo repitió con **16/16**, F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre

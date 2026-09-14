@@ -149,10 +149,11 @@ dependen de eso.
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
 | **F6-bis** ✅ | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** —y con él la guarda de temporada ([D-91])— y **la resiliencia del recorrido** (`4d66aa0`). Detalle abajo | unit puro · niveles 1, 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 · [D-91] |
+| **F6-ter** | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo) | unit + integración | [D-15], [D-55], `A-5` · H-31 |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
-| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36) | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36 |
+| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -187,6 +188,27 @@ a decidir en F10 con [D-67] delante:
 - **Que el cliente compare marcas de tiempo** —*"¿ha aparecido una pasada más nueva que mi petición?"*—, que no
   toca nada del backend y es el N+1 por recarga que [D-89] descartó **a propósito**.
 
+**Y F10 hereda tres deberes más, los tres de la frontera de error** (`A-6` y `A-7`), que van juntos porque
+son el mismo sitio: hasta F10 la ingesta **no pasa por HTTP** (§2.3-b), y el `/preview` la ejecuta **en línea
+y dentro de la respuesta**.
+
+- **Los cuatro casos de `FederationError` acaban hoy en el mismo 500** (`A-6`, H-15). El fichero justifica su
+  taxonomía —*"un caso de uso tiene que poder distinguir «la fuente no contesta» de «la fuente contesta algo
+  que no entiendo»"*— y en producción **no los distingue nadie**: se lanzan en `Federation/` y se discriminan
+  solo en `Tests/`. `ProblemMiddleware`, cuyo `switch` sobre `DomainError` es exhaustivo **a propósito**, no
+  contempla `FederationError`. Hoy no se nota porque el `202` responde antes de llamar a la federación
+  ([D-88]); el `/preview` llama **dentro** de la petición, y ahí *"la RFFM está caída"* y *"la RFFM cambió de
+  formato"* merecen respuestas distintas.
+- **La guarda de tenant de §6.1 está donde no puede dispararse** (`A-6`, H-42). `tenantMismatch` existe,
+  funciona y está mapeada a **403**, pero en el camino HTTP el actor **se deriva del propio ambiente**, así que
+  la comparación es una tautología; A-6 la dejó como **puerta y cinturón**, con el cinturón abrochado en
+  Persistencia y la puerta pendiente del *claim*. F10 escribe endpoints de escritura con *"rol elevado"* en el
+  *spec*: es cuando la puerta hace falta.
+- **De los 14 códigos `Problem` que el middleware puede emitir, 3 los afirma un test** (`A-7`, H-46). La ronda
+  de A-7 fijó **por caso** los cinco casos de `ApplicationError` que la ingesta levanta —404 contra 500 contra
+  503 no son intercambiables y hasta entonces lo eran sin que la batería lo notase—, pero eso es el nivel 2.
+  **La superficie HTTP sigue sin afirmarse**, y es F10 quien la estrena.
+
 **Y F7 llega con otro deber heredado, éste de una línea** (`A-5`, H-31 → [D-90]): **no se edita una
 migración ya aplicada.** F7, F8 y F10 añaden tres tablas a un esquema que ya tiene clubes con historia, y
 `_fluent_migrations` guarda el **nombre** de cada migración, no su contenido — así que un `CHECK` corregido
@@ -195,6 +217,18 @@ club (que no). Ya ocurrió una vez, con `CreateClub`. Lo que se corrige va en un
 la lista **que le toque por FK**. La buena noticia del bloque es la otra mitad, y está medida: **el esquema de
 un club no depende de cuándo se dio de alta** —cuatro caminos distintos, un solo `md5`—, y desde `A-5` eso lo
 guarda un test (H-38) en vez de depender de que alguien lo repita a mano.
+
+**Y el deber de operación que trae A-7, que es el más barato de todos y el que más tiempo lleva pendiente:
+montar el *workflow* de integración continua** (H-07, H-49). No hay CI de ningún tipo en el repositorio, y el
+código **sí está preparado**: la guarda de `DatabaseAvailability` —los tests de BD se omiten en local pero
+**fallan** con `CI` o `REQUIRE_DB` definidas— se escribió *para* un CI que no existe. La consecuencia, medida
+en A-7: con Postgres parado, `swift test` sale **0** y sus seis renglones de resumen son **idénticos en texto
+y en recuento** a los de una pasada de verdad —el total sale de la lista, no de lo ejecutado—, así que **lo
+único que distingue *"probado"* de *"no probado"* es la duración**: 5,70 s contra 0,002 s. A-7 deja la
+propuesta entera con sus cuatro pasos medidos y la señal que hay que leer, que **no es texto**:
+`swift test --xunit-output` emite el recuento por *target* y el motivo de cada omitido. **Va con el cron**
+([D-87], §9), porque es la misma decisión de despliegue y porque el canario necesita exactamente lo mismo: un
+disparo programado y separado de la batería.
 
 **Los dos deberes de A-5 que no son de fase sino de operación**, apuntados aquí para que no se pierdan y
 decididos en §9.3 del LLD: **cerrar el *pool* de cada club** al terminar con él —hoy se registra uno por
@@ -294,6 +328,39 @@ despliegue que sigue pendiente desde F6 (§9). **Lo que sí cambió después, y 
 *crash*—. Así que el sitio donde vivirá ese `exit(n)` ya existe y ya es el dueño de la cuenta: **el comando
 decide si falló lanzando; `Run/main.swift` decide cómo se cuenta.** Lo que falta es solo **qué número** para
 cada clase de fallo, y eso lo pide el cron, no el código.
+
+#### F6-ter · el segundo freno de [D-86] bajo el arnés — **pendiente, y es lo inmediato**
+
+**La fase más pequeña de todo el plan, y está aquí por la misma razón por la que F6-bis está: la regla 2 del
+plan de auditoría no admite excepciones por tamaño.** Un arreglo que cambia una API pública deja de ser una
+corrección de auditoría, y esto la cambia: hay que poder llamar a la regla desde un test.
+
+**Qué encontró A-7** (H-45). [D-86] enmendada tiene **dos** frenos, y hasta A-7 solo uno estaba probado:
+
+| Freno | Dónde | Estado |
+|---|---|---|
+| Entre **competiciones** de un club | `IngestClubCalendars` pone `report.abortedByInfrastructure` | ✅ probado desde F6-bis, y A-3 lo mutó |
+| Entre **clubes** del recorrido | `IngestCommand` empareja `if case ApplicationError.databaseUnavailable` | ⚠️ **el lado que lanza ya tiene test** (ronda de A-7); **el que empareja, no** |
+
+El lado que lanza lo cerró la ronda de A-7 con un test de nivel 2 y aserción **sobre el caso** — mata las dos
+mutaciones que sobrevivían: cambiar el caso, y borrar la sonda entera. Lo que queda es el `if case`, y **no se
+puede probar hoy**: la unidad de trabajo se construye *dentro* de `ingest` desde `app.db(.control)` y no es
+inyectable, y provocar el fallo de verdad exige parar Postgres a mitad de un test, que `A-3` ya descartó.
+
+**Qué entrega.** Extraer la pregunta *"¿este resultado detiene el recorrido?"* como regla pura y llamarla
+desde el bucle. **El criterio no hay que inventarlo: el fichero ya tiene el hermano** —`incomplete(outcomes)`
+se separó de `run` *"porque es la regla —no el `print`— y probarla no puede exigir montar una consola"*—, así
+que esto es la misma decisión aplicada catorce líneas más arriba. Con eso, las dos mitades del freno quedan
+bajo el arnés y `D-86` deja de depender de que dos *targets* estén de acuerdo sin que nada lo compruebe.
+
+**Por qué antes de F7 y no después.** Porque F7 y F8 **no estrenan recorrido: le cuelgan trabajo**.
+`StandingRow` y `LeagueScorer` se sincronizan por el mismo `IngestClubCalendars`, así que el recorrido de
+clubes se recorre tres veces más antes de que nadie vuelva a mirarlo. Es el mismo argumento con el que F6-bis
+se adelantó a F7, y la única razón por la que esto no entró en ella es que A-3 no llegó a esta sonda.
+
+**Y una lección de A-7 que conviene tener delante al escribirla** (H-48): *antes de aceptar que algo no se
+puede probar, buscar si el proyecto ya resolvió el caso hermano*. A-6 lo aprendió con el log —declarado
+*"fuera del arnés"* cuando `CapturingLogHandler` ya existía— y aquí vuelve a pasar con el mismo desenlace.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
@@ -1063,6 +1130,14 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
   lunes y los fines de semana es una decisión de despliegue**, no de código. Hasta que exista ese cron, la
   ingesta solo corre a mano o por el `POST` del backoffice — y el tope semanal de §5.6 no está garantizado
   por nada.
+- **Montar el *workflow* de integración continua** (`A-7`, H-07 y H-49), y **va con el punto de arriba**: son
+  la misma decisión de despliegue y el canario necesita lo mismo que el cron, un disparo programado y fuera de
+  la batería (§5.5 del README). Hoy **no hay CI**, y el mecanismo que debía impedir un verde falso está
+  escrito y desconectado: la guarda de `DatabaseAvailability` falla con `CI` o `REQUIRE_DB` definidas, y nadie
+  las define. Mientras no exista, **lo único que separa *"probado"* de *"no probado"* es la disciplina de
+  correr `REQUIRE_DB=1 swift test` y mirar el reloj** — porque el texto de la salida es idéntico en los dos
+  casos, medido. La propuesta está entera en §7 del plan de auditoría, con sus cuatro pasos comprobados; lo
+  que falta es decidir cuándo.
 - **Coordenadas reales de la RFFM** para F5 en adelante — una URL de calendario de la web de la federación,
   del tipo que el administrador pegaría en `/federation-link`. Hasta F4 bastan los *fixtures* de
   `docs/Federation APIs examples/`.
