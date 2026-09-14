@@ -119,36 +119,83 @@ public struct IngestCommand: AsyncCommand {
 
         var outcomes: [TenantIngestion] = []
         for slug in tenants {
+            // **Un club que revienta no detiene a los demás** (`D-86`), igual que
+            // una competición dentro de un club. Aquí caen los fallos que no son
+            // de una pasada concreta: un *schema* sin aprovisionar, o una
+            // federación sin adaptador (`D-17`).
+            //
+            // El resultado se guarda entero —y no ya convertido en texto— porque
+            // **quien decide si el recorrido sigue es `stopsTraversal`**, y para
+            // decidirlo necesita el caso del error, que `diagnosticText` pierde.
+            let result: Result<ClubIngestionReport, any Error>
             do {
-                let report = try await useCase.execute(
-                    scope: scope,
-                    actor: ActorContext(clubSlug: try Slug(slug), isSystem: true))
-                outcomes.append(TenantIngestion(slug: slug, report: report, error: nil))
-
-                // **La caída de la base no está aislada por club** (H-23). El
-                // aislamiento de `D-86` es por competición, y lo hereda el club
-                // porque cada uno tiene su *schema*; pero el *pool*, la conexión y
-                // el Postgres son **uno solo** (§6.4). Así que cuando un club se
-                // detiene por esto, probar con el siguiente no es resiliencia: son
-                // N recorridos que tampoco van a poder dejar constancia.
-                if report.abortedByInfrastructure { break }
+                result = .success(
+                    try await useCase.execute(
+                        scope: scope,
+                        actor: ActorContext(clubSlug: try Slug(slug), isSystem: true)))
             } catch {
-                // **Un club que revienta no detiene a los demás** (`D-86`), igual
-                // que una competición dentro de un club. Aquí caen los fallos que
-                // no son de una pasada concreta: un *schema* sin aprovisionar, o
-                // una federación sin adaptador (`D-17`).
+                result = .failure(error)
+            }
+
+            switch result {
+            case .success(let report):
+                outcomes.append(TenantIngestion(slug: slug, report: report, error: nil))
+            case .failure(let error):
                 outcomes.append(
                     TenantIngestion(
-                        slug: slug, report: nil,
-                        error: diagnosticText(for: error)))
-
-                // La excepción a lo anterior, y por lo mismo que arriba: si el que
-                // falló fue el ámbito 1 del club porque la base no está, los demás
-                // clubes no tienen nada que intentar.
-                if case ApplicationError.databaseUnavailable = error { break }
+                        slug: slug, report: nil, error: diagnosticText(for: error)))
             }
+
+            // **Se apunta siempre, y solo después se pregunta si se sigue.** Las
+            // dos formas de parar —el club que se paró solo y el que ni empezó—
+            // son la misma razón, así que son **una** pregunta y **un** `break`.
+            if Self.stopsTraversal(result) { break }
         }
         return outcomes
+    }
+
+    /// **¿Este resultado detiene el recorrido de clubes?** (`D-86` enmendada)
+    ///
+    /// Está separado de `ingest` por el mismo motivo que `incomplete` está
+    /// separado de `run`: es **la regla**, no el bucle, y probarla no puede
+    /// exigir tener Postgres cayéndose a mitad de un test. Hasta F6-ter vivía
+    /// dentro del `for` en dos `if` que **no alcanzaba ningún test** —la unidad
+    /// de trabajo se construye dentro de `ingest` y no es inyectable—, así que
+    /// `D-86` dependía de que dos *targets* estuvieran de acuerdo sin que nada
+    /// lo comprobara (`A-7`/H-45).
+    ///
+    /// **Las dos formas de parar son la misma razón contada desde dos sitios**, y
+    /// por eso son una sola función y no dos:
+    ///
+    /// - el club **se recorrió** y se paró él solo (`abortedByInfrastructure`):
+    ///   la base dejó de responder entre sus competiciones;
+    /// - el club **ni empezó** porque el ámbito 1 se encontró la base caída
+    ///   (`databaseUnavailable`).
+    ///
+    /// En los dos casos lo que falta es el sitio donde se apuntan los fallos, y
+    /// el *pool*, la conexión y el Postgres son **uno solo** (§6.4): seguir con
+    /// el club siguiente no es resiliencia, son N recorridos más que tampoco van
+    /// a poder dejar constancia — justo lo que `D-86` declara inseguro.
+    ///
+    /// Lo que **no** para el recorrido es todo lo demás, y es igual de
+    /// deliberado: una competición fallida (`D-86`), un club sin adaptador
+    /// (`D-17`) o un *schema* sin aprovisionar son fallos **de ese club**, con su
+    /// constancia escrita, y frenar ahí dejaría sin sincronizar a todos los que
+    /// van detrás por orden alfabético.
+    ///
+    /// Y se pregunta por el **caso**, no por el tipo (`A-7`/H-46): cada caso de
+    /// `ApplicationError` es una decisión razonada aparte, y
+    /// `federationAdapterMissing` es del mismo tipo y significa lo contrario.
+    public static func stopsTraversal(
+        _ result: Result<ClubIngestionReport, any Error>
+    ) -> Bool {
+        switch result {
+        case .success(let report):
+            return report.abortedByInfrastructure
+        case .failure(let error):
+            if case ApplicationError.databaseUnavailable = error { return true }
+            return false
+        }
     }
 
     /// Los clubes que **no** terminaron bien, y con ellos el código de salida.
