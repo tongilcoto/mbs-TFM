@@ -128,18 +128,34 @@ extension APIHandler {
     /// `PATCH /v1/club` (§5.1). El camino de escritura completo:
     /// DTO generado → comando → Dominio (que revalida) → repositorio.
     ///
-    /// # Los errores se **devuelven**, no se lanzan
+    /// # Lo que el contrato declara se **devuelve**; el resto se lanza
     ///
-    /// Y no es una preferencia de estilo. El transporte generado (D-65) atrapa
-    /// cualquier error que salga de este método y lo convierte en **500** antes
-    /// de que ningún middleware de Vapor lo vea: `ProblemMiddleware` está *fuera*
-    /// del transporte y solo alcanza lo que ocurre antes de entrar —la
-    /// resolución de tenant, el 404 de ruta—.
+    /// Y no es una preferencia de estilo, sino la frontera entre *"esto es una
+    /// respuesta prevista"* y *"esto es un fallo"*:
     ///
-    /// La consecuencia es buena, aunque cueste descubrirla: **un código de error
-    /// que el *spec* no declara no se puede devolver**, porque no existe como
-    /// caso del `Output` generado. El contrato deja de ser una promesa y pasa a
-    /// ser el juego completo de respuestas posibles.
+    /// - **Devolver** un caso del `Output` generado es la única forma de emitir
+    ///   una respuesta **que el *spec* declara**, porque los casos son
+    ///   literalmente los códigos declarados (D-65). Un cliente generado del
+    ///   contrato la decodifica como valor tipado. Lo de aquí abajo —el 400 de
+    ///   `minProperties`, el 422 de la invariante— es eso.
+    /// - **Lanzar** vale para todo lo demás, y hay red: el transporte generado
+    ///   envuelve el error en un `ServerError` y lo **propaga**, así que
+    ///   `ProblemMiddleware` lo ve y lo traduce con su `switch` exhaustivo,
+    ///   desenvolviéndolo primero para no degradar un 422 nuestro a 500 por venir
+    ///   envuelto.
+    ///
+    /// **Aquí hubo escrito lo contrario durante tres fases** —que el transporte
+    /// convertía en 500 cualquier cosa que se lanzase *"antes de que ningún
+    /// middleware lo vea"*— y era falso: lo desmentía el propio
+    /// `ProblemMiddleware`, cuyo `case ServerError` existe justo para esto.
+    /// La corrección es de `A-6`/H-40, y lo que lo sostiene ahora es un test
+    /// (`ErrorBoundaryTests`) y no un comentario.
+    ///
+    /// La consecuencia práctica, que es la que decide al escribir un *handler*
+    /// nuevo: **no hace falta un `catch` por caso**. Solo se atrapa lo que se
+    /// quiera servir como respuesta declarada; enumerar el resto a mano duplica
+    /// el `switch` del middleware y, al ser `catch` por caso, el compilador no
+    /// avisa de lo que falte.
     public func updateClub(_ input: Operations.updateClub.Input) async throws
         -> Operations.updateClub.Output
     {

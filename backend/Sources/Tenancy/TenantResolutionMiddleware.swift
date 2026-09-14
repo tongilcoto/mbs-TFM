@@ -7,8 +7,20 @@ public import Vapor
 /// autoritativo y el subdominio es solo enrutado**, porque cualquiera puede
 /// enviar el `Host` que quiera. §7.7 lo confirma como el hueco más grande del
 /// diseño ("nada de §7 se ha ejecutado"). Cuando llegue la validación JWKS,
-/// **este middleware es el sitio donde se compara y se rechaza la discrepancia**
-/// — no otro.
+/// **este middleware es el sitio donde se compara y se rechaza la
+/// discrepancia** — es la **puerta**: corta antes de tocar datos y cubre
+/// cualquier endpoint, incluido el que no abra un ámbito de tenant.
+///
+/// - Note: Decía *"no otro"*, y eso era inexacto (`A-6`/H-42): la comparación
+///   **ya existe** un piso más abajo, en `FluentTenantUnitOfWork.resolveTenant`,
+///   que lanza `TenancyError.tenantMismatch` si el actor y el tenant ambiental
+///   discrepan. No es una duplicación que sobre, es un **cinturón** detrás de la
+///   puerta — con la diferencia de que solo se abrocha cuando alguien abre un
+///   ámbito. Lo que hay que saber al montar la auth es que **hoy la comparación
+///   del camino HTTP es una tautología**: `APIHandler.currentActor()` construye
+///   el actor *desde* `TenantContext.current`, así que compara un valor consigo
+///   mismo y `tenantMismatch` es inalcanzable. Deja de serlo en el momento en
+///   que el actor salga del *claim*, que es una línea en `currentActor()`.
 ///
 /// - Important: Se cuelga como **último** middleware de la cadena, por el
 ///   problema conocido entre `@TaskLocal` y la implementación interna de Vapor

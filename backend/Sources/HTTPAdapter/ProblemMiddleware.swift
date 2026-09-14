@@ -49,9 +49,31 @@ public struct ProblemMiddleware: AsyncMiddleware {
             return try await next.respond(to: request)
         } catch {
             let problem = translate(error)
+            // **El log va con `diagnosticText` y no solo con `report`** (`A-6`/H-43).
+            // `report(error:)` imprime la descripción del error, y la de un
+            // `PSQLError` está **enmascarada** a propósito por PostgresNIO — así
+            // que en producción, donde el `detail` de un 5xx se calla, no quedaba
+            // ni una salida con el motivo verdadero. Se conserva `report` porque
+            // añade la ubicación en el fuente, y se le pone al lado lo que de
+            // verdad se necesita para depurar.
             request.logger.report(error: error)
+            if problem.status.code >= 500 {
+                request.logger.error("\(diagnosticText(for: Self.rootCause(of: error)))")
+            }
             return try problem.response(on: request, exposesDetail: exposesInternalDetail)
         }
+    }
+
+    /// El error que de verdad interesa para depurar: si el transporte generado lo
+    /// envolvió en un `ServerError`, **el de dentro**.
+    ///
+    /// Sin desenvolver, `String(reflecting:)` refleja el envoltorio — y el
+    /// envoltorio describe a su contenido con `String(describing:)`, que es
+    /// exactamente el enmascaramiento del que se venía huyendo. La primera
+    /// versión de este arreglo caía en eso, y lo delató el propio log de los
+    /// tests: dos líneas seguidas con el mismo *"Generic description…"*.
+    private static func rootCause(of error: any Error) -> any Error {
+        (error as? ServerError)?.underlyingError ?? error
     }
 
     /// El mapa error → HTTP. **Un `switch`, no una cadena de `if`**: cuando
@@ -242,13 +264,24 @@ public struct ProblemMiddleware: AsyncMiddleware {
                            code: status.code >= 500 ? "INTERNAL" : "BAD_REQUEST",
                            title: status.code >= 500
                                ? "Error interno" : "La petición no cumple el contrato",
-                           detail: server.causeDescription,
+                           // **`causeDescription` no basta para un 5xx** (`A-6`/H-43):
+                           // el literal que trae es `"User handler threw an error."`,
+                           // que no dice nada — el motivo está en el error envuelto y
+                           // hay que pedírselo con `String(reflecting:)` porque un
+                           // `PSQLError` esconde el suyo. En los 4xx sí sirve: los
+                           // pone el propio runtime y describen qué falta del
+                           // contrato ("Missing required query parameter named: …").
+                           detail: status.code >= 500
+                               ? diagnosticText(for: server.underlyingError)
+                               : server.causeDescription,
                            base: typeBaseURI,
                            slug: status.code >= 500 ? "internal" : "bad-request")
 
         default:
+            // Mismo motivo que arriba: éste es el cajón de lo que nadie clasificó,
+            // así que es justo donde más falta hace el motivo completo.
             return Problem(status: .internalServerError, code: "INTERNAL",
-                           title: "Error interno", detail: String(describing: error),
+                           title: "Error interno", detail: diagnosticText(for: error),
                            base: typeBaseURI, slug: "internal")
         }
     }

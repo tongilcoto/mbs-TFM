@@ -50,6 +50,18 @@ extension FluentTenantUnitOfWork {
         if let ambient = TenantContext.current {
             // Si el actor y el ambiente discrepan, algo se ha cruzado. Se
             // rechaza en vez de elegir uno, que es el criterio de §6.1.
+            //
+            // **Esto es el cinturón, no la puerta** (`A-6`/H-42). §6.1 pone la
+            // comparación en `TenantResolutionMiddleware`, y ahí es donde irá
+            // cuando el *claim* exista: corta antes de tocar datos. Esta guarda
+            // solo se abrocha si alguien abre un ámbito de tenant — que hoy son
+            // todos, pero no es lo mismo que "siempre". Y **hoy no puede
+            // dispararse por HTTP**, porque `currentActor()` deriva el actor de
+            // este mismo `TenantContext`: la igualdad es una tautología hasta que
+            // el actor venga del *claim*. Se conserva por eso y porque el camino
+            // del comando (§2.3-b) llega sin ambiente, donde la rama de abajo es
+            // la que corre. Lo afirma `ErrorBoundaryTests`, con el actor
+            // construido a mano.
             guard ambient.slug == actor.clubSlug.value else {
                 throw TenancyError.tenantMismatch(
                     host: ambient.slug, claim: actor.clubSlug.value)

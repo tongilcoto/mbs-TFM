@@ -83,6 +83,16 @@ public func configure(
     // `TenantResolutionMiddleware` va el **último** de la cadena a propósito, por
     // el problema conocido entre `@TaskLocal` y la implementación interna de
     // Vapor que documenta `swift-openapi-vapor`.
+    //
+    // **Y esa restricción hace más de lo que parece: cierra el oráculo de
+    // tenants** (`A-6`/H-44). Al tener que ir la última, el middleware de auth
+    // solo puede colgarse **por fuera**, o sea que corre **antes** — así que un
+    // no autenticado se va con un **401** sin que la resolución de tenant llegue
+    // a consultar `public.tenants`. Hoy, sin auth, la API **sí** distingue un
+    // club que existe (200) de uno que no (404) sin una sola credencial, que es
+    // la superficie de enumeración que §9.10 dio por cerrada. Al reordenar esta
+    // cadena, saber que se lleva las dos cosas por delante y no solo el
+    // `@TaskLocal`.
     let routes = app.grouped(
         // El primero del todo, para que vea la petición tal cual llega y la
         // respuesta ya traducida a RFC 7807. Inerte salvo con `HTTP_TRACE=1`

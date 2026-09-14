@@ -19,12 +19,16 @@ import Logging
 /// fila**. Pide que el job pase, y la fila la escribe él con la misma política
 /// de §3.7. El cuerpo de la petición no lleva ni un solo dato de la pasada.
 ///
-/// # Los errores se **devuelven**, no se lanzan
+/// # Lo que el contrato declara se **devuelve**; el resto se lanza
 ///
-/// Igual que en `updateClub`, y por lo mismo: el transporte generado atrapa lo
-/// que se lance y lo convierte en **500** antes de que `ProblemMiddleware` lo
-/// vea. La consecuencia buena es que **un código que el *spec* no declara no se
-/// puede devolver**, porque no existe como caso del `Output`.
+/// Igual que en `updateClub`, y con su misma corrección de `A-6`/H-40: aquí
+/// decía que el transporte convertía en 500 lo que se lanzara antes de que
+/// `ProblemMiddleware` lo viese, y **es falso** — lo propaga envuelto en un
+/// `ServerError` y el middleware lo traduce. Lo que sí es cierto y es el motivo
+/// de los `catch` de abajo: **solo se puede devolver un código que el *spec*
+/// declare**, porque los casos del `Output` generado son esos códigos. Se
+/// atrapa, entonces, lo que se quiera servir como respuesta **del contrato**
+/// —los dos 404, el 501, el 502— y se deja volar lo demás.
 extension APIHandler {
 
     public func listIngestionRuns(_ input: Operations.listIngestionRuns.Input) async throws
