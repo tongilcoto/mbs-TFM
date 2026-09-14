@@ -149,7 +149,7 @@ dependen de eso.
 | **F5** ✅ | Ingesta del calendario **end-to-end** → `Round`, `OpponentClub`, `Team`, `Match`. Y el **transporte HTTP real** con su ***canario*** (detalle en §4.7) | integración, Postgres real | §3.7, §4.4 |
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
 | **F6-bis** ✅ | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** —y con él la guarda de temporada ([D-91])— y **la resiliencia del recorrido** (`4d66aa0`). Detalle abajo | unit puro · niveles 1, 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 · [D-91] |
-| **F6-ter** | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
+| **F6-ter** ✅ | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
 | **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo) | unit + integración | [D-15], [D-55], `A-5` · H-31 |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
@@ -329,7 +329,7 @@ despliegue que sigue pendiente desde F6 (§9). **Lo que sí cambió después, y 
 decide si falló lanzando; `Run/main.swift` decide cómo se cuenta.** Lo que falta es solo **qué número** para
 cada clase de fallo, y eso lo pide el cron, no el código.
 
-#### F6-ter · el segundo freno de [D-86] bajo el arnés — **pendiente, y es lo inmediato**
+#### F6-ter · el segundo freno de [D-86] bajo el arnés — **entregada** (2026-09-14)
 
 **La fase más pequeña de todo el plan, y está aquí por la misma razón por la que F6-bis está: la regla 2 del
 plan de auditoría no admite excepciones por tamaño.** Un arreglo que cambia una API pública deja de ser una
@@ -361,6 +361,52 @@ se adelantó a F7, y la única razón por la que esto no entró en ella es que A
 **Y una lección de A-7 que conviene tener delante al escribirla** (H-48): *antes de aceptar que algo no se
 puede probar, buscar si el proyecto ya resolvió el caso hermano*. A-6 lo aprendió con el log —declarado
 *"fuera del arnés"* cuando `CapturingLogHandler` ya existía— y aquí vuelve a pasar con el mismo desenlace.
+
+**Qué entregó, y es exactamente lo que la fila prometía: una función, su test y nada más.**
+
+- **`IngestCommand.stopsTraversal(_:)`**, que recibe un `Result<ClubIngestionReport, any Error>` —el desenlace
+  de **un club**— y contesta sí o no. Los dos frenos entran por la misma puerta porque **son la misma razón
+  contada desde dos sitios**: el club que se recorrió y se paró solo (`abortedByInfrastructure`) y el que ni
+  empezó porque el ámbito 1 se encontró la base caída (`databaseUnavailable`). En los dos falta el sitio donde
+  se apuntan los fallos, y el *pool*, la conexión y el Postgres son uno solo (§6.4).
+- **El bucle pasa de dos `if` a uno**, y de dos `break` a uno. El desenlace se guarda **entero** —antes el
+  `catch` lo convertía en texto en el acto— porque quien decide si el recorrido sigue necesita **el caso** del
+  error, y `diagnosticText` lo pierde. Se apunta siempre, y solo después se pregunta si se sigue.
+- **Cuatro tests de nivel 1** (`IngestTraversalStopTests`), en dos pares. Los pares no son simetría decorativa:
+  [D-86] es una decisión con **dos mitades inseparables** —*"se continúa y se apunta"* y *"se para cuando no se
+  puede apuntar"*—, así que probar solo que se para dejaría pasar un freno que frena siempre, que es volver a
+  antes de [D-86].
+
+**El ciclo de §5.1, entero y con el esqueleto.** El esqueleto fue `return false` —*"nunca se para"*, que es
+literalmente la implementación ingenua que la enmienda de [D-86] existe para prohibir—, y contra él los dos
+tests de *"sí para"* fallaron **por su aserción**, con la expectativa delante. Los otros dos pasaron desde el
+esqueleto, y eso también es información: son la mitad que ya estaba bien y que había que no romper.
+
+**Cinco mutaciones, cuatro cazadas — y la quinta es el borde de la fase, no un descuido.**
+
+| Se rompe | Resultado | Quién la caza |
+|---|---|---|
+| **M1** · la rama de éxito devuelve `false` | **cazada** | `un club que abortó por infraestructura para el recorrido` |
+| **M2** · `databaseUnavailable` → `federationAdapterMissing` | **cazada** | `databaseUnavailable para el recorrido` **y** `cualquier otro fallo no para el recorrido` — el par entero, que es para lo que existe |
+| **M3** · la rama de fallo desaparece entera | **cazada** | `databaseUnavailable para el recorrido` — es la M1c de `A-7` un piso más arriba, y allí también la cazó el test del extremo que lanza |
+| **M4** · `stopsTraversal` devuelve `true` siempre | **cazada, con seis testigos** | los dos de *"no para"* de nivel 1 **y cuatro de nivel 3** —`un club sin adaptador no detiene el recorrido de los demás` entre ellos—. Es la M1b de `A-7`, que ya se cazaba; ahora además se caza sin Docker |
+| **M5** · el bucle deja de llamar a la regla | **sobrevive** | nadie |
+
+**M5 es el residuo declarado, y conviene que esté escrito para que nadie lo confunda con cobertura.** Lo que
+esta fase pone bajo el arnés es **la regla**; lo que queda fuera es **el cable** —la línea
+`if Self.stopsTraversal(result) { break }`—, y queda fuera por lo mismo que lo estaba todo antes: la unidad de
+trabajo se construye dentro de `ingest` desde `app.db(.control)` y no es inyectable, así que ningún test puede
+hacer que un club devuelva `databaseUnavailable` de verdad. La diferencia con el punto de partida no es
+pequeña: antes el freno **era** el cable —dos `if` dentro del bucle, sin regla que nombrar y sin un solo test
+que los alcanzara—, y `D-86` dependía de que dos *targets* estuvieran de acuerdo sin testigo; ahora el acuerdo
+está afirmado por su nombre y lo único no observado es una línea de cableado con un solo camino. Cerrar M5 exige **la otra salida que `A-7` ya había identificado y descartado
+para esta fase** —una unidad de trabajo inyectable en `ingest`, más mover `SwitchableUnitOfWork` de
+`Tests/ApplicationTests/IngestionFakes.swift` a `TestSupport`—, que es otra API pública y, por la regla 2, otra
+mini-fase. **No se hace aquí**: la fila de esta decía *"una función, su test y nada más"*.
+
+**304 tests** (300 → 304), 0 fallos, 1 omitido —el canario, que está fuera de la batería por diseño—, medidos
+con `REQUIRE_DB=1 swift test --xunit-output`: **7+64+51+105+53+24**, y los dos *targets* de BD en **6,46 s** y
+**3,46 s**, que es el testigo de H-07 de que corrieron.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 

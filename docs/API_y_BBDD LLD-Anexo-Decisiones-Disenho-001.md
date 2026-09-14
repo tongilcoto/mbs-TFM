@@ -273,6 +273,15 @@ mantener viva una transacción durante la latencia de un tercero; el intercambio
 > base responda"*. Con la base caída, la única señal que sobrevive es el **código de salida** del comando y su
 > informe por consola. Convertir eso en un aviso que alguien lea es la misma decisión de despliegue que el cron
 > de §5.6, que sigue pendiente.
+>
+> **Apostilla del 2026-09-14 · los dos frenos, y quién los vigila.** Esta enmienda dejó **dos**: el de dentro de
+> un club —entre competiciones, `report.abortedByInfrastructure`— y el de **entre clubes**. El bloque `A-7` del
+> plan de auditoría (H-45) midió que solo el primero tenía testigo: el segundo emparejaba un caso de error
+> **entre dos *targets*** y ningún test ejecutaba ni uno de sus dos extremos. La ronda de A-7 cerró el lado que
+> lanza; **F6-ter** cerró el que decide, extrayendo la pregunta *"¿este resultado detiene el recorrido?"* como
+> regla con nombre (`IngestCommand.stopsTraversal(_:)`). Los dos frenos entran hoy por la misma puerta, que es
+> lo que esta entrada venía diciendo de ellos: **son la misma razón contada desde dos sitios**. Lo que sigue sin
+> testigo es la línea que llama a la regla, y eso está escrito en Plan §4.1 como borde de la fase.
 
 **Qué hay que decidir.** [D-83] deja la pasada de **una** competición atómica, y F6 la pone dentro de dos
 bucles: por competición del club, y por club del plano de control (§4.7). La pregunta que §9.3 dejó abierta

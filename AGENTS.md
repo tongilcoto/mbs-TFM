@@ -235,7 +235,9 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**300 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+Y las dos que la auditoría añadió: **F6-bis** —el sobre del puerto de federación y la resiliencia del
+recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés.
+**304 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -395,13 +397,17 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6 y **F6-bis** entregadas —la fase que no estaba prevista y que trajo la auditoría—, lo inmediato es
-**F6-ter**, y después F7. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su último
-bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter es una función y su test**: extraer de
-`IngestCommand` la pregunta *"¿este resultado detiene el recorrido?"*, porque `D-86` enmendada tiene **dos**
-frenos y el del recorrido de **clubes** empareja un caso de error entre dos *targets* sin que nada lo
-compruebe (`A-7`/H-45). Va antes de F7 por el mismo argumento que F6-bis: F7 y F8 **no estrenan recorrido, le
-cuelgan trabajo**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
+Con F0–F6, **F6-bis** y **F6-ter** entregadas —las dos fases que no estaban previstas y que trajo la
+auditoría—, lo inmediato es **F7**. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su
+último bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter fue una función y su test**:
+`IngestCommand.stopsTraversal(_:)`, la pregunta *"¿este resultado detiene el recorrido?"* sacada del bucle,
+porque `D-86` enmendada tiene **dos** frenos y el del recorrido de **clubes** emparejaba un caso de error entre
+dos *targets* sin que nada lo comprobara (`A-7`/H-45). Ahora los dos entran por la misma puerta —son la misma
+razón contada desde dos sitios— y el desenlace del club viaja **entero** hasta la decisión, porque
+`diagnosticText` pierde el caso del error. **Lo que sigue fuera del arnés, y está declarado**: el *cable* —la
+línea que llama a la regla—, que solo se cierra haciendo inyectable la unidad de trabajo de `ingest`; la
+**regla** sí está afirmada por su nombre. Iba antes de F7 por el mismo argumento que F6-bis: F7 y F8 **no
+estrenan recorrido, le cuelgan trabajo**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
 recorrido** (`4d66aa0`) y **el sobre del puerto**, que dejó `FederationRound.label` fuera —no lo leía nadie— y
 `seasonLabel` **opcional** —la FCF no la publica y en la RFFM es el eco de nuestro propio parámetro—, más la
 guarda de temporada de `D-91`. Al añadirle `fetchStandings` y `fetchScorers`: **no copiar la forma del
@@ -429,7 +435,9 @@ porque el canario necesita exactamente lo mismo que el cron.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
 11/11 mutaciones), F4 lo repitió con **16/16**, F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre
-**35 ciclos**, y F6 con **23/23**, y F6-bis con **8/8** —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
+**35 ciclos**, y F6 con **23/23**, F6-bis con **8/8** y F6-ter con **4/5 — y la que sobrevive es el borde
+declarado de la fase, no un descuido**: lo que queda sin testigo es la línea que *llama* a la regla, porque la
+unidad de trabajo de `ingest` no es inyectable; la regla en sí tiene sus cuatro —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
 test"**, una de ellas seria: *"la competición que nunca se sincronizó no entra"* pasaba toda la batería, y
 significaba que una competición recién dada de alta se quedaría esperando para siempre. Ningún rojo la habría
 encontrado, porque ningún test tenía motivo para existir hasta que la mutación preguntó. F5 aportó una lectura que no se había dado: una mutación superviviente son *"falta un test"* o
