@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **300 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**, más **F6-bis** y **F6-ter**. **304 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -46,7 +46,7 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 300 tests, ~5 s con Docker levantado
+swift test                        # 304 tests, ~5 s con Docker levantado
 ```
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
@@ -406,6 +406,7 @@ simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería
 | F6 · el recorrido y sus argumentos | `'IngestClubCalendars\|IngestArguments'` | no |
 | F6 · el recorrido por tenant | `TenantTraversal` | **sí** |
 | F6 · los dos endpoints | `IngestionEndpoint` | **sí** |
+| F6-ter · el freno del recorrido de clubes | `IngestTraversalStop` | no |
 
 > **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
 > del `@Test`—, y de ahí salen tres sorpresas. **Arrastra tests de suites que no esperas**, así que las
