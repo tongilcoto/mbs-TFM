@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **293 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **297 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -46,7 +46,7 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 293 tests, ~5 s con Docker levantado
+swift test                        # 297 tests, ~5 s con Docker levantado
 ```
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
