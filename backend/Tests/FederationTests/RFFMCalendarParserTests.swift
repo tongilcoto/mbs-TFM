@@ -62,8 +62,12 @@ struct RFFMCalendarParserTests {
     func roundNumberComesFromCodjornada() throws {
         let calendar = try parse()
         #expect(calendar.rounds.map(\.number) == Array(1...34))
-        #expect(calendar.rounds[0].label == "1 (13-09-2026)")
-        #expect(calendar.rounds[33].label == "34 (06-06-2027)")
+
+        // **El rótulo ya no se transporta** (F6-bis, H-08): no lo leía nadie, y
+        // la FCF no tiene equivalente. Lo que este test guarda sigue siendo lo
+        // importante: que el número **no** sale de ese rótulo. Si alguien
+        // "arregla" el parser leyendo `jornada`, `Int("1 (13-09-2026)")` da
+        // `nil` y la jornada no se crea — se vería aquí, no en producción.
     }
 
     /// §F.7: `currentRound` viene en el calendario y la app **no lo usa**. Es el
@@ -82,7 +86,30 @@ struct RFFMCalendarParserTests {
         let calendar = try parse()
         #expect(calendar.competitionName == "PREFERENTE AFICIONADO")
         #expect(calendar.groupLabel == "Grupo 1")
-        #expect(calendar.seasonLabel.value == "2026/27")
+        // Opcional desde F6-bis (H-08), pero la RFFM la publica: aquí tiene que
+        // llegar con valor, y el `nil` se reserva para *"la fuente no lo dijo"*.
+        #expect(calendar.seasonLabel?.value == "2026/27")
+    }
+
+    /// **H-10, y es la razón de que `seasonLabel` sea opcional**: la etiqueta es
+    /// campo de sobre y su único lector es una herramienta de CLI, así que un
+    /// rótulo que no se entiende **no puede tumbar el calendario entero**.
+    ///
+    /// Antes de F6-bis, `RFFMSeasonLabel.parse` lanzaba dentro de la expresión
+    /// que construye el `FederationCalendar`: dos años no consecutivos
+    /// —`"2026-2028"`, que `SeasonLabel` rechaza por `D-71`— se llevaban por
+    /// delante 34 jornadas y 306 partidos **ya parseados**.
+    @Test("una temporada con años no consecutivos deja el campo vacío, no tumba la pasada (H-10)")
+    func anUnparseableSeasonLabelDegradesToNil() throws {
+        let roto = Self.fixture.replacingOccurrences(
+            of: #""temporada":"2026-2027""#, with: #""temporada":"2026-2028""#)
+        #expect(roto != Self.fixture, "el volcado ya no trae la temporada donde se creía")
+
+        let calendar = try RFFMCalendarParser.parse(roto)
+
+        #expect(calendar.seasonLabel == nil)
+        #expect(calendar.rounds.count == 34, "el resto del calendario tiene que llegar entero")
+        #expect(calendar.competitionName == "PREFERENTE AFICIONADO")
     }
 
     // ── El partido ───────────────────────────────────────────────────────────

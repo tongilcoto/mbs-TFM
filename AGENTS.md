@@ -71,6 +71,16 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   el eje de la temporada, tapado ahora en el de la competición. **No es `Participation`** (`D-27`): la
   escribe el club, no la ingesta. Al tocarla: el `UNIQUE` de tres columnas va con **`NULLS NOT DISTINCT`**, y
   la coherencia con la temporada es una **FK compuesta**, no una guarda.
+- **Una migración aplicada es inmutable, y el esquema de un club no depende de cuándo se dio de alta**
+  (`D-90`, §4.6). Lo segundo está **medido** y es la buena noticia: un alta limpia y un club migrado en tres
+  lotes de tres días dan el mismo esquema **byte a byte** —cuatro caminos, un solo `md5`—, y no por
+  disciplina: `provision-tenant` no tiene juego propio, llama a la misma función que `migrate-tenants`. Lo
+  primero es la única vía que queda para romperlo, y **ya pasó una vez**: `_fluent_migrations` guarda el
+  **nombre** de la migración, no su contenido, así que un *schema* que ya la aplicó **no recibe jamás** una
+  edición posterior de su `prepare`, sin error y sin aviso. Al añadir una tabla en F7/F8/F10: se añade al
+  final de la lista **que le toque por FK**, y lo que haya que corregir de una vieja va en una migración
+  **nueva**. Y si el recorrido encuentra un club roto **se para** —correcto por `D-86`: una migración a
+  medias *es* estado a medias— diciendo de quién era.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
@@ -92,15 +102,30 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   del 2026-09-02**). Lo que la entrada decía —que la RFFM reutiliza los códigos entre temporadas— **es falso**:
   cada temporada recibe un bloque nuevo (PREFERENTE AFICIONADO G1 es `24037456` en 25-26 y `26737701` en
   26-27). Lo cierto, medido: **`competicion`+`grupo` lo determinan todo y `temporada` se ignora**. La
-  conclusión no cambia —la guarda sigue haciendo falta— pero **el riesgo principal sí**: ya no es la misma
-  coordenada en otra temporada, es **la coordenada que se queda vieja**, que devuelve el calendario del año
-  pasado para siempre y sin error. Y **no da 404 nunca** en esa ruta:
-  con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con una `temporada`
-  inexistente responde `200` con el calendario de otra e **ignora el parámetro**. Consecuencias: confirma con
-  dato la regla de §3.5 (`Competition` se identifica por `season_id` **+** `federation_group_id`); obliga a la
-  ingesta a **comparar el nombre contra `Competition.federation_name` antes de escribir**; y le da al canario
-  de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier adaptador de federación: **una premisa
-  sobre un sistema de terceros no se hereda, se mide** — ésta llevaba escrita desde F2 y era falsa.
+  conclusión no cambia —la guarda sigue haciendo falta— pero **el riesgo principal sí**. Y ojo con cómo se
+  cuenta, que es fácil contarlo mal: **los códigos no caducan solos con el tiempo.** Siguen apuntando
+  exactamente a lo mismo —*"Primera Cadete Grupo 4 **de 25-26**"*—, y servir eso es correcto. Lo que pasa es
+  que **la coordenada lleva la temporada dentro y nada en la respuesta lo dice**, así que el fallo lo comete
+  un humano en el alta: al llegar la temporada nueva se copian los códigos del año pasado y la ingesta
+  sincroniza 2025 en una competición marcada como 2026, sin un solo error. Y **no da 404 nunca** en esa ruta:
+  con `competicion`/`grupo` inexistentes responde `200` con `calendar: null`, y con otra `temporada`
+  responde `200` con el calendario **de los mismos códigos** e **ignora el parámetro**. Consecuencias:
+  confirma con dato la regla de §3.5 (`Competition` se identifica por `season_id` **+**
+  `federation_group_id`); obliga a la ingesta a **comparar el nombre contra `Competition.federation_name`
+  antes de escribir**; y le da al canario de Plan §4.4 **cuatro** señales en vez de dos. Al tocar cualquier
+  adaptador de federación: **una premisa sobre un sistema de terceros no se hereda, se mide** — ésta llevaba
+  escrita desde F2 y era falsa.
+- **Y el nombre no distingue temporadas, así que hacen falta dos guardas y no una** (`D-91`,
+  [Anexo RFFM §F.17], medido el 2026-09-13 sobre PRIMERA CADETE G4). Los rótulos `competicion` y `grupo` son
+  **idénticos** en 25-26 y 26-27, de modo que la guarda del nombre caza *"me equivoqué de competición"* y es
+  **ciega** al error que ocurre cada verano, *"me traje los códigos del año pasado"*. La señal que no puede
+  ser eco son **las fechas**, que se van un año entero: la pasada exige que **la mediana** de las fechas del
+  calendario caiga en la ventana de la `Season`. **Mediana** y no *"todas dentro"* —un aplazado a julio
+  tumbaría la competición para siempre— ni *"que solapen"* —un solo aplazado la haría pasar—. Las dos guardas
+  son complementarias, y **la de las fechas vale también para la FCF**, que no publica nombre pero sí fecha.
+  Y una lección de método que ya va por la tercera vez: **el dato estaba medido desde el 2026-09-02 y la
+  conclusión que se sacó de él era incompleta** — la tabla de §F.16 ya mostraba el mismo nombre en las cuatro
+  filas. *Hay que volver a leer una medición cuando se construya algo encima.*
 - **Y medir no basta cuando la fuente te devuelve tu propio parámetro** (`D-84` enmendada,
   [Anexo RFFM §F.16]). El `calendar.temporada` de la RFFM **es el eco de lo que le pediste**, no un dato suyo:
   con los códigos de 2025-26 y `temporada=22` responde *"2026-2027"* y sirve los partidos de 2025-26. Así se
@@ -210,7 +235,7 @@ calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **polític
 sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punta a punta** —las cuatro
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
-**279 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+**300 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -285,7 +310,14 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy: clubs -> seasons -> competitions
+                                          # hoy son OCHO migraciones por tenant:
+                                          #   clubs -> seasons -> opponent_clubs ->
+                                          #   teams -> competitions -> rounds ->
+                                          #   matches -> ingestion_runs
+                                          #   --revert exige --yes: borra las tablas de
+                                          #   TODOS (o del que diga -t). Si uno falla, el
+                                          #   recorrido SE PARA y el error dice de qué
+                                          #   club fue (`D-86`, §9.3)
 swift run Run seed-competition -t atleti -u "<URL del calendario>" \
                                -c cadete -g masculino
                                           # HERRAMIENTA, no contrato: da de alta la
@@ -298,8 +330,11 @@ swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -c <uuid>         solo esa competición
                                           #   --season <uuid>   esa temporada, aunque no sea la vigente
                                           #   --force           ignora el antirrebote de 6 h
-                                          # Sale con código != 0 si algo falló: es la
-                                          # única señal que ve el cron (`D-86`)
+                                          # Sale con código 1 si algo falló: es la
+                                          # única señal que ve el cron (`D-86`).
+                                          # Antes salía 133 —el SIGTRAP de un
+                                          # `throw` en el nivel superior—, que no
+                                          # se distingue de un crash (`A-5`/H-39)
 swift run Run serve
 curl http://atleti.localhost:8080/v1/club   # el club va en el subdominio (§6.1)
 curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>"   # el registro (D-85)
@@ -360,20 +395,41 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6 entregadas, lo inmediato es **F7: `StandingRow`, con la clasificación histórica de la RFFM y el
+Con F0–F6 y **F6-bis** entregadas —la fase que no estaba prevista y que trajo la auditoría—, lo inmediato es
+**F6-ter**, y después F7. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su último
+bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter es una función y su test**: extraer de
+`IngestCommand` la pregunta *"¿este resultado detiene el recorrido?"*, porque `D-86` enmendada tiene **dos**
+frenos y el del recorrido de **clubes** empareja un caso de error entre dos *targets* sin que nada lo
+compruebe (`A-7`/H-45). Va antes de F7 por el mismo argumento que F6-bis: F7 y F8 **no estrenan recorrido, le
+cuelgan trabajo**. F6-bis era *"arréglalo antes de que F7 y F8 lo copien"* en dos mitades: **la resiliencia del
+recorrido** (`4d66aa0`) y **el sobre del puerto**, que dejó `FederationRound.label` fuera —no lo leía nadie— y
+`seasonLabel` **opcional** —la FCF no la publica y en la RFFM es el eco de nuestro propio parámetro—, más la
+guarda de temporada de `D-91`. Al añadirle `fetchStandings` y `fetchScorers`: **no copiar la forma del
+sobre**. `/api/standings` y `/api/scorers` de la RFFM traen `competicion` y `grupo` y sus equivalentes de la
+FCF no, así que un DTO modelado por analogía reproduce H-08 y H-09 **dos veces más** antes de que exista el
+adaptador catalán.
+
+**F7: `StandingRow`, con la clasificación histórica de la RFFM y el
 *fallback* calculado desde `Match`** (`D-15`, `D-55`). **Los tres deberes que F6 arrastraba están hechos**: el
 recorrido continúa tras un fallo y la unidad de aislamiento es la competición (`D-86`), la cadencia vive fuera
 del proceso y el código trae un antirrebote que no es el tope semanal (`D-87`), y el registro tiene su `GET`
 —más un `POST` que dispara la pasada, que no estaba previsto y lo pidió el desarrollador para controlarlo
 desde la web (`D-88`)—.
 
-**Queda un deber que no es de código y conviene no perderlo**: **montar el cron**. F6 entrega el comando, pero
-quién lo llama los lunes y los fines de semana es una decisión de despliegue; hasta que exista, el tope semanal
-de §5.6 **no lo garantiza nada**.
+**Quedan dos deberes que no son de código, van juntos y conviene no perderlos**: **montar el cron** y **montar
+el CI**. F6 entrega el comando, pero quién lo llama los lunes y los fines de semana es una decisión de
+despliegue; hasta que exista, el tope semanal de §5.6 **no lo garantiza nada**. Y **no hay CI de ningún tipo**,
+con el agravante de que el código sí está preparado: la guarda de `DatabaseAvailability` falla con `CI` o
+`REQUIRE_DB` definidas y **nadie las define**, así que hoy un verde puede significar *"no se probó nada que
+toque la base"* — el texto de la salida es **idéntico** corriendo y omitiendo, y lo único que cambia es la
+duración: 5,70 s contra 0,002 s (`A-7`/H-07, medido). Al correr la batería a mano: **`REQUIRE_DB=1 swift test`,
+nunca `swift test` a secas**. Y si hace falta una señal legible por máquina, `--xunit-output` trae los
+recuentos por *target* y el motivo de cada omitido. Los dos deberes son la misma decisión de despliegue,
+porque el canario necesita exactamente lo mismo que el cron.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
 11/11 mutaciones), F4 lo repitió con **16/16**, F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre
-**35 ciclos**, y F6 con **23/23** — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
+**35 ciclos**, y F6 con **23/23**, y F6-bis con **8/8** —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
 test"**, una de ellas seria: *"la competición que nunca se sincronizó no entra"* pasaba toda la batería, y
 significaba que una competición recién dada de alta se quedaría esperando para siempre. Ningún rojo la habría
 encontrado, porque ningún test tenía motivo para existir hasta que la mutación preguntó. F5 aportó una lectura que no se había dado: una mutación superviviente son *"falta un test"* o
@@ -414,3 +470,4 @@ El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude 
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

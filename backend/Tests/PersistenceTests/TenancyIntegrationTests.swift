@@ -110,10 +110,17 @@ struct TenancyIntegrationTests {
                     """).first(decodingColumn: "present", as: Bool.self) ?? false
             }
 
-            // Las tres tablas de dominio que hay hoy (F0 + F1). Cada fase suma
-            // aquí las suyas: es el sitio donde se comprueba que una migración
-            // nueva no se ha colado en `public` por olvidar el `space` (§4.7).
-            for table in ["clubs", "seasons", "competitions"] {
+            // **Las ocho tablas de dominio que hay hoy** (F0, F1 y F5). Cada fase
+            // suma aquí las suyas: es el sitio donde se comprueba que una
+            // migración nueva no se ha colado en `public` por olvidar el `space`
+            // (§4.7). Las cinco de F5 llevaban sin aparecer desde que se
+            // escribieron, y lo encontró la ronda de arreglos de `A-5`: el
+            // comentario pedía sumarlas y nadie las sumó, que es la forma de
+            // fallar de un arnés que se amplía a mano.
+            for table in [
+                "clubs", "seasons", "opponent_clubs", "teams",
+                "competitions", "rounds", "matches", "ingestion_runs",
+            ] {
                 #expect(try await exists(table, in: "\(Self.prefix)ddl"), "falta \(table)")
                 #expect(!(try await exists(table, in: "public")),
                         "`\(table)` se coló en public: revisa el `space` de su Record")

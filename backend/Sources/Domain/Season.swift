@@ -88,6 +88,56 @@ extension Season {
     }
 
     /// Deshace el archivado.
+    /// Comprueba que el calendario que llega es **de esta temporada** (`D-91`).
+    ///
+    /// # Por qué hace falta una segunda guarda, y por qué no la vio F5
+    ///
+    /// `requireSameSource` (`D-84`) compara el **nombre** de la competición, y
+    /// eso caza *"me he equivocado de competición"*. No caza el error que ocurre
+    /// **cada verano** —copiar los códigos del año pasado al dar de alta la
+    /// temporada nueva—, porque la coordenada de la RFFM **lleva la temporada
+    /// dentro** (cada año es un bloque nuevo) y **el nombre es idéntico entre
+    /// temporadas**: medido el 2026-09-13 sobre PRIMERA CADETE Grupo 4, los
+    /// rótulos `competicion` y `grupo` no cambian de un año a otro
+    /// ([Anexo RFFM §F.17]). Ni el nombre ni la etiqueta de temporada valen: esa
+    /// etiqueta es **el eco del parámetro que enviamos** (§F.16), así que
+    /// compararla con la nuestra sería comparar un dato consigo mismo.
+    ///
+    /// # La mediana, y por qué no las otras dos formas
+    ///
+    /// Lo que no puede ser eco son **las fechas de los partidos**, que en un
+    /// desfase de temporada se van doce meses. La regla es *"la temporada de un
+    /// calendario es la de **la mitad** de sus partidos"*:
+    ///
+    /// - **Todas dentro** tumbaría la competición entera —y para siempre— por un
+    ///   partido aplazado a julio, que es un caso real y no se va a deshacer.
+    /// - **Que los rangos solapen** tolera el aplazado pero depende de **un solo
+    ///   valor**: un calendario de 25-26 con un partido reprogramado en julio de
+    ///   2026 solaparía con la 26-27 y pasaría la guarda.
+    /// - Un **umbral** (*"el 80% dentro"*) obliga a justificar un número que
+    ///   ningún dato justifica.
+    ///
+    /// La mediana no tiene umbral que discutir y es inmune a los extremos.
+    ///
+    /// # Un calendario sin fechas no opina
+    ///
+    /// Una competición recién publicada puede no tener ni una fecha. Eso **no es
+    /// evidencia de nada**, y pararla sería el error que `D-56` evita: tratar un
+    /// silencio como un dato.
+    ///
+    /// - Parameter matchDates: las fechas de **todos** los partidos del
+    ///   calendario que llega, en cualquier orden.
+    public func requireOwnsCalendar(matchDates: [Date]) throws {
+        guard !matchDates.isEmpty else { return }
+        // Con un número **par** de fechas se toma la superior de las dos
+        // centrales. Da igual cuál: la regla no depende de un día, y lo que
+        // separa una temporada de otra son doce meses.
+        let median = matchDates.sorted()[matchDates.count / 2]
+        guard median < startDate || median > endDate else { return }
+        throw DomainError.federationSeasonMismatch(
+            seasonLabel: label.value, calendarMedian: median)
+    }
+
     public func restored() throws -> Season {
         try Season(
             id: id, label: label, federationSeasonID: federationSeasonID,

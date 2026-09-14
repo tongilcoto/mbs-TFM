@@ -27,6 +27,17 @@ public struct ProblemMiddleware: AsyncMiddleware {
     /// PostgreSQL o una traza filtran estructura interna al cliente.
     private let exposesInternalDetail: Bool
 
+    /// Fechas de los problemas en ISO y en UTC (`D-91`). El Dominio entrega
+    /// `Date` sin formatear porque no conoce zona ni idioma (§5.4); el formato
+    /// es cosa de la frontera, y aquí es el mismo que usa el contrato.
+    private static let isoDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
     public init(typeBaseURI: String = "https://api.example.com/problems",
                 exposesInternalDetail: Bool) {
         self.typeBaseURI = typeBaseURI
@@ -38,9 +49,31 @@ public struct ProblemMiddleware: AsyncMiddleware {
             return try await next.respond(to: request)
         } catch {
             let problem = translate(error)
+            // **El log va con `diagnosticText` y no solo con `report`** (`A-6`/H-43).
+            // `report(error:)` imprime la descripción del error, y la de un
+            // `PSQLError` está **enmascarada** a propósito por PostgresNIO — así
+            // que en producción, donde el `detail` de un 5xx se calla, no quedaba
+            // ni una salida con el motivo verdadero. Se conserva `report` porque
+            // añade la ubicación en el fuente, y se le pone al lado lo que de
+            // verdad se necesita para depurar.
             request.logger.report(error: error)
+            if problem.status.code >= 500 {
+                request.logger.error("\(diagnosticText(for: Self.rootCause(of: error)))")
+            }
             return try problem.response(on: request, exposesDetail: exposesInternalDetail)
         }
+    }
+
+    /// El error que de verdad interesa para depurar: si el transporte generado lo
+    /// envolvió en un `ServerError`, **el de dentro**.
+    ///
+    /// Sin desenvolver, `String(reflecting:)` refleja el envoltorio — y el
+    /// envoltorio describe a su contenido con `String(describing:)`, que es
+    /// exactamente el enmascaramiento del que se venía huyendo. La primera
+    /// versión de este arreglo caía en eso, y lo delató el propio log de los
+    /// tests: dos líneas seguidas con el mismo *"Generic description…"*.
+    private static func rootCause(of error: any Error) -> any Error {
+        (error as? ServerError)?.underlyingError ?? error
     }
 
     /// El mapa error → HTTP. **Un `switch`, no una cadena de `if`**: cuando
@@ -81,6 +114,22 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "La coordenada apunta a otra competición",
                                detail: "se esperaba '\(expected)' y la fuente devolvió '\(found)'",
                                base: typeBaseURI, slug: "federation-source-mismatch")
+
+            case .federationSeasonMismatch(let seasonLabel, let median):
+                // **502, igual que su hermano de arriba y por la misma razón**
+                // (`D-91`): la coordenada es válida, la fuente contesta, y lo que
+                // devuelve es el calendario de **otra temporada**. El cliente no
+                // ha mandado nada mal; lo que está mal es la coordenada guardada,
+                // y eso no lo arregla reintentar con otro cuerpo.
+                //
+                // **La fecha se formatea aquí y no en el Dominio** (§5.4): en ISO
+                // y en UTC, que es como viaja todo en el contrato, y no en el
+                // idioma ni la zona de quien lea el problema.
+                return Problem(status: .badGateway, code: "FEDERATION_SEASON_MISMATCH",
+                               title: "El calendario es de otra temporada",
+                               detail: "la temporada es '\(seasonLabel)' y el calendario "
+                                   + "tiene su mitad en \(Self.isoDay.string(from: median))",
+                               base: typeBaseURI, slug: "federation-season-mismatch")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────
@@ -215,13 +264,24 @@ public struct ProblemMiddleware: AsyncMiddleware {
                            code: status.code >= 500 ? "INTERNAL" : "BAD_REQUEST",
                            title: status.code >= 500
                                ? "Error interno" : "La petición no cumple el contrato",
-                           detail: server.causeDescription,
+                           // **`causeDescription` no basta para un 5xx** (`A-6`/H-43):
+                           // el literal que trae es `"User handler threw an error."`,
+                           // que no dice nada — el motivo está en el error envuelto y
+                           // hay que pedírselo con `String(reflecting:)` porque un
+                           // `PSQLError` esconde el suyo. En los 4xx sí sirve: los
+                           // pone el propio runtime y describen qué falta del
+                           // contrato ("Missing required query parameter named: …").
+                           detail: status.code >= 500
+                               ? diagnosticText(for: server.underlyingError)
+                               : server.causeDescription,
                            base: typeBaseURI,
                            slug: status.code >= 500 ? "internal" : "bad-request")
 
         default:
+            // Mismo motivo que arriba: éste es el cajón de lo que nadie clasificó,
+            // así que es justo donde más falta hace el motivo completo.
             return Problem(status: .internalServerError, code: "INTERNAL",
-                           title: "Error interno", detail: String(describing: error),
+                           title: "Error interno", detail: diagnosticText(for: error),
                            base: typeBaseURI, slug: "internal")
         }
     }

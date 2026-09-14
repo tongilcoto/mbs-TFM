@@ -25,7 +25,40 @@ public struct MigrateTenantsCommand: AsyncCommand {
         @Flag(name: "revert", help: "Revertir todos los lotes en lugar de aplicarlos.")
         public var revert: Bool
 
+        /// Igual que el `migrate` de serie de Fluent, y por el mismo motivo
+        /// (`A-5`, H-32): `--revert` borra las tablas de **todos** los clubes.
+        @Flag(name: "yes", short: "y", help: "Confirma un --revert sin preguntar. Obligatoria.")
+        public var yes: Bool
+
         public init() {}
+    }
+
+    /// `--revert` destruye datos, así que exige confirmación explícita (H-32).
+    ///
+    /// **La asimetría era el hallazgo**: el `migrate` de serie de Fluent pide
+    /// confirmación por consola —de ahí el `--yes` que el README documenta— y
+    /// éste no pedía nada, pese a actuar sobre **todos** los clubes de
+    /// `public.tenants` cuando se omite `-t`. Quien teclea `--revert` viniendo
+    /// de Fluent espera el *prompt* que aquí no existía.
+    ///
+    /// Se resuelve con bandera y no con `console.confirm` a propósito: un
+    /// comando administrativo tiene que poder correr **sin terminal** (cron,
+    /// CI), y una pregunta interactiva en ese contexto o cuelga o se responde
+    /// sola. La bandera es explícita, no interactiva y queda escrita en el
+    /// historial del *shell*.
+    static func authorizeRevert(revert: Bool, confirmed: Bool) throws {
+        guard revert, !confirmed else { return }
+        throw RevertNotConfirmed()
+    }
+
+    struct RevertNotConfirmed: Error, CustomStringConvertible {
+        var description: String {
+            """
+            --revert borra las tablas de TODOS los clubes de public.tenants \
+            (o del que diga -t) y sus datos con ellas. Si es lo que quieres, \
+            repítelo con --yes.
+            """
+        }
     }
 
     public var help: String {
@@ -36,6 +69,8 @@ public struct MigrateTenantsCommand: AsyncCommand {
 
     public func run(using context: CommandContext, signature: Signature) async throws {
         let app = context.application
+        // Antes de leer nada: un `--revert` sin confirmar no llega a la base.
+        try Self.authorizeRevert(revert: signature.revert, confirmed: signature.yes)
         let query = TenantRecord.query(on: app.db(.control))
         if let slug = signature.tenant { query.filter(\.$slug == slug) }
         let tenants = try await query.sort(\.$slug).all()
@@ -48,41 +83,107 @@ public struct MigrateTenantsCommand: AsyncCommand {
         for tenant in tenants {
             let verb = signature.revert ? "revirtiendo" : "migrando"
             context.console.info("→ \(verb) \(tenant.slug) (schema \(tenant.schemaName))")
-            if signature.revert {
-                try await Self.revert(schema: tenant.schemaName, on: app)
-            } else {
-                try await Self.migrate(schema: tenant.schemaName, on: app)
-            }
+            try await Self.apply(to: tenant, revert: signature.revert, on: app)
         }
         context.console.success("\(tenants.count) tenant(s) procesados.")
     }
 
+    /// Un tenant del recorrido, con su fallo **atribuido** (`A-5`, H-33).
+    ///
+    /// El `catch` no decide nada —vuelve a lanzar, así que el recorrido sigue
+    /// parándose como `D-86` y §9.3 piden— y lo único que añade es **de quién
+    /// era**. Es la mitad barata de §9.3: decir dónde paró. La otra, poder
+    /// preguntarlo después, no cabe aquí.
+    public static func apply(
+        to tenant: TenantRecord, revert: Bool, on app: Application
+    ) async throws {
+        do {
+            if revert {
+                try await Self.revert(schema: tenant.schemaName, on: app)
+            } else {
+                try await Self.migrate(schema: tenant.schemaName, on: app)
+            }
+        } catch {
+            throw TenantMigrationFailure(
+                slug: tenant.slug,
+                schemaName: tenant.schemaName,
+                reverting: revert,
+                underlying: error
+            )
+        }
+    }
+
     /// Idempotente: la `_fluent_migrations` del propio *schema* decide qué falta.
-    public static func migrate(schema: String, on app: Application) async throws {
-        let migrator = makeMigrator(schema: schema, on: app)
+    ///
+    /// El parámetro `migrations` existe **solo como costura de prueba** y por
+    /// una razón concreta (`A-5`, H-38): el *"camino B"* del plan de auditoría
+    /// —un club migrado **por partes, en momentos distintos**— no se puede
+    /// reproducir de otra forma desde un test, porque con el juego completo
+    /// aplicado no queda ninguna pendiente. Pasar un prefijo de la lista es lo
+    /// que hizo el tenant de trabajo a lo largo de tres fases, y comparar su
+    /// esquema con el de un alta limpia es la garantía que nadie medía.
+    /// En producción **nunca** se pasa: el valor por defecto es el juego entero.
+    public static func migrate(
+        schema: String,
+        migrations: [any Migration] = TenantMigrations.all(),
+        on app: Application
+    ) async throws {
+        let migrator = makeMigrator(schema: schema, migrations: migrations, on: app)
         try await migrator.setupIfNeeded().get()
         try await migrator.prepareBatch().get()
     }
 
     public static func revert(schema: String, on app: Application) async throws {
-        let migrator = makeMigrator(schema: schema, on: app)
+        let migrator = makeMigrator(schema: schema, migrations: TenantMigrations.all(), on: app)
         try await migrator.setupIfNeeded().get()
         try await migrator.revertAllBatches().get()
     }
 
-    private static func makeMigrator(schema: String, on app: Application) -> Migrator {
+    private static func makeMigrator(
+        schema: String, migrations list: [any Migration], on app: Application
+    ) -> Migrator {
         // El *pool* del tenant lleva `search_path` fijado al abrir la conexión,
         // así que el DDL sin cualificar (`CREATE TABLE "clubs"`) aterriza en su
         // *schema* — y con él la propia `_fluent_migrations`.
         let id = app.tenantPools.databaseID(for: schema)
         let migrations = Migrations()
-        migrations.add(TenantMigrations.all(), to: id)
+        migrations.add(list, to: id)
         return Migrator(
             databases: app.databases,
             migrations: migrations,
             logger: app.logger,
             on: app.eventLoopGroup.any()
         )
+    }
+}
+
+/// El fallo de un tenant del recorrido, **con su nombre puesto** (`A-5`, H-33).
+///
+/// Sin esto, el recorrido se para —que es lo correcto (`D-86`, §9.3: una
+/// migración a medias **es** estado a medias, así que continuar no es seguro)—
+/// pero lo hace por un error crudo del driver que **no dice de qué club era**.
+/// Medido con cinco tenants y el tercero saboteado: el `PSQLError` se imprimía
+/// tres veces, con el `CREATE TABLE` entero, y el único rastro del culpable era
+/// la línea `→ migrando …` de antes, a 47 líneas de distancia con 50 clubes.
+///
+/// - Note: **No** es la otra mitad de §9.3, que sigue abierta: saber *después*
+///   en qué versión quedó cada club. Esto dice dónde paró; no deja constancia
+///   durable de quién se quedó a medias.
+public struct TenantMigrationFailure: Error, CustomStringConvertible {
+    public let slug: String
+    public let schemaName: String
+    public let reverting: Bool
+    public let underlying: any Error
+
+    public var description: String {
+        let verb = reverting ? "revertir" : "migrar"
+        // `String(reflecting:)` y no interpolación: un `PSQLError` esconde su
+        // descripción —lo aprendió F6 en `IngestionRun`— y el motivo es la mitad
+        // del valor de este error.
+        return """
+            No se pudo \(verb) el club '\(slug)' (schema \(schemaName)); \
+            el recorrido se para aquí: \(String(reflecting: underlying))
+            """
     }
 }
 

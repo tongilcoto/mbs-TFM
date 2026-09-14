@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **279 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**. **300 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -46,7 +46,7 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 279 tests, ~5 s con Docker levantado
+swift test                        # 300 tests, ~5 s con Docker levantado
 ```
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
@@ -645,7 +645,8 @@ swift run Run --help
 swift run Run migrate --yes                 # plano de control (public.tenants)
 swift run Run migrate-tenants               # migraciones nuevas a TODOS los clubes
 swift run Run migrate-tenants -t atleti     # solo a uno
-swift run Run migrate-tenants --revert      # revierte
+swift run Run migrate-tenants --revert --yes          # revierte TODOS: pide --yes
+swift run Run migrate-tenants -t atleti --revert -y   # revierte uno
 
 # Alta de club: los cuatro pasos de §6.3, idempotente
 swift run Run provision-tenant atleti -f rffm
@@ -664,7 +665,14 @@ swift run Run provision-tenant atleti -f rffm -s mi_schema
   comandos: los tenants de los tests los crean y borran ellos (§5.1). Así que `1 tenant(s) procesados` es la
   respuesta correcta si solo diste de alta `atleti`.
 - **Cuando una fase añade tablas, vuelve a pasar `migrate-tenants`.** Fluent aplica solo las que faltan y no
-  hay que reaprovisionar nada.
+  hay que reaprovisionar nada. **Lo que no se hace nunca es editar una migración ya aplicada** (`D-90`):
+  `_fluent_migrations` guarda el nombre y no el contenido, así que tu base la recibiría al recrearla y un club
+  en producción **no**, sin un solo aviso. Lo que haya que corregir va en una migración nueva.
+- **`--revert` exige `--yes`**, igual que el `migrate` de serie: borra las tablas de **todos** los clubes de
+  `public.tenants` —o del que diga `-t`— y sus datos con ellas. Sin la bandera no toca la base y te dice por
+  qué. Y si un club falla a mitad del recorrido, **el comando se para** (`D-86`, §9.3: una migración a medias
+  es estado a medias) y el error **dice de qué club era**; los que ya se migraron se quedan migrados, y
+  reanudar es volver a pasar el comando.
 - **`--name` no tiene forma corta**: `-n` lo reserva ConsoleKit y, si se declara, sale en el `--help` pero el
   valor acaba en `.unknownInput`. `-f` y `-s` sí funcionan.
 - **El alta de un club es un comando, no un endpoint** (`D-23`), y por eso hace **cuatro** cosas: crea el
@@ -736,7 +744,12 @@ swift run Run ingest --force                # ignora el antirrebote de 6 h
 swift run Run ingest --min-interval-hours 24
 ```
 
-**Sale con código distinto de cero si algo falló**, y esa es la única señal que ve un cron (`D-86`). Un fallo
+**Sale con código `1` si algo falló**, y esa es la única señal que ve un cron (`D-86`). Hasta el 2026-09-13
+salía con **133** —el `SIGTRAP` de un `Fatal error: Error raised at top level`—, que también es distinto de
+cero pero es la firma de un programa que se ha caído: en un log de despliegue no se distinguía *"falló la
+sincronización de un club"* de *"el binario se ha roto"*. Lo arregló `A-5`/H-39 en el punto de entrada, así
+que vale para **los cinco comandos**: el comando decide **si** falló lanzando, y `Run/main.swift` decide
+**cómo se cuenta**. Un fallo
 **no detiene el recorrido**: la unidad de aislamiento es la competición, porque la pasada ya es atómica
 (`D-83`) y ya deja constancia de su fallo (`D-85`). Para leerla:
 

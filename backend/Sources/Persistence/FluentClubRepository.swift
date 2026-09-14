@@ -92,4 +92,9 @@ public enum PersistenceError: Error, Equatable, Sendable {
     /// —"los dos goles o ninguno"— repartido en dos columnas anulables porque el
     /// esquema no sabe expresar el par. Es corrupción, no un caso de negocio.
     case corruptPair(table: String, columns: String, id: String)
+    /// Un ayudante de DDL de `SQLHelpers` recibió una base que no habla SQL, así
+    /// que no puede crear lo que Fluent no expresa —`CHECK`, índices,
+    /// `NULLS NOT DISTINCT`— (`A-5`, H-35). **Lanza en vez de callarse**: un
+    /// esquema sin sus `CHECK` no falla, acepta lo que el Dominio rechaza.
+    case schemaHelperNeedsSQL(helper: String, object: String)
 }

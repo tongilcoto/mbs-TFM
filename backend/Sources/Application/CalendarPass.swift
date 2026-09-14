@@ -21,6 +21,10 @@ import Domain
 /// vuelve a aparecer escrita aquí, está duplicada.
 final class CalendarPass {
     private let competition: Competition
+    /// La temporada de esa competición, **solo para la guarda de `D-91`**: su
+    /// ventana es lo único con lo que se puede contrastar que el calendario que
+    /// llega sea de este año. No se escribe ni se lee para nada más.
+    private let season: Season
     private let repositories: any Repositories
     private let ids: any UUIDProvider
     private let now: Date
@@ -36,11 +40,13 @@ final class CalendarPass {
 
     init(
         competition: Competition,
+        season: Season,
         repositories: any Repositories,
         ids: any UUIDProvider,
         now: Date
     ) async throws {
         self.competition = competition
+        self.season = season
         self.repositories = repositories
         self.ids = ids
         self.now = now
@@ -63,6 +69,19 @@ final class CalendarPass {
         // competición, y se parecen lo suficiente como para que la pasada entera
         // lo escriba sin enterarse.
         try competition.requireSameSource(as: calendar.competitionName)
+
+        // **Y la segunda guarda, que es la que ve lo que el nombre no puede**
+        // (`D-91`): los rótulos de competición y de grupo son **idénticos entre
+        // temporadas** ([Anexo RFFM §F.17]), así que la de arriba calla cuando
+        // la coordenada es del año pasado — el caso que ocurre cada verano al
+        // dar de alta la temporada nueva copiando los códigos. Lo único que no
+        // puede ser eco del parámetro que enviamos son las **fechas**, y la
+        // regla es que su mediana caiga en la ventana de la temporada.
+        //
+        // Se pasan **todas** las fechas y la decisión es del Dominio: aquí solo
+        // se recogen del calendario, que es de lo que esta capa se encarga.
+        try season.requireOwnsCalendar(
+            matchDates: calendar.rounds.flatMap(\.matches).compactMap(\.date))
 
         for federationRound in calendar.rounds {
             // La jornada primero: los partidos cuelgan de ella por FK, y su

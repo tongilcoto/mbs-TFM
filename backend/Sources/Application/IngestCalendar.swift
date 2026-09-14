@@ -145,9 +145,18 @@ public struct IngestCalendar: Sendable {
             else {
                 throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
             }
+            // La temporada se relee **aquí dentro**, y es el mismo intercambio
+            // que `D-83` ya asumió con la competición: un `SELECT` por PK a
+            // cambio de no mantener viva una transacción durante la latencia de
+            // un tercero. La necesita la guarda de `D-91`, que compara las
+            // fechas del calendario con la ventana de la temporada.
+            guard let season = try await repositories.seasons.find(competition.seasonID)
+            else {
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+            }
 
             let pass = try await CalendarPass(
-                competition: competition, repositories: repositories,
+                competition: competition, season: season, repositories: repositories,
                 ids: ids, now: clock.now())
             try await pass.run(calendar)
             return pass.report

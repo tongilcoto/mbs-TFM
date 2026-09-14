@@ -88,7 +88,7 @@ public struct SeedCompetitionCommand: AsyncCommand {
             .fetchCalendar(coordinate)
 
         context.console.info("""
-              temporada:   \(calendar.seasonLabel.value)  (temporada=\(coordinate.federationSeasonID))
+              temporada:   \(calendar.seasonLabel?.value ?? "«sin etiqueta»")  (temporada=\(coordinate.federationSeasonID))
               competición: \(calendar.competitionName ?? "«sin nombre»")
               grupo:       \(calendar.groupLabel ?? "«sin rótulo»")
               jornadas:    \(calendar.rounds.count)
@@ -107,9 +107,20 @@ public struct SeedCompetitionCommand: AsyncCommand {
             {
                 season = existing
             } else {
+                // **El sobre ya no promete la etiqueta** (F6-bis, H-08): es
+                // opcional porque la FCF no la publica y porque en la RFFM es el
+                // eco de nuestro propio parámetro ([Anexo RFFM §F.16]). Esta
+                // herramienta es su único lector en todo el backend, así que el
+                // hueco se trata aquí y se dice en voz alta: sin etiqueta no se
+                // puede dar de alta una temporada nueva, y **inventarla sería
+                // peor** —`Season.label` deriva de ella la ventana que `D-91`
+                // usa como evidencia—.
+                guard let label = calendar.seasonLabel else {
+                    throw SeedError.seasonLabelUnavailable(coordinate.federationSeasonID)
+                }
                 season = try Season(
                     id: SeasonID(raw: UUID()),
-                    label: calendar.seasonLabel,
+                    label: label,
                     federationSeasonID: coordinate.federationSeasonID,
                     createdAt: now, updatedAt: now)
                 try await repositories.seasons.save(season)
@@ -156,6 +167,7 @@ public struct SeedCompetitionCommand: AsyncCommand {
     enum SeedError: Error, CustomStringConvertible {
         case missing(String)
         case unknown(String, String, [String])
+        case seasonLabelUnavailable(String)
 
         var description: String {
             switch self {
@@ -163,6 +175,13 @@ public struct SeedCompetitionCommand: AsyncCommand {
                 "Falta \(option)."
             case .unknown(let option, let value, let valid):
                 "\(option) no admite '\(value)'. Valores: \(valid.joined(separator: ", "))."
+            case .seasonLabelUnavailable(let federationSeasonID):
+                """
+                La federación no publicó una etiqueta de temporada legible, así que \
+                no se puede dar de alta la temporada '\(federationSeasonID)' desde aquí. \
+                Créala antes (con su etiqueta, p. ej. 2026/27) y repite el comando: \
+                esta herramienta la reutilizará por su federationSeasonId.
+                """
             }
         }
     }

@@ -1,6 +1,21 @@
 import Fluent
 import SQLKit
 
+// **Los tres ayudantes de aquí lanzan si la base no es SQL, y no es celo**
+// (`A-5`, H-35). Empezaban por `guard … else { return }`, así que sobre una base
+// que no conformara `SQLDatabase` la migración habría creado la tabla y se
+// habría saltado **en silencio** los `CHECK`, los índices y el
+// `NULLS NOT DISTINCT` — o sea la mitad de las invariantes que `D-28` decidió
+// bajar al esquema. Un esquema al que le faltan los `CHECK` **no falla**: acepta
+// datos que el Dominio rechaza, que es el reverso exacto del argumento de
+// `D-02`. El `as?` gemelo de `ProvisionTenantCommand` ya lanzaba; ésta es la
+// asimetría que se cierra.
+//
+// Hoy no es alcanzable —todo es Postgres— y por eso no tiene test propio:
+// fabricar un doble de `Database` cuesta más que el arreglo (§3, regla 2 del
+// plan de auditoría). Lo que sí está bajo test es **su consecuencia**: el
+// inventario de `MigrationIntegrityTests` ancla los 10 `CHECK` y el
+// `NULLS NOT DISTINCT`, así que un ayudante que deje de hacer su trabajo se ve.
 extension Database {
     /// Añade un `CHECK` con SQL crudo.
     ///
@@ -8,7 +23,9 @@ extension Database {
     /// ADR). Aparecerá también en los `CHECK` **entre columnas** que el modelo ya
     /// tiene previstos: `Appearance` (D-42), `Card` (D-45) y los tres de `Goal`.
     func checkConstraint(table: String, name: String, expression: String) async throws {
-        guard let sql = self as? any SQLDatabase else { return }
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "checkConstraint", object: name)
+        }
         try await sql.raw(
             "ALTER TABLE \(ident: table) ADD CONSTRAINT \(ident: name) CHECK (\(unsafeRaw: expression))"
         ).run()
@@ -27,7 +44,9 @@ extension Database {
     /// `IF NOT EXISTS` para que la migración sea reejecutable sobre un *schema*
     /// que ya la tuviera a medias.
     func index(table: String, name: String, columns: [String]) async throws {
-        guard let sql = self as? any SQLDatabase else { return }
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "index", object: name)
+        }
         let columnList = columns.map { "\"\($0)\"" }.joined(separator: ", ")
         try await sql.raw(
             "CREATE INDEX IF NOT EXISTS \(ident: name) ON \(ident: table) (\(unsafeRaw: columnList))"
@@ -54,7 +73,10 @@ extension Database {
     func uniqueIndexNullsNotDistinct(
         table: String, name: String, columns: [String]
     ) async throws {
-        guard let sql = self as? any SQLDatabase else { return }
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "uniqueIndexNullsNotDistinct", object: name)
+        }
         let columnList = columns.map { "\"\($0)\"" }.joined(separator: ", ")
         try await sql.raw(
             """

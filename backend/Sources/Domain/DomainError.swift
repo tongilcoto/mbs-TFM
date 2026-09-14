@@ -1,3 +1,5 @@
+public import struct Foundation.Date
+
 /// Errores de invariante del Dominio.
 ///
 /// El Dominio **no conoce HTTP**: no hay códigos de estado aquí. Traducir a
@@ -22,4 +24,16 @@ public enum DomainError: Error, Equatable, Sendable {
     /// No es un dato mal formado ni una invariante rota por el usuario: es la
     /// constatación de que el proveedor ignora el parámetro `temporada` (`D-84` enmendada).
     case federationSourceMismatch(expected: String, found: String)
+
+    /// El calendario que llega es de **otra temporada** (`D-91`): la mediana de
+    /// sus fechas cae fuera de la ventana de la `Season`.
+    ///
+    /// Hermano del anterior y por el mismo motivo —el proveedor no falla, sirve
+    /// otra cosa— pero con la **evidencia distinta**: aquél compara el nombre de
+    /// la competición, que es idéntico entre temporadas ([Anexo RFFM §F.17]), y
+    /// éste las fechas, que son lo único que no puede ser eco (§F.16).
+    ///
+    /// Lleva la fecha **sin formatear**: el Dominio no conoce la zona horaria ni
+    /// el idioma del que va a leer el problema (§5.4).
+    case federationSeasonMismatch(seasonLabel: String, calendarMedian: Date)
 }

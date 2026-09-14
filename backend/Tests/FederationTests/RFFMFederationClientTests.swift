@@ -79,7 +79,7 @@ struct RFFMFederationClientTests {
 
         #expect(transport.requested == [RFFMEndpoints.calendar(for: Self.coordinate)])
         #expect(calendar.rounds.count == 34)
-        #expect(calendar.seasonLabel.value == "2026/27")
+        #expect(calendar.seasonLabel?.value == "2026/27")
     }
 
     /// **El puerto es sin estado** (Plan §7.2, punto 2): el `FCFContext` de la app

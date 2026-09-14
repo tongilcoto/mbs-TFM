@@ -39,6 +39,25 @@ public struct IngestClubCalendars: Sendable {
     public func execute(
         scope: IngestionScope = IngestionScope(), actor: ActorContext
     ) async throws -> ClubIngestionReport {
+        // TODO(§7): aquí va la comprobación de **quién puede disparar una
+        // pasada**, y no es el mismo caso que el de `UpdateClub` (`A-6`/H-41).
+        //
+        // Los dos llamantes traen actores de naturaleza distinta: el job pone
+        // `isSystem: true` (§2.3-b, no hay usuario detrás) y el `POST` de `D-88`
+        // pone el actor de la petición, que es una **persona**. Y lo que se
+        // escribe detrás son `Team`, `OpponentClub`, `Round` y `Match`, que §7.3
+        // asigna a *"la ingesta (actor de sistema)"* — así que un usuario que
+        // pulsa el botón está pidiendo una escritura que la tabla de propiedad no
+        // le atribuye a él.
+        //
+        // El *spec* ya se comprometió: `triggerIngestion` dice *"Requiere **rol
+        // elevado** (§7.3)"* y declara su `403`. Lo que falta es la decisión de
+        // **cómo se expresa** —un verbo propio del disparador, o que el actor
+        // pueda decir "actúo por cuenta de la ingesta"—, y esa decisión es de
+        // diseño, no de auditoría: va con F10, que estrena el mismo patrón un
+        // nivel más allá (el `202` de `D-67` encola una pasada). Hoy `isSystem`
+        // se escribe y **no lo lee nadie**, que es el hueco exacto que esto marca.
+        //
         // El plan es el **ámbito 1** del club, y también puede ser el primero en
         // enterarse de que la base no está. Si lo es, se dice con su nombre en vez
         // de dejar salir un error de conexión en crudo: el llamante que recorre

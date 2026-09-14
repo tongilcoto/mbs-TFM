@@ -585,13 +585,19 @@ respuesta, así que salen de otros que sí:
 | `Round.start_date` / `end_date` | **mínimo y máximo** de las fechas de los partidos de la jornada. En la temporada jugada eso da sábado→domingo en 26 de 30 y recoge los 4 partidos entre semana; sin arrancar, colapsa en un día | [D-81] |
 | `OpponentClub.slug` | del **nombre**, mecánicamente y sin lista de formas jurídicas. Es la regla **opuesta** a la de `NormalizedName` en el mismo texto: aquélla borra las fronteras, ésta las conserva como guiones | [D-82] |
 
-**Y una guarda antes de escribir nada: que la coordenada siga apuntando a esta competición.** La RFFM
-**ignora el parámetro `temporada`** y sus códigos **no** se reutilizan entre temporadas —cada una recibe un
-bloque nuevo— ([D-84] enmendada con la causa corregida, [Anexo RFFM §F.16]): la misma coordenada con otra
-`temporada` devuelve un calendario perfectamente parseable **de otra competición**, y **no da 404**. La
-evidencia con la que se detecta ya existía —`Competition.federation_name` ([D-72])— y ésta es la primera vez
-que se usa. Si el nombre discrepa, la pasada **se para sin escribir** ([D-84]); los dos silencios no paran
-nada, porque sin nombre guardado es la primera pasada y una fuente que calla no contradice ([D-56]).
+**Y dos guardas antes de escribir nada, porque son dos errores distintos.** La RFFM **ignora el parámetro
+`temporada`**, sus códigos **no** se reutilizan entre temporadas —cada una recibe un bloque nuevo— y **nunca
+da 404**: una coordenada equivocada devuelve un calendario perfectamente parseable ([D-84] con su causa
+enmendada, [Anexo RFFM §F.16] y [Anexo RFFM §F.17]).
+
+| Error del administrador | Qué llega | Guarda |
+|---|---|---|
+| Códigos de **otra competición** | Otro calendario, con otro nombre | **El nombre**: si `Competition.federation_name` ([D-72]) discrepa del que publica la fuente, la pasada **se para sin escribir** ([D-84]). Los dos silencios no paran nada: sin nombre guardado es la primera pasada, y una fuente que calla no contradice ([D-56]) |
+| Códigos de **la temporada pasada**, misma competición | El calendario **del año pasado**, con el mismo nombre y el mismo rótulo de grupo | **Las fechas**: la **mediana** de las fechas del calendario tiene que caer dentro del rango de la `Season` ([D-91]). El nombre aquí **no sirve** —es idéntico entre temporadas, medido— y la etiqueta de temporada tampoco: es el **eco** del parámetro que enviamos ([Anexo RFFM §F.16]) |
+
+**La segunda vale también para la FCF y la primera no**, y eso está asumido: la FCF no publica nombre de
+competición en su calendario, pero sí fecha en todos sus partidos ([Anexo FCF §C.10.4]). Un calendario
+**vacío** no tiene mediana y la guarda no opina: no es evidencia de nada ([D-91]).
 
 **La pasada es atómica, y su registro no.** Todo lo que una pasada escribe va en **un** ámbito de tenant
 —o la competición queda sincronizada o no queda tocada ([D-83])—, y la llamada a la federación queda **fuera**
@@ -897,6 +903,11 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 *N* veces por *schema*, dedicado 1 vez por proyecto) sin tratamiento especial por tipo Postgres.
 
 **Convención de migraciones:**
+- **Una migración aplicada es inmutable** ([D-90]): `_fluent_migrations` guarda el **nombre**, no el
+  contenido, así que un *schema* que ya la aplicó **no recibe jamás** una edición posterior de su `prepare`
+  — y nada lo dice. Lo que haya que corregir va en una migración **nueva**. Es la única vía por la que el
+  esquema de un club puede acabar dependiendo de cuándo se dio de alta: medido, los dos caminos de §4.7
+  convergen byte a byte, y esto no.
 - Una `AsyncMigration` por entidad (`CreateTeam`, `CreateMatch`, …), cada una con su `prepare(on:)`
   (`schema(...).id().field(...).unique(on:).create()`) y `revert(on:)` simétrico.
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
@@ -2099,11 +2110,13 @@ trajo con dato delante ([D-84]), **con la causa enmendada el 2026-09-02** ([Anex
 Las tres se parecen a un fallo de formato sin serlo, así que el adaptador las llama por su nombre y la
 ingesta compara el nombre contra `Competition.federation_name` antes de escribir.
 
-**Y hay un caso que esa guarda no cubre: la coordenada que se queda vieja** —mismo nombre de competición, otro
-año—. La comprobación que parece obvia no sirve: la etiqueta de temporada que devuelve la fuente es **el eco
-del parámetro que le enviamos** (§F.16), así que compararla con `Season.label` es comparar un dato consigo
-mismo. Lo que sí es dato son **las fechas de los partidos**, que `Season` puede acotar con su ventana derivada
-(§3.2). Queda anotado en [D-84] y sin implementar.
+**Y el caso que esa guarda no cubre —códigos de la temporada pasada— lo cubre la segunda** ([D-91]). El
+nombre no sirve ahí: es **idéntico** entre temporadas, medido sobre PRIMERA CADETE G4 ([Anexo RFFM §F.17]). Y la
+comprobación que parece obvia tampoco: la etiqueta de temporada que devuelve la fuente es **el eco del
+parámetro que le enviamos** ([Anexo RFFM §F.16]), así que compararla con `Season.label` es comparar un dato consigo
+mismo. Lo que sí es dato son **las fechas de los partidos**, y la regla es que **su mediana** caiga dentro de
+la ventana derivada de la `Season` (§3.2) — mediana y no *"todas dentro"*, porque un partido aplazado a julio
+no puede tumbar la competición entera, ni *"que solapen"*, porque un solo aplazado la haría pasar ([D-91]).
 
 **El *canario*.** Fuera de la batería normal, tras `FEDERATION_LIVE=1`, se pasa el parser por encima de la
 respuesta **viva** y se exige que no falle. **No compara bytes** —el calendario cambia cada semana por
@@ -2523,17 +2536,34 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
    subió mucho menos de lo temido — pico de 1,54 → 1,76 GiB (§8.2). De la implementación salió además una
    decisión que esta cuestión no anticipaba: **se genera filtrado** ([D-69]).
 2. Forma exacta del tier dedicado (proyecto Supabase vs despliegue completo) y su provisión.
-3. Estrategia de automatización de migraciones por tenant — **estrechada**. El mecanismo y la idempotencia
+3. Estrategia de automatización de migraciones por tenant — **casi cerrada**. El mecanismo y la idempotencia
    por club están resueltos y comprobados (§4.7, §6.4): registro dinámico de `DatabaseID`, `_fluent_migrations`
-   por *schema*, juego completo en las altas, y la restricción de ir por conexión directa. Queda abierto el
-   **fallo a mitad de recorrido** (qué pasa con los clubes ya migrados cuando el número 30 revienta) y el
-   **paralelismo** entre clubes, que a 50 clubes deja de ser una cuestión estética.
+   por *schema*, juego completo en las altas, y la restricción de ir por conexión directa.
 
    > **La misma pregunta sobre la ingesta sí está contestada** ([D-86]): el recorrido **continúa** y la unidad
    > de aislamiento es la competición. Y no se traslada aquí sin más, porque **no es la misma pregunta**: una
    > pasada a medias deja la base exactamente como estaba ([D-83]) y una fila que lo explica ([D-85]); una
    > migración a medias deja *schemas* a distinta versión y **nada que lo diga**. Lo que sí se puede copiar es
    > el criterio: **continuar solo es seguro cuando el fallo deja constancia y no deja estado a medias.**
+
+   **Las dos mitades quedan decididas con dato** por el bloque `A-5` del
+   [plan de auditoría](../backend/Plan%20de%20auditor%C3%ADa-001.md), y una de ellas cambia de pregunta:
+
+   - **Fallo a mitad: se para, y eso es lo correcto.** Aplicado el criterio de arriba, ninguna de sus dos
+     condiciones se cumple aquí —una migración a medias **es** estado a medias y no hay dónde apuntarlo—, así
+     que el recorrido **no** debe continuar, al contrario que la ingesta. Ya se paraba; lo que faltaba era
+     decir **de qué club** (medido: el error crudo del driver no lo nombraba), y eso está hecho.
+   - **Lo que sigue pendiente es la constancia *durable***: tras un fallo, saber en qué versión quedó cada
+     club exige abrir `_fluent_migrations` de cada *schema* a mano. Medido con cinco clubes y el tercero
+     saboteado: 8/8, 6/8, 0/8 y dos sin intentar. A dos clubes es estético; a cincuenta es la única forma de
+     saber qué pasó anoche. **Decidido que hace falta**; su forma —bandera del comando, o un comando de
+     estado— se implementa cuando el número de clubes lo pida.
+   - **El paralelismo no es el problema, y medirlo lo invierte.** 25 clubes y 160 migraciones tardan
+     **1,82 s**: por tiempo no hace falta. Lo que sí escala mal es el ***pool* por tenant**, que se registra y
+     **no se suelta** —pico medido de **25 conexiones simultáneas**, una por club—, y por §6.4 son conexiones
+     del puerto **directo**, que es el recurso escaso. Así que **se descarta paralelizar** (multiplicaría
+     justo lo que escasea para ahorrar segundos que no duelen) y lo que queda por hacer es **cerrar el *pool*
+     de cada club al terminar con él**.
 4. Estrategia de retención (RGPD, datos de menores): política de **archivado** (`Season.archived_at`, reversible, §5) frente a **erasure** físico (`DELETE ?cascade=true`) — plazos de conservación y "derecho al olvido" por decidir. El *mecanismo* ya está ([D-24]); falta la **política**.
 5. **Operación de fusión** de `OpponentClub` (y de `Team`) para duplicados de emparejamiento. Al retirar el
    `DELETE` de las entidades ingeridas ([D-21]), es la **única** salida para un duplicado. **Sigue abierta,
@@ -2785,7 +2815,16 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.7]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-81]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-82]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-83]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-86]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.17]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

@@ -63,12 +63,20 @@ struct CalendarIngestionEndToEndTests {
 
     /// Siembra la **entrada** de la ingesta (`D-16`) con la coordenada real del
     /// volcado, y devuelve el caso de uso cableado contra Postgres.
+    /// - Parameter seasonLabel: **la temporada del volcado, y hay que acertarla**
+    ///   (`D-91`). Hasta que esa guarda existió, este helper sembraba `2025/26`
+    ///   para los dos volcados —y el de *"temporada sin jugar"* es de **26-27**,
+    ///   con sus partidos entre septiembre de 2026 y mayo de 2027—. O sea que el
+    ///   arnés llevaba desde F5 con una competición apuntando a un calendario de
+    ///   otro año y **nada lo decía**: es exactamente el fallo que `D-91` caza, y
+    ///   lo primero que cazó fue este *fixture*.
     static func prepare(
-        _ tenant: TenantFixture, fixture name: String, app: Vapor.Application
+        _ tenant: TenantFixture, fixture name: String, app: Vapor.Application,
+        seasonLabel: String = "2025/26", federationSeasonID: String = "21"
     ) async throws -> (IngestCalendar, CompetitionID) {
         let season = try Season(
-            id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
-            federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+            id: SeasonID(raw: UUID()), label: try SeasonLabel(seasonLabel),
+            federationSeasonID: federationSeasonID, createdAt: Date(), updatedAt: Date())
         let competition = try Competition(
             id: CompetitionID(raw: UUID()), seasonID: season.id,
             modality: .futbol11, gender: .masculino,
@@ -158,9 +166,12 @@ struct CalendarIngestionEndToEndTests {
     @Test("ingiere un calendario sin arrancar sin inventar marcador ni hora (D-56, D-81)")
     func ingestsAnUnstartedSeason() async throws {
         try await Self.withTenant("e2e-sinjugar") { tenant in
+            // **La temporada de este volcado es la 26-27**, no la 25-26: sus 306
+            // partidos van de septiembre de 2026 a mayo de 2027. Sembrar la
+            // temporada equivocada es justo lo que `D-91` para.
             let (useCase, competitionID) = try await Self.prepare(
                 tenant, fixture: "RFFM-calendario-temporada-sin-jugar.html",
-                app: tenant.app)
+                app: tenant.app, seasonLabel: "2026/27", federationSeasonID: "22")
 
             let report = try await useCase.execute(
                 competitionID: competitionID,
@@ -764,7 +775,7 @@ struct CalendarIngestionEndToEndTests {
             seasonLabel: try! SeasonLabel("2025/26"),
             competitionName: "PRIMERA DIVISION AUTONOMICA CADETE",
             groupLabel: "Grupo 1", currentRound: 1,
-            rounds: [FederationRound(number: 1, label: "1 (27-09-2025)", matches: [
+            rounds: [FederationRound(number: 1, matches: [
                 FederationMatch(
                     federationMatchID: federationMatchID,
                     home: ref("821", "0010940034", "CELTIC CASTILLA C.F."),
@@ -794,7 +805,7 @@ struct CalendarIngestionEndToEndTests {
         return FederationCalendar(
             seasonLabel: try! SeasonLabel("2025/26"),
             competitionName: nil, groupLabel: "Grupo 1", currentRound: 1,
-            rounds: [FederationRound(number: 1, label: "1", matches: [
+            rounds: [FederationRound(number: 1, matches: [
                 match("1", ref("821", "CELTIC CASTILLA C.F."),
                       ref("304468", "C.D. GALAPAGAR"),
                       Date(timeIntervalSince1970: 1_758_931_200)),
@@ -827,7 +838,7 @@ struct CalendarIngestionEndToEndTests {
         return FederationCalendar(
             seasonLabel: try! SeasonLabel("2025/26"),
             competitionName: nil, groupLabel: "Grupo 1", currentRound: 1,
-            rounds: [FederationRound(number: 1, label: "1", matches: [
+            rounds: [FederationRound(number: 1, matches: [
                 match("1", celtic, galapagar),
                 match("2", boadilla, boadilla),
             ])])

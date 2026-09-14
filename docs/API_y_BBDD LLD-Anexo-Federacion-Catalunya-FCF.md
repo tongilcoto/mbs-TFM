@@ -1,7 +1,7 @@
 # Anexo de la Federación · Ingeniería inversa de la fuente (FCF, Cataluña)
 
-- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10**
-- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28
+- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10** y **§C.11**
+- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28 (§C.10) y **2026-09-12** (§C.11)
 
 > # ⚠️ Aviso de obsolescencia (2026-08-28)
 >
@@ -12,10 +12,15 @@
 > **No leer §C.1–§C.9 como descripción del presente.** Siguen aquí por dos motivos —dejan constancia de
 > *por qué* el modelo tiene la forma que tiene, y varias decisiones (`D-17`, `D-55`, `D-56`, `D-67`) las
 > citan— pero **§C.10 dice qué sobrevive y qué no, punto por punto**. Ante cualquier contradicción, manda
-> §C.10, que es lo único verificado contra el servidor real.
+> **§C.11 y luego §C.10**, que son lo único verificado contra el servidor real — §C.11 es posterior y
+> **enmienda dos puntos de §C.10**.
 >
 > La reobservación **no es exhaustiva**: se hizo para responder una pregunta concreta (la coordenada, ver
 > `D-74`) y se paró al confirmar el alcance del cambio. El trabajo completo es **F9** del plan.
+>
+> **Y una reobservación no exhaustiva deja inferencias dentro**, que es lo que §C.11 vino a cobrar: §C.10.3
+> dejó marcado como **[I]** qué era el `disciplinaId` femenino y **la inferencia era falsa**. Al leer §C.10,
+> mirar los marcadores de procedencia: lo que dice **[I]** no está medido.
 - **Documento principal:** [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · **Decisiones:** [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · **Federación hermana:** [RFFM (Madrid)](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md)
 
 > **Qué es este anexo.** El material de **observación** sobre la fuente de datos de la FCF: llamadas, muestras
@@ -310,6 +315,11 @@ cuyo nombre acabe legítimamente en letra suelta. **[C]**
 
 ## C.7 Modalidades
 
+> ⚠️ **Incompleta, y la tabla engaña por lo que le falta.** La lista entera son **siete** códigos (§C.10.3),
+> y —medido en **§C.11.2**— ese eje **no es el de las modalidades**: dos de los siete son cajones de
+> **género** que cruzan modalidades. Los dos códigos de abajo siguen siendo correctos; lo que no se puede es
+> leer esta tabla como *"código ↔ modalidad"* y extrapolar.
+
 | Código (`categoria`) | *Slug* (`tipo`) | Modalidad |
 |----------------------|-----------------|-----------|
 | `19308233` | `futbol-11` | Fútbol 11 |
@@ -398,13 +408,17 @@ compartida que ninguna de las dos apps explora. **[I]** — merece una comprobac
   pero la pregunta cambia: ya no es qué clase CSS lo señala, sino qué valores toman `ESTADO` y `CERRADA`
   fuera de `"0"`/`"1"` (§C.10.5).
 - ~~**Fútbol sala y fútbol playa**: si viven bajo `fcf.cat`.~~ **RESUELTO: sí** (§C.10.3), y con código
-  propio, junto con fútbol-5 y las dos disciplinas femeninas.
+  propio, junto con fútbol-5 y las dos disciplinas femeninas. **Con un matiz medido en §C.11.2**: el fútbol
+  playa **femenino** no está bajo la disciplina de fútbol playa, sino dentro del cajón *Futbol Femení*.
 - **El nombre del parámetro de paginación** en la clasificación, si lo hay.
 - **La página `/camp/{código}`**: qué contiene, y si trae dirección y localidad como en Madrid.
 - ~~**Estabilidad interanual de los *slugs***.~~ **Sin objeto**: la coordenada ya no usa *slugs* (§C.10.2).
   Lo que sí sigue en pie de §C.3 es que **el código numérico de competición no sobrevive a la temporada** —
   el volcado nuevo lo confirma: `COPA CATALUNYA MASCULINA 24/25` y `COPA CATALUNYA MASCULINA` conviven con
-  códigos distintos en la misma llamada. No importa, porque `Competition` ya cuelga de una `Season`.
+  códigos distintos en la misma llamada. **Y §C.11.3 lo mide de frente: 32 competiciones con el mismo nombre
+  en la 21 y en la 22, las 32 con código distinto, cero reutilizados.** Que `Competition` cuelgue de una
+  `Season` lo hace inofensivo **para el modelo**; lo que no arregla es la coordenada que se queda vieja
+  ([D-84], §C.11.3).
 - **El id numérico de acta del widget de racha**: si es el mismo espacio de identificadores que usa la FCF
   internamente y si hay forma de obtenerlo para todos los partidos, no solo para los cinco últimos.
 
@@ -435,7 +449,7 @@ antiguo (§C.1).
 | Endpoint | Parámetros | Verificado |
 |---|---|---|
 | `/api/competition/temporadas` | — | ✅ |
-| `/api/competition/disciplines` | `temporadaId` | ✅ |
+| `/api/competition/disciplines` | `temporadaId` — **lo acepta y lo ignora** (§C.11.1) | ✅ |
 | `/api/competition/competicions` | `disciplinaId`, **`temporada`** | ✅ |
 | `/api/competition/grupos` | `competicioId` | ✅ |
 | **`/api/competition/partidos`** | **`grupId`** | ✅ **el calendario entero** |
@@ -450,6 +464,10 @@ antiguo (§C.1).
 **Ojo al nombre del parámetro de temporada: no es homogéneo.** `disciplines` lo llama `temporadaId`;
 `competicions` y `goleadores` lo llaman **`temporada`** a secas. Es la misma trampa que el `idGroup` en
 *camelCase* de la RFFM (§F.7): se copia del volcado, no se supone.
+
+> ⚠️ **Y con `disciplines` hay una trampa peor, medida en §C.11.1: el parámetro no sirve para nada.** Da el
+> mismo cuerpo con `temporadaId=21`, con `=22` y **sin parámetro**. Que un endpoint acepte un parámetro no
+> significa que lo use — es la lección de [Anexo RFFM §F.16] en la otra federación.
 
 Hay además rastro de un `actaId` en el JavaScript — existe ruta de acta, **no explorada**.
 
@@ -475,6 +493,14 @@ Está escrito como [D-74].
 
 ### C.10.3 `disciplinaId` no es la modalidad: lleva el género dentro
 
+> ⚠️ **ENMENDADA el 2026-09-12 — ver §C.11.2.** El título se queda corto y **la inferencia `[I]` de abajo
+> era falsa**: `19308237 "Futbol Femení"` **no** es fútbol-11 femenino, y el eje **no** es la pareja
+> *(modalidad, género)* colapsada. Es un eje **irregular**: cinco cajones con forma de modalidad
+> —implícitamente masculinos o mixtos— **más dos cajones de género que atraviesan modalidades**. La
+> consecuencia para el `/preview` de `D-58` cambia de signo: aquí el género se sabe y **la modalidad se
+> pierde**. Lo medido está en §C.11.2; lo de abajo se conserva porque el volcado de la lista sigue siendo
+> bueno y porque explica cómo se llegó a la inferencia equivocada.
+
 ```json
 /api/competition/disciplines?temporadaId=22 →
 [{"value":"19308233","label":"Futbol 11"},   {"value":"19308235","label":"Futbol 7"},
@@ -491,12 +517,15 @@ tiene consecuencia de modelo:
 la RFFM, donde no hay campo de género en ninguna entidad y hay que inferirlo del rótulo de la competición
 ([Anexo RFFM §F.14]). Consecuencias para cuando se abra F9:
 
-- `disciplinaId` **no casa uno a uno** con nuestro `Modality` (§3.3): es la pareja (modalidad, género)
+- `disciplinaId` **no casa uno a uno** con nuestro `Modality` (§3.3). ~~Es la pareja (modalidad, género)
   colapsada en un código. `19308237 "Futbol Femení"` es, presumiblemente, fútbol-11 femenino — **[I]**, no
-  verificado.
-- El `/preview` de [D-58] tendrá **dos caminos**: en Madrid propone un género inferido de un texto; aquí lo
-  sabe con certeza desde la coordenada. La decisión de que el administrador **confirme** sigue siendo buena
-  —`mixto` sigue sin ser expresable en la fuente— pero el valor propuesto es mucho más fiable.
+  verificado.~~ **Refutado en §C.11.2**: es un cajón de **género** que contiene fútbol-11, fútbol-7 y fútbol
+  playa a la vez. Lo que sí sigue en pie es la primera frase: **no casa uno a uno**.
+- ~~El `/preview` de [D-58] tendrá **dos caminos**: en Madrid propone un género inferido de un texto; aquí lo
+  sabe con certeza desde la coordenada.~~ **Medio refutado en §C.11.2**: aquí sabe el **género** y **no sabe
+  la modalidad**, que entra en la clave única de `Team` exactamente igual (`D-07`). Lo que sobrevive intacto
+  —y es lo que importa— es que **la decisión de que el administrador confirme sigue siendo buena**: `mixto`
+  sigue sin ser expresable en la fuente, y ahora hay un segundo motivo.
 
 ### C.10.4 El calendario entero en **una** petición
 
@@ -601,7 +630,167 @@ su evidencia se movió:
 | [D-56] · vacío nunca sobrescribe | su ejemplo estrella es *"la FCF borra fecha y hora al jugarse"* | ❌ **El ejemplo es falso**: 240/240 partidos jugados conservan `COMIENZO1`. La regla puede seguir siendo buena; **su justificación hay que rehacerla**, y toca en **F3** |
 | [D-67] · alta en cascada devuelve **202** | *"es 202 porque la FCF cuesta ~34 peticiones y en línea daría timeout"* | ❌ **Razón caducada**: cuesta **1**. La decisión puede sostenerse por otros motivos; hay que revisarla, no darla por buena |
 | §5.6 · cadencia semanal como **requisito** | se apoya en la pérdida irrecuperable de la fecha en la FCF | ❌ Mismo caso que [D-56]. Como *recomendación* sigue en pie; como *requisito*, se quedó sin base |
+| [D-58] · el `/preview` propone el género y el administrador confirma | §C.10.3 añadió que *"en Cataluña se sabe con certeza desde la coordenada"* | ⚠️ **La mitad es falsa** (§C.11.2): el género sí, **la modalidad no**. La decisión no cambia de dirección —confirmar sigue siendo lo correcto— pero **cambia de razón y de eje**. Se decide en **F10**, con el `/preview` delante, no aquí |
+| [D-84] · la guarda de la coordenada caducada | escrita midiendo **solo** la RFFM ([Anexo RFFM §F.16]) | ✅ **Su riesgo, medido también aquí** (§C.11.3): los códigos tampoco se reutilizan entre temporadas, 32 de 32. La guarda hace la misma falta en Cataluña — y ahí **no se dispara**, que es `H-09` |
 
+---
+
+## C.11 El eje de disciplinas y los códigos entre temporadas — **reobservación del 2026-09-12**
+
+Todo lo de esta sección es **[C]**: peticiones reales al servidor, con el volcado guardado en
+[`FCF-disciplinas-y-competiciones-femeninas.txt`](./Federation%20APIs%20examples/FCF-disciplinas-y-competiciones-femeninas.txt).
+
+**Por qué existe esta sección.** §C.10 se paró *"al confirmar el alcance del cambio"* y dejó dentro una
+inferencia marcada `[I]`: qué era el `disciplinaId` femenino. El desarrollador aportó una URL de la web de hoy
+—`temporadaId=21&disciplinaId=19308233&competicioId=54722000&grupId=55348104`, la misma forma que la de
+§C.10— y con ella dos observaciones del **frontal**: que el desplegable de disciplinas no ofrece fútbol
+femenino y que las competiciones de fútbol-11 no lo incluyen. Al ir a casar eso con el volcado del 2026-08-28
+—que **sí** lista *"Futbol Femení"*— la inferencia se cayó. **Lo que la tiró no fue una contradicción en los
+datos: fue mirar el marcador de procedencia.**
+
+### C.11.1 `disciplines` acepta `temporadaId` y lo ignora
+
+```sh
+curl -s https://www.fcf.cat/api/competition/disciplines
+curl -s https://www.fcf.cat/api/competition/disciplines?temporadaId=21
+curl -s https://www.fcf.cat/api/competition/disciplines?temporadaId=22
+```
+
+**Los tres cuerpos son byte a byte el mismo**: 307 bytes, `md5 ec0db4e54d66e5f889ccaf2cb039d233`. La tabla de
+§C.10.1 lo listaba como *"parámetros: `temporadaId`"*, que es cierto en el sentido de que la web lo envía, y
+falso en el único que importa.
+
+Es la lección de [Anexo RFFM §F.16] repetida en la otra federación, y en su forma más barata de detectar:
+allí el `calendar.temporada` **era el eco de lo que pediste**; aquí el parámetro **no tiene ni eco**. La regla
+que las dos comparten: **un parámetro aceptado no es un parámetro usado, y comprobarlo cuesta una llamada
+sin él.**
+
+`competicions`, en cambio, **sí honra `temporada`**: los cuerpos de la 21 y la 22 son distintos de arriba
+abajo. Su `CODTEMPORADA` es eco del parámetro —así que por §F.16 no vale como prueba—, pero los **códigos de
+competición** son otros, y ésos no pueden ser eco.
+
+**Y no explica el desplegable.** La API devuelve *Futbol Femení* siempre, con parámetro y sin él. Que la web
+no lo ofrezca ahí es cosa del frontal, y **para el adaptador es irrelevante**: nosotros hablamos con la API.
+Anotado porque la observación de la web era razonable y la conclusión que invitaba a sacar —*"el femenino no
+está en la fuente"*— es falsa.
+
+**Dónde estaba escondido, y es el dato que remata §C.11.2.** La web tiene un **conmutador superior que
+alterna «mixto» y «femenino»**, y solo en la posición *femenino* aparecen las dos disciplinas femeninas
+(observado por el desarrollador). O sea: **el frontal sabe cuáles de los siete códigos son femeninos, y el
+objeto de disciplina no lo dice** — son dos campos, `value` y `label`, y nada más.
+
+> **La clasificación del eje vive en el cliente, no en el dato.** La propia FCF trata su eje de disciplinas
+> como irregular y **lo tapa en la interfaz** con un conmutador. Consecuencia para F9/F10: un adaptador que
+> quiera proponer el género desde el `disciplinaId` tiene que llevar **el conjunto de los dos códigos a
+> mano**, igual que el catálogo de federaciones es código y no tabla (`D-17`). Eso es admisible, pero **hay
+> que declararlo como tal**: no se deduce de la respuesta, se decide y se escribe.
+>
+> Y trae su propia trampa, que es la de §C.7 al revés: si algún día apareciera un *"Futbol 7 Femení"* con
+> código nuevo, **caería del lado masculino en silencio**. El aviso que §C.7 le hacía a la app antigua
+> —*mapa explícito y fallo ruidoso*— vale aquí igual, y ahora con más razón: lo que se mapea es un eje que la
+> fuente no etiqueta.
+
+### C.11.2 `disciplinaId` no es *(modalidad, género)*: es un eje irregular
+
+La pregunta que decidía era una: **¿qué modalidades hay dentro del cajón femenino?**
+
+```sh
+curl -s "https://www.fcf.cat/api/competition/competicions?disciplinaId=19308237&temporada=21"   # 48
+curl -s "https://www.fcf.cat/api/competition/competicions?disciplinaId=19308237&temporada=22"   # 44
+```
+
+| Temporada | Competiciones | dicen `F11` | dicen `F7` | son de **fútbol playa** | **no dicen la modalidad** |
+|---|---|---|---|---|---|
+| **21** | 48 | 6 | 10 | 0 | **32** |
+| **22** | 44 | 4 | 6 | **11** | **23** |
+
+Y el recíproco lo cierra:
+
+```sh
+curl -s "https://www.fcf.cat/api/competition/competicions?disciplinaId=19308239&temporada=22"   # 16
+```
+
+**16 competiciones de *Futbol Platja* y ninguna con «FEMEN» en el nombre.** O sea: **el fútbol playa femenino
+vive bajo `19308237 "Futbol Femení"`**, no bajo la disciplina de fútbol playa.
+
+Así que el eje de disciplinas no es ni modalidad ni la pareja *(modalidad, género)*. Es **irregular**:
+
+| `disciplinaId` | Qué es en realidad |
+|---|---|
+| `19308233` Futbol 11 · `19308235` Futbol 7 · `24885364` Futbol 5 · `19308236` Futbol Sala · `19308239` Futbol Platja | **modalidad**, con el género **implícito** (masculino o mixto) |
+| `19308237` **Futbol Femení** | **género**, cruzando fútbol-11, fútbol-7 **y** fútbol playa |
+| `24694879` **Futbol Sala Femení** | **género**, dentro de una sola modalidad |
+
+La aritmética lo anticipaba y nadie la miró: **cinco** entradas con forma de modalidad y **solo dos**
+femeninas. Si el género estuviera plegado dentro de cada modalidad habría parejas; **no existe «Futbol 7
+Femení»** porque el fútbol-7 femenino está dentro de *Futbol Femení*.
+
+**La consecuencia de modelo, y es la que cambia de signo respecto a §C.10.3.** Dentro del cajón femenino, la
+**modalidad no está en la coordenada** — y en la mayoría de los casos **tampoco en el nombre**: 32 de 48 y 23
+de 44 no la dicen. `PREFERENT FEMENÍ`, `PRIMERA DIVISIÓ FEMENÍ`, `TERCERA FEDERACIÓ FUTBOL FEMENÍ`, y
+`COPA LLEIDA`, que no dice nada de nada. Inferirla exigiría saber convenciones federativas por categoría de
+edad (*"benjamín es F7"*), que es conocimiento nuestro, no dato de la fuente.
+
+Y `modality` **no es cosmética**: entra en la clave única de `Team` exactamente igual que `gender`
+(§3.2, `D-07`, `D-58`).
+
+> **Las dos federaciones saben un eje y pierden el otro.** Madrid no publica género y hay que inferirlo del
+> rótulo de la competición ([Anexo RFFM §F.14]); Cataluña publica el género en la coordenada y, cuando lo
+> hace, **deja de publicar la modalidad**. No hay una fuente mejor y otra peor: hay **dos huecos distintos**,
+> y el `/preview` de [D-58] los tapa igual —proponiendo y dejando que el administrador confirme— pero **lo
+> que propone con certeza y lo que propone a ojo se intercambia según la federación**.
+
+**Esto no toca la ingesta.** `disciplinaId` **no entra en la ruta del calendario**: `partidos?grupId=…` toma
+un solo parámetro (§C.10.4). Su único consumidor futuro es el `/preview` de **F10**.
+
+### C.11.3 Los códigos tampoco se reutilizan entre temporadas, y eso importa por [D-84]
+
+De las competiciones del cajón femenino, **32 tienen el mismo nombre en la 21 y en la 22**:
+
+```
+PRIMERA FEDERACIÓ FUTBOL FEMENÍ:  21 → 54323056   22 → 58162840
+SEGONA FEDERACIÓ FUTBOL FEMENÍ:   21 → 54323057   22 → 58162842
+PREFERENT FEMENÍ:                 21 → 54322975   22 → 58162314
+COPA LLEIDA:                      21 → 54819589   22 → 58964376
+```
+
+**Las 32 con código distinto. Cero reutilizados.** Es exactamente lo que [Anexo RFFM §F.16] midió en Madrid
+—*cada temporada recibe un bloque nuevo*— y confirma lo que §C.9 ya apuntaba con un indicio más débil (dos
+copas de nombre parecido en la misma llamada).
+
+**Por qué esto es el resultado más útil de la reobservación.** El riesgo principal de [D-84] enmendada no es
+*"la misma coordenada en otra temporada"* sino **la coordenada que se queda vieja**: como los códigos cambian
+cada año, un `grupId` del año pasado sirve el calendario del año pasado **para siempre y sin error**. Eso
+estaba medido **solo para la RFFM**, y ahora lo está también para la FCF.
+
+Y aquí se cruza con la auditoría: la guarda que defiende de eso compara `Competition.federation_name` contra
+el nombre que trae el calendario, y **el calendario de la FCF no publica nombre de competición** (`H-08`), así
+que **en Cataluña la guarda no se dispara nunca** (`H-09`). Las dos mitades de `H-09` pasan de deducidas a
+medidas: **el riesgo existe y la defensa está apagada**.
+
+Añádase que `partidos` **no tiene parámetro de temporada**: la FCF es estructuralmente inmune al eco de
+§F.16 —no hay nada de qué hacer eco— y **no lo es en absoluto** a la coordenada caducada.
+
+### C.11.4 Dos cosas que aparecieron solas
+
+- **`TIPO_COMPETICION`** (`"1"` / `"2"`) es un campo que §C.10 no documenta. La correlación con copa/liga es
+  **sugerente pero no limpia**: `COPA TERRES DE L EBRE FEMENI F7` es `2` y `FUTBOL PLATJA SENIOR FEMENÍ` es
+  `1`. Queda como **[I]** y **sin usar**; si algún día hace falta distinguir liga de copa, esto se mide, no se
+  supone.
+- **El nombre de competición no es único** dentro de disciplina + temporada. En la 22 hay **cuatro** etiquetas
+  repetidas con códigos distintos: `FUTBOL PLATJA JUVENIL FEMENÍ`, `… CADET FEMENI`, `… INFANTIL FEMENI`,
+  `… ALEVI FEMENI`. **No rompe la guarda de [D-84]** —que compara igualdad, no unicidad— pero descarta
+  emparejar competiciones por nombre, y conviene saberlo antes de que a alguien le parezca una buena idea.
+
+### C.11.5 Qué NO cambia, que es casi todo
+
+La conclusión operativa de [D-74] sale intacta y conviene decirlo, porque es la que sostiene F9: **la
+mecánica y las entidades son las mismas en las dos federaciones**. Tres códigos, tres columnas (§C.10.2);
+`CODACTA` → `federation_match_id`, `CODEQUIPO` → `federation_team_id`, `CODCLUB` → `federation_club_id`
+(§C.10.4). Nada de §C.11 toca el adaptador del calendario.
+
+Lo que §C.11 mueve son **dos frases**: una de §C.10.3, que era una inferencia; y una de [D-84], que era el
+alcance de su medición. Y **refuerza `H-09`**, que ya tenía fase.
 
 ---
 
@@ -668,6 +857,7 @@ su evidencia se movió:
 [D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
@@ -683,3 +873,5 @@ su evidencia se movió:
 [Anexo RFFM §F.12]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.14]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.15]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

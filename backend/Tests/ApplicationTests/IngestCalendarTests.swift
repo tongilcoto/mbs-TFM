@@ -60,7 +60,7 @@ struct IngestCalendarTests {
             currentRound: 1,
             rounds: [
                 FederationRound(
-                    number: 1, label: "1 (27-09-2025)",
+                    number: 1,
                     matches: matches ?? [Self.match()])
             ])
     }
@@ -118,6 +118,68 @@ struct IngestCalendarTests {
     /// de dominio del `tipojuego` (`D-07`), y el adaptador la traduce al llamar.
     /// Que viaje aquí es lo que permite que el catálogo de federaciones no tenga
     /// que consultar la base.
+    /// **Las dos guardas del ámbito 1, que hasta A-7 no las recorría nada**
+    /// (`A-7`/H-46). No son defensivas de adorno: el `202` de `D-88` planifica y
+    /// responde, y la pasada corre **después**, así que entre el plan y el ámbito
+    /// 1 hay una ventana real en la que la competición puede dejar de estar.
+    ///
+    /// Lo que importa es **cuál** de las dos se levanta, porque
+    /// `ProblemMiddleware` las traduce al revés una de otra y con razones
+    /// escritas: `competitionNotFound` es **404** —*"para esta petición la
+    /// competición no está"*— y `seasonNotFound` es **500**, porque
+    /// `competitions.season_id` es `NOT NULL` con integridad referencial y una
+    /// competición sin temporada **no es un dato que falte: es el schema roto**.
+    /// Intercambiarlas convierte un 404 en un 500 y al revés, y hasta este test
+    /// la batería no lo notaba.
+    @Test("una competición que ya no está da su propio caso, no el de la temporada (A-7/H-46)")
+    func aVanishedCompetitionIsNamedAsSuch() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        // El almacén queda **vacío a propósito**: `pass` no siembra nada si no se
+        // le pasa el par, así que el id que se pide no existe.
+        let store = IngestionStore()
+        let useCase = IngestCalendar(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federation: SpyFederationClient(returning: try Self.calendar()),
+            clock: FixedClock(instant: Self.syncInstant),
+            ids: SequentialUUIDProvider())
+
+        await #expect {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        } throws: { error in
+            guard case ApplicationError.competitionNotFound = error else { return false }
+            return true
+        }
+    }
+
+    /// La otra mitad: la competición **sí** está y su temporada no. Es el caso
+    /// que el middleware llama *"el schema roto"* y manda a 500 — y sin este test
+    /// era indistinguible del de arriba.
+    @Test("una competición cuya temporada no está da el caso del schema roto (A-7/H-46)")
+    func aCompetitionWithoutItsSeasonIsNamedAsSuch() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        // La competición sí; la temporada a la que apunta, no.
+        await store.seed(competitions: [competition])
+        let useCase = IngestCalendar(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federation: SpyFederationClient(returning: try Self.calendar()),
+            clock: FixedClock(instant: Self.syncInstant),
+            ids: SequentialUUIDProvider())
+
+        await #expect {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        } throws: { error in
+            guard case ApplicationError.seasonNotFound = error else { return false }
+            return true
+        }
+    }
+
     @Test("compone la coordenada con la temporada y la competición (§3.7)")
     func buildsTheCoordinateFromTheStoredEntities() async throws {
         let season = try Self.season()
@@ -321,8 +383,16 @@ struct IngestCalendarTests {
             clock: FixedClock(instant: Self.syncInstant),
             ids: SequentialUUIDProvider())
 
-        await #expect(throws: ApplicationError.self) {
+        // **El caso y no el tipo** (`A-7`/H-46): `runNotRecorded` es 500 con un
+        // `detail` que existe para que quien lo reciba **no repita** una ingesta
+        // que sí se escribió. Con `ApplicationError.self`, este test pasaba
+        // igual devolviendo `databaseUnavailable` —un 503, o sea *"reintenta"*—,
+        // que es justo lo contrario de lo que la pasada necesita decir.
+        await #expect {
             try await useCase.execute(competitionID: competition.id, actor: actor)
+        } throws: { error in
+            guard case ApplicationError.runNotRecorded = error else { return false }
+            return true
         }
 
         // El ámbito 2 comprometió, y eso no se deshace por no poder apuntarlo.
@@ -609,6 +679,44 @@ struct IngestCalendarTests {
         let season = try Self.season()
         let competition = try Self.competition(
             seasonID: season.id, federationName: "PREFERENTE AFICIONADO")
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(
+                competitionName: "PRIMERA DIVISION AUTONOMICA CADETE"))
+
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        #expect(await store.opponentClubs.isEmpty)
+        #expect(await store.teams.isEmpty)
+        #expect(await store.rounds.isEmpty)
+        #expect(await store.matches.isEmpty)
+        #expect(await store.competitions.first?.lastSyncedAt == nil)
+    }
+
+    /// **El error que la guarda del nombre no puede ver** (`D-91`): se da de alta
+    /// la temporada nueva y se pegan los códigos de la anterior.
+    ///
+    /// La fuente responde `200`, **el nombre coincide** —los rótulos de
+    /// competición y grupo son idénticos entre temporadas, medido sobre PRIMERA
+    /// CADETE Grupo 4 ([Anexo RFFM §F.17])— y el calendario es del año pasado.
+    /// `requireSameSource` calla, porque no tiene nada que objetar; lo único que
+    /// delata el desfase son **las fechas de los partidos**, que se van doce
+    /// meses y no pueden ser eco del parámetro que enviamos (§F.16).
+    ///
+    /// Se para y **no escribe nada**, igual que `D-84`.
+    @Test("un calendario del año pasado para la pasada, aunque el nombre coincida (D-91)")
+    func abortsWhenTheCalendarBelongsToAnotherSeason() async throws {
+        // La temporada es la 2026/27 y el calendario de `Self.calendar()` trae
+        // partidos del 27-09-2025: un año entero de desfase.
+        let season = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2026/27"),
+            federationSeasonID: "22", createdAt: Date(), updatedAt: Date())
+        let competition = try Self.competition(
+            seasonID: season.id, federationName: "PRIMERA DIVISION AUTONOMICA CADETE")
         let (useCase, store, _) = await Self.pass(
             competition: competition, season: season,
             calendar: try Self.calendar(
