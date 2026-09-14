@@ -164,10 +164,18 @@ struct IngestClubCalendarsTests {
         // en un solo ámbito (`D-83`), así que un id equivocado en la lista se ve
         // antes de tocar la red — y quien marcó tres casillas se entera de que
         // una estaba mal en vez de recibir dos pasadas y un silencio.
-        await #expect(throws: ApplicationError.self) {
+        //
+        // **El caso y no el tipo** (`A-7`/H-46): cada caso de `ApplicationError`
+        // es un HTTP distinto y razonado aparte, y éste es **404**. Con
+        // `ApplicationError.self` el test pasaba devolviendo `seasonNotFound`,
+        // que es **500** — o sea *"me he roto"* en vez de *"ese id no está"*.
+        await #expect {
             try await useCase.execute(
                 scope: IngestionScope(competitionIDs: [cadete.id, CompetitionID(raw: UUID())]),
                 actor: Self.actor)
+        } throws: { error in
+            guard case ApplicationError.competitionNotFound = error else { return false }
+            return true
         }
         #expect(federation.received.isEmpty)
     }
@@ -213,9 +221,18 @@ struct IngestClubCalendarsTests {
         // otra cosa no es un fallo visible**. Si un id desconocido cayera a la
         // temporada vigente, quien pidió recomponer la 2024/25 vería una pasada
         // con éxito y los datos de otra.
-        await #expect(throws: ApplicationError.self) {
+        //
+        // **El caso y no el tipo** (`A-7`/H-46), y aquí la distinción es la que
+        // `ProblemMiddleware` explica con más cuidado: `unknownSeason` es **404**
+        // *"porque el id lo puso quien llama"*, mientras que `seasonNotFound` es
+        // **500** *"porque es el schema roto"*. Las dos hablan de una temporada
+        // que no aparece y **no significan lo mismo**.
+        await #expect {
             try await useCase.execute(
                 scope: IngestionScope(seasonID: SeasonID(raw: UUID())), actor: Self.actor)
+        } throws: { error in
+            guard case ApplicationError.unknownSeason = error else { return false }
+            return true
         }
         #expect(federation.received.isEmpty)
     }
@@ -431,6 +448,47 @@ struct IngestClubCalendarsTests {
         #expect(report.abortedByInfrastructure == false)
         #expect(report.entries.map(\.competitionID) == competitions.map(\.id))
         #expect(report.hasFailures)
+    }
+
+    /// **La otra sonda de H-23, la del ámbito 1 — y hasta A-7 no la ejecutaba
+    /// nada** (`A-7`/H-45).
+    ///
+    /// `D-86` enmendada tiene **dos** frenos, no uno. El de arriba es el del
+    /// bucle por competición: la base se cae a mitad de recorrido y el informe
+    /// lo dice con `abortedByInfrastructure`. Éste es el otro: la base **ya no
+    /// está cuando se va a leer el plan**, así que no hay ni una competición que
+    /// recorrer y no hay informe que devolver. Se lanza, y **lo que se lanza
+    /// importa**: `IngestCommand` decide si sigue con los demás clubes haciendo
+    /// `if case ApplicationError.databaseUnavailable`, así que cualquier otro
+    /// caso deja el recorrido de clubes continuando con la base caída — que es
+    /// lo que `D-86` declara inseguro, porque ninguno podrá dejar constancia.
+    ///
+    /// **Por eso la aserción es sobre el caso y no sobre el tipo.** Con
+    /// `ApplicationError.self` este test pasa igual de bien cambiando el caso, y
+    /// es exactamente la mutación que sobrevivió (M1). Y con la sonda entera
+    /// borrada saldría el error crudo del ámbito, no éste (M1c).
+    @Test("si la base no está al leer el plan, se dice con su nombre (D-86, A-7/H-45)")
+    func aDatabaseDownBeforeThePlanIsNamed() async throws {
+        let power = DatabaseSwitch()
+        let (store, _) = try await Self.storeWithThreeCompetitions()
+        // Abajo **antes** de empezar: el ámbito 1 es el primero que lo descubre.
+        await power.bringDown()
+
+        let useCase = IngestClubCalendars(
+            unitOfWork: SwitchableUnitOfWork(store: store, power: power),
+            federationClients: FakeFederationClientProvider([
+                .rffm: SpyFederationClient(returning: Self.calendar)
+            ]),
+            clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        await #expect {
+            try await useCase.execute(scope: IngestionScope(), actor: Self.actor)
+        } throws: { error in
+            // El caso, no el tipo: es el que `IngestCommand:148` empareja.
+            guard case ApplicationError.databaseUnavailable = error else { return false }
+            return true
+        }
     }
 
     @Test("el recorrido dice cuál falló y por qué (D-86)")
