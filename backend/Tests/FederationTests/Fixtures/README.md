@@ -150,10 +150,12 @@ nunca** en la ruta del calendario. Dice que no de dos maneras, y las dos son
 |---|---|
 | `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** — es este volcado |
 
-> **Ojo con el `200` de la primera fila: es inferencia.** Este fichero es **solo el cuerpo**; el código HTTP
-> no se guardó. Lo que sí está dentro y lo sostiene: Next.js sirvió `page: "/competicion/calendario"` —no
-> `"/404"`—, con `gssp: true`, sus props completas y `calendar: null`. Una 404 de Next se sirve como `/404`.
-> Y vale **para el calendario**: de las rutas `/api/…`, que son JSON, no hay medición (`D-84`, acotaciones).
+> **El `200` de la primera fila está medido** (2026-09-15): `curl -o /dev/null -w '%{http_code}'` sobre
+> `competicion=99999999&grupo=99999999` devuelve **200**. Hizo falta porque **este fichero es solo el cuerpo**
+> y el código HTTP no se guardó — la fila se apoyaba hasta entonces en que Next.js sirvió
+> `page: "/competicion/calendario"` y no `"/404"`. **Al recapturar un volcado, anotar también el código.**
+> Y ojo con el alcance: esto vale **para el calendario**; de las rutas `/api/…`, que son JSON, no hay
+> medición (`D-84`, acotaciones).
 
 | `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. Ignora el parámetro |
 

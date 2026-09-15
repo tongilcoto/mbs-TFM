@@ -2118,12 +2118,20 @@ otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y 
 
 > **Dos acotaciones sobre esta tabla, añadidas el 2026-09-15 al revisarla con el desarrollador.**
 >
-> **(1) El `200` de la primera fila es inferencia, no un byte medido.** El volcado
-> `RFFM-calendario-coordenada-inexistente.html` es **solo el cuerpo** de la respuesta: el código HTTP no se
-> guardó. Lo que sí está dentro del fichero, y es lo que sostiene la fila, es que Next.js sirvió
-> **`page: "/competicion/calendario"`** —no `"/404"`— con `gssp: true` y sus props completas, y el `calendar`
-> a `null`. Una página 404 de Next se sirve como `/404`. Es evidencia fuerte y **sigue sin ser el código
-> medido**; cuesta una petición con `-o /dev/null -w '%{http_code}'` cerrarlo del todo.
+> **(1) El `200` de la primera fila está medido** (2026-09-15, el desarrollador desde su terminal):
+>
+> ```
+> curl -sS -o /dev/null -w '%{http_code}\n' \
+>   '…/competicion/calendario?temporada=21&tipojuego=1&competicion=99999999&grupo=99999999'
+> → 200
+> ```
+>
+> Hacía falta porque el volcado `RFFM-calendario-coordenada-inexistente.html` es **solo el cuerpo**: el código
+> HTTP no se guardó, y hasta hoy la fila se apoyaba en una deducción —Next.js sirvió
+> `page: "/competicion/calendario"` y no `"/404"`, con `gssp: true` y sus props completas—. La deducción era
+> correcta, y aun así valía la pena gastar una petición: **una deducción buena y una medición no son la misma
+> clase de cosa**, y esta entrada existe precisamente porque una premisa heredada resultó falsa. Al recapturar
+> un volcado, **anotar el código HTTP**: cuesta un `-w '%{http_code}'` y evita la duda tres años después.
 >
 > **(2) Esta tabla es del CALENDARIO, que es una página HTML.** No dice nada de las rutas `/api/…`, que son
 > JSON y podrían perfectamente devolver 404 — es lo normal en una API. De `/api/standings` con un `idGroup`

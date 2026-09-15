@@ -997,10 +997,18 @@ envió. Confirma que ese campo sigue a la coordenada y no a la petición.
 
 ### Pendiente de observar en este endpoint
 
-- **Qué hace `/api/standings` con una coordenada que NO existe.** Del calendario está medido: `200` con
-  `calendar: null` (§F.15). De éste **no se sabe**, y por tanto **no está demostrado que [D-84] se reproduzca
-  aquí**. El volcado con `idGroup=24037649` **no** lo demuestra: ese grupo existe y el servidor sirvió
-  exactamente lo que se le pidió. Hace falta una captura con un `idGroup` inventado.
+- **Qué hace `/api/standings` con una coordenada que NO existe.** Del calendario está medido y cerrado:
+  **`200`** con `calendar: null` —el cuerpo por el volcado de §F.15, y el código HTTP con un
+  `curl -w '%{http_code}'` el 2026-09-15—. De **éste** no se sabe, y por tanto **no está demostrado que
+  [D-84] se reproduzca aquí**: es otra ruta y es JSON, y una API que devuelva 404 sería lo normal. El volcado
+  con `idGroup=24037649` **no** lo demuestra: ese grupo existe —es el de los volcados de goleadores y de
+  acta— y el servidor sirvió exactamente lo que se le pidió. Hace falta una captura con un `idGroup`
+  inventado, anotando **el código además del cuerpo**.
+
+  > **Consecuencia para el adaptador de F7, para que no se herede por analogía:** el parser del calendario
+  > detecta *"esa coordenada no designa nada"* mirando `calendar: null`, **porque ahí no hay 404 que mirar**.
+  > Si `/api/standings` sí lo da, esa detección es del **transporte** y no del parser. Copiar la forma del
+  > parser del calendario sería escribir una premisa sobre una ruta que nadie ha medido.
 - **`puntos_sancion` con valor.** Sigue sin ejercitarse: `"0"` en las 32 filas. Es la pieza que decidiría si
   el modelo tiene que recogerlo — aplazado desde §F.6 y sigue aplazado, ahora con dato de que en un grupo
   entero de una temporada entera no apareció.
