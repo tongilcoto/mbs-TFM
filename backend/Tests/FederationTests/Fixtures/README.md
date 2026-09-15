@@ -11,6 +11,7 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 | `RFFM-calendario-temporada-jugada.html` | `docs/Federation APIs examples/` + el mismo nombre | PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, temporada **2025-26**: 30 jornadas, 240 partidos, **todos jugados** |
 | `RFFM-calendario-coordenada-inexistente.html` | `docs/Federation APIs examples/` + el mismo nombre | Lo que la RFFM responde a una coordenada que **no existe**: `200` y `calendar: null` |
 | `RFFM-standings-temp21-group-24037549-round30-29.txt` | `docs/Federation APIs examples/` + el mismo nombre | **La clasificación** (F7): PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26, jornadas **30 y 29** en un solo fichero, 16 equipos cada una |
+| `RFFM-standings-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/standings` responde a un `idGroup` que **no existe**: `200` y **`null` a secas**, cuatro bytes |
 
 **El nombre dice las dos cosas que hay que saber antes de usarlos.** Son `.html`
 —no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
@@ -73,7 +74,8 @@ los dos sitios:
 ```sh
 for f in RFFM-calendario-temporada-sin-jugar.html RFFM-calendario-temporada-jugada.html \
          RFFM-calendario-coordenada-inexistente.html \
-         RFFM-standings-temp21-group-24037549-round30-29.txt; do
+         RFFM-standings-temp21-group-24037549-round30-29.txt \
+         RFFM-standings-coordenada-inexistente.txt; do
   cp "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
   diff -q "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
 done
@@ -107,6 +109,23 @@ while (j := raw.find('{', i)) != -1:
     print(obj['jornada'], obj['competicion'], obj['grupo'], len(obj['clasificacion']), 'equipos')
 "
 ```
+
+## Los dos "no" de la RFFM no tienen la misma forma, y ésa es la trampa
+
+Hay dos volcados de coordenada inexistente, uno por ruta, y **no se parecen**:
+
+| | Qué llega | Cómo se detecta |
+|---|---|---|
+| `RFFM-calendario-coordenada-inexistente.html` | la **página entera** con sus props completas y **un campo** a nulo: `props.pageProps.calendar` | mirando ese campo (lo hace `RFFMCalendarParser`) |
+| `RFFM-standings-coordenada-inexistente.txt` | **el documento entero es `null`** — no hay sobre, ni `estado`, ni lista vacía | decodificando a **opcional** y tratando el `nil` como `coordinateNotFound` |
+
+**Los dos son `200`**, medido: en la RFFM el código HTTP no distingue una coordenada mala en ninguna de las
+dos rutas. Así que el 404 que traduce `HTTPFederationTransport` no se dispara aquí nunca — es la mitad
+genérica de una regla que otra federación podrá cumplir.
+
+> **Al escribir el parser de clasificación, no copiar el del calendario.** Decodificar directo al sobre
+> convierte ese `null` en un `DecodingError` → `malformedResponse` → el canario gritando *"¡han cambiado la
+> forma!"* cada vez que alguien se equivoque de número, que es la falsa alarma que `D-84` existe para evitar.
 
 ## No intentes leerlos en Xcode
 

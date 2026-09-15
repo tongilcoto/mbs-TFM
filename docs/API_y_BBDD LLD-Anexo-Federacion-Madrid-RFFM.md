@@ -997,18 +997,41 @@ envió. Confirma que ese campo sigue a la coordenada y no a la petición.
 
 ### Pendiente de observar en este endpoint
 
-- **Qué hace `/api/standings` con una coordenada que NO existe.** Del calendario está medido y cerrado:
-  **`200`** con `calendar: null` —el cuerpo por el volcado de §F.15, y el código HTTP con un
-  `curl -w '%{http_code}'` el 2026-09-15—. De **éste** no se sabe, y por tanto **no está demostrado que
-  [D-84] se reproduzca aquí**: es otra ruta y es JSON, y una API que devuelva 404 sería lo normal. El volcado
-  con `idGroup=24037649` **no** lo demuestra: ese grupo existe —es el de los volcados de goleadores y de
-  acta— y el servidor sirvió exactamente lo que se le pidió. Hace falta una captura con un `idGroup`
-  inventado, anotando **el código además del cuerpo**.
+- ~~**Qué hace `/api/standings` con una coordenada que NO existe.**~~ **MEDIDO el 2026-09-15**, ver abajo.
 
-  > **Consecuencia para el adaptador de F7, para que no se herede por analogía:** el parser del calendario
-  > detecta *"esa coordenada no designa nada"* mirando `calendar: null`, **porque ahí no hay 404 que mirar**.
-  > Si `/api/standings` sí lo da, esa detección es del **transporte** y no del parser. Copiar la forma del
-  > parser del calendario sería escribir una premisa sobre una ruta que nadie ha medido.
+### Una coordenada que no existe: `200` y `null` a secas — **medido el 2026-09-15**
+
+```
+https://www.rffm.es/api/standings?idGroup=99999999&round=1
+→ HTTP 200
+→ null
+```
+
+→ `RFFM-standings-coordenada-inexistente.txt`. El cuerpo son **cuatro bytes**: `null`. **[C]**
+
+**Tampoco da 404.** Con esto queda cerrado, para las dos rutas medidas de la RFFM, que **el código HTTP no
+distingue nunca una coordenada mala**: ni la página del calendario (§F.15) ni esta API. El 404 del transporte
+(`HTTPFederationTransport`) sigue siendo la mitad genérica de una regla que la otra federación podrá cumplir;
+en Madrid no se dispara en ninguna de las dos.
+
+**Y la forma del "no" NO es la misma, que era justo el riesgo.** Compararlas importa porque la tentación era
+copiar el parser del calendario por analogía:
+
+| | Qué llega con una coordenada inexistente |
+|---|---|
+| **Calendario** (§F.15) | La **página entera**, con sus props completas, y **un campo** a nulo: `props.pageProps.calendar: null` |
+| **`/api/standings`** | **El documento entero es `null`**. No hay sobre, ni `estado`, ni `clasificacion` vacía |
+
+**Consecuencia para el adaptador de F7, y hay que escribirla antes de escribirlo:** la detección **no** se
+hace mirando un campo, porque no hay ningún campo que mirar. Se decodifica el cuerpo como **opcional** y un
+`nil` es `coordinateNotFound`. Hacerlo al revés —decodificar al sobre directamente— convierte esto en un
+`DecodingError`, que el parser clasificaría como `malformedResponse`: exactamente la falsa alarma que [D-84]
+existe para evitar, con el canario gritando *"¡han cambiado la forma!"* cada vez que alguien se equivoque de
+número.
+
+> **Ojo con el `estado` del sobre como guarda alternativa.** En el volcado bueno vale `"1"`, lo que invita a
+> pensar que un `"0"` sería la señal de error. **No lo es aquí**: con coordenada mala no llega sobre ninguno.
+> Si `estado` significa algo, será para otro fallo, y no está observado.
 - **`puntos_sancion` con valor.** Sigue sin ejercitarse: `"0"` en las 32 filas. Es la pieza que decidiría si
   el modelo tiene que recogerlo — aplazado desde §F.6 y sigue aplazado, ahora con dato de que en un grupo
   entero de una temporada entera no apareció.

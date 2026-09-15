@@ -2133,10 +2133,16 @@ otra"*. **La RFFM no da 404 nunca** en esta ruta. Dice que no de dos maneras, y 
 > clase de cosa**, y esta entrada existe precisamente porque una premisa heredada resultó falsa. Al recapturar
 > un volcado, **anotar el código HTTP**: cuesta un `-w '%{http_code}'` y evita la duda tres años después.
 >
-> **(2) Esta tabla es del CALENDARIO, que es una página HTML.** No dice nada de las rutas `/api/…`, que son
-> JSON y podrían perfectamente devolver 404 — es lo normal en una API. De `/api/standings` con un `idGroup`
-> inexistente **no hay medición** ([Anexo RFFM §F.18], *pendiente de observar*). No heredar de aquí lo que
-> haga aquélla: es la lección de [D-74] aplicada dentro de la misma federación.
+> **(2) Esta tabla es del CALENDARIO, que es una página HTML** — pero la conclusión se extiende, y **medida**.
+> El 2026-09-15 se comprobó `/api/standings?idGroup=99999999&round=1`: **`200` y `null` a secas**, cuatro
+> bytes ([Anexo RFFM §F.18]). Así que **en la RFFM el código HTTP no distingue una coordenada mala en ninguna
+> de las dos rutas medidas**.
+>
+> **Lo que sí cambia entre ellas es la forma del "no", y por eso la medición hacía falta igual:** el
+> calendario sirve la página entera con **un campo** a nulo (`pageProps.calendar`); la API devuelve **el
+> documento entero** nulo. La detección no se copia: allí se mira un campo, aquí hay que decodificar a
+> opcional y tratar el `nil` como `coordinateNotFound` — decodificar al sobre daría un `DecodingError`, que es
+> `malformedResponse`, que es la falsa alarma que el punto 2 de la decisión existe para evitar.
 
 La tercera es la peligrosa: no hay ningún síntoma técnico. Sin guarda, la pasada escribiría un calendario
 cadete dentro de una competición senior, y los equipos que creara heredarían de ella la categoría equivocada
