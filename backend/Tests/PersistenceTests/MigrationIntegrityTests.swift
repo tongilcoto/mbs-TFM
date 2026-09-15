@@ -113,7 +113,14 @@ struct MigrationIntegrityTests {
             // que Fluent **no** sabe expresar y por tanto va por `sql.raw`
             // (§4.6): los `CHECK` derivados de `D-02` y el `NULLS NOT DISTINCT`
             // de la clave de `Team` (§3.5).
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 10,
+            //
+            // **13 desde F7**, que añade los tres de `standing_rows`: `position`,
+            // `previous_position` y el de los siete contadores. El número sube con
+            // cada fase y **eso es lo que se quiere** — actualizarlo obliga a mirar
+            // qué se añadió. Lo que NO hay en esa tabla, y es deliberado, es un
+            // `CHECK` de aritmética: la tabla oficial de un grupo sancionado no
+            // cumple `points = 3·G + E` (`D-92`).
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 13,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")

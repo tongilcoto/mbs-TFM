@@ -23,7 +23,8 @@ public protocol TenantUnitOfWork: Sendable {
 /// Los puertos de salida disponibles dentro de un ámbito de tenant.
 ///
 /// Crece con cada fase: F0 trajo `clubs`; F1, la entrada de la ingesta (`D-16`);
-/// F5, su **salida** — las cuatro entidades que la pasada del calendario escribe.
+/// F5, su **salida** — las cuatro entidades que la pasada del calendario escribe—;
+/// F7, `standingRows`.
 public protocol Repositories: Sendable {
     var clubs: any ClubRepository { get }
     var seasons: any SeasonRepository { get }
@@ -33,4 +34,5 @@ public protocol Repositories: Sendable {
     var teams: any TeamRepository { get }
     var matches: any MatchRepository { get }
     var ingestionRuns: any IngestionRunRepository { get }
+    var standingRows: any StandingRowRepository { get }
 }

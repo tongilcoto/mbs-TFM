@@ -336,3 +336,76 @@ extension IngestionRunRecord {
         return run
     }
 }
+
+/// El repositorio de `StandingRow` (F7).
+///
+/// **La lectura es por jornada y ordenada por posición**, que no es cosmética:
+/// la sirve la pantalla de clasificación tal cual, y la usa la ingesta para
+/// resolver la columna PREV de la jornada siguiente (`D-33`). El índice que la
+/// hace barata es el `UNIQUE(round_id, team_id)` de §3.5, así que no hace falta
+/// uno aparte.
+public struct FluentStandingRowRepository: StandingRowRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func list(roundID: RoundID) async throws -> [StandingRow] {
+        try await StandingRowRecord.query(on: database)
+            .filter(\.$round.$id == roundID.raw)
+            .sort(\.$position)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func save(_ row: StandingRow) async throws {
+        if let existing = try await StandingRowRecord.find(row.id.raw, on: database) {
+            existing.apply(row)
+            try await existing.update(on: database)
+        } else {
+            let record = StandingRowRecord()
+            record.id = row.id.raw
+            record.apply(row)
+            try await record.create(on: database)
+        }
+    }
+}
+
+extension StandingRowRecord {
+    func apply(_ row: StandingRow) {
+        $competition.id = row.competitionID.raw
+        $round.id = row.roundID.raw
+        $team.id = row.teamID.raw
+        position = row.position
+        previousPosition = row.previousPosition
+        played = row.played
+        won = row.won
+        drawn = row.drawn
+        lost = row.lost
+        goalsFor = row.goalsFor
+        goalsAgainst = row.goalsAgainst
+        points = row.points
+    }
+
+    func toDomain() throws -> StandingRow {
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(
+                table: Self.schema, id: try requireID().uuidString)
+        }
+        return try StandingRow(
+            id: StandingRowID(raw: try requireID()),
+            competitionID: CompetitionID(raw: $competition.id),
+            roundID: RoundID(raw: $round.id),
+            teamID: TeamID(raw: $team.id),
+            position: position,
+            previousPosition: previousPosition,
+            played: played,
+            won: won,
+            drawn: drawn,
+            lost: lost,
+            goalsFor: goalsFor,
+            goalsAgainst: goalsAgainst,
+            points: points,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}

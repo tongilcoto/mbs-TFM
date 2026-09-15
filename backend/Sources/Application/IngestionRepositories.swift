@@ -65,3 +65,36 @@ public protocol IngestionRunRepository: Sendable {
     /// la última vez?"*.
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun]
 }
+
+/// Puerto de salida de `StandingRow` (§4.3, F7).
+///
+/// # Dos operaciones, y la segunda es la que no se ve venir
+///
+/// `save` es el *upsert* de siempre. `list(roundID:)` está porque **la columna
+/// PREV se calcula comparando con la jornada anterior** (`D-33`): sin poder leer
+/// ese *snapshot*, la pasada no tiene con qué rellenarla y la pantalla pintaría
+/// *"–"* en toda la temporada.
+///
+/// # Por qué se lee por jornada y no por competición
+///
+/// Porque la unidad del modelo es **(jornada, equipo)** y la pregunta que se le
+/// hace es siempre *"¿cómo estaba la tabla tras la jornada N?"* — la de la
+/// pantalla y la de PREV son la misma. Traerse la competición entera serían 30
+/// jornadas × 16 equipos para usar 16 filas.
+///
+/// # Y no hay `delete`
+///
+/// Por lo mismo que en el resto de la salida de la ingesta (`D-75`): lo que la
+/// fuente deja de publicar no se destruye. Una fila que sobra —un equipo
+/// retirado a mitad de liga— deja de aparecer en las jornadas siguientes porque
+/// la fuente ya no la manda, no porque alguien la borre.
+public protocol StandingRowRepository: Sendable {
+    /// La tabla de una jornada, **ordenada por posición**: una clasificación
+    /// desordenada no es una clasificación (§5.1).
+    func list(roundID: RoundID) async throws -> [StandingRow]
+
+    /// *Upsert* por `id`, igual que sus hermanas de F5: el id lo pone el caso de
+    /// uso para que la fila recién escrita entre en los candidatos de la misma
+    /// pasada sin releerla.
+    func save(_ row: StandingRow) async throws
+}

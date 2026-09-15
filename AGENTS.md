@@ -312,10 +312,17 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son OCHO migraciones por tenant:
+                                          # hoy son NUEVE migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
-                                          #   matches -> ingestion_runs
+                                          #   matches -> standing_rows ->
+                                          #   ingestion_runs
+                                          #   El orden es el de FK, y cada fase
+                                          #   añade la suya AL FINAL DE LA LISTA
+                                          #   QUE LE TOQUE, no al final a secas
+                                          #   (`D-90`). Una ya aplicada NO se
+                                          #   edita: `_fluent_migrations` guarda
+                                          #   el nombre, no el contenido
                                           #   --revert exige --yes: borra las tablas de
                                           #   TODOS (o del que diga -t). Si uno falla, el
                                           #   recorrido SE PARA y el error dice de qué
