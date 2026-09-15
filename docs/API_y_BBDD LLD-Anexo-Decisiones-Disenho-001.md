@@ -118,6 +118,8 @@
 | **D-25**               | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica                                                  | §5.2, §5.5                         |
 | **D-26**               | El LLD se queda con lo normativo; deliberación y evidencia van a anexos                                                       | —                                  |
 | **D-65**               | Design-first: el *spec* genera los tipos, pero no valida                                                                      | §5.5, §8.2, §9.1                   |
+| **D-69**               | El *spec* se genera **filtrado**: la lista de operaciones **es** el alcance entregado                                         | §5.5, §9.1                         |
+| **D-70**               | Los tests se escriben con `swift-testing`, no con XCTest                                                                      | §8.1                               |
 
 ---
 
@@ -3986,5 +3988,6 @@ solo tiene la cuenta buena si la tabla se ingiere. Calculándola no hay de dónd
 [D-87]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-88]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-89]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-92]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
