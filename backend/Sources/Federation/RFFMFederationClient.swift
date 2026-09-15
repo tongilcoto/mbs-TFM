@@ -1,6 +1,7 @@
 public import protocol Application.FederationClient
 public import struct Application.FederationCalendar
 public import struct Application.FederationCoordinate
+public import struct Application.FederationStanding
 
 /// El adaptador de la RFFM: implementa el puerto `FederationClient` (§4.3).
 ///
@@ -31,5 +32,24 @@ public struct RFFMFederationClient: FederationClient {
     public func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
         let page = try await transport.get(RFFMEndpoints.calendar(for: coordinate))
         return try RFFMCalendarParser.parse(page)
+    }
+
+    /// La clasificación tras una jornada (F7, [Anexo RFFM §F.8]).
+    ///
+    /// Las mismas cuatro líneas y por el mismo motivo que arriba: traer es del
+    /// transporte, interpretar es del parser. Lo único propio de la federación
+    /// que queda aquí es **que la jornada viaja en la URL** y no en la coordenada.
+    ///
+    /// **Y no decide si la respuesta sirve.** La RFFM la sirve histórica, así que
+    /// pedir la jornada 9 dos años después funciona; la FCF ignorará el parámetro
+    /// y devolverá la vigente. Esa diferencia es `providesRoundStandings`
+    /// (`D-55`), la mira el caso de uso, y un adaptador que intentara arreglarla
+    /// aquí estaría mintiendo sobre lo que su fuente dio.
+    public func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        let body = try await transport.get(
+            RFFMEndpoints.standings(for: coordinate, round: round))
+        return try RFFMStandingsParser.parse(body)
     }
 }

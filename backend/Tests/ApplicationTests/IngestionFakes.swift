@@ -196,6 +196,16 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
         if let error { throw error }
         return calendar
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "SpyFederationClient")
+    }
+
 }
 
 struct FixedClock: Clock {
@@ -250,6 +260,16 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         }
         return calendar
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "FlakyFederationClient")
+    }
+
 }
 
 /// Un reloj que **avanza** un segundo en cada consulta.
@@ -288,6 +308,16 @@ struct OpaqueFailingClient: FederationClient {
     func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
         throw OpaqueError(detail: detail)
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "OpaqueFailingClient")
+    }
+
 }
 
 // ── H-23: la base que se cae a mitad de recorrido ──────────────────────────
@@ -341,6 +371,16 @@ final class OutageInducingClient: FederationClient, @unchecked Sendable {
         if calls == outageOnCall { await power.bringDown() }
         return calendar
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "OutageInducingClient")
+    }
+
 }
 
 // ── H-24: falla solo el ámbito del registro ────────────────────────────────
@@ -364,5 +404,16 @@ final class FailOnNthScope: TenantUnitOfWork, @unchecked Sendable {
         calls += 1
         if calls == failOn { throw FakeOutage() }
         return try await wrapped.withRepositories(actor: actor, work)
+    }
+}
+
+/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+///
+/// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
+/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
+struct StandingsNotStubbed: Error, CustomStringConvertible {
+    let client: String
+    var description: String {
+        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
     }
 }

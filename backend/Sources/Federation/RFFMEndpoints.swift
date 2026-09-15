@@ -24,6 +24,26 @@ public enum RFFMEndpoints {
             + "&grupo=\(coordinate.federationGroupID)"
     }
 
+    /// La clasificación **tras una jornada** ([Anexo RFFM §F.8], §F.18).
+    ///
+    /// # Dos parámetros, y ninguno se parece a los del calendario
+    ///
+    /// **`idGroup` es el único nombre en *camelCase* de toda la API** —el
+    /// calendario usa `grupo`— y esta ruta **no lleva `temporada` ni
+    /// `tipojuego`**. No es una simplificación nuestra: es que el grupo ya
+    /// determina la competición, y la fuente lo demuestra devolviendo el
+    /// `codigo_competicion` que nadie le envió (§F.18).
+    ///
+    /// Que la coordenada traiga temporada y modalidad y aquí no se usen **no es
+    /// un descuido**: el puerto pasa la coordenada entera porque es la unidad que
+    /// el modelo tiene, y cada endpoint coge lo suyo. Añadirlos "por simetría"
+    /// con el calendario es justo lo que el encabezado de este fichero avisa.
+    public static func standings(for coordinate: FederationCoordinate, round: Int) -> String {
+        "\(host)/api/standings"
+            + "?idGroup=\(coordinate.federationGroupID)"
+            + "&round=\(round)"
+    }
+
     /// La **inversa**: la coordenada que hay dentro de una URL de calendario.
     ///
     /// # Por qué existe, y por qué no pide los números sueltos
