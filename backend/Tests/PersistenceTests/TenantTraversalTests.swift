@@ -236,7 +236,7 @@ struct TenantTraversalTests {
 
             // El club de Madrid se sincroniza igual. Con el recorrido abortando,
             // bastaría un club de una federación aún no soportada —o una sola
-            // coordenada caducada, `D-84`— para dejar sin datos a todos los que
+            // coordenada equivocada, `D-84`— para dejar sin datos a todos los que
             // vayan detrás por orden alfabético.
             #expect(client.received.map(\.federationGroupID) == ["222"])
             #expect(outcomes.map(\.slug) == ["jobcat", "jobmad"])

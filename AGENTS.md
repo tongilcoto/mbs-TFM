@@ -133,7 +133,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   lo que enviaste**, y buscar una señal que no pueda ser eco — aquí, las fechas de los partidos.
 - **El recorrido de la ingesta no se detiene en el primer fallo, y eso solo es seguro por dos cosas que ya
   estaban puestas** (`D-86`): la pasada es **atómica** (`D-83`) y **deja constancia** de su fallo (`D-85`). La
-  unidad de aislamiento es la **competición**: abortar haría que una sola coordenada caducada —de las que
+  unidad de aislamiento es la **competición**: abortar haría que una sola coordenada equivocada —de las que
   `D-84` demuestra que existen y que no dan error— dejara sin sincronizar a todo lo que va detrás. Las dos
   mitades son inseparables: **se continúa y se apunta**, y el comando sale con código distinto de cero.
   **Y eso vale para el fallo de datos, no para el de la base** (`D-86` enmendada el 2026-09-12, H-23): el

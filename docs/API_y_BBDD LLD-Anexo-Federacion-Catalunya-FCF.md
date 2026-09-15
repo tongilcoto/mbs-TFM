@@ -631,7 +631,7 @@ su evidencia se movió:
 | [D-67] · alta en cascada devuelve **202** | *"es 202 porque la FCF cuesta ~34 peticiones y en línea daría timeout"* | ❌ **Razón caducada**: cuesta **1**. La decisión puede sostenerse por otros motivos; hay que revisarla, no darla por buena |
 | §5.6 · cadencia semanal como **requisito** | se apoya en la pérdida irrecuperable de la fecha en la FCF | ❌ Mismo caso que [D-56]. Como *recomendación* sigue en pie; como *requisito*, se quedó sin base |
 | [D-58] · el `/preview` propone el género y el administrador confirma | §C.10.3 añadió que *"en Cataluña se sabe con certeza desde la coordenada"* | ⚠️ **La mitad es falsa** (§C.11.2): el género sí, **la modalidad no**. La decisión no cambia de dirección —confirmar sigue siendo lo correcto— pero **cambia de razón y de eje**. Se decide en **F10**, con el `/preview` delante, no aquí |
-| [D-84] · la guarda de la coordenada caducada | escrita midiendo **solo** la RFFM ([Anexo RFFM §F.16]) | ✅ **Su riesgo, medido también aquí** (§C.11.3): los códigos tampoco se reutilizan entre temporadas, 32 de 32. La guarda hace la misma falta en Cataluña — y ahí **no se dispara**, que es `H-09` |
+| [D-84] · la guarda de la coordenada equivocada | escrita midiendo **solo** la RFFM ([Anexo RFFM §F.16]) | ✅ **Su riesgo, medido también aquí** (§C.11.3): los códigos tampoco se reutilizan entre temporadas, 32 de 32. La guarda hace la misma falta en Cataluña — y ahí **no se dispara**, que es `H-09` |
 
 ---
 
@@ -769,7 +769,7 @@ que **en Cataluña la guarda no se dispara nunca** (`H-09`). Las dos mitades de 
 medidas: **el riesgo existe y la defensa está apagada**.
 
 Añádase que `partidos` **no tiene parámetro de temporada**: la FCF es estructuralmente inmune al eco de
-§F.16 —no hay nada de qué hacer eco— y **no lo es en absoluto** a la coordenada caducada.
+§F.16 —no hay nada de qué hacer eco— y **no lo es en absoluto** a la coordenada equivocada.
 
 ### C.11.4 Dos cosas que aparecieron solas
 

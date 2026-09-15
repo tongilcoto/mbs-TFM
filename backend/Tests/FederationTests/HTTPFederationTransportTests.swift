@@ -40,7 +40,7 @@ struct HTTPFederationTransportTests {
     /// §F.1]), así que un 404 es **revisa la coordenada** y no *"han rehecho la
     /// web"*. Sin separarlos, el canario grita lo mismo para las dos cosas y a
     /// las tres semanas nadie lo mira.
-    @Test("un 404 dice 'coordenada caducada', no 'cambió la fuente' (Plan §4.4)")
+    @Test("un 404 dice 'revisa la coordenada', no 'cambió la fuente' (Plan §4.4)")
     func notFoundIsItsOwnSignal() async throws {
         let transport = HTTPFederationTransport { _ in (status: 404, body: "") }
 

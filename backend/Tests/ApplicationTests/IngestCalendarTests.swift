@@ -663,7 +663,7 @@ struct IngestCalendarTests {
     /// DIVISION AUTONOMICA CADETE.
     ///
     /// Eso rompe el supuesto de Plan §4.4 —*"un 404 tiene que decir una cosa y un
-    /// parseo fallido otra"*—: una coordenada caducada **no da 404**, devuelve un
+    /// parseo fallido otra"*—: una coordenada equivocada **no da 404**, devuelve un
     /// calendario perfectamente parseable **de otra competición**. Sin guarda, la
     /// pasada escribiría un calendario cadete dentro de una competición senior y
     /// nada chillaría: los equipos heredarían la categoría equivocada de la

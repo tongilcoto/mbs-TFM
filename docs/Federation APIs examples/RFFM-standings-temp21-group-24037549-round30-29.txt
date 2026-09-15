@@ -1,0 +1,1722 @@
+https://www.rffm.es/api/standings?idGroup=24037549&round=30
+
+{
+    "estado": "1",
+    "sesion_ok": "1",
+    "competicion": "PRIMERA DIVISION AUTONOMICA CADETE",
+    "codigo_competicion": "24037548",
+    "grupo": "Grupo 1",
+    "codigo_grupo": "24037549",
+    "tipo_competicion": "2",
+    "jornada": "30",
+    "fecha_jornada": "23-05-2026",
+    "clasificacion": [
+        {
+            "color": "#41FF1A",
+            "posicion": "1",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011221693_FDE__logo_sello.png?nova=1",
+            "codequipo": "3350761",
+            "nombre": "C.D.E. FOOTBALL DREAMS EXPERIENCE 'A'",
+            "jugados": "30",
+            "ganados": "23",
+            "perdidos": "3",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "78",
+            "goles_en_contra": "23",
+            "jugados_casa": "15",
+            "ganados_casa": "13",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "1",
+            "jugados_fuera": "15",
+            "ganados_fuera": "10",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "2",
+            "puntos": "73",
+            "puntos_sancion": "0",
+            "puntos_local": "40",
+            "puntos_visitante": "33",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "#41FF1A",
+            "posicion": "2",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012083236_logo.png?nova=1",
+            "codequipo": "109",
+            "nombre": "ARAVACA C.F. - CEIBA 'A'",
+            "jugados": "30",
+            "ganados": "23",
+            "perdidos": "5",
+            "empatados": "2",
+            "penaltis": "0",
+            "goles_a_favor": "83",
+            "goles_en_contra": "28",
+            "jugados_casa": "15",
+            "ganados_casa": "13",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "1",
+            "jugados_fuera": "15",
+            "ganados_fuera": "10",
+            "empatados_fuera": "1",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "71",
+            "puntos_sancion": "0",
+            "puntos_local": "40",
+            "puntos_visitante": "31",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "3",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011615318_ESCUDO_ADCV.png?nova=1",
+            "codequipo": "198",
+            "nombre": "A.D. COLMENAR VIEJO 'A'",
+            "jugados": "30",
+            "ganados": "19",
+            "perdidos": "4",
+            "empatados": "7",
+            "penaltis": "0",
+            "goles_a_favor": "70",
+            "goles_en_contra": "23",
+            "jugados_casa": "15",
+            "ganados_casa": "10",
+            "empatados_casa": "4",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "1",
+            "jugados_fuera": "15",
+            "ganados_fuera": "9",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "3",
+            "puntos": "64",
+            "puntos_sancion": "0",
+            "puntos_local": "34",
+            "puntos_visitante": "30",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "4",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012184056_Escudo_Uni__n_Adarve.jpg?nova=1",
+            "codequipo": "1599",
+            "nombre": "A.D. UNION ADARVE 'C'",
+            "jugados": "30",
+            "ganados": "18",
+            "perdidos": "7",
+            "empatados": "5",
+            "penaltis": "0",
+            "goles_a_favor": "59",
+            "goles_en_contra": "39",
+            "jugados_casa": "15",
+            "ganados_casa": "10",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "3",
+            "jugados_fuera": "15",
+            "ganados_fuera": "8",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "59",
+            "puntos_sancion": "0",
+            "puntos_local": "32",
+            "puntos_visitante": "27",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "5",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011108020_Escudo_nuevos_Las_Rozas.png?nova=1",
+            "codequipo": "298",
+            "nombre": "LAS ROZAS C.F. 'B'",
+            "jugados": "30",
+            "ganados": "17",
+            "perdidos": "9",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "60",
+            "goles_en_contra": "38",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "5",
+            "jugados_fuera": "15",
+            "ganados_fuera": "9",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "55",
+            "puntos_sancion": "0",
+            "puntos_local": "26",
+            "puntos_visitante": "29",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "6",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010960678_escudo_Rffm_-_CFPOZUELO.jpg?nova=1",
+            "codequipo": "1878",
+            "nombre": "C.F. POZUELO DE ALARCON 'A'",
+            "jugados": "30",
+            "ganados": "15",
+            "perdidos": "10",
+            "empatados": "5",
+            "penaltis": "0",
+            "goles_a_favor": "54",
+            "goles_en_contra": "44",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "4",
+            "jugados_fuera": "15",
+            "ganados_fuera": "7",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "6",
+            "puntos": "50",
+            "puntos_sancion": "0",
+            "puntos_local": "27",
+            "puntos_visitante": "23",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "7",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011078749_Escudo_CDG.png?nova=1",
+            "codequipo": "304468",
+            "nombre": "C.D. GALAPAGAR 'B'",
+            "jugados": "30",
+            "ganados": "12",
+            "perdidos": "9",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "51",
+            "goles_en_contra": "47",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "5",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "2",
+            "jugados_fuera": "15",
+            "ganados_fuera": "4",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "45",
+            "puntos_sancion": "0",
+            "puntos_local": "29",
+            "puntos_visitante": "16",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "8",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011107215_electrocor_sin_bordes.png?nova=1",
+            "codequipo": "2732911",
+            "nombre": "C.D. ELECTROCOR LAS ROZAS C.F. 'A'",
+            "jugados": "30",
+            "ganados": "10",
+            "perdidos": "11",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "54",
+            "goles_en_contra": "54",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "4",
+            "jugados_fuera": "15",
+            "ganados_fuera": "2",
+            "empatados_fuera": "6",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "39",
+            "puntos_sancion": "0",
+            "puntos_local": "27",
+            "puntos_visitante": "12",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "9",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010911159_ESCUDO_UD_LAS_MATAS.jpg?nova=1",
+            "codequipo": "8963337",
+            "nombre": "U.D. LAS MATAS C.F. 'A'",
+            "jugados": "30",
+            "ganados": "10",
+            "perdidos": "14",
+            "empatados": "6",
+            "penaltis": "0",
+            "goles_a_favor": "48",
+            "goles_en_contra": "70",
+            "jugados_casa": "15",
+            "ganados_casa": "9",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "5",
+            "jugados_fuera": "15",
+            "ganados_fuera": "1",
+            "empatados_fuera": "5",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "9",
+            "puntos": "36",
+            "puntos_sancion": "0",
+            "puntos_local": "28",
+            "puntos_visitante": "8",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "10",
+            "url_img": "/pnfg/pimg/Clubes/00100_0000039449_Trivel_Valderas.jpg?nova=1",
+            "codequipo": "2269792",
+            "nombre": "C.F. TRIVAL VALDERAS ALCORCON 'C'",
+            "jugados": "30",
+            "ganados": "8",
+            "perdidos": "14",
+            "empatados": "8",
+            "penaltis": "0",
+            "goles_a_favor": "42",
+            "goles_en_contra": "69",
+            "jugados_casa": "15",
+            "ganados_casa": "2",
+            "empatados_casa": "6",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "7",
+            "jugados_fuera": "15",
+            "ganados_fuera": "6",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "32",
+            "puntos_sancion": "0",
+            "puntos_local": "12",
+            "puntos_visitante": "20",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "11",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011007675_ESCUDO_ZONA.png?nova=1",
+            "codequipo": "2237",
+            "nombre": "UNION ZONA NORTE 'A'",
+            "jugados": "30",
+            "ganados": "8",
+            "perdidos": "15",
+            "empatados": "7",
+            "penaltis": "0",
+            "goles_a_favor": "39",
+            "goles_en_contra": "58",
+            "jugados_casa": "15",
+            "ganados_casa": "6",
+            "empatados_casa": "4",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "5",
+            "jugados_fuera": "15",
+            "ganados_fuera": "2",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "10",
+            "puntos": "31",
+            "puntos_sancion": "0",
+            "puntos_local": "22",
+            "puntos_visitante": "9",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "12",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010993722_Fundacion.jpg?nova=1",
+            "codequipo": "1422",
+            "nombre": "FUNDACION ADF 'A'",
+            "jugados": "30",
+            "ganados": "7",
+            "perdidos": "15",
+            "empatados": "8",
+            "penaltis": "0",
+            "goles_a_favor": "37",
+            "goles_en_contra": "60",
+            "jugados_casa": "15",
+            "ganados_casa": "4",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "8",
+            "jugados_fuera": "15",
+            "ganados_fuera": "3",
+            "empatados_fuera": "5",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "29",
+            "puntos_sancion": "0",
+            "puntos_local": "15",
+            "puntos_visitante": "14",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "13",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012158828_Escudo_Tres_Cantos_CDF.png?nova=1",
+            "codequipo": "2032",
+            "nombre": "C.D. FUTBOL TRES CANTOS 'A'",
+            "jugados": "30",
+            "ganados": "7",
+            "perdidos": "15",
+            "empatados": "8",
+            "penaltis": "0",
+            "goles_a_favor": "45",
+            "goles_en_contra": "58",
+            "jugados_casa": "15",
+            "ganados_casa": "3",
+            "empatados_casa": "4",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "8",
+            "jugados_fuera": "15",
+            "ganados_fuera": "4",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "29",
+            "puntos_sancion": "0",
+            "puntos_local": "13",
+            "puntos_visitante": "16",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "14",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012189690_Escudo_CD_M__STOLES.jpg?nova=1",
+            "codequipo": "2131",
+            "nombre": "C.D. MOSTOLES U.R.J.C. 'B'",
+            "jugados": "30",
+            "ganados": "6",
+            "perdidos": "15",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "29",
+            "goles_en_contra": "49",
+            "jugados_casa": "15",
+            "ganados_casa": "3",
+            "empatados_casa": "5",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "7",
+            "jugados_fuera": "15",
+            "ganados_fuera": "3",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "8",
+            "puntos": "27",
+            "puntos_sancion": "0",
+            "puntos_local": "14",
+            "puntos_visitante": "13",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "15",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png?nova=1",
+            "codequipo": "821",
+            "nombre": "CELTIC CASTILLA C.F. 'A'",
+            "jugados": "30",
+            "ganados": "4",
+            "perdidos": "22",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "41",
+            "goles_en_contra": "95",
+            "jugados_casa": "15",
+            "ganados_casa": "4",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "9",
+            "jugados_fuera": "15",
+            "ganados_fuera": "0",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "13",
+            "puntos": "16",
+            "puntos_sancion": "0",
+            "puntos_local": "14",
+            "puntos_visitante": "2",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "16",
+            "url_img": "/pnfg/pimg/Clubes/00100_0000000663_3660_EFMO_BOADILLA.jpg?nova=1",
+            "codequipo": "1742",
+            "nombre": "E.F.M.O. BOADILLA 'B'",
+            "jugados": "30",
+            "ganados": "4",
+            "perdidos": "23",
+            "empatados": "3",
+            "penaltis": "0",
+            "goles_a_favor": "39",
+            "goles_en_contra": "74",
+            "jugados_casa": "15",
+            "ganados_casa": "2",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "10",
+            "jugados_fuera": "15",
+            "ganados_fuera": "2",
+            "empatados_fuera": "0",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "13",
+            "puntos": "15",
+            "puntos_sancion": "0",
+            "puntos_local": "9",
+            "puntos_visitante": "6",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        }
+    ],
+    "promociones": [
+        {
+            "orden": "1",
+            "nombre_promocion": "ASCENSOS",
+            "color_promocion": "#41FF1A"
+        },
+        {
+            "orden": "2",
+            "nombre_promocion": "DESCENSOS",
+            "color_promocion": "#FF491C"
+        }
+    ],
+    "host": "https://appweb.rffm.es/"
+}
+
+
+https://www.rffm.es/api/standings?idGroup=24037549&round=29
+
+{
+    "estado": "1",
+    "sesion_ok": "1",
+    "competicion": "PRIMERA DIVISION AUTONOMICA CADETE",
+    "codigo_competicion": "24037548",
+    "grupo": "Grupo 1",
+    "codigo_grupo": "24037549",
+    "tipo_competicion": "2",
+    "jornada": "29",
+    "fecha_jornada": "16-05-2026",
+    "clasificacion": [
+        {
+            "color": "#41FF1A",
+            "posicion": "1",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012083236_logo.png?nova=1",
+            "codequipo": "109",
+            "nombre": "ARAVACA C.F. - CEIBA 'A'",
+            "jugados": "29",
+            "ganados": "23",
+            "perdidos": "4",
+            "empatados": "2",
+            "penaltis": "0",
+            "goles_a_favor": "82",
+            "goles_en_contra": "26",
+            "jugados_casa": "14",
+            "ganados_casa": "13",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "0",
+            "jugados_fuera": "15",
+            "ganados_fuera": "10",
+            "empatados_fuera": "1",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "71",
+            "puntos_sancion": "0",
+            "puntos_local": "40",
+            "puntos_visitante": "31",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "#41FF1A",
+            "posicion": "2",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011221693_FDE__logo_sello.png?nova=1",
+            "codequipo": "3350761",
+            "nombre": "C.D.E. FOOTBALL DREAMS EXPERIENCE 'A'",
+            "jugados": "29",
+            "ganados": "22",
+            "perdidos": "3",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "74",
+            "goles_en_contra": "23",
+            "jugados_casa": "15",
+            "ganados_casa": "13",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "1",
+            "jugados_fuera": "14",
+            "ganados_fuera": "9",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "2",
+            "puntos": "70",
+            "puntos_sancion": "0",
+            "puntos_local": "40",
+            "puntos_visitante": "30",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "3",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011615318_ESCUDO_ADCV.png?nova=1",
+            "codequipo": "198",
+            "nombre": "A.D. COLMENAR VIEJO 'A'",
+            "jugados": "29",
+            "ganados": "18",
+            "perdidos": "4",
+            "empatados": "7",
+            "penaltis": "0",
+            "goles_a_favor": "64",
+            "goles_en_contra": "23",
+            "jugados_casa": "14",
+            "ganados_casa": "9",
+            "empatados_casa": "4",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "1",
+            "jugados_fuera": "15",
+            "ganados_fuera": "9",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "3",
+            "puntos": "61",
+            "puntos_sancion": "0",
+            "puntos_local": "31",
+            "puntos_visitante": "30",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "4",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012184056_Escudo_Uni__n_Adarve.jpg?nova=1",
+            "codequipo": "1599",
+            "nombre": "A.D. UNION ADARVE 'C'",
+            "jugados": "29",
+            "ganados": "17",
+            "perdidos": "7",
+            "empatados": "5",
+            "penaltis": "0",
+            "goles_a_favor": "55",
+            "goles_en_contra": "38",
+            "jugados_casa": "14",
+            "ganados_casa": "9",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "3",
+            "jugados_fuera": "15",
+            "ganados_fuera": "8",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "56",
+            "puntos_sancion": "0",
+            "puntos_local": "29",
+            "puntos_visitante": "27",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "5",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011108020_Escudo_nuevos_Las_Rozas.png?nova=1",
+            "codequipo": "298",
+            "nombre": "LAS ROZAS C.F. 'B'",
+            "jugados": "29",
+            "ganados": "17",
+            "perdidos": "8",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "59",
+            "goles_en_contra": "36",
+            "jugados_casa": "14",
+            "ganados_casa": "8",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "4",
+            "jugados_fuera": "15",
+            "ganados_fuera": "9",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "4",
+            "puntos": "55",
+            "puntos_sancion": "0",
+            "puntos_local": "26",
+            "puntos_visitante": "29",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "6",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010960678_escudo_Rffm_-_CFPOZUELO.jpg?nova=1",
+            "codequipo": "1878",
+            "nombre": "C.F. POZUELO DE ALARCON 'A'",
+            "jugados": "29",
+            "ganados": "14",
+            "perdidos": "10",
+            "empatados": "5",
+            "penaltis": "0",
+            "goles_a_favor": "52",
+            "goles_en_contra": "44",
+            "jugados_casa": "14",
+            "ganados_casa": "7",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "4",
+            "jugados_fuera": "15",
+            "ganados_fuera": "7",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "6",
+            "puntos": "47",
+            "puntos_sancion": "0",
+            "puntos_local": "24",
+            "puntos_visitante": "23",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "7",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011078749_Escudo_CDG.png?nova=1",
+            "codequipo": "304468",
+            "nombre": "C.D. GALAPAGAR 'B'",
+            "jugados": "29",
+            "ganados": "11",
+            "perdidos": "9",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "46",
+            "goles_en_contra": "44",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "5",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "2",
+            "jugados_fuera": "14",
+            "ganados_fuera": "3",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "42",
+            "puntos_sancion": "0",
+            "puntos_local": "29",
+            "puntos_visitante": "13",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "8",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011107215_electrocor_sin_bordes.png?nova=1",
+            "codequipo": "2732911",
+            "nombre": "C.D. ELECTROCOR LAS ROZAS C.F. 'A'",
+            "jugados": "29",
+            "ganados": "10",
+            "perdidos": "10",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "53",
+            "goles_en_contra": "50",
+            "jugados_casa": "15",
+            "ganados_casa": "8",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "4",
+            "jugados_fuera": "14",
+            "ganados_fuera": "2",
+            "empatados_fuera": "6",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "6",
+            "puntos": "39",
+            "puntos_sancion": "0",
+            "puntos_local": "27",
+            "puntos_visitante": "12",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "9",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010911159_ESCUDO_UD_LAS_MATAS.jpg?nova=1",
+            "codequipo": "8963337",
+            "nombre": "U.D. LAS MATAS C.F. 'A'",
+            "jugados": "29",
+            "ganados": "10",
+            "perdidos": "14",
+            "empatados": "5",
+            "penaltis": "0",
+            "goles_a_favor": "47",
+            "goles_en_contra": "69",
+            "jugados_casa": "15",
+            "ganados_casa": "9",
+            "empatados_casa": "1",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "5",
+            "jugados_fuera": "14",
+            "ganados_fuera": "1",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "9",
+            "puntos": "35",
+            "puntos_sancion": "0",
+            "puntos_local": "28",
+            "puntos_visitante": "7",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "10",
+            "url_img": "/pnfg/pimg/Clubes/00100_0000039449_Trivel_Valderas.jpg?nova=1",
+            "codequipo": "2269792",
+            "nombre": "C.F. TRIVAL VALDERAS ALCORCON 'C'",
+            "jugados": "29",
+            "ganados": "8",
+            "perdidos": "13",
+            "empatados": "8",
+            "penaltis": "0",
+            "goles_a_favor": "42",
+            "goles_en_contra": "63",
+            "jugados_casa": "15",
+            "ganados_casa": "2",
+            "empatados_casa": "6",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "7",
+            "jugados_fuera": "14",
+            "ganados_fuera": "6",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "6",
+            "puntos": "32",
+            "puntos_sancion": "0",
+            "puntos_local": "12",
+            "puntos_visitante": "20",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "11",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010993722_Fundacion.jpg?nova=1",
+            "codequipo": "1422",
+            "nombre": "FUNDACION ADF 'A'",
+            "jugados": "29",
+            "ganados": "7",
+            "perdidos": "14",
+            "empatados": "8",
+            "penaltis": "0",
+            "goles_a_favor": "37",
+            "goles_en_contra": "58",
+            "jugados_casa": "15",
+            "ganados_casa": "4",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "8",
+            "jugados_fuera": "14",
+            "ganados_fuera": "3",
+            "empatados_fuera": "5",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "6",
+            "puntos": "29",
+            "puntos_sancion": "0",
+            "puntos_local": "15",
+            "puntos_visitante": "14",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                }
+            ]
+        },
+        {
+            "color": "",
+            "posicion": "12",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012158828_Escudo_Tres_Cantos_CDF.png?nova=1",
+            "codequipo": "2032",
+            "nombre": "C.D. FUTBOL TRES CANTOS 'A'",
+            "jugados": "29",
+            "ganados": "7",
+            "perdidos": "15",
+            "empatados": "7",
+            "penaltis": "0",
+            "goles_a_favor": "44",
+            "goles_en_contra": "57",
+            "jugados_casa": "14",
+            "ganados_casa": "3",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "8",
+            "jugados_fuera": "15",
+            "ganados_fuera": "4",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "7",
+            "puntos": "28",
+            "puntos_sancion": "0",
+            "puntos_local": "12",
+            "puntos_visitante": "16",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "13",
+            "url_img": "/pnfg/pimg/Clubes/00100_0011007675_ESCUDO_ZONA.png?nova=1",
+            "codequipo": "2237",
+            "nombre": "UNION ZONA NORTE 'A'",
+            "jugados": "29",
+            "ganados": "7",
+            "perdidos": "15",
+            "empatados": "7",
+            "penaltis": "0",
+            "goles_a_favor": "37",
+            "goles_en_contra": "57",
+            "jugados_casa": "15",
+            "ganados_casa": "6",
+            "empatados_casa": "4",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "5",
+            "jugados_fuera": "14",
+            "ganados_fuera": "1",
+            "empatados_fuera": "3",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "10",
+            "puntos": "28",
+            "puntos_sancion": "0",
+            "puntos_local": "22",
+            "puntos_visitante": "6",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "14",
+            "url_img": "/pnfg/pimg/Clubes/00100_0012189690_Escudo_CD_M__STOLES.jpg?nova=1",
+            "codequipo": "2131",
+            "nombre": "C.D. MOSTOLES U.R.J.C. 'B'",
+            "jugados": "29",
+            "ganados": "5",
+            "perdidos": "15",
+            "empatados": "9",
+            "penaltis": "0",
+            "goles_a_favor": "27",
+            "goles_en_contra": "48",
+            "jugados_casa": "15",
+            "ganados_casa": "3",
+            "empatados_casa": "5",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "7",
+            "jugados_fuera": "14",
+            "ganados_fuera": "2",
+            "empatados_fuera": "4",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "8",
+            "puntos": "24",
+            "puntos_sancion": "0",
+            "puntos_local": "14",
+            "puntos_visitante": "10",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "15",
+            "url_img": "/pnfg/pimg/Clubes/00100_0010940034_ESC_CELTIC_CASTILLA.png?nova=1",
+            "codequipo": "821",
+            "nombre": "CELTIC CASTILLA C.F. 'A'",
+            "jugados": "29",
+            "ganados": "4",
+            "perdidos": "21",
+            "empatados": "4",
+            "penaltis": "0",
+            "goles_a_favor": "41",
+            "goles_en_contra": "91",
+            "jugados_casa": "14",
+            "ganados_casa": "4",
+            "empatados_casa": "2",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "8",
+            "jugados_fuera": "15",
+            "ganados_fuera": "0",
+            "empatados_fuera": "2",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "13",
+            "puntos": "16",
+            "puntos_sancion": "0",
+            "puntos_local": "14",
+            "puntos_visitante": "2",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "G",
+                    "color": "#04B431"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                }
+            ]
+        },
+        {
+            "color": "#FF491C",
+            "posicion": "16",
+            "url_img": "/pnfg/pimg/Clubes/00100_0000000663_3660_EFMO_BOADILLA.jpg?nova=1",
+            "codequipo": "1742",
+            "nombre": "E.F.M.O. BOADILLA 'B'",
+            "jugados": "29",
+            "ganados": "4",
+            "perdidos": "22",
+            "empatados": "3",
+            "penaltis": "0",
+            "goles_a_favor": "36",
+            "goles_en_contra": "69",
+            "jugados_casa": "14",
+            "ganados_casa": "2",
+            "empatados_casa": "3",
+            "ganados_penalti_casa": "",
+            "perdidos_casa": "9",
+            "jugados_fuera": "15",
+            "ganados_fuera": "2",
+            "empatados_fuera": "0",
+            "ganados_penalti_fuera": "",
+            "perdidos_fuera": "13",
+            "puntos": "15",
+            "puntos_sancion": "0",
+            "puntos_local": "9",
+            "puntos_visitante": "6",
+            "mostrar_coeficiente": "0",
+            "coeficiente": "",
+            "racha_partidos": [
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "E",
+                    "color": "#D7DF01"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                },
+                {
+                    "tipo": "P",
+                    "color": "#F78181"
+                }
+            ]
+        }
+    ],
+    "promociones": [
+        {
+            "orden": "1",
+            "nombre_promocion": "ASCENSOS",
+            "color_promocion": "#41FF1A"
+        },
+        {
+            "orden": "2",
+            "nombre_promocion": "DESCENSOS",
+            "color_promocion": "#FF491C"
+        }
+    ],
+    "host": "https://appweb.rffm.es/"
+}

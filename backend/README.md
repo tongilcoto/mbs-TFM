@@ -599,17 +599,19 @@ falle, más unos invariantes baratos (que haya jornadas, que los `codacta` sigan
 | Lo que sale | Qué significa | ¿Hay que hacer algo? |
 |---|---|---|
 | *"No se pudo hablar con la RFFM"* | no hay red, o su servidor está caído | no |
-| *"La coordenada ha caducado"* | `competicion`/`grupo` reciben un bloque nuevo cada temporada | pasarle otra por variable de entorno |
+| *"La coordenada no designa nada"* | esos `competicion`/`grupo` no existen. **No es que hayan caducado**: cada temporada recibe un bloque nuevo, y los viejos siguen sirviendo lo suyo | pasarle otra por variable de entorno |
 | *"Respondió 500"* | fallo suyo | no, salvo que se repita días |
 | **⚠️ *"El parser ya no traga"*** | **han cambiado la forma de la respuesta** | **sí: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser** |
 
 Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de otra competición**. La RFFM
 **no reutiliza los códigos entre temporadas** —cada una recibe un bloque nuevo— y además **ignora el
-parámetro `temporada`** (`D-84` enmendada), así que una coordenada caducada **no da 404**: devuelve el
-calendario del año pasado, para siempre y sin error. El canario compara también el nombre.
+parámetro `temporada`** (`D-84` enmendada), así que una coordenada equivocada **no da 404**: devuelve el
+calendario que corresponda a esos códigos, para siempre y sin error. **Los códigos no caducan**; lo que
+caduca es la intención de quien copió la URL del año pasado. El canario compara también el nombre.
 
-**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto caduca —`competicion` y `grupo`
-cambian cada temporada—, así que las otras cuatro son configurables sin tocar código:
+**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto **envejece** —seguirá sirviendo su
+temporada para siempre, que dentro de un año ya no será la vigente—, así que las otras cuatro son
+configurables sin tocar código:
 
 | Variable | Por defecto |
 |---|---|

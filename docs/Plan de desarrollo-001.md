@@ -767,7 +767,7 @@ con la batería completa en **217**. Corre en 4 s con Postgres; los de dominio y
 | ¿De dónde salen `Round.start_date` y `end_date`, que la fuente no publica? | Del **mínimo y el máximo de las fechas de sus partidos**. Medido: en la temporada jugada da sábado→domingo en 26 de 30 jornadas → [D-81] |
 | ¿Cómo se genera el `slug` de `OpponentClub`? | **Mecánicamente**, sin lista de formas jurídicas. Y el desempate de colisiones vive en el caso de uso, no en el VO → [D-82] |
 | ¿Dónde están las fronteras transaccionales de una pasada? | **Tres ámbitos, y la red fuera de los tres.** La decisión vive en el caso de uso, no en el adaptador → [D-83] |
-| ¿Una coordenada caducada falla? | **No.** Devuelve `200` y el calendario de **otra competición** → [D-84] |
+| ¿Una coordenada equivocada falla? | **No.** Devuelve `200` y el calendario de **otra competición**. Y los códigos **no** caducan: cambian cada temporada y los viejos siguen sirviendo lo suyo → [D-84] |
 | ¿Dónde queda constancia de una pasada? | En una **tabla**, y escrita **fuera** de la transacción de la pasada → [D-85] |
 | ¿Sirve el volcado que había para la rama de "partido jugado"? | No, y ya no hace falta: el volcado de temporada jugada cierra el deber de §4.3 |
 
