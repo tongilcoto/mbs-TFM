@@ -1,4 +1,5 @@
 public import Domain
+public import struct Foundation.Date
 
 /// Puerto de salida de `Round` (§4.3).
 ///
@@ -97,4 +98,70 @@ public protocol StandingRowRepository: Sendable {
     /// uso para que la fila recién escrita entre en los candidatos de la misma
     /// pasada sin releerla.
     func save(_ row: StandingRow) async throws
+}
+
+/// Puerto de salida de `LeagueScorer` (§4.3, F8).
+///
+/// # Tres operaciones, y la tercera **no la tiene ningún otro puerto de ingesta**
+///
+/// `list` y `save` son lo de siempre. **`retire` borra**, y es la excepción del
+/// modelo: `D-75` dice que lo que la fuente deja de publicar no se destruye, y
+/// por eso `StandingRowRepository`, `MatchRepository` y `RoundRepository` no
+/// tienen `delete`.
+///
+/// La condición que autoriza la excepción es **"la tabla es estado vigente y no
+/// histórico"** (`D-94`), y en toda la salida de la ingesta solo la cumple ésta:
+/// una fila de clasificación es la foto de una jornada que ya pasó y sigue siendo
+/// verdad; un ranking de goleadores dice *"cómo va la cosa ahora"*, y un goleador
+/// que el proveedor dejó de publicar no es un dato viejo identificable — es una
+/// fila indistinguible de las buenas dentro de una tabla que afirma ser la de
+/// hoy.
+///
+/// > **Al añadir la entidad 24: si tiene jornada, es histórico y no se borra.**
+///
+/// # Por qué se lee por competición y no hay `find`
+///
+/// Porque la unidad de consumo es **la tabla entera de una competición** —el
+/// ranking—, igual que en la clasificación es la de una jornada. Y no hay acceso
+/// por id (`D-34`): el `id` existe porque toda tabla tiene PK (§3.5).
+public protocol LeagueScorerRepository: Sendable {
+    /// El ranking de una competición, **en su orden** (`D-49`, §5.1): puesto
+    /// ascendente con los nulos al final, goles descendente como criterio real y
+    /// el nombre como desempate estable.
+    ///
+    /// **Hoy el puesto es nulo siempre** —ninguna de las dos federaciones lo
+    /// publica—, así que en la práctica ordena por goles y nombre. El orden se
+    /// escribe entero igualmente: el día que una fuente lo publique, `D-49` dice
+    /// que se respeta el suyo, y esa regla no puede vivir en el llamante.
+    func list(competitionID: CompetitionID) async throws -> [LeagueScorer]
+
+    /// *Upsert* por `id`, igual que sus hermanas: el id lo pone el caso de uso
+    /// para que la fila recién escrita entre en los candidatos de la misma pasada
+    /// sin releerla.
+    func save(_ scorer: LeagueScorer) async throws
+
+    /// **Retira los que el proveedor dejó de publicar** (`D-94`): borra las filas
+    /// de **esta competición** cuya marca sea anterior a la de la pasada.
+    ///
+    /// Devuelve cuántas borró, porque ese número va al registro (`D-85`) y es el
+    /// que delata una pasada que en vez de limpiar ha vaciado.
+    ///
+    /// # Las dos mitades del filtro son igual de obligatorias
+    ///
+    /// Sin `syncedBefore` esto vacía la competición. **Y sin `competitionID` esto
+    /// vacía el club entero** — que es la clase de fallo que no da error, se lleva
+    /// los datos y solo se nota al mirar la pantalla equivocada. Van juntas en la
+    /// firma para que no se pueda llamar con una sola.
+    ///
+    /// # Y por qué la marca y no la resta de conjuntos
+    ///
+    /// Comparar *"lo que había"* contra *"lo que vino"* en memoria da el mismo
+    /// resultado y obliga a releer la tabla entera. La marca lo resuelve en el
+    /// `WHERE`, y sobre todo **es correcta si la pasada se interrumpe**: todo
+    /// ocurre dentro de la transacción de `D-83`, así que o se escriben las nuevas
+    /// y se retiran las viejas, o no pasa ninguna de las dos cosas. Con la
+    /// variante ingenua —*"borro todo y vuelvo a insertar"*— una caída a mitad
+    /// dejaría la tabla vacía; aquí eso no es representable.
+    @discardableResult
+    func retire(competitionID: CompetitionID, syncedBefore: Date) async throws -> Int
 }

@@ -27,6 +27,7 @@ actor IngestionStore {
     var matches: [Match] = []
     var ingestionRuns: [IngestionRun] = []
     var standingRows: [StandingRow] = []
+    var leagueScorers: [LeagueScorer] = []
 
     /// Cuántas veces se abrió un ámbito de tenant. Lo mira el test de
     /// atomicidad: la pasada escribe en **uno**.
@@ -37,9 +38,11 @@ actor IngestionStore {
     func seed(seasons: [Season] = [], competitions: [Competition] = [],
               rounds: [Round] = [], opponentClubs: [OpponentClub] = [],
               teams: [Team] = [], matches: [Match] = [],
-              standingRows: [StandingRow] = []) {
+              standingRows: [StandingRow] = [],
+              leagueScorers: [LeagueScorer] = []) {
         self.seasons += seasons
         self.standingRows += standingRows
+        self.leagueScorers += leagueScorers
         self.competitions += competitions
         self.rounds += rounds
         self.opponentClubs += opponentClubs
@@ -58,6 +61,24 @@ actor IngestionStore {
     func record(_ value: IngestionRun) { ingestionRuns.append(value) }
     func save(standingRow value: StandingRow) {
         upsert(&standingRows, value) { $0.id == value.id }
+    }
+    func save(leagueScorer value: LeagueScorer) {
+        upsert(&leagueScorers, value) { $0.id == value.id }
+    }
+
+    /// La retirada de `D-94`, con **las dos mitades del filtro**, igual que el
+    /// adaptador de verdad.
+    ///
+    /// Que el doble las copie no es celo: si aquí se filtrara solo por la marca,
+    /// el nivel 2 no podría afirmar nunca *"no toca las otras competiciones"*, y
+    /// ése es exactamente el fallo que no da error y se lleva los datos.
+    func retireLeagueScorers(competitionID: CompetitionID, syncedBefore: Date) -> Int {
+        let stale = leagueScorers.filter {
+            $0.competitionID == competitionID
+                && ($0.syncedAt.map { $0 < syncedBefore } ?? true)
+        }
+        leagueScorers.removeAll { scorer in stale.contains { $0.id == scorer.id } }
+        return stale.count
     }
 
     private func upsert<T>(_ list: inout [T], _ value: T, where match: (T) -> Bool) {
@@ -177,6 +198,45 @@ struct FakeRepositories: Repositories {
     }
     var standingRows: any StandingRowRepository {
         FakeStandingRowRepository(store: store)
+    }
+    var leagueScorers: any LeagueScorerRepository {
+        FakeLeagueScorerRepository(store: store)
+    }
+}
+
+/// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de
+/// clasificación: el orden es el dato (`D-49`, §5.1), así que un doble que no lo
+/// reprodujera haría que el nivel 2 midiera otra cosa que el nivel 3.
+///
+/// Los tres criterios, en orden: puesto ascendente con los nulos al final —hoy
+/// siempre nulo—, goles descendente, y el nombre de desempate, que es la lección
+/// de `D-92` sobre órdenes que no son totales.
+struct FakeLeagueScorerRepository: LeagueScorerRepository {
+    let store: IngestionStore
+
+    func list(competitionID: CompetitionID) async throws -> [LeagueScorer] {
+        await store.leagueScorers
+            .filter { $0.competitionID == competitionID }
+            .sorted { left, right in
+                switch (left.rank, right.rank) {
+                case let (l?, r?) where l != r: return l < r
+                case (nil, _?): return false
+                case (_?, nil): return true
+                default: break
+                }
+                if left.goals != right.goals { return left.goals > right.goals }
+                return left.fullName < right.fullName
+            }
+    }
+
+    func save(_ scorer: LeagueScorer) async throws {
+        await store.save(leagueScorer: scorer)
+    }
+
+    @discardableResult
+    func retire(competitionID: CompetitionID, syncedBefore: Date) async throws -> Int {
+        await store.retireLeagueScorers(
+            competitionID: competitionID, syncedBefore: syncedBefore)
     }
 }
 

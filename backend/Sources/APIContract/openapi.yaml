@@ -6460,8 +6460,13 @@ components:
         disparo** y sin esto serían indistinguibles — misma competición, misma hora, y los contadores del
         otro a cero, que se lee como *"no hizo nada"* en vez de como *"esos no van con esto"*.
 
-        Es además lo que le dice al cliente **qué contadores mirar** de los diez que trae `counters`.
-      enum: [calendar, standings]
+        Es además lo que le dice al cliente **qué contadores mirar** de los trece que trae `counters`.
+
+        **F8 añade `scorers`**, y con ella una competición deja **tres** filas por disparo. Cae del lado
+        **nulo** de `roundId`, igual que el calendario y por el mismo motivo: `LeagueScorer` es estado
+        vigente único, no *snapshot* por jornada (§3.2), así que su endpoint devuelve la competición
+        entera en una petición.
+      enum: [calendar, standings, scorers]
 
     IngestionHealth:
       type: string
@@ -6497,7 +6502,8 @@ components:
       required:
         [opponentClubsCreated, opponentClubsUpdated, teamsCreated, teamsUpdated,
          roundsCreated, roundsUpdated, matchesCreated, matchesUpdated,
-         standingRowsCreated, standingRowsUpdated]
+         standingRowsCreated, standingRowsUpdated,
+         leagueScorersCreated, leagueScorersUpdated, leagueScorersRetired]
       properties:
         opponentClubsCreated: { type: integer, minimum: 0, readOnly: true }
         opponentClubsUpdated: { type: integer, minimum: 0, readOnly: true }
@@ -6519,8 +6525,25 @@ components:
             —16 equipos, 30 jornadas—, pero cuántas escribió *esta* pasada no, y no se puede reconstruir
             después. Una en régimen; veinticinco la primera de un alta a mitad de temporada.
         standingRowsUpdated: { type: integer, minimum: 0, readOnly: true }
+        leagueScorersCreated: { type: integer, minimum: 0, readOnly: true }
+        leagueScorersUpdated: { type: integer, minimum: 0, readOnly: true }
+        leagueScorersRetired:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Goleadores **retirados** por esta pasada (F8, D-94), y el único contador del contrato que
+            cuenta filas **borradas**.
 
-      # **Los diez viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es
+            Existe porque `LeagueScorer` es la única salida de la ingesta que borra: al ser *estado
+            vigente* y no histórico, el goleador que el proveedor deja de publicar se quedaría para
+            siempre mezclado con los vivos. Se retira por la marca `syncedAt`, que no viaja en el DTO.
+
+            **Y es el número que hay que mirar cuando algo va mal**: una pasada que retire 200 de 218 no
+            ha limpiado nada — ha vaciado el ranking. Sin contador, eso se ve en la pantalla y no en la
+            tabla, que es justo lo que D-85 existe para evitar.
+
+      # **Los trece viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es
       # `kind`, no la ausencia del campo: un contador ausente y uno a cero se leen igual desde el
       # cliente, y "esos no van con esto" no es lo mismo que "no hizo nada".
 
@@ -6553,6 +6576,13 @@ components:
         `unresolved_team`: allí el arrastre va del equipo al partido, y aquí la fila **es** del equipo
         desconocido. La tabla de la federación puede traer un equipo que el calendario todavía no ha
         mencionado, porque los partidos que lo mencionarían son de jornadas aún sin ingerir.
+
+        `unidentified_scorer` es de la pasada de **goleadores** (F8) y es el único de la lista que
+        significa *"la fuente cambió de forma"* y no *"los datos aún no cuadran"*: el identificador de
+        jugador viene en **426/426** filas de los volcados medidos, así que su ausencia es una anomalía.
+        No tira la pasada, y ahí está la asimetría con la clasificación: un ranking sin numeración
+        aguanta 217 de 218, mientras que una clasificación a la que le falte una fila tiene un hueco en
+        una numeración que este mismo *spec* declara imposible.
       enum:
         - ambiguous_opponent_club
         - ambiguous_team
@@ -6562,6 +6592,7 @@ components:
         - unsluggable_club_name
         - duplicate_club_name
         - unknown_standing_team
+        - unidentified_scorer
 
     TriggerIngestionRequest:
       type: object

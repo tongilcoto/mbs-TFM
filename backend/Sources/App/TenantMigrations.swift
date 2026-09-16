@@ -57,6 +57,11 @@ public enum TenantMigrations {
             CreateRound(),
             CreateMatch(),
             CreateStandingRow(),
+            // F8: la entidad 23. El orden canónico de arriba la pone detrás de
+            // `Goal`, pero `Player`…`Goal` no existen todavía, así que su sitio
+            // efectivo es éste. No es una excepción a `D-90`: su única FK es
+            // `Competition`, aplicada desde F1.
+            CreateLeagueScorer(),
             CreateIngestionRun(),
             // F7: tres columnas al registro de pasadas. **Va al final y no junto
             // a `CreateIngestionRun`** porque no crea una tabla nueva: altera una
@@ -68,6 +73,12 @@ public enum TenantMigrations {
             // faltaba `round_id`, y `D-90` no admite editar una aplicada. La
             // lección cayendo dentro de la propia fase que la heredaba.
             AddIngestionRunRound(),
+            // F8: los tres contadores de goleadores **y el `CHECK` de `kind`
+            // rehecho**, que es el hallazgo de la fase. Se creía que el caso nuevo
+            // del enumerado lo heredaba solo (`D-02`); se midió y no: la
+            // derivación ocurre cuando la migración corre, y su texto se queda
+            // congelado en el *schema*. `D-90` un piso más abajo.
+            AddScorersToIngestionRun(),
         ]
     }
 }
