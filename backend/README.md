@@ -30,7 +30,7 @@
 ## 0. Qué hay montado
 
 Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F8**, incluidas **F6-bis** y **F6-ter**. **446 tests.**
-Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
+Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.10**; aquí solo lo que se puede
 **tocar**.
 
 | Operación HTTP | |
@@ -46,8 +46,14 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 394 tests, ~10 s con Docker levantado
+REQUIRE_DB=1 swift test           # 446 tests, ~17 s con Docker levantado
 ```
+
+> **`REQUIRE_DB=1` y no `swift test` a secas, aunque cueste teclearlo** (`A-7`/H-07). Sin esa variable, los
+> tests de base de datos **se omiten** si Docker está parado — y la salida es **idéntica en texto y en
+> recuento** a la de una pasada de verdad, porque el total sale de la lista y no de lo ejecutado. Lo único
+> que cambia es la duración: **17 s contra 0,002 s**. Para el bucle rápido, omitir está bien y es el diseño
+> ([§5.2](#52-si-postgres-no-está-levantado)); para saber si algo está roto, la variable.
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
 
@@ -202,8 +208,20 @@ y se puede borrar entera sin consecuencias.
 ```
 tfm
 ├── public          ← plano de control: tenants  (+ su propia _fluent_migrations)
-├── club_atleti     ← un club: clubs  (+ su propia _fluent_migrations)
+├── club_atleti     ← un club: sus DIEZ tablas  (+ su propia _fluent_migrations)
 └── club_celtic     ← otro club: las mismas tablas, datos distintos
+```
+
+Las diez de hoy, en el orden de FK con que se crean (§4.6) — **no son las 21 entidades de §3.2**, solo las
+que las fases entregadas han llegado a necesitar:
+
+```
+clubs · seasons · opponent_clubs · teams · competitions · rounds · matches
+      · standing_rows · league_scorers · ingestion_runs
+```
+
+```sh
+docker exec backend-db-1 psql -U tfm -d tfm -c "\dt club_atleti.*"
 ```
 
 Cada uno de los tres tiene **su propia `_fluent_migrations`**, y eso no es ruido: el plano de control se
@@ -354,7 +372,7 @@ curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
 curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&limit=5" | jq
 ```
 
-**Tres cosas que se aprenden más rápido probándolas que leyéndolas:**
+**Cinco cosas que se aprenden más rápido probándolas que leyéndolas:**
 
 - **El cuerpo `{}` no es opcional.** Un `POST` sin cuerpo devuelve **400**: el servidor generado lo parsea
   igual, así que el *spec* declara `required: true` con todos los campos opcionales. Es `D-65` otra vez — lo
@@ -378,12 +396,12 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 ## 5. Los tests
 
 ```sh
-swift test                                  # los cuatro niveles
+REQUIRE_DB=1 swift test                     # los cuatro niveles — LA FORMA BUENA (§0)
+swift test                                  # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests             # nivel 1
 swift test --filter ApplicationTests        # nivel 2
 swift test --filter PersistenceTests        # nivel 3 — necesita Docker
 swift test --filter APITests                # nivel 4 — necesita Docker
-REQUIRE_DB=1 swift test                     # falla si no hay BD, en vez de omitir
 KEEP_TEST_DATA=1 swift test                 # conserva los schemas para inspeccionarlos
 swift test --filter TenancyTests            # nivel rápido, aunque sea infraestructura
 swift test --filter FederationTests         # nivel 1 — federación: sin red y sin Docker
@@ -413,14 +431,20 @@ simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería
 | F7 · la pasada, con dobles | `IngestStandingsTests` | no |
 | F7 · la tabla y sus CHECK | `StandingPersistence` | **sí** |
 | F7 · los dos volcados hasta Postgres | `StandingIngestionEndToEnd` | **sí** |
-| F8 · la entidad 23 y su clave de *upsert* | `LeagueScorerTests` | no |
+| F8 · el goleador y su clave de *upsert* | `LeagueScorerTests` | no |
 | F8 · el parser de goleadores | `RFFMScorersParser` | no |
 | F8 · la pasada, con dobles | `IngestScorersTests` | no |
-| F8 · el `CHECK` de `kind` contra el enumerado | `MigrationIntegrity` | **sí** |
+| F8 · la tabla, el `UNIQUE` y la retirada | `LeagueScorerPersistence` | **sí** |
+| F8 · que el `CHECK` de un enumerado siga vivo | `MigrationIntegrity` | **sí** |
 
 > **Y la sorpresa del `--filter`, otra vez, medida aquí mismo**: `--filter Standing` a secas trae **75** —las
-> seis filas de arriba juntas, de cuatro *targets* distintos—. No está mal, pero no es *"el dominio de F7"*.
-> Para eso son los tres nombres de tipo de la primera fila, que dan **31**.
+> seis filas de F7 juntas, de cuatro *targets* distintos—. No está mal, pero no es *"el dominio de F7"*.
+> Para eso son los tres nombres de tipo de su primera fila, que dan **31**. En F8 pasa lo mismo con otra
+> forma: `--filter Scorer` trae **58** y `--filter LeagueScorer` **23**, porque el primero se lleva también
+> `IngestScorersTests` y `RFFMScorersParserTests`.
+>
+> **Y ojo con medir esto sin `REQUIRE_DB=1`**: las filas marcadas con *"sí"* se omiten y el filtro parece
+> traer la mitad. Las tres cuentas de arriba están medidas **con** la variable.
 
 > **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
 > del `@Test`—, y de ahí salen tres sorpresas. **Arrastra tests de suites que no esperas**, así que las
@@ -676,7 +700,7 @@ swift run Run provision-tenant atleti -f rffm -s mi_schema
 > de equivocarse no es leer mal: es **crear la tabla en el *schema* de otro club**, y eso no se deshace
 > reintentando.
 
-**Cuatro cosas que ahorran un rato:**
+**Seis cosas que ahorran un rato:**
 
 - **`swift run Run …` trabaja siempre sobre `tfm`**, tu base manual. `tfm_test` no existe para estos
   comandos: los tenants de los tests los crean y borran ellos (§5.1). Así que `1 tenant(s) procesados` es la
@@ -764,6 +788,25 @@ Repetirlo es idempotente: si la competición ya existe, la reutiliza y te devuel
 El adaptador primario del módulo de ingesta (§2.3-b). **No es un endpoint** porque un job de sistema no tiene
 usuario ni JWT que validar; el botón del backoffice existe además, y llama al mismo caso de uso (§4.5).
 
+**Un disparo son TRES pasadas por competición, no una**, y conviene saberlo antes de mirar la tabla de
+`ingestion_runs`, porque cada una deja su fila con su `kind`:
+
+| `kind` | Qué sincroniza | Unidad | Filas por competición |
+|---|---|---|---|
+| `calendar` | `Round`, `Match`, `Team`, `OpponentClub` | la competición | **1** |
+| `standings` | `StandingRow` — ingerida o **calculada** (`D-15`) | **la jornada** | **una por jornada** que toque |
+| `scorers` | `LeagueScorer` | la competición | **1** |
+
+**Y el orden no es arbitrario**: el calendario va primero porque es quien crea los `Team` con los que la
+clasificación empareja y los `Match` desde los que calcula. Un alta a mitad de temporada deja por eso
+**muchas más filas de las que uno espera** — una del calendario, una por cada jornada ya jugada, y una de
+goleadores.
+
+**La de goleadores no siempre existe**, y no es un fallo: si la federación del club no los publica
+(`ClubResponse.federationProvidesScorers`, `D-48`) la pasada **ni se intenta**, porque no hay *fallback* que
+valga — calcular el ranking desde `Goal` daría el de nuestra plantilla disfrazado del de la liga (`D-09`).
+Hoy las dos federaciones soportadas los publican, así que se ve siempre.
+
 ```sh
 swift run Run ingest                        # todos los clubes, temporada vigente
 swift run Run ingest -t atleti              # solo un club (o varios: -t "atleti,otro")
@@ -784,8 +827,21 @@ que vale para **los cinco comandos**: el comando decide **si** falló lanzando, 
 (`D-83`) y ya deja constancia de su fallo (`D-85`). Para leerla:
 
 ```sh
-curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>" | jq
+curl "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>" | jq '.data[] | {kind, outcome, roundId}'
 ```
+
+O directamente contra la base, que para esto es más cómodo:
+
+```sh
+docker exec backend-db-1 psql -U tfm -d tfm -c "
+SELECT kind, outcome, round_id IS NULL AS sin_jornada,
+       league_scorers_created, league_scorers_retired,
+       round((extract(epoch from finished_at - started_at))::numeric, 3) AS seg
+FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
+```
+
+> **`round_id` solo lo lleva la clasificación**, y el esquema lo hace cumplir:
+> `(kind = 'standings') = (round_id IS NOT NULL)`. Las otras dos son de la competición entera.
 
 **Lo que este comando no trae es la cadencia** (`D-87`). No hay temporizador dentro del proceso: quien lo
 llama es un cron o una *scheduled machine*, y §5.6 pide **lunes** (horarios confirmados + resultado de la
@@ -804,8 +860,8 @@ la recién dada de alta esperaría para siempre.
 
 ## 7. El *spec* y el código generado
 
-El contrato está en `Sources/APIContract/openapi.yaml` — **6.565 líneas, 83 operaciones en 45 rutas y las
-21 entidades completas**
+El contrato está en `Sources/APIContract/openapi.yaml` — **6.644 líneas, 83 operaciones en 45 rutas y las
+21 entidades de §3.2 completas**
 (F6 añadió la 21ª, `IngestionRun`, con su recurso). Es la
 **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` que el servidor conforma
 (`D-65`).
