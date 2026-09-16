@@ -23,12 +23,15 @@ public import enum Domain.Modality
 ///
 /// # Lo que este puerto todavía no tiene
 ///
-/// Goleadores (F8) y acta (`D-57`). Se añaden cuando su fase los pida, no antes:
+/// **El acta** (`D-57`), y nada más. Se añade cuando su fase la pida, no antes:
 /// una firma inventada hoy se escribiría contra un anexo y no contra un volcado.
-/// La **clasificación** la añadió F7, y siguiendo esa misma regla: su volcado se
-/// capturó **antes** de escribir la firma, y lo que se midió en él cambió dos
-/// decisiones —qué evidencia lleva el sobre y cómo se detecta una coordenada que
-/// no designa nada ([Anexo RFFM §F.18])—.
+///
+/// Las dos que llegaron siguieron esa regla al pie de la letra, y las dos
+/// cobraron: F7 capturó `/api/standings` **antes** de escribir la firma y lo
+/// medido cambió dos decisiones ([Anexo RFFM §F.18]); F8 hizo lo propio con
+/// `/api/scorers` y encontró que **no se comporta como su vecina** —exige los dos
+/// códigos y valida que sean pareja ([Anexo RFFM §F.19])—, que es justo lo que se
+/// habría dado por hecho copiando.
 ///
 /// > ⚠️ **Antes de añadir el segundo método, leer F6-bis del Plan de desarrollo.**
 /// > El bloque `A-1` de la auditoría midió este puerto contra el volcado de la FCF
@@ -51,7 +54,14 @@ public import enum Domain.Modality
 /// > sobre y los ocho contadores, y los dos de sobre son anulables porque la FCF
 /// > no tiene equivalente. Lo que quedó fuera —`fecha_jornada`, `puntos_sancion`,
 /// > `promociones[]`, la racha— **no es lo que la fuente no da, sino lo que nadie
-/// > lee todavía**. Falta que F8 haga lo propio con `/api/scorers`.
+/// > lee todavía**.
+/// >
+/// > **Y F8 la aplicó más fuerte todavía, porque su asimetría es la mayor de las
+/// > tres**: `/api/scorers` trae un sobre de cuatro claves y el equivalente
+/// > catalán es **un array pelado, sin sobre ninguno**. `FederationScorerTable`
+/// > lleva **un** campo de sobre —el nombre, para la guarda de `D-84`— y deja
+/// > fuera hasta el `codigo_competicion` que su vecina celebra, porque aquí ese
+/// > código **se envía** y por tanto solo podría ser eco.
 /// >
 /// > **Y la evidencia de la coordenada no vive en el sobre** (`D-91`): ni la
 /// > etiqueta de temporada —que en la RFFM es el **eco** de lo que enviamos— ni
@@ -105,6 +115,42 @@ public protocol FederationClient: Sendable {
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding
+
+    /// El **ranking de goleadores** de la competición entera (F8, `D-09`).
+    ///
+    /// # Sin jornada, y ésa es la diferencia con su vecina
+    ///
+    /// `fetchStandings` recibe `round:` porque la clasificación **es** la foto de
+    /// una jornada. Esto no: `LeagueScorer` es **estado vigente único**, sin
+    /// histórico ni columna PREV (§3.2), así que su unidad es la **competición**
+    /// —igual que la del calendario— y una pasada deja **una** fila en
+    /// `ingestion_runs`, no una por jornada.
+    ///
+    /// Y la fuente lo confirma: ni `/api/scorers` ni `/api/competition/goleadores`
+    /// aceptan jornada ([Anexo RFFM §F.19], [Anexo FCF §C.10.7]). No hay parámetro
+    /// que inventar ni que ignorar.
+    ///
+    /// # Quién decide si esta llamada se hace siquiera
+    ///
+    /// El caso de uso, leyendo `federationProvidesScorers` del catálogo (`D-48`).
+    /// Y aquí esa capacidad pesa **más** que su hermana de la clasificación: con
+    /// `false` no hay *fallback* —calcular el ranking desde `Goal` daría el de
+    /// nuestra plantilla disfrazado del de la liga (`D-09`)— así que la tabla se
+    /// queda vacía y el cliente **oculta la pantalla**. Hoy las dos federaciones
+    /// lo publican, así que la guarda no se dispara; existe porque la tercera
+    /// podría no hacerlo.
+    ///
+    /// # Qué significa que no esté
+    ///
+    /// `FederationError.coordinateNotFound`, y en la RFFM llega como `200` con el
+    /// cuerpo a `null`, igual que `/api/standings` — **pero por un motivo más**:
+    /// esta ruta exige `idGroup` **e** `idCompetition` y **valida que sean
+    /// pareja**, así que un `idCompetition` equivocado o ausente también da `null`
+    /// ([Anexo RFFM §F.19]). Es la única ruta medida de la RFFM donde una
+    /// coordenada mal tecleada **no** puede servir los datos de otra competición.
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable
 }
 
 /// Las coordenadas con las que se llama a una federación (§3.7).
@@ -489,5 +535,153 @@ public struct FederationStandingRow: Equatable, Sendable {
         self.goalsFor = goalsFor
         self.goalsAgainst = goalsAgainst
         self.points = points
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - Los goleadores (F8)
+//
+// **Tercer sobre, y la advertencia de F6-bis sigue en pie**: no se modela por
+// analogía con los dos anteriores. Cada campo de abajo tiene que justificar que
+// **lo lee alguien**, no que la fuente lo publica — que es lo que `A-1`/H-08
+// cobró en `FederationCalendar` y lo que F7 aplicó en `FederationStanding`.
+//
+// Y aquí la asimetría entre fuentes es **la mayor de las tres**, medida:
+// `/api/scorers` devuelve un sobre de cuatro claves y `/api/competition/goleadores`
+// devuelve **un array pelado, sin sobre ninguno** ([Anexo FCF §C.10.7]). Un DTO
+// con campos de sobre obligatorios sería H-08 por tercera vez.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// El ranking de goleadores de una competición, tal y como lo publica la fuente.
+///
+/// # Lo que lleva, y es **una** cosa además de las filas
+///
+/// El nombre de la competición, para la guarda de `D-84` que ya existe
+/// (`Competition.requireSameSource`). Anulable porque la FCF no publica sobre.
+///
+/// # Lo que NO lleva, y cada ausencia tiene su motivo medido
+///
+/// - **El identificador de competición.** `FederationStanding` sí lo lleva, y
+///   §F.18 lo celebró como *"la evidencia más fuerte que hay en todo el puerto"*
+///   porque a `/api/standings` **no se le envía**. Aquí **sí se envía**
+///   (`idCompetition`), así que aunque la respuesta lo trajera sería un **eco** —
+///   la trampa de [Anexo RFFM §F.16]—. Y medido: no lo trae.
+/// - **`grupo`**, el rótulo. Ya lo trae el calendario y ya se guarda.
+/// - **`estado` / `sesion_ok`.** Valen `"1"` en los volcados buenos, lo que invita
+///   a usar un `"0"` como señal de error. Con coordenada mala **no llega sobre
+///   ninguno**, así que no hay `estado` que mirar (§F.19).
+///
+/// # Y una ausencia que NO es una decisión, sino un límite de la fuente
+///
+/// **No hay ni una fecha en toda la respuesta**, así que la guarda de temporada
+/// de `D-91` —*"la mediana de las fechas cae dentro de la ventana de la
+/// `Season`"*— **no se puede aplicar a este endpoint**. Quien copie los códigos
+/// del año pasado recibirá un ranking perfectamente parseable de la temporada
+/// anterior, y lo único que lo detecta es el calendario, que sí trae 240 fechas.
+/// Está escrito aquí para que nadie crea que la guarda del nombre basta: §F.17
+/// midió que el nombre es **idéntico entre temporadas**.
+public struct FederationScorerTable: Equatable, Sendable {
+    /// El nombre literal de la competición, para `Competition.requireSameSource`
+    /// (`D-84`). Anulable: la FCF no manda sobre.
+    public let competitionName: String?
+
+    /// Las filas, **en el orden que publica la fuente**, que es lo único que
+    /// hace de ranking: ninguna de las dos federaciones publica campo de puesto
+    /// ([Anexo RFFM §F.13], §F.19, [Anexo FCF §C.10.7]).
+    ///
+    /// **Y ese orden no se convierte en `rank` aquí ni en ningún sitio.** El
+    /// *spec* se comprometió a respetar el puesto del proveedor *"porque los
+    /// criterios de desempate son suyos"*; numerar nosotros los empates —dos
+    /// goleadores con 45 goles en §F.13— sería inventar ese desempate y servirlo
+    /// con cara de dato de la fuente.
+    public let rows: [FederationScorerRow]
+
+    public init(competitionName: String?, rows: [FederationScorerRow]) {
+        self.competitionName = competitionName
+        self.rows = rows
+    }
+}
+
+/// Una fila del ranking publicado.
+///
+/// # El equipo es una **etiqueta**, no un `FederationTeamRef`, y ahí NO se copia
+/// lo que hizo F7
+///
+/// `FederationStandingRow` reutiliza `FederationTeamRef` porque sus filas hay que
+/// **emparejarlas** con un `Team` por la cadena de §3.7. Éstas no se emparejan con
+/// nada (`D-09`), así que un `FederationTeamRef` aquí sería una invitación a
+/// hacerlo — y el *spec* fija `teamLabel` como **texto** precisamente para que no
+/// se haga (`D-32`).
+///
+/// Hay además un motivo de forma: la RFFM publica el nombre del equipo con la
+/// letra **pegada y sin comillas** (`"AULA C.F. - BREZO OSUNA A"`), al revés que
+/// en el calendario ([Anexo RFFM §F.13]). Meterlo por `FederationTeamRef`
+/// obligaría a partirlo, y partirlo mal es peor que no partirlo: aquí el texto
+/// solo se pinta.
+///
+/// > **Y que no se empareje no es que no se pueda.** §F.19 midió que el
+/// > `codigo_equipo` del ranking casa **16/16** con el del calendario. La unión
+/// > existiría, por id y sin degradar a nombre. No se hace porque `D-09` no
+/// > quiere; por eso ese código **ni se transporta**.
+///
+/// # Casi todo es opcional, al revés que en `FederationStandingRow`
+///
+/// Allí los ocho contadores son obligatorios y el parser falla si falta uno,
+/// porque **una clasificación es un bloque**: una fila sin posición deja un hueco
+/// en una numeración que el *spec* declara imposible. Aquí las filas son
+/// **independientes** —no hay numeración que agujerear—, así que un ranking de
+/// 217 de 218 sigue siendo un ranking utilizable y tirar la pasada entera por una
+/// fila rara sería el error caro de `D-75`. La fila que no se pueda construir se
+/// **descarta y se apunta** (`unidentifiedScorer`), que es `D-86` a escala de
+/// fila.
+public struct FederationScorerRow: Equatable, Sendable {
+    /// `codigo_jugador` / `codjugador`: **la clave del *upsert*** (`D-93`).
+    ///
+    /// Anulable **aquí** aunque sea obligatorio en el Dominio, y no es una
+    /// contradicción: este tipo describe *lo que dijo una fuente ajena*, con sus
+    /// huecos, y la entidad describe lo que estamos dispuestos a guardar. El
+    /// hueco lo convierte en descarte el caso de uso.
+    ///
+    /// Medido presente y único en **426/426** filas de los tres volcados, así que
+    /// el descarte es la red y no el camino.
+    public let federationPlayerID: String?
+
+    /// El nombre tal cual lo publica la fuente. No se normaliza: `NormalizedName`
+    /// existe para **emparejar**, y aquí no se empareja nada.
+    public let fullName: String
+
+    /// El equipo como texto del proveedor, entero y sin partir.
+    public let teamLabel: String
+
+    /// Goles. `nil` ⇒ **la fuente no dijo nada**, que no es `0` — la misma
+    /// distinción sobre la que `D-56` construye la política de *upsert*.
+    ///
+    /// En la FCF ojo con de dónde sale: el campo se llama `goles` y hay un
+    /// `total` al lado que **no** es el total de goles sino los partidos jugados
+    /// (medido 0/50, [Anexo FCF §C.10.7]).
+    public let goals: Int?
+
+    /// El puesto **según el proveedor**, y hoy `nil` desde las dos fuentes.
+    ///
+    /// Se transporta igualmente, y no es el caso de `FederationRound.label`: aquél
+    /// tenía productor y **ningún consumidor** —su única línea en el backend era
+    /// `self.label = label`—; éste tiene consumidor —`LeagueScorer.rank`, que el
+    /// *spec* declara— y ningún productor **todavía**. Quitarlo dejaría muerta la
+    /// columna del modelo; dejarlo cuesta un opcional y hace que el día que una
+    /// federación lo publique solo haya que tocar su parser.
+    public let rank: Int?
+
+    public init(
+        federationPlayerID: String?,
+        fullName: String,
+        teamLabel: String,
+        goals: Int?,
+        rank: Int? = nil
+    ) {
+        self.federationPlayerID = federationPlayerID
+        self.fullName = fullName
+        self.teamLabel = teamLabel
+        self.goals = goals
+        self.rank = rank
     }
 }

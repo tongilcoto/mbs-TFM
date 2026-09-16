@@ -303,6 +303,9 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         record.matchesUpdated = run.matchesUpdated
         record.standingRowsCreated = run.standingRowsCreated
         record.standingRowsUpdated = run.standingRowsUpdated
+        record.leagueScorersCreated = run.leagueScorersCreated
+        record.leagueScorersUpdated = run.leagueScorersUpdated
+        record.leagueScorersRetired = run.leagueScorersRetired
         record.skipped = .init(rows: run.skipped)
         try await record.create(on: database)
     }
@@ -339,6 +342,9 @@ extension IngestionRunRecord {
             outcome: outcome, error: error)
         run.standingRowsCreated = standingRowsCreated
         run.standingRowsUpdated = standingRowsUpdated
+        run.leagueScorersCreated = leagueScorersCreated
+        run.leagueScorersUpdated = leagueScorersUpdated
+        run.leagueScorersRetired = leagueScorersRetired
         run.opponentClubsCreated = opponentClubsCreated
         run.opponentClubsUpdated = opponentClubsUpdated
         run.teamsCreated = teamsCreated
@@ -419,6 +425,125 @@ extension StandingRowRecord {
             goalsFor: goalsFor,
             goalsAgainst: goalsAgainst,
             points: points,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}
+
+// ── LeagueScorer (F8) ───────────────────────────────────────────────────────
+
+/// Adaptador de `LeagueScorerRepository` (§4.4).
+public struct FluentLeagueScorerRepository: LeagueScorerRepository {
+    private let database: any Database
+
+    public init(database: any Database) {
+        self.database = database
+    }
+
+    /// El ranking, **en el orden que `D-49` y §5.1 fijan**: puesto ascendente con
+    /// los nulos al final, goles descendente, y el nombre como desempate estable.
+    ///
+    /// # Los tres criterios hacen falta aunque hoy solo se note el segundo
+    ///
+    /// - **`rank` primero**, porque el *spec* se comprometió a respetar el del
+    ///   proveedor: los criterios de desempate son suyos. Hoy es nulo siempre
+    ///   —ninguna de las dos federaciones lo publica—, así que este `sort` no
+    ///   reordena nada; el día que una lo publique, la regla ya está aquí y no en
+    ///   el llamante.
+    /// - **`goals` descendente**, que es el criterio real de hoy.
+    /// - **`fullName` de desempate**, y no es cosmético: es la misma lección que
+    ///   `D-92` cobró en la clasificación. Sin un tercer criterio, dos goleadores
+    ///   con los mismos goles salen en el orden que le apetezca a Postgres, y ese
+    ///   orden **puede cambiar entre dos consultas idénticas**. El ranking es lo
+    ///   que la pantalla pinta; que dos filas bailen entre recargas es un defecto,
+    ///   no una indiferencia.
+    ///
+    /// > **`NULLS LAST` es explícito y no el valor por defecto.** En Postgres, con
+    /// > orden ascendente los nulos van **al final** por defecto, así que aquí
+    /// > coincide — pero coincidir no es lo mismo que decirlo, y el día que alguien
+    /// > invierta el orden del puesto se lo llevaría por delante en silencio.
+    public func list(competitionID: CompetitionID) async throws -> [LeagueScorer] {
+        try await LeagueScorerRecord.query(on: database)
+            .filter(\.$competition.$id == competitionID.raw)
+            .sort(\.$rank, .ascending)
+            .sort(\.$goals, .descending)
+            .sort(\.$fullName, .ascending)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func save(_ scorer: LeagueScorer) async throws {
+        if let existing = try await LeagueScorerRecord.find(scorer.id.raw, on: database) {
+            existing.apply(scorer)
+            try await existing.update(on: database)
+        } else {
+            let record = LeagueScorerRecord()
+            record.id = scorer.id.raw
+            record.apply(scorer)
+            try await record.create(on: database)
+        }
+    }
+
+    /// La retirada de `D-94`, **con las dos mitades del filtro**.
+    ///
+    /// `competition_id` **y** la marca. Sin la primera esto vacía el club entero;
+    /// sin la segunda, la competición.
+    ///
+    /// # `IS DISTINCT FROM`, expresado con un `OR`
+    ///
+    /// Lo que hay que retirar es *"lo que esta pasada no ha tocado"*, y en SQL eso
+    /// es `synced_at IS DISTINCT FROM :mark`. Fluent no lo expresa, así que va
+    /// como `!=` **más** el `IS NULL`: un `synced_at != :mark` a secas evalúa a
+    /// `NULL` —no a `true`— en las filas sin marca, y ésas son justo las que
+    /// ninguna pasada ha confirmado. Sin la segunda rama serían inmortales.
+    ///
+    /// Se cuenta **antes** de borrar y no se usa el número de filas afectadas,
+    /// porque Fluent no lo expone de forma portable en `delete()`. Son dos
+    /// consultas dentro de la misma transacción (`D-83`), así que entre ellas no
+    /// se cuela nadie.
+    @discardableResult
+    public func retire(competitionID: CompetitionID, keepingMark: Date) async throws -> Int {
+        func stale() -> QueryBuilder<LeagueScorerRecord> {
+            LeagueScorerRecord.query(on: database)
+                .filter(\.$competition.$id == competitionID.raw)
+                .group(.or) { outdated in
+                    outdated.filter(\.$syncedAt != keepingMark)
+                    outdated.filter(\.$syncedAt == .null)
+                }
+        }
+        let retired = try await stale().count()
+        guard retired > 0 else { return 0 }
+        try await stale().delete()
+        return retired
+    }
+}
+
+extension LeagueScorerRecord {
+    func apply(_ scorer: LeagueScorer) {
+        $competition.id = scorer.competitionID.raw
+        federationPlayerID = scorer.federationPlayerID
+        fullName = scorer.fullName
+        teamLabel = scorer.teamLabel
+        goals = scorer.goals
+        rank = scorer.rank
+        syncedAt = scorer.syncedAt
+    }
+
+    func toDomain() throws -> LeagueScorer {
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(
+                table: Self.schema, id: try requireID().uuidString)
+        }
+        return try LeagueScorer(
+            id: LeagueScorerID(raw: try requireID()),
+            competitionID: CompetitionID(raw: $competition.id),
+            federationPlayerID: federationPlayerID,
+            fullName: fullName,
+            teamLabel: teamLabel,
+            goals: goals,
+            rank: rank,
+            syncedAt: syncedAt,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

@@ -1,0 +1,22 @@
+Las TRES formas de no designar nada, medidas el 2026-09-16. Los dos parametros
+son obligatorios y el par se valida: basta con que uno de los dos no case, o
+falte, para recibir `null`. La cuarta peticion -la buena- esta en el otro fichero.
+Es la diferencia con /api/standings, que solo pide idGroup. Ver Anexo RFFM §F.19.
+
+https://www.rffm.es/api/scorers?idGroup=99999999&idCompetition=99999999
+
+null
+
+HTTP 200
+
+https://www.rffm.es/api/scorers?idGroup=24037549&idCompetition=99999999
+
+null
+
+HTTP 200
+
+https://www.rffm.es/api/scorers?idGroup=24037549
+
+null
+
+HTTP 200

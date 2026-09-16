@@ -35,4 +35,5 @@ public protocol Repositories: Sendable {
     var matches: any MatchRepository { get }
     var ingestionRuns: any IngestionRunRepository { get }
     var standingRows: any StandingRowRepository { get }
+    var leagueScorers: any LeagueScorerRepository { get }
 }

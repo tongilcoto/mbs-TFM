@@ -86,3 +86,55 @@ extension Database {
         ).run()
     }
 }
+
+extension Database {
+    /// **Rehace** un `CHECK` que ya existe: lo borra si está y lo vuelve a crear.
+    ///
+    /// # Por qué hace falta, y es una corrección de F8 a una frase que era falsa
+    ///
+    /// `D-02` dice que el `CHECK` de un enumerado **se deriva y no se teclea**, y
+    /// `sqlValueList` lo cumple. De ahí se concluyó —y quedó escrito en
+    /// `AddStandingsToIngestionRun`— que *"el caso que F8 añada lo hereda sin
+    /// tocar SQL"*. **No lo hereda.**
+    ///
+    /// La derivación ocurre **una vez**, cuando la migración corre, y lo que queda
+    /// en el *schema* es el texto que salió ese día. Medido contra la base de
+    /// trabajo antes de escribir esto:
+    ///
+    /// ```
+    /// club_atleti | chk_ingestion_runs_kind
+    ///             | CHECK (kind = ANY (ARRAY['calendar'::text, 'standings'::text]))
+    /// ```
+    ///
+    /// Un caso nuevo en el `enum` de Swift **no llega ahí jamás**, por la misma
+    /// razón que `D-90`: `_fluent_migrations` guarda el **nombre** de la
+    /// migración, no su contenido. Un alta limpia tendría los tres valores y un
+    /// club vivo dos, y el club vivo rechazaría la pasada nueva con un `23514`
+    /// que nadie relaciona con un `enum`.
+    ///
+    /// > **La lección, que es la de `D-90` un piso más abajo:** *derivado* no
+    /// > significa *vivo*. Un valor derivado en tiempo de migración se congela con
+    /// > ella; para que cambie hace falta una migración nueva que lo rehaga.
+    ///
+    /// # Por qué `DROP … IF EXISTS` y no un `ALTER … VALIDATE`
+    ///
+    /// Postgres no deja modificar la expresión de un `CHECK`: hay que tirarlo y
+    /// ponerlo otra vez. El `IF EXISTS` hace la migración reejecutable y, sobre
+    /// todo, la hace válida **en los dos caminos de §4.7** — un alta limpia llega
+    /// aquí con el `CHECK` ya bueno (lo puso la migración anterior con el
+    /// enumerado de hoy) y lo rehace idéntico; un club vivo llega con el viejo y
+    /// lo sustituye. Un solo camino de código para los dos, que es lo que `A-5`
+    /// midió que hace que los esquemas converjan byte a byte.
+    func replaceCheckConstraint(table: String, name: String, expression: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "replaceCheckConstraint", object: name)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) DROP CONSTRAINT IF EXISTS \(ident: name)"
+        ).run()
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) ADD CONSTRAINT \(ident: name) CHECK (\(unsafeRaw: expression))"
+        ).run()
+    }
+}

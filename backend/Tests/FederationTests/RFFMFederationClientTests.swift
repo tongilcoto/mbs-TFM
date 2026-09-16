@@ -57,6 +57,64 @@ struct RFFMFederationClientTests {
             "https://www.rffm.es/api/standings?idGroup=26737702&round=30")
     }
 
+    /// §F.19. **Tercera ruta y tercer juego de nombres**, que es el argumento
+    /// entero de que estas URLs vivan en un solo sitio: `idGroup` **y**
+    /// `idCompetition`, los dos en *camelCase*, y sin `temporada` ni `tipojuego`.
+    ///
+    /// **Y aquí `idCompetition` SÍ hace falta**, al revés que en la clasificación,
+    /// que se apaña con el grupo. No es simetría: está medido —sin ese parámetro,
+    /// o con uno que no case con el grupo, la respuesta es `null` (§F.19)—. Quien
+    /// lo quite "porque en `standings` no está" convierte la ruta en un silencio.
+    @Test("construye la URL de goleadores tal y como la documenta §F.19")
+    func buildsScorersURL() {
+        #expect(RFFMEndpoints.scorers(for: Self.coordinate) ==
+            "https://www.rffm.es/api/scorers?idGroup=26737702&idCompetition=26737701")
+    }
+
+    /// El reverso del test de arriba, y el que de verdad caza el cruce: los dos
+    /// códigos son números largos y parecidos, así que intercambiarlos **no da un
+    /// error** — da `null`, que se lee como *"esta competición no tiene
+    /// goleadores"*. Afirmar el orden con dos valores distintos es lo único que lo
+    /// distingue.
+    @Test("y no cruza grupo con competición, que no daría error sino silencio (§F.19)")
+    func theScorersURLDoesNotSwapTheTwoCodes() {
+        let url = RFFMEndpoints.scorers(for: Self.coordinate)
+        #expect(url.contains("idGroup=\(Self.coordinate.federationGroupID)"))
+        #expect(url.contains("idCompetition=\(Self.coordinate.federationCompetitionID)"))
+        #expect(Self.coordinate.federationGroupID != Self.coordinate.federationCompetitionID)
+    }
+
+    /// Los goleadores **no llevan jornada**, y el puerto lo dice en la firma: son
+    /// estado vigente único, no *snapshot* (§3.2). Es la asimetría con el test de
+    /// abajo, y por eso van juntos.
+    @Test("la misma coordenada pide siempre la misma URL de goleadores (F8)")
+    func scorersHaveNoRound() async throws {
+        let transport = SpyTransport(returning: .success("null"))
+        let client = RFFMFederationClient(transport: transport)
+
+        _ = try? await client.fetchScorers(Self.coordinate)
+        _ = try? await client.fetchScorers(Self.coordinate)
+
+        #expect(transport.requested == [
+            "https://www.rffm.es/api/scorers?idGroup=26737702&idCompetition=26737701",
+            "https://www.rffm.es/api/scorers?idGroup=26737702&idCompetition=26737701",
+        ])
+    }
+
+    /// Lo mismo que su hermana de la clasificación, y hace falta por separado: un
+    /// adaptador que se "protegiera" devolviendo una tabla vacía convertiría una
+    /// coordenada mala en *"esta liga no tiene goleadores"* — que aquí es un dato
+    /// **perfectamente creíble**, porque `D-48` dice que hay federaciones que no
+    /// los publican. Es el peor sitio del puerto para tragarse ese error.
+    @Test("una coordenada mala de goleadores sube como tal, no como ranking vacío (D-84, D-48)")
+    func theClientDoesNotSwallowTheScorersCoordinateError() async throws {
+        let client = RFFMFederationClient(transport: SpyTransport(returning: .success("null")))
+
+        await #expect(throws: FederationError.self) {
+            try await client.fetchScorers(Self.coordinate)
+        }
+    }
+
     /// La jornada es **de la operación, no de la competición** (H-14): con la
     /// misma coordenada se piden dos fotos distintas, y eso es lo que hace que
     /// `StandingRow` sea un *snapshot* (`D-33`).

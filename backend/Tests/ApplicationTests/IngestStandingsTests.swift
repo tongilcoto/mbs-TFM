@@ -38,7 +38,13 @@ struct IngestStandingsTests {
         }
 
         func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
-            throw StandingsNotStubbed(client: "StandingsClient")
+            throw NotStubbed(client: "StandingsClient", operation: "fetchCalendar")
+        }
+
+        func fetchScorers(
+            _ coordinate: FederationCoordinate
+        ) async throws -> FederationScorerTable {
+            throw NotStubbed(client: "StandingsClient", operation: "fetchScorers")
         }
 
         func fetchStandings(

@@ -27,6 +27,7 @@ actor IngestionStore {
     var matches: [Match] = []
     var ingestionRuns: [IngestionRun] = []
     var standingRows: [StandingRow] = []
+    var leagueScorers: [LeagueScorer] = []
 
     /// Cuántas veces se abrió un ámbito de tenant. Lo mira el test de
     /// atomicidad: la pasada escribe en **uno**.
@@ -37,9 +38,11 @@ actor IngestionStore {
     func seed(seasons: [Season] = [], competitions: [Competition] = [],
               rounds: [Round] = [], opponentClubs: [OpponentClub] = [],
               teams: [Team] = [], matches: [Match] = [],
-              standingRows: [StandingRow] = []) {
+              standingRows: [StandingRow] = [],
+              leagueScorers: [LeagueScorer] = []) {
         self.seasons += seasons
         self.standingRows += standingRows
+        self.leagueScorers += leagueScorers
         self.competitions += competitions
         self.rounds += rounds
         self.opponentClubs += opponentClubs
@@ -58,6 +61,23 @@ actor IngestionStore {
     func record(_ value: IngestionRun) { ingestionRuns.append(value) }
     func save(standingRow value: StandingRow) {
         upsert(&standingRows, value) { $0.id == value.id }
+    }
+    func save(leagueScorer value: LeagueScorer) {
+        upsert(&leagueScorers, value) { $0.id == value.id }
+    }
+
+    /// La retirada de `D-94`, con **las dos mitades del filtro**, igual que el
+    /// adaptador de verdad.
+    ///
+    /// Que el doble las copie no es celo: si aquí se filtrara solo por la marca,
+    /// el nivel 2 no podría afirmar nunca *"no toca las otras competiciones"*, y
+    /// ése es exactamente el fallo que no da error y se lleva los datos.
+    func retireLeagueScorers(competitionID: CompetitionID, keepingMark: Date) -> Int {
+        let stale = leagueScorers.filter {
+            $0.competitionID == competitionID && $0.syncedAt != keepingMark
+        }
+        leagueScorers.removeAll { scorer in stale.contains { $0.id == scorer.id } }
+        return stale.count
     }
 
     private func upsert<T>(_ list: inout [T], _ value: T, where match: (T) -> Bool) {
@@ -178,6 +198,45 @@ struct FakeRepositories: Repositories {
     var standingRows: any StandingRowRepository {
         FakeStandingRowRepository(store: store)
     }
+    var leagueScorers: any LeagueScorerRepository {
+        FakeLeagueScorerRepository(store: store)
+    }
+}
+
+/// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de
+/// clasificación: el orden es el dato (`D-49`, §5.1), así que un doble que no lo
+/// reprodujera haría que el nivel 2 midiera otra cosa que el nivel 3.
+///
+/// Los tres criterios, en orden: puesto ascendente con los nulos al final —hoy
+/// siempre nulo—, goles descendente, y el nombre de desempate, que es la lección
+/// de `D-92` sobre órdenes que no son totales.
+struct FakeLeagueScorerRepository: LeagueScorerRepository {
+    let store: IngestionStore
+
+    func list(competitionID: CompetitionID) async throws -> [LeagueScorer] {
+        await store.leagueScorers
+            .filter { $0.competitionID == competitionID }
+            .sorted { left, right in
+                switch (left.rank, right.rank) {
+                case let (l?, r?) where l != r: return l < r
+                case (nil, _?): return false
+                case (_?, nil): return true
+                default: break
+                }
+                if left.goals != right.goals { return left.goals > right.goals }
+                return left.fullName < right.fullName
+            }
+    }
+
+    func save(_ scorer: LeagueScorer) async throws {
+        await store.save(leagueScorer: scorer)
+    }
+
+    @discardableResult
+    func retire(competitionID: CompetitionID, keepingMark: Date) async throws -> Int {
+        await store.retireLeagueScorers(
+            competitionID: competitionID, keepingMark: keepingMark)
+    }
 }
 
 /// El ámbito de tenant, sin transacción y sin `search_path`.
@@ -220,13 +279,31 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "SpyFederationClient")
+        throw NotStubbed(client: "SpyFederationClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -284,13 +361,31 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "FlakyFederationClient")
+        throw NotStubbed(client: "FlakyFederationClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -332,13 +427,31 @@ struct OpaqueFailingClient: FederationClient {
         throw OpaqueError(detail: detail)
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "OpaqueFailingClient")
+        throw NotStubbed(client: "OpaqueFailingClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -395,13 +508,31 @@ final class OutageInducingClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "OutageInducingClient")
+        throw NotStubbed(client: "OutageInducingClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -430,13 +561,21 @@ final class FailOnNthScope: TenantUnitOfWork, @unchecked Sendable {
     }
 }
 
-/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+/// Un doble al que se le ha pedido una operación del puerto que no prepara.
 ///
 /// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
-/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
-struct StandingsNotStubbed: Error, CustomStringConvertible {
+/// escrito sobre el doble equivocado pasara sin sincronizar nada, y pasaría por el
+/// motivo equivocado — que es el mismo error de método que `H-07`, confundir *"no
+/// se ejecutó"* con un resultado.
+///
+/// **Lleva la operación dentro desde F8**, que es cuando hubo dos: con un tipo por
+/// operación, el mensaje de un doble que no prepara `fetchScorers` diría
+/// `fetchStandings`. Se generaliza al segundo caso y no por anticipado, que es el
+/// criterio de `D-32`.
+struct NotStubbed: Error, CustomStringConvertible {
     let client: String
+    let operation: String
     var description: String {
-        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
+        "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }

@@ -71,19 +71,51 @@ struct StandingIngestionEndToEndTests {
 
     /// Sirve el calendario o la clasificación **según la URL que le pidan**, que
     /// es lo que permite que la pasada entera corra contra volcados reales.
+    /// Sirve los **tres** volcados reales del mismo grupo, decidiendo por la ruta.
+    ///
+    /// **`scorers` es opcional, y no por comodidad**: los tests que solo ejercitan
+    /// el calendario y la clasificación no tienen por qué preparar un ranking, y
+    /// devolver `null` es lo que la fuente responde de verdad cuando no hay nada
+    /// que servir. Lo que **no** vale es devolver el calendario por defecto para
+    /// cualquier ruta desconocida, que es lo que hacía la primera versión de este
+    /// doble: con `/api/scorers` sin preparar, el parser de goleadores recibía una
+    /// página HTML y el fallo llegaba disfrazado de *"han cambiado la forma"*.
     struct DumpTransport: FederationTransport {
         let calendar: String
         let standingsByRound: [Int: String]
+        var scorers: String?
 
         func get(_ url: String) async throws -> String {
-            guard url.contains("/api/standings") else { return calendar }
-            let round = url.split(separator: "round=").last.flatMap { Int($0) }
-            guard let round, let body = standingsByRound[round] else {
-                Issue.record("nadie preparó la jornada de \(url)")
-                return "null"
+            if url.contains("/api/scorers") {
+                return scorers ?? "null"
             }
-            return body
+            if url.contains("/api/standings") {
+                let round = url.split(separator: "round=").last.flatMap { Int($0) }
+                guard let round, let body = standingsByRound[round] else {
+                    Issue.record("nadie preparó la jornada de \(url)")
+                    return "null"
+                }
+                return body
+            }
+            return calendar
         }
+    }
+
+    /// El cuerpo del volcado de goleadores, sin la URL de cabecera.
+    static func scorersBody() throws -> String {
+        let raw = try fixture("RFFM-scorers-group-24037549.txt")
+        return raw
+            .components(separatedBy: "https://www.rffm.es/api/")
+            .dropFirst()
+            .map { block in
+                block
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .dropFirst()
+                    .filter { !$0.hasPrefix("HTTP ") }
+                    .joined(separator: "\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .first ?? ""
     }
 
     struct FixedInstantClock: Clock {
@@ -257,7 +289,13 @@ struct StandingIngestionEndToEndTests {
             let transport = DumpTransport(
                 calendar: try Self.fixture("RFFM-calendario-temporada-jugada.html"),
                 standingsByRound: [30: try #require(bodies.first),
-                                   29: try #require(bodies.last)])
+                                   29: try #require(bodies.last)],
+                // **El tercer volcado, y del MISMO grupo que los otros dos** — por
+                // eso F8 lo capturó en vez de reutilizar el de §F.13, que era de
+                // PRIMERA INFANTIL G12. Así el recorrido entero se prueba sobre una
+                // sola competición, con sus 240 partidos, sus 16 equipos, sus 30
+                // clasificaciones y sus 218 goleadores.
+                scorers: try Self.scorersBody())
 
             // **Por el recorrido entero**, que es lo que aquí se prueba: hasta F7
             // `IngestClubCalendars` solo llamaba al calendario, y el cableado
@@ -298,6 +336,47 @@ struct StandingIngestionEndToEndTests {
             #expect(runs.filter { $0.kind == .calendar }.count == 1)
             #expect(runs.filter { $0.kind == .standings }.count == 30)
             #expect(runs.filter { $0.kind == .calendar }.allSatisfy { $0.roundID == nil })
+
+            // ── Y F8: la tercera clase de pasada ─────────────────────────────
+            //
+            // **Una sola, y sin jornada.** Es la asimetría entera de `IngestScorers`
+            // contra `IngestStandings` afirmada contra Postgres: treinta filas de
+            // clasificación —una por jornada— y **una** de goleadores, porque el
+            // ranking es de la competición y `LeagueScorer` es estado vigente
+            // único (§3.2). El `CHECK` del esquema lo repite, así que si el
+            // `roundID` no fuera nulo esto ni siquiera habría llegado a escribirse.
+            let scorerRuns = runs.filter { $0.kind == .scorers }
+            #expect(scorerRuns.count == 1)
+            #expect(scorerRuns.allSatisfy { $0.roundID == nil })
+            #expect(scorerRuns.allSatisfy { $0.outcome == .succeeded })
+
+            // Las **218** filas del volcado, enteras y sin un solo descarte: los
+            // `codigo_jugador` vienen en las 218 y son 218 distintos ([Anexo RFFM
+            // §F.19]), que es la medición sobre la que se apoya `D-93`.
+            let scorers = try await tenant.scope {
+                try await $0.leagueScorers.list(competitionID: competition.id)
+            }
+            #expect(scorers.count == 218)
+            #expect(scorerRuns.first?.leagueScorersCreated == 218)
+            #expect(scorerRuns.first?.skipped.isEmpty == true)
+
+            // **La clave de `D-93` es única en la tabla de verdad**, no solo en el
+            // `Set` de un test: si el `UNIQUE(competition_id, federation_player_id)`
+            // no estuviera, esto pasaría igual y el duplicado aparecería en la
+            // segunda pasada. Lo que lo prueba es el refresco de abajo.
+            #expect(Set(scorers.map(\.federationPlayerID)).count == 218)
+
+            // El orden **es** el dato (`D-49`, §5.1): sin puesto publicado, lo que
+            // ordena es el número de goles.
+            #expect(scorers.map(\.goals) == scorers.map(\.goals).sorted(by: >))
+            #expect(scorers.first?.goals == 31)
+            #expect(scorers.allSatisfy { $0.rank == nil },
+                    "la RFFM no publica puesto y aquí se ha inventado uno (§F.19)")
+
+            // **El nombre del equipo entra entero, con la letra pegada**, que es
+            // como lo publica esta ruta y al revés que el calendario. No se parte
+            // porque aquí solo se pinta (`D-32`).
+            #expect(scorers.first?.teamLabel == "ARAVACA C.F. - CEIBA A")
             #expect(runs.filter { $0.kind == .standings }.allSatisfy { $0.roundID != nil })
 
             try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)

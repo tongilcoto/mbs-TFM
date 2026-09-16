@@ -152,6 +152,21 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   tope semanal**, que es un máximo y lo hace cumplir el calendario de disparos. Y **la competición que nunca
   se sincronizó entra siempre**: sin esa excepción, la recién dada de alta por el enganche de `D-67` esperaría
   para siempre. Lo encontró la comprobación de mutación, no un rojo.
+- **`LeagueScorer` no tenía clave de negocio, y era la única de la salida de la ingesta sin ella** (`D-93`).
+  §3.5 enumera las unicidades del modelo y esa entidad **no aparecía**; mientras el ranking no se ingería no se
+  notaba. La alternativa aparente —`(competición, nombre, equipo)`— **la desmiente el propio *spec***, que dice
+  en la descripción del `id` que *"`fullName` no es identificador: dos jugadores pueden llamarse igual"*. La
+  clave es **`federation_player_id`**, que las dos federaciones publican (`codigo_jugador` / `codjugador`) y
+  que está medido: 426/426 filas únicas y no vacías. Es obligatorio —al revés que sus tres hermanas, que son
+  anulables porque sus entidades tienen un estado intermedio— y **no viaja en el DTO**, igual que `synced_at`.
+- **Y es la única salida de la ingesta que *borra*** (`D-94`). `D-75` dice que lo que la fuente deja de
+  publicar no se destruye, y por eso ningún otro repositorio tiene `delete`. La condición que autoriza la
+  excepción es **"la tabla es estado vigente y no histórico"**, y solo la cumple ésta: una fila de
+  clasificación es la foto de una jornada que ya pasó y sigue siendo verdad; un goleador que el proveedor dejó
+  de publicar es una fila **indistinguible de las buenas** dentro de una tabla que afirma ser la de hoy. La
+  retirada va por la marca `synced_at` y **dentro del mismo ámbito que la escritura**, para que una caída a
+  mitad no pueda dejar la tabla vacía. Al añadir la séptima salida de la ingesta: **si tiene jornada, es
+  histórico y no se borra**.
 - **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas** (`D-88`).
   `GET /v1/ingestion-runs` lee el registro; `POST /v1/ingestion-runs` **pide que el job pase** —el cuerpo no
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
@@ -238,8 +253,11 @@ el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros end
 Y las dos que la auditoría añadió: **F6-bis** —el sobre del puerto de federación y la resiliencia del
 recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés. Y **F7**, la **clasificación**: la entidad
 22 del modelo con sus **dos fuentes** —ingerida de la federación o calculada desde `Match` (`D-15`)—, su
-puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9).
-**394 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9). Y **F8**, los **goleadores**: la
+entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`), la **única retirada de filas de toda la
+salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
+mantiene solo** (Plan §4.10).
+**446 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -294,8 +312,8 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
-| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. **Sin** `import Vapor/Fluent` |
-| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición |
+| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. F8, `LeagueScorer` — con eso la salida de la ingesta está **completa**. **Sin** `import Vapor/Fluent` |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`) |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
@@ -314,16 +332,21 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son ONCE migraciones por tenant:
+                                          # hoy son TRECE migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
+                                          #   league_scorers ->
                                           #   ingestion_runs -> (+kind, +contadores)
-                                          #   -> (+round_id)
-                                          #   Las dos últimas ALTERAN ingestion_runs
-                                          #   y son DOS y no una porque la primera
-                                          #   ya estaba aplicada cuando se vio que
-                                          #   faltaba round_id (`D-90`)
+                                          #   -> (+round_id) -> (+contadores de
+                                          #   goleadores Y EL CHECK DE kind REHECHO)
+                                          #   Las tres últimas ALTERAN ingestion_runs
+                                          #   y son TRES y no una porque cada una ya
+                                          #   estaba aplicada cuando llegó la
+                                          #   siguiente (`D-90`). Y la de F8 rehace
+                                          #   el CHECK de `kind` porque un enumerado
+                                          #   derivado NO se mantiene solo: se
+                                          #   deriva al migrar y ahí se congela
                                           #   El orden es el de FK, y cada fase
                                           #   añade la suya AL FINAL DE LA LISTA
                                           #   QUE LE TOQUE, no al final a secas
@@ -411,12 +434,29 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter** y **F7** entregadas, lo inmediato es **F8** (`LeagueScorer`), que llega
-con el camino hecho: `/api/scorers` ya tiene volcado en el repositorio y anexo escrito (§F.13), así que no
-hará falta capturar nada. Lo que sí hereda de F7 son **tres reglas**: el `kind` de `IngestionRun` se amplía
-con su caso y el `CHECK` **se deriva solo**; su pasada cae del lado **nulo** de `round_id` —`LeagueScorer` es
-estado vigente único, no *snapshot* por jornada (§3.2)—; y **no copiar la forma del sobre**, que es lo que
-F6-bis avisó y F7 cumplió. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su
+Con F0–F6, **F6-bis**, **F6-ter**, **F7** y **F8** entregadas, lo inmediato es **F9**, el adaptador de la
+**FCF** — API JSON, no raspado ([D-74]). Llega con **tres deberes ya medidos y ninguno heredado de oídas**:
+sus tres volcados están en `docs/Federation APIs examples/`; su ranking de goleadores publica `goles`,
+`penalti` y **`total` como números JSON y no como cadenas**, lo que rompe la regla de §F.11 que vale en
+Madrid; y **`total` no es el total de goles, son partidos jugados** — 0/50 filas cuadran con `goles +
+penalti`, medido en F8. El `goals` del modelo sale de **`goles`**.
+
+**Y lo que F8 dejó desmentido, que hay que leer antes de añadir el cuarto caso a `IngestionKind`** (el acta
+de `D-57`): *"el `CHECK` de un enumerado se deriva solo"* es **falso** para un *schema* que ya existe. `D-02`
+y `sqlValueList` derivan la expresión, sí — **una sola vez, cuando la migración corre**. Lo que queda en la
+base es el texto de aquel día, y `D-90` explica por qué no se actualiza: `_fluent_migrations` guarda el
+nombre, no el contenido. Se midió en `club_atleti` antes de arreglarlo. **Un caso nuevo en un enumerado con
+`CHECK` obliga a una migración que lo *rehaga*** (`replaceCheckConstraint`), o un alta limpia lo acepta y un
+club vivo lo rechaza con un `23514` que nadie relaciona con Swift. Lo vigila `MigrationIntegrityTests`, y hizo
+falta **tumbar dos versiones del test con mutación** para escribirlo bien: un *schema* migrado antes de que el
+caso existiera **no se puede fabricar ejecutando el código de ahora**, porque el código de entonces ya no está.
+
+Las otras dos reglas que F8 sí heredó de F7 y cumplió: su pasada cae del lado **nulo** de `round_id`
+—`LeagueScorer` es estado vigente único, no *snapshot* por jornada (§3.2), y el `CHECK` ya lo admitía sin
+tocarlo porque se escribió enunciando la regla y no enumerando los casos—; y **no copiar la forma del sobre**,
+que es lo que F6-bis avisó. En `/api/scorers` esa advertencia valía doble: su equivalente catalán es **un
+array pelado, sin sobre ninguno**, así que `FederationScorerTable` lleva **un** campo y deja fuera hasta el
+`codigo_competicion` que su vecina celebra —aquí ese código **se envía**, luego solo podría ser eco—. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su
 último bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter fue una función y su test**:
 `IngestCommand.stopsTraversal(_:)`, la pregunta *"¿este resultado detiene el recorrido?"* sacada del bucle,
 porque `D-86` enmendada tiene **dos** frenos y el del recorrido de **clubes** emparejaba un caso de error entre

@@ -92,4 +92,7 @@ struct FluentRepositories: Repositories {
     var standingRows: any StandingRowRepository {
         FluentStandingRowRepository(database: database)
     }
+    var leagueScorers: any LeagueScorerRepository {
+        FluentLeagueScorerRepository(database: database)
+    }
 }

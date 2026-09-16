@@ -151,7 +151,7 @@ dependen de eso.
 | **F6-bis** ✅ | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** —y con él la guarda de temporada ([D-91])— y **la resiliencia del recorrido** (`4d66aa0`). Detalle abajo | unit puro · niveles 1, 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 · [D-91] |
 | **F6-ter** ✅ | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
 | **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
-| **F8** | `LeagueScorer` | integración | [D-09] |
+| **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
 | **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
@@ -923,6 +923,12 @@ regla global con efectos globales, en una batería paralela, no es un test — e
 la regla *"sin filtro son todos"* se afirma sobre una consulta **sin efectos**, y el recorrido de verdad se
 lanza sobre una lista explícita de clubes.
 
+> **Y aun así el paralelismo no sobra, que es la otra mitad y está medida**: con `--no-parallel` los 138 tests
+> de entonces tardaban **3,7 s**; en paralelo, **0,9 s**. Correrlos concurrentes es además **lo que destapó
+> esta carrera** — un orden fijo la habría escondido hasta que apareciera en CI o en la máquina de otro. Así
+> que la batería corre en paralelo y **para leerla** se usa `--no-parallel --disable-xctest`, que además da
+> orden de fichero determinista y un renglón por caso parametrizado.
+
 **Y dos hallazgos del contrato, los dos por lo mismo — que el *spec* declara y el generador no obedece**
 ([D-65], tercera fase que lo cobra):
 
@@ -1005,7 +1011,7 @@ Ahí viven además las dos precedencias que el `--help` no puede explicar: `--fo
 
 ### 4.9 F7 · La clasificación, ingerida y calculada — **entregada** (2026-09-16)
 
-**La entidad 22 del modelo, y la primera fase con dos fuentes para la misma fila.** [D-15] dice que
+**La entidad 9 de §3.2, y la primera fase con dos fuentes para la misma fila.** [D-15] dice que
 `StandingRow` es **agnóstica a la fuente** —vale igual ingerida que calculada— y F7 es donde esa frase se
 convierte en un `switch` de dos ramas que acaban en el mismo `save`.
 
@@ -1114,6 +1120,160 @@ backoffice lea esos campos de verdad.
 Y la enmienda de [D-92] sigue anotada y sin aplicar: el desempate por enfrentamiento directo es **una
 recursión sobre `StandingTable.upTo`**, no una regla nueva, pero sería su propia mini-fase y habría que
 hacerlo **entero** —la mini-liga de N equipos, no solo el caso de dos—.
+
+---
+
+### 4.10 F8 · Los goleadores, y el `CHECK` que se creía vivo — **entregada** (2026-09-16)
+
+**La entidad 15 de §3.2, y la fase que cierra la salida de la ingesta.** Con `LeagueScorer` escrita, las
+seis entidades que la ingesta produce tienen su tabla, su puerto y su pasada.
+
+**Qué entrega, de abajo arriba:**
+
+| Capa | Qué |
+|---|---|
+| Dominio | `LeagueScorer` y el caso `scorers` de `IngestionKind` |
+| `Application` | `fetchScorers` en el puerto, sus DTOs, `LeagueScorerRepository` —el primero con `retire`— e `IngestScorers` |
+| `Federation` | `RFFMScorersParser` contra **dos volcados reales nuevos** |
+| `Persistence` | `league_scorers`, tres contadores más en `ingestion_runs` y **un `CHECK` rehecho** |
+
+#### Lo que la medición cambió, que otra vez fue lo primero que se hizo
+
+La regla de [D-74] —**el volcado antes que la firma**— se aplicó por tercera vez, y por tercera vez cobró.
+`/api/scorers` **no se comporta como su vecina**:
+
+| | `/api/standings` | `/api/scorers` |
+|---|---|---|
+| Parámetros | `idGroup` + `round` | `idGroup` **e** `idCompetition`, **los dos obligatorios** |
+| Coordenada mala | `200` + `null` | `200` + `null` — **y también si falta uno de los dos** |
+| Evidencia del sobre | `codigo_competicion`, que **no puede ser eco** | solo el **nombre**: ese código se envía |
+| ¿Puede servir otra competición? | **sí** ([D-84]) | **no**: el par se valida |
+
+Es la **única ruta medida de la RFFM donde [D-84] no ocurre**. El riesgo no desaparece —copiar *los dos*
+códigos del año pasado da un par perfectamente válido— pero se estrecha; y como la respuesta **no trae ni una
+fecha**, la guarda de temporada de [D-91] **no se puede aplicar aquí**: la sigue haciendo el calendario.
+
+Y el volcado nuevo se capturó **del mismo grupo** que los de F5 y F7, lo que permitió comprobar una afirmación
+que [Anexo RFFM §F.13] solo podía deducir entre grupos distintos: el `codigo_equipo` del ranking **casa 16/16**
+con el del calendario. **Eso no cambia [D-09], cambia su argumento** — unir `LeagueScorer` con `Team` *se
+podría*; no se hace porque no se quiere. Quien reabra la decisión tiene que discutir eso y no la imposibilidad.
+
+De regalo, sin salir a la red: el `total` de la FCF **no es el total de goles, son partidos jugados** (0/50
+filas cuadran con `goles + penalti`). Un campo que se llama como la pregunta que te haces no es la respuesta.
+
+#### Las dos decisiones que la fase tuvo que tomar
+
+**1. `LeagueScorer` no tenía clave ([D-93]).** Era la **única** entidad de la salida de la ingesta sin
+unicidad declarada en §3.5, y mientras el ranking no se ingería no se notaba. La alternativa aparente
+—`(competición, nombre, equipo)`— **la desmiente el propio *spec***, que dice en la descripción del `id` que
+*"`fullName` no es identificador: dos jugadores pueden llamarse igual"*. Se añade `federation_player_id`, que
+**las dos federaciones publican** y que está medido: **426/426** filas únicas y no vacías. Es [D-06] aplicado
+a la séptima entidad, y **no viaja en el DTO**, igual que `synced_at`.
+
+**2. Es la única salida de la ingesta que borra ([D-94]).** [D-75] dice que lo que la fuente deja de publicar
+no se destruye, y por eso ningún otro repositorio tiene `delete`. La condición que autoriza la excepción es
+*"la tabla es **estado vigente** y no histórico"*, y en toda la salida solo la cumple ésta: una fila de
+clasificación es la foto de una jornada que ya pasó y sigue siendo verdad; un goleador que el proveedor dejó
+de publicar es una fila **indistinguible de las buenas** dentro de una tabla que afirma ser la de hoy.
+
+> **Al añadir la séptima salida de la ingesta: si tiene jornada, es histórico y no se borra.**
+
+#### El hallazgo que nadie buscaba: **derivado no significa vivo**
+
+[D-02] dice que el `CHECK` de un enumerado **se deriva y no se teclea**, y `sqlValueList` lo cumple. De ahí
+F7 concluyó —y lo dejó escrito en `AddStandingsToIngestionRun`— que *"el caso que F8 añada lo hereda sin tocar
+SQL"*. **Es falso**, y se midió antes de escribir una línea:
+
+```
+club_atleti | chk_ingestion_runs_kind
+            | CHECK (kind = ANY (ARRAY['calendar'::text, 'standings'::text]))
+```
+
+La derivación ocurre **una sola vez**, cuando la migración corre; lo que queda en el *schema* es el texto de
+aquel día. Es **[D-90] un piso más abajo**: `_fluent_migrations` guarda el nombre y no el contenido, así que
+el caso nuevo no llega jamás a un *schema* que ya existe. Sin arreglarlo, el fallo tendría la peor forma
+posible — **un alta limpia acepta la pasada y un club vivo la rechaza**, con un `23514` que nadie relaciona
+con un `enum` de Swift, y solo al ejecutar. Exactamente la divergencia entre caminos que `A-5`/H-38 mide que
+no debe existir.
+
+Se arregla con una migración nueva que **rehace** la constraint (`replaceCheckConstraint`), verificada contra
+la base de trabajo. Y queda escrito en tres sitios —el enumerado, la migración y el README— porque la
+tentación de creer que se mantiene solo es exactamente la que produjo el defecto.
+
+#### La comprobación de mutación, y lo que enseñó del método
+
+**46 mutaciones, 46 cazadas.** Ocho sobrevivieron a la primera pasada, y **ninguna era "sobra el código"**:
+
+- **Dos eran huecos de regla en el nivel 2**, y las dos importan: *"la clave del *upsert* es el nombre"* —que
+  significa que una **errata corregida por la federación** duplica al goleador— y *"`createdAt` se pisa en cada
+  pasada"*, que vacía de significado un campo que el *spec* publica.
+- **Cuatro apuntaban todas al mismo sitio, y ése es el hallazgo de método: F8 se había saltado su suite de
+  nivel 3.** El `UNIQUE` de [D-93] y las dos mitades del `WHERE` de la retirada **solo existen en el esquema**,
+  y el doble en memoria hace *upsert* por `id`, así que con él la clave de negocio sencillamente no existe.
+  Quitar el índice de la migración no rompía **ni un test**. La mutación no encontró un defecto: **encontró un
+  agujero en la pirámide** — F7 tiene `StandingPersistenceTests` y F8 no tenía su equivalente.
+
+> **La lectura que se añade a las de F2, F5 y F7:** cuando **varias** mutaciones supervivientes caen en la
+> misma capa, no son N tests que faltan — es **un nivel de la pirámide que falta**. Conviene mirar el patrón
+> antes de escribir el primer test.
+
+#### Y una errata que se propagó por herencia, que es `D-84` aplicada a nosotros mismos
+
+Al repasar el README se contaron las entidades de §3.2 y salieron **21**, con `StandingRow` la **9ª** y
+`LeagueScorer` la **15ª**. F7 había escrito *"la entidad 22 del modelo"* y F8 copió *"la 23"* sin comprobarlo,
+**contradiciendo de frente** el *"las 21 entidades de §3.2"* que el propio README repetía dos secciones más
+abajo. De ahí salió además una *"entidad 24"* que no existe.
+
+El origen del error es identificable y vale la pena: `IngestionRun` **sí** es la 21ª, porque F5 la **añadió**
+de verdad — y de ahí se dedujo que la fase siguiente traería la 22ª. Pero `StandingRow` y `LeagueScorer` **no
+se añadieron**: estaban en §3.2 desde que se cerró. Lo que F7 y F8 hicieron fue **implementarlas**, que es otra
+cosa.
+
+Corregido en los **15** sitios —código, tests, este plan y AGENTS.md—, y lo que queda escrito es el método,
+porque es literalmente [D-84] con nosotros de sistema ajeno: **una convención heredada de la fase anterior no
+se hereda, se comprueba.** La que está bien —`IngestionRun`, la 21ª— lo está por casualidad de que aquella vez
+sí se contó.
+
+Y el guion de mutación llevaba desde el principio los **tres frenos** que F7 tuvo que aprender a base de leer
+mal el instrumento: comprobar que el fichero **cambió**, que **compila**, y mirar el `✘` **antes** que el
+`error:`. Esta vez ninguna lectura fue falsa.
+
+#### Una regla que un test corrigió, y no al revés
+
+`retire` era `syncedBefore:` con un `<`, que se lee igual de bien y **es frágil**: hace depender la regla de
+la resolución del reloj. Dos pasadas en el mismo instante —un reintento rápido— no retirarían nada. Lo destapó
+el test de la retirada, que con `TickingClock` compartía instante entre las dos pasadas. Pasa a ser
+**`keepingMark:`** —*"lo que esta pasada no ha tocado"*—, que es exacto. **Y el test también estaba mal**: la
+cadencia real de §5.6 es semanal, no simultánea, así que la segunda pasada corre con el reloj de la semana
+siguiente. Se arreglaron los dos.
+
+#### Lo ejecutado contra la base de trabajo, que es lo que la batería no ve
+
+La lección de F6 —*"al añadir algo a `IngestionRun`, ejecutarlo y mirar la tabla"*— aplicada:
+
+| Competición | Creados | Retirados | Duración |
+|---|---|---|---|
+| PRIMERA INFANTIL | 208 | 0 | **1,241 s** |
+| PRIMERA DIVISION AUTONOMICA CADETE | 218 | 0 | **1,534 s** |
+
+Segunda pasada: **0 creados, 218 actualizados, 218 filas** — el *upsert* contra el `UNIQUE` de verdad. Y con
+una fila rancia sembrada a mano: **218 actualizados, 1 retirado**, y las 208 de la otra competición intactas.
+La duración **se mide y no sale cero**: el defecto de F6 no ha vuelto.
+
+**446 tests** (394 → 446): 7 + 90 + 79 + 152 + 94 + 24, 0 fallos y 1 omitido —el canario—, con los dos
+*targets* de BD en **6,76 s** y **3,98 s**, que es el testigo de H-07 de que corrieron.
+
+#### Lo que F8 deja apuntado y no resuelve
+
+- **`ingestionHealth` ([D-89]) tiene ahora tres clases de pasada que reconciliar**, no dos. F7 ya lo dejó
+  anotado; con `scorers` la regla de lectura *"la última pasada de esta competición"* es aún menos una sola
+  cosa. Sigue sin bloquear nada hasta que el backoffice lea esos campos.
+- **`GET /v1/league-scorers` sigue sin implementarse**, y es deliberado: F8 es la ingesta, como F7. El
+  `filter` del generador no se toca.
+- **Tres cosas de `/api/scorers` sin observar** ([Anexo RFFM §F.19]): qué devuelve un grupo sin goles todavía
+  —si fuera `null`, sería indistinguible de una coordenada mala—, dos jugadores homónimos en el mismo equipo
+  (0 en 426 filas, así que [D-93] está argumentada pero no exhibida), y si la lista tiene tope, que en la FCF
+  huele a *top-50*.
 
 ---
 

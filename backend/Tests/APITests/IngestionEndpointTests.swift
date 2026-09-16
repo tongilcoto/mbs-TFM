@@ -64,13 +64,31 @@ struct IngestionEndpointTests {
             return IngestionEndpointTests.emptyCalendar
         }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "StubClient")
+        throw NotStubbed(client: "StubClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
     }
@@ -252,7 +270,10 @@ struct IngestionEndpointTests {
                     .GET, "/v1/ingestion-runs?competitionId=\(id)",
                     beforeRequest: { request async throws in Self.header(&request) }
                 ) { response async throws in
-                    #expect(try Self.decodeRuns(response).count == 1, "id \(id)")
+                    // **No vacío**, no "exactamente una": el 202 promete que la
+                    // competición se sincronizó, y cuántas pasadas deja eso
+                    // depende de cuántas clases haya (tres desde F8).
+                    #expect(try !Self.decodeRuns(response).isEmpty, "id \(id)")
                 }
             }
         }
@@ -296,10 +317,21 @@ struct IngestionEndpointTests {
             ) { response async throws in
                 #expect(response.status == .ok)
                 let runs = try Self.decodeRuns(response)
-                #expect(runs.count == 2)
+
+                // **Dos disparos, y cada uno deja las pasadas de su competición.**
+                // Cuántas son por disparo depende de cuántas clases de pasada
+                // existan —una en F6, dos en F7, tres en F8—, así que lo que se
+                // afirma es que hay más de un disparo y que vienen ordenadas.
+                #expect(runs.count >= 2)
+
                 // La pregunta que esta tabla contesta es *"¿qué pasó la última
                 // vez?"*, así que el orden es parte del contrato, no un detalle.
-                if runs.count == 2 { #expect(runs[0].finishedAt >= runs[1].finishedAt) }
+                // **Por parejas y no con `sorted`**: en este test el reloj está
+                // fijo, así que todas las pasadas comparten `finishedAt` y
+                // `sorted` —que no es estable— devuelve otra permutación igual de
+                // válida. Lo que hay que afirmar es que la secuencia no sube.
+                #expect(zip(runs, runs.dropFirst()).allSatisfy { $0.finishedAt >= $1.finishedAt },
+                        "el registro no llega de la más reciente a la más antigua")
             }
         }
     }
@@ -563,13 +595,31 @@ struct CollapsingClient: FederationClient {
         return IngestionEndpointTests.emptyCalendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "CollapsingClient")
+        throw NotStubbed(client: "CollapsingClient", operation: "fetchStandings")
+    }
+
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -629,5 +679,17 @@ struct StandingsNotStubbed: Error, CustomStringConvertible {
     let client: String
     var description: String {
         "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
+    }
+}
+
+
+/// El mismo `NotStubbed` de `ApplicationTests`, declarado aquí porque los
+/// *targets* de test no se importan entre sí. Ver allí el porqué de llevar la
+/// operación dentro (F8).
+struct NotStubbed: Error, CustomStringConvertible {
+    let client: String
+    let operation: String
+    var description: String {
+        "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }

@@ -64,8 +64,12 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// de clasificación sin jornada no se puede leer, y una de calendario con
     /// jornada dice algo que no es verdad.
     ///
-    /// Los goleadores de F8 caerán del lado nulo: `LeagueScorer` es **estado
-    /// vigente único, no *snapshot* por jornada** (§3.2).
+    /// Los goleadores de F8 caen del lado nulo, y el `CHECK` ya lo admitía sin
+    /// tocarlo: `LeagueScorer` es **estado vigente único, no *snapshot* por
+    /// jornada** (§3.2), así que su pasada es de la competición entera. La
+    /// expresión `(kind = 'standings') = (round_id IS NOT NULL)` dice exactamente
+    /// eso —*"solo la clasificación lleva jornada"*— y no *"las que no son
+    /// calendario la llevan"*, que es lo que habría habido que corregir.
     public let roundID: RoundID?
 
     public let startedAt: Date
@@ -111,6 +115,24 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public var standingRowsCreated: Int = 0
     public var standingRowsUpdated: Int = 0
 
+    /// Los goleadores escritos (F8), **y los retirados**, que es el que no tiene
+    /// hermano en ninguna otra entidad.
+    ///
+    /// Los dos primeros son el par de siempre: cada entidad que la ingesta escribe
+    /// tiene su `created`/`updated`, y sin ellos los goleadores serían la única
+    /// sin él.
+    ///
+    /// **`leagueScorersRetired` es propio de esta pasada y de ninguna más**,
+    /// porque `LeagueScorer` es la única salida de la ingesta que **borra**
+    /// (`D-94`). Y es justo el número que hay que poder mirar cuando algo va mal:
+    /// una pasada que retire 200 de 218 no ha limpiado nada, ha vaciado el
+    /// ranking — y sin contador eso se ve en la pantalla y no en la tabla. Es el
+    /// mismo argumento con el que `D-85` existe: la ingesta no tiene usuario
+    /// delante.
+    public var leagueScorersCreated: Int = 0
+    public var leagueScorersUpdated: Int = 0
+    public var leagueScorersRetired: Int = 0
+
     /// Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal.
     ///
     /// Va como documento y no como tabla hija: no se consulta por sus campos —se
@@ -137,17 +159,24 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         // La pareja de la jornada, y va antes que la del error porque es la que
         // decide si la fila se puede leer siquiera: diez pasadas de clasificación
         // sin decir de qué jornada son, son diez filas iguales.
+        //
+        // **El `switch` nombra los tres casos y no usa `default` para los que no
+        // son clasificación**: con un `default`, el caso que añada la fase
+        // siguiente entraría por él y aceptaría una jornada en silencio. Aquí, el
+        // compilador obliga a decidir — que es el criterio de `D-61` y el mismo
+        // que sostiene `RFFMGameType` y `toContract()`.
         switch (kind, roundID) {
         case (.standings, nil):
             throw DomainError.invalidValue(
                 field: "roundID", reason: "una pasada de clasificación es de una jornada"
             )
-        case (.calendar, _?):
+        case (.calendar, _?), (.scorers, _?):
             throw DomainError.invalidValue(
                 field: "roundID",
-                reason: "la pasada de calendario es de la competición entera, no de una jornada"
+                reason: "solo la pasada de clasificación es de una jornada; "
+                    + "las demás son de la competición entera"
             )
-        default:
+        case (.calendar, nil), (.scorers, nil), (.standings, _?):
             break
         }
 
@@ -207,6 +236,9 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         timed.matchesUpdated = matchesUpdated
         timed.standingRowsCreated = standingRowsCreated
         timed.standingRowsUpdated = standingRowsUpdated
+        timed.leagueScorersCreated = leagueScorersCreated
+        timed.leagueScorersUpdated = leagueScorersUpdated
+        timed.leagueScorersRetired = leagueScorersRetired
         timed.skipped = skipped
         return timed
     }
@@ -231,16 +263,31 @@ public struct IngestionRunID: Hashable, Sendable {
 ///
 /// Es `String` y `CaseIterable` por el mismo motivo que `IngestionOutcome` y
 /// `FederationCode` (`D-02`): el `CHECK` de la columna **se deriva** de
-/// `sqlValueList` y no se teclea, así que el caso de F8 lo hereda solo. Lo único
-/// que hay que hacer a mano es añadirlo también al `enum` del contrato — y eso
-/// tampoco depende de acordarse, porque el `toContract()` del adaptador es un
-/// `switch` exhaustivo y no compila sin él (`D-61`).
+/// `sqlValueList` y no se teclea. Lo único que hay que hacer a mano en el
+/// contrato es añadir el caso al `enum` del *spec* — y eso tampoco depende de
+/// acordarse, porque el `toContract()` del adaptador es un `switch` exhaustivo y
+/// no compila sin él (`D-61`).
+///
+/// > ⚠️ **Lo que F7 escribió aquí era falso, y F8 lo midió: el caso nuevo NO lo
+/// > hereda un *schema* que ya existe.** Decía que *"el caso de F8 lo hereda
+/// > solo"*. La derivación ocurre **una sola vez**, cuando la migración corre, y
+/// > lo que queda en la base es el texto que salió aquel día:
+/// > `CHECK (kind = ANY (ARRAY['calendar','standings']))`, comprobado en
+/// > `club_atleti` antes de añadir `scorers`. Es `D-90` un piso más abajo —
+/// > **derivado no significa vivo**—, así que **añadir un caso aquí obliga a una
+/// > migración nueva** que rehaga el `CHECK` (`AddScorersToIngestionRun`). Sin
+/// > ella, un alta limpia acepta la pasada de goleadores y un club vivo la
+/// > rechaza con un `23514` que nadie relaciona con un `enum`.
 public enum IngestionKind: String, CaseIterable, Equatable, Sendable {
     /// La pasada de §5.6: el calendario y sus resultados, de la que salen
     /// `Round`, `Match`, `Team` y `OpponentClub`.
     case calendar
     /// La de F7: la clasificación por jornada, ingerida o calculada (`D-15`).
     case standings
+    /// La de F8: el ranking de goleadores, **de la competición entera** y sin
+    /// jornada — `LeagueScorer` es estado vigente único, no *snapshot* (§3.2),
+    /// así que esta pasada cae del lado **nulo** de `roundID`.
+    case scorers
 }
 
 /// Cómo acabó la pasada (§3.3).
@@ -309,5 +356,28 @@ public struct IngestionSkip: Equatable, Sendable, Codable {
         /// de dieciséis, y la pasada siguiente —con el calendario ya al día— la
         /// resuelve sola.
         case unknownStandingTeam
+
+        /// **F8**: una fila del ranking de goleadores sin identificador de
+        /// jugador, o que el Dominio rechaza por cualquier otro motivo.
+        ///
+        /// # Es el único descarte que significa "la fuente ha cambiado", no
+        /// "los datos aún no cuadran"
+        ///
+        /// Los otros ocho describen estados transitorios y legítimos: un equipo
+        /// que el calendario no ha visto todavía, una fecha que la federación no
+        /// ha publicado, dos candidatos igual de buenos. Éste no: el
+        /// `codigo_jugador` viene en **426/426** filas de los volcados medidos
+        /// ([Anexo RFFM §F.13], §F.19, [Anexo FCF §C.10.7]), así que su ausencia
+        /// es una anomalía y no un compás de espera.
+        ///
+        /// # Y aun así no hace fallar la pasada, al revés que en la clasificación
+        ///
+        /// Porque un ranking **no tiene numeración**: 217 filas de 218 siguen
+        /// siendo un ranking utilizable. Una clasificación a la que le falte una
+        /// fila tiene un hueco en una numeración que el *spec* declara imposible,
+        /// y por eso allí el parser exige y aquí se descarta. Es `D-75` aplicado a
+        /// dos formas distintas de tabla: los dos errores no cuestan lo mismo en
+        /// una y en la otra.
+        case unidentifiedScorer
     }
 }

@@ -88,6 +88,12 @@ public struct IngestClubCalendars: Sendable {
         // desconocidos a equipos que se acaban de crear.
         let ingestStandings = IngestStandings(
             unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids)
+        // **Y los goleadores detrás de las dos** (F8). El orden aquí importa
+        // menos que el de arriba —el ranking no se empareja con nada (`D-09`),
+        // así que no depende de que `Team` ni `Match` existan— pero se mantiene el
+        // criterio: primero lo que crea filas de las que cuelga el resto.
+        let ingestScorers = IngestScorers(
+            unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids)
 
         var report = ClubIngestionReport(
             clubSlug: actor.clubSlug, federation: plan.federation)
@@ -111,11 +117,23 @@ public struct IngestClubCalendars: Sendable {
                 // que `D-85` existe para evitar.
                 //
                 // Y no se pierde nada al contarlo así: la pasada del calendario
-                // **ya dejó su fila** con su éxito, y las de clasificación la
-                // suya con su jornada y su motivo (`D-85`, `kind`, `round_id`).
-                // El informe en memoria es más grueso que la tabla; la tabla es la
-                // que se lee tres días después.
+                // **ya dejó su fila** con su éxito, las de clasificación la suya
+                // con su jornada y su motivo, y la de goleadores la suya (`D-85`,
+                // `kind`, `round_id`). El informe en memoria es más grueso que la
+                // tabla; la tabla es la que se lee tres días después.
+                //
+                // **Con tres clases de pasada, `D-89` tiene más trabajo del que
+                // F7 le dejó apuntado**: `ingestionHealth` se deriva de *"la
+                // última pasada de esta competición"*, y ahora *"la última"* son
+                // hasta tres cosas distintas por disparo. Sigue sin bloquear
+                // nada hasta que el backoffice lea esos campos.
                 _ = try await ingestStandings.execute(
+                    competitionID: competition.id, actor: actor)
+
+                // **Y lo mismo con los goleadores**: si fallan, la competición
+                // cuenta como fallida. `nil` no es fallo — es que esta federación
+                // no los publica (`D-48`), y entonces no hay pasada que registrar.
+                _ = try await ingestScorers.execute(
                     competitionID: competition.id, actor: actor)
 
                 report.entries.append(

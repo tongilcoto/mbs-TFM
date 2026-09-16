@@ -89,6 +89,133 @@ struct MigrationIntegrityTests {
             """).first(decodingColumn: "n", as: Int.self) ?? 0
     }
 
+    /// **F8: el `CHECK` de un enumerado no se mantiene solo, y esto es lo que lo
+    /// vigila.**
+    ///
+    /// # El defecto que este test existe para cazar, y que ya ocurrió
+    ///
+    /// `D-02` dice que el `CHECK` de un enumerado **se deriva y no se teclea**, y
+    /// `sqlValueList` lo cumple. De ahí se concluyó —y quedó escrito en
+    /// `AddStandingsToIngestionRun`— que *"el caso que F8 añada lo hereda sin
+    /// tocar SQL"*. **Es falso.** La derivación ocurre **una sola vez**, cuando la
+    /// migración corre, y lo que queda en el *schema* es el texto de aquel día.
+    /// Medido en `club_atleti` antes de arreglarlo:
+    ///
+    /// ```
+    /// chk_ingestion_runs_kind → CHECK (kind = ANY (ARRAY['calendar','standings']))
+    /// ```
+    ///
+    /// Es `D-90` un piso más abajo: **derivado no significa vivo**.
+    ///
+    /// # Por qué no bastaba el inventario de constraints
+    ///
+    /// Porque **cuenta**, y este fallo no cambia la cuenta: `chk_ingestion_runs_kind`
+    /// sigue siendo una constraint antes y después de añadir el caso. El
+    /// inventario habría seguido en verde mientras un club vivo rechazaba la
+    /// pasada nueva con un `23514`. Lo que hay que afirmar no es que el `CHECK`
+    /// **esté**, sino **qué admite** — y contra el enumerado de Swift, no contra
+    /// una lista tecleada aquí, que se desincronizaría igual.
+    ///
+    /// # Y por qué no es un test del `INSERT`
+    ///
+    /// Porque insertar una pasada exige una competición, una temporada y un club,
+    /// y el fallo no está en la fila: está en el texto de la constraint. Se lee
+    /// del catálogo y se comprueba que **cada** caso del enumerado aparece.
+    ///
+    /// > **Al añadir el cuarto caso a `IngestionKind`** —el acta de `D-57`—, este
+    /// > test se pone rojo hasta que exista su migración. Que es el trabajo.
+    @Test("el CHECK de `kind` admite TODOS los casos del enumerado, no los de su día (D-02, D-90)")
+    func theKindCheckAdmitsEveryCase() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)kindcheck"
+            let sql = app.db(.control) as! any SQLDatabase
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+            try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+
+            // **Hay que fabricar un club vivo, y eso cuesta dos cosas: migrar en
+            // dos lotes y falsificar el `CHECK` viejo. Las dos.**
+            //
+            // La primera versión de este test solo aprovisionaba un *schema*
+            // limpio, y **la comprobación de mutación la tumbó**. La segunda ya
+            // migraba en dos lotes, y la mutación **volvió a sobrevivir** — por un
+            // motivo más de fondo: el primer lote también ejecuta el código de
+            // **hoy**, así que `AddStandingsToIngestionRun` deriva su `CHECK` con
+            // el enumerado de hoy y sale con los tres casos aunque nadie lo rehaga.
+            //
+            // **Un *schema* migrado antes de que el caso existiera no se puede
+            // fabricar ejecutando el código de ahora**, porque el código de
+            // entonces ya no está. Así que se escribe a mano el `CHECK` que aquel
+            // código dejó — y no es una invención: es el texto **medido** en
+            // `club_atleti` el 2026-09-16, antes de arreglarlo.
+            //
+            // Es la misma lección que `H-07` y que las tres pasadas fallidas del
+            // guion de mutación de F7: **un test que no reproduce la condición no
+            // es un test, es un verde**. Lo encontró la mutación dos veces
+            // seguidas, no un rojo.
+            let all = TenantMigrations.all()
+            let upToStandings = try #require(
+                all.firstIndex { $0.name.hasSuffix("AddStandingsToIngestionRun") },
+                "AddStandingsToIngestionRun ya no está en la lista: el corte no significa nada")
+            try await MigrateTenantsCommand.migrate(
+                schema: schema, migrations: Array(all.prefix(upToStandings + 1)), on: app)
+
+            // El `CHECK` tal y como lo dejó F7, literal.
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                DROP CONSTRAINT \(ident: "chk_ingestion_runs_kind")
+                """).run()
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                ADD CONSTRAINT \(ident: "chk_ingestion_runs_kind")
+                CHECK (kind IN ('calendar', 'standings'))
+                """).run()
+
+            // Testigo de que el montaje hizo lo que dice: en este punto el `CHECK`
+            // existe **y le falta** el caso de F8. Sin esta comprobación, un fallo
+            // del `ALTER` de arriba dejaría el test pasando por el motivo
+            // equivocado — que es exactamente contra lo que avisa `H-07`.
+            let beforeSecondBatch = try #require(
+                try await Self.kindCheck(of: schema, on: app),
+                "el primer lote no llegó a crear el CHECK")
+            #expect(!beforeSecondBatch.contains("'scorers'"),
+                    "el montaje no reprodujo el CHECK viejo: \(beforeSecondBatch)")
+
+            // Y ahora el resto, que es lo que le pasa a un club vivo cuando se
+            // despliega F8.
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            #expect(try await Self.batches(of: schema, on: app) == 2,
+                    "el schema no se migró en dos lotes: no reproduce a un club vivo")
+
+            let check = try #require(
+                try await Self.kindCheck(of: schema, on: app),
+                "no existe chk_ingestion_runs_kind")
+
+            // **Contra `allCases`, no contra una lista escrita aquí.** Una lista
+            // tecleada en el test se desincroniza del enumerado por el mismo
+            // motivo por el que se desincronizó el `CHECK`, y entonces el test
+            // pasaría a ser parte del problema en vez de la guarda.
+            for kind in IngestionKind.allCases {
+                let diagnostic = "el CHECK del schema no admite `\(kind.rawValue)`: \(check)."
+                    + " Un caso nuevo del enumerado NO llega solo a un schema ya migrado:"
+                    + " hace falta una migración que lo rehaga (D-90)."
+                #expect(check.contains("'\(kind.rawValue)'"), "\(diagnostic)")
+            }
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// La definición de `chk_ingestion_runs_kind` tal y como está **en la base**,
+    /// que es el único sitio donde este defecto se puede ver.
+    static func kindCheck(of schema: String, on app: Application) async throws -> String? {
+        let sql = app.db(.control) as! any SQLDatabase
+        return try await sql.raw("""
+            SELECT pg_get_constraintdef(con.oid) AS line
+            FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
+            WHERE n.nspname = \(bind: schema) AND con.conname = 'chk_ingestion_runs_kind'
+            """).first(decodingColumn: "line", as: String.self)
+    }
+
     /// H-30/H-38: **el `revert` deshace de verdad**, y la prueba no es que no
     /// falle: es que volver a migrar deja el esquema **exactamente** como estaba.
     ///
@@ -114,14 +241,27 @@ struct MigrationIntegrityTests {
             // (§4.6): los `CHECK` derivados de `D-02` y el `NULLS NOT DISTINCT`
             // de la clave de `Team` (§3.5).
             //
-            // **15 desde F7**: tres de `standing_rows` —`position`,
-            // `previous_position` y el de los siete contadores— y dos en
-            // `ingestion_runs`, el de `kind` y el de la pareja de `round_id`. El número sube con cada fase y **eso es lo que se
-            // quiere**: actualizarlo obliga a mirar qué se añadió. Lo que NO hay
-            // en `standing_rows`, y es deliberado, es un `CHECK` de aritmética: la
-            // tabla oficial de un grupo sancionado no cumple `points = 3·G + E`
-            // (`D-92`).
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 15,
+            // **18 desde F8** (15 en F7): tres de `standing_rows` —`position`,
+            // `previous_position` y el de los siete contadores—, dos en
+            // `ingestion_runs` —`kind` y la pareja de `round_id`— y **tres nuevos
+            // en `league_scorers`**: `goals >= 0`, `rank IS NULL OR rank >= 1` y
+            // el de la clave de `D-93`, que impide que `federation_player_id` sea
+            // la cadena vacía. El número sube con cada fase y **eso es lo que se
+            // quiere**: actualizarlo obliga a mirar qué se añadió.
+            //
+            // **Y en F8 ese repaso cobró de verdad, que es para lo que existe.**
+            // El recuento no cambia al añadir el caso `scorers` a
+            // `IngestionKind` —`chk_ingestion_runs_kind` sigue siendo uno—, así
+            // que si `AddScorersToIngestionRun` no rehiciera su expresión, este
+            // test seguiría en verde y el club vivo rechazaría la pasada nueva.
+            // Lo que lo caza es `theKindCheckAdmitsEveryCase`, más abajo: el
+            // inventario cuenta constraints, no lo que dicen.
+            //
+            // Lo que NO hay, y es deliberado en las dos tablas, es un `CHECK` de
+            // aritmética: la tabla oficial de un grupo sancionado no cumple
+            // `points = 3·G + E` (`D-92`), y los goles del ranking son de
+            // jugadores ajenos, sin nada nuestro contra lo que cuadrarlos (§3.7).
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 18,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")

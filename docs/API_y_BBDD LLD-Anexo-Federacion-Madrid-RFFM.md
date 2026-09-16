@@ -1039,3 +1039,121 @@ número.
   9 en cuatro, jornada 9 de SEGUNDA ALEVIN F-7 G17) y este volcado **no lo reproduce**: al ser final de
   temporada, los 16 equipos tienen 30. La regla *"no asumir `jugados == round`"* sigue viva y su evidencia
   sigue siendo la de §F.8.
+
+---
+
+## F.19 Goleadores, sobre el terreno — **volcado real** (medido el 2026-09-16)
+
+§F.13 describió `/api/scorers` con un volcado de **PRIMERA INFANTIL Grupo 12**, que es *otra* competición que
+la del calendario (§F.15) y la clasificación (§F.18). F8 lo captura **del mismo grupo que aquellas dos**, y
+con eso se puede comprobar por primera vez una afirmación que §F.13 solo podía deducir. **[C]**
+
+```
+https://www.rffm.es/api/scorers?idGroup=24037549&idCompetition=24037548
+→ PRIMERA DIVISION AUTONOMICA CADETE · Grupo 1 · 2025-26 · 218 filas · 16 equipos
+```
+
+Guardado en `docs/Federation APIs examples/RFFM-scorers-group-24037549.txt`. El de §F.13
+(`RFFM-scorers.txt`, 208 filas) se conserva: dos grupos distintos valen más que uno.
+
+### Lo que confirma de §F.13
+
+Las cuatro observaciones de §F.13 se reproducen en un grupo distinto, así que dejan de ser propiedades de una
+muestra:
+
+| | §F.13 (INFANTIL G12) | §F.19 (CADETE G1) |
+|---|---|---|
+| Filas | 208 | **218** |
+| `codigo_jugador` únicos y no vacíos | 208/208 | **218/218** |
+| Ordenado por `goles` descendente | ✅ | ✅ (31 → 1) |
+| Campo de puesto | ❌ no existe | ❌ **no existe** |
+| `foto` | vacía en las 208 | **vacía en las 218** |
+| Todo llega como cadena (§F.11) | ✅ | ✅ (las 10 claves) |
+
+### La afirmación que §F.13 no podía comprobar, y ahora sí
+
+§F.13 decía que `codigo_equipo` *"casa con el `codigo_equipo_*` del calendario (§F.3)"*. Era una deducción
+entre **grupos distintos**: no se podía cruzar. Cruzado ahora contra `RFFM-calendario-temporada-jugada.html`,
+que es el mismo grupo:
+
+```
+codigo_equipo del calendario : 16 valores
+codigo_equipo de /api/scorers: 16 valores
+intersección: 16 · solo en uno: 0 · solo en el otro: 0
+```
+
+**16/16, exacto.** Es el mismo espacio de identificadores, y los valores son los mismos de siempre — desde
+`"109"` hasta `"8963337"` (§F.3 ya avisaba de que no tienen longitud fija).
+
+> **Y esto no cambia [D-09]: cambia su argumento, que es peor de dejar sin escribir.** La decisión dice que
+> `LeagueScorer` **no se liga a `Player` ni a `Team`** y que `team_label` es *"texto del proveedor, no una
+> clave"*. Con esta medición delante, la lectura *"es que no se puede unir"* es **falsa**: se podría, por id y
+> sin degradar a nombre, exactamente igual que las filas de clasificación en F7. No se hace porque
+> **no se quiere** —el ranking es de jugadores ajenos y el *spec* fija `teamLabel` como texto ([D-32])—, no
+> porque falte el dato. Quien reabra [D-09] tiene que discutir eso y no la imposibilidad.
+
+### Lo que añade, y es donde NO se parece a `/api/standings`
+
+**Los dos parámetros son obligatorios, y el par se valida.** Es la diferencia de forma con su vecina, que solo
+pide `idGroup`:
+
+| Petición | Respuesta |
+|---|---|
+| `?idGroup=24037549&idCompetition=24037548` | el ranking, 218 filas |
+| `?idGroup=24037549&idCompetition=99999999` | **`200` + `null`** |
+| `?idGroup=24037549` *(sin `idCompetition`)* | **`200` + `null`** |
+| `?idGroup=99999999&idCompetition=99999999` | **`200` + `null`** |
+
+Guardado en `RFFM-scorers-coordenada-inexistente.txt`.
+
+**La consecuencia buena, y conviene decirla en voz alta porque es la primera ruta de la RFFM de la que se
+puede:** aquí **no ocurre [D-84]**. El calendario, con una coordenada equivocada, sirve *el calendario de otra
+competición* sin un solo error; `/api/standings` sirve *la clasificación del grupo que le pidas*. Ésta, en
+cambio, **exige que el grupo y la competición sean pareja** y contesta `null` si no lo son. Un dígito mal
+tecleado en `idCompetition` da silencio, no dato ajeno.
+
+**Pero el riesgo de [D-84] no desaparece, solo se estrecha.** Lo que la ruta comprueba es la **coherencia
+interna** del par, no que el par sea el que queríamos: copiar los **dos** códigos del año pasado —que es el
+error real de cada verano ([D-91])— daría una pareja perfectamente válida y un ranking perfectamente
+parseable de la temporada anterior. Y aquí **no hay ni una fecha** en toda la respuesta, así que la señal que
+`D-91` eligió —*"la mediana de las fechas cae en la ventana de la `Season`"*— **no se puede aplicar a este
+endpoint**. La guarda de la temporada la tiene que seguir haciendo el calendario.
+
+### Y el sobre trae menos evidencia que el de la clasificación
+
+```json
+{ "estado": "1", "sesion_ok": "1",
+  "competicion": "PRIMERA DIVISION AUTONOMICA CADETE", "grupo": "Grupo 1",
+  "goles": [ … ] }
+```
+
+Cuatro claves, y **no está `codigo_competicion`** — que es justo el campo que §F.18 celebró como *"la
+evidencia más fuerte que hay en todo el puerto"*, porque a `/api/standings` no se le envía y por tanto no
+puede ser eco. Aquí ese código **se envía**, así que aunque viniera no valdría.
+
+Lo que sí queda utilizable es **`competicion`**, el nombre: no es eco, porque lo que se manda son números y lo
+que vuelve es texto. Sirve para la misma guarda que ya existe (`Competition.requireSameSource`, [D-84]) y con
+la misma limitación medida en §F.17 — **el nombre es idéntico entre temporadas**, así que caza *"me equivoqué
+de competición"* y es ciega a *"me traje los códigos del año pasado"*.
+
+`grupo` (`"Grupo 1"`) es el mismo rótulo que ya trae el calendario y que ya se guarda; aquí no aporta.
+
+### Lo que la fuente da de más, y sigue sin lector
+
+`escudo_equipo` (no vacío en las 218), `partidos_jugados`, `goles_penalti` y `goles_por_partidos`. Ninguno
+tiene columna en §3.2 y ninguno entra: es la regla que F6-bis cobró con `FederationRound.label` — **un campo
+sin lector no se transporta**. Están descritos aquí y entran el día que exista quien los lea.
+
+`foto` llega vacía en las 218, igual que en las 208 de §F.13. Dos grupos, 426 filas, cero fotos.
+
+### Pendiente de observar en este endpoint
+
+- **Un grupo sin goles todavía** (jornada 0). Se espera `"goles": []`, pero **no está medido**, y la diferencia
+  que importaría es si en ese caso el documento entero llega a `null` — que sería indistinguible de una
+  coordenada mala.
+- **Dos jugadores con el mismo nombre en el mismo equipo.** En las 426 filas de los dos volcados **no hay un
+  solo nombre repetido**, así que la colisión que [D-93] usa para justificar la clave de *upsert* está
+  argumentada pero **no exhibida**.
+- **Si la lista tiene tope.** 218 filas y ni rastro de paginación en la respuesta; el volcado de la FCF, en
+  cambio, trae **exactamente 50**, que huele a *top-50* del servidor. En Madrid no parece haberlo, pero no se
+  ha probado con un grupo grande.

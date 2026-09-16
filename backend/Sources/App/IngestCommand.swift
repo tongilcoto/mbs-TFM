@@ -55,8 +55,12 @@ public struct IngestCommand: AsyncCommand {
     /// nunca una pasada legítima.
     public static let defaultMinIntervalHours = 6
 
+    /// **Lo que sale en `swift run Run --help`**, así que es documentación tanto
+    /// como el README — y decía solo *"el calendario"* hasta F8, cuando el disparo
+    /// llevaba ya tres pasadas por competición.
     public var help: String {
-        "Sincroniza el calendario de la federación de cada club (§2.3-b)."
+        "Sincroniza con la federación el calendario, la clasificación y los "
+            + "goleadores de cada club (§2.3-b)."
     }
 
     public init() {}

@@ -2,6 +2,7 @@ public import protocol Application.FederationClient
 public import struct Application.FederationCalendar
 public import struct Application.FederationCoordinate
 public import struct Application.FederationStanding
+public import struct Application.FederationScorerTable
 
 /// El adaptador de la RFFM: implementa el puerto `FederationClient` (§4.3).
 ///
@@ -51,5 +52,23 @@ public struct RFFMFederationClient: FederationClient {
         let body = try await transport.get(
             RFFMEndpoints.standings(for: coordinate, round: round))
         return try RFFMStandingsParser.parse(body)
+    }
+
+    /// El ranking de goleadores (F8, [Anexo RFFM §F.19]).
+    ///
+    /// Las mismas cuatro líneas que sus dos hermanas, y lo único propio de la
+    /// federación que queda aquí es **que no hay jornada que pasar**: los
+    /// goleadores son estado vigente único (§3.2), así que la coordenada basta.
+    ///
+    /// **Y no decide si la respuesta sirve.** Si el `null` llega —par de códigos
+    /// que no casa— sube como `coordinateNotFound` y no como ranking vacío, que
+    /// es el error más caro que este método podría cometer: `D-48` dice que hay
+    /// federaciones que **no publican** goleadores, así que una lista vacía es un
+    /// dato perfectamente creíble y aquí sería perfectamente falso.
+    public func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        let body = try await transport.get(RFFMEndpoints.scorers(for: coordinate))
+        return try RFFMScorersParser.parse(body)
     }
 }

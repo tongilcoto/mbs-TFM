@@ -610,6 +610,14 @@ Dos observaciones y una advertencia:
 - **`goles`, `penalti` y `total` son números JSON**, no cadenas. Rompe la regla de §C.6 y la de
   [Anexo RFFM §F.11] (*"todo llega como cadena, sin excepción"*): en esta fuente **no**. Tipar por volcado.
 - Como en la RFFM, **no hay campo de puesto**: el orden de la lista es la única señal ([Anexo RFFM §F.13]).
+- ⚠️ **`total` NO es el total de goles — es partidos jugados** (medido el 2026-09-16 sobre las 50 filas del
+  volcado). El nombre invita a leerlo como `goles + penalti`, y **no lo es en ninguna fila**: 0/50. Los cuatro
+  primeros registros lo enseñan solos — `goles=22 penalti=2 total=25`, `14/0/28`, `13/0/28`, `12/2/20` —, y lo
+  que encaja es el **`partidos_jugados`** de la RFFM ([Anexo RFFM §F.13]): 22 goles en 25 partidos, 14 en 28.
+  Lo confirma el orden: la lista viene ordenada por **`goles`** descendente (50/50), **no** por `total`. Así
+  que el `goals` del modelo (§3.2) sale de **`goles`**, y `total` se queda fuera como se queda
+  `partidos_jugados` en Madrid — sin lector. Es la trampa de §F.16 con otra ropa: **un campo que se llama como
+  la pregunta que te haces no es la respuesta**, y aquí ni siquiera hacía falta salir a la red para verlo.
 - ⚠️ **`licencia` es un DNI.** En fútbol base eso es dato personal de un menor. **No se ingiere**: no tiene
   columna en el modelo (§3.2) y no debe tenerla. Anotado aquí porque el campo *viene solo* y lo fácil es
   volcarlo sin mirar.

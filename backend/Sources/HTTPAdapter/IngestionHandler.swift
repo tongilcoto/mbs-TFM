@@ -310,7 +310,10 @@ extension Domain.IngestionRun {
                 matchesCreated: matchesCreated,
                 matchesUpdated: matchesUpdated,
                 standingRowsCreated: standingRowsCreated,
-                standingRowsUpdated: standingRowsUpdated),
+                standingRowsUpdated: standingRowsUpdated,
+                leagueScorersCreated: leagueScorersCreated,
+                leagueScorersUpdated: leagueScorersUpdated,
+                leagueScorersRetired: leagueScorersRetired),
             skipped: skipped.map {
                 .init(reason: $0.reason.toContract(), detail: $0.detail)
             })
@@ -325,6 +328,7 @@ extension Domain.IngestionKind {
         switch self {
         case .calendar: .calendar
         case .standings: .standings
+        case .scorers: .scorers
         }
     }
 }
@@ -358,6 +362,7 @@ extension Domain.IngestionSkip.Reason {
         case .unsluggableClubName: .unsluggable_club_name
         case .duplicateClubName: .duplicate_club_name
         case .unknownStandingTeam: .unknown_standing_team
+        case .unidentifiedScorer: .unidentified_scorer
         }
     }
 }

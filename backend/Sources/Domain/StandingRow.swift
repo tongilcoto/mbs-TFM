@@ -1,6 +1,6 @@
 public import struct Foundation.Date
 
-/// La fila de clasificación de un equipo en una jornada (§3.2, entidad 22).
+/// La fila de clasificación de un equipo en una jornada (§3.2, **entidad 9**).
 ///
 /// # Es un *snapshot*, no un acumulado
 ///

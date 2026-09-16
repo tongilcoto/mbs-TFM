@@ -34,6 +34,13 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     @Field(key: "standing_rows_created") public var standingRowsCreated: Int
     @Field(key: "standing_rows_updated") public var standingRowsUpdated: Int
 
+    /// Los tres de F8. Ver `AddScorersToIngestionRun`. **El tercero no tiene
+    /// hermano en ninguna otra entidad**: cuenta filas *borradas*, porque
+    /// `LeagueScorer` es la única salida de la ingesta que borra (`D-94`).
+    @Field(key: "league_scorers_created") public var leagueScorersCreated: Int
+    @Field(key: "league_scorers_updated") public var leagueScorersUpdated: Int
+    @Field(key: "league_scorers_retired") public var leagueScorersRetired: Int
+
     /// Documento, no tabla hija.
     ///
     /// **Va envuelto en un `struct` y no como `[IngestionSkip]` a pelo**, y lo
