@@ -44,6 +44,30 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// `.calendar` por defecto convertiría un olvido en una fila que miente.
     public let kind: IngestionKind
 
+    /// **De qué jornada** es esta pasada. Nula cuando no va de una jornada.
+    ///
+    /// # Era un agujero, no un campo nuevo
+    ///
+    /// La tabla decía *"qué competición"* y no *"qué jornada"*, y eso bastaba
+    /// mientras la única pasada posible era la del calendario — que es
+    /// **agnóstica de jornada por construcción**: su endpoint devuelve la
+    /// competición entera en una petición (§5.6), así que no hay jornada que
+    /// nombrar. La de clasificación es lo contrario: `/api/standings?round=N`
+    /// sirve **una**, así que una pasada **es** una jornada, y sin esta columna
+    /// las diez de un alta a mitad de temporada serían diez filas idénticas.
+    ///
+    /// # La pareja se ata, como la de `error`
+    ///
+    /// `kind == .standings` ⟺ hay jornada. El `init` lo comprueba y el esquema
+    /// lo repite con un `CHECK`, que es el mismo trato que recibe
+    /// `(outcome == .failed) ⟺ (error != nil)` y por el mismo motivo: una pasada
+    /// de clasificación sin jornada no se puede leer, y una de calendario con
+    /// jornada dice algo que no es verdad.
+    ///
+    /// Los goleadores de F8 caerán del lado nulo: `LeagueScorer` es **estado
+    /// vigente único, no *snapshot* por jornada** (§3.2).
+    public let roundID: RoundID?
+
     public let startedAt: Date
     public let finishedAt: Date
 
@@ -99,6 +123,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         id: IngestionRunID,
         competitionID: CompetitionID,
         kind: IngestionKind,
+        roundID: RoundID? = nil,
         startedAt: Date,
         finishedAt: Date,
         outcome: IngestionOutcome = .succeeded,
@@ -109,6 +134,23 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
                 field: "finishedAt", reason: "una pasada no puede acabar antes de empezar"
             )
         }
+        // La pareja de la jornada, y va antes que la del error porque es la que
+        // decide si la fila se puede leer siquiera: diez pasadas de clasificación
+        // sin decir de qué jornada son, son diez filas iguales.
+        switch (kind, roundID) {
+        case (.standings, nil):
+            throw DomainError.invalidValue(
+                field: "roundID", reason: "una pasada de clasificación es de una jornada"
+            )
+        case (.calendar, _?):
+            throw DomainError.invalidValue(
+                field: "roundID",
+                reason: "la pasada de calendario es de la competición entera, no de una jornada"
+            )
+        default:
+            break
+        }
+
         // El par que el esquema no puede atar: un fallo sin motivo no se puede
         // depurar, y un éxito con motivo es una contradicción.
         switch (outcome, error) {
@@ -127,6 +169,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         self.id = id
         self.competitionID = competitionID
         self.kind = kind
+        self.roundID = roundID
         self.startedAt = startedAt
         self.finishedAt = finishedAt
         self.outcome = outcome
@@ -151,7 +194,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// aquí un par de fechas al revés.
     public func timed(from startedAt: Date, to finishedAt: Date) throws -> IngestionRun {
         var timed = try IngestionRun(
-            id: id, competitionID: competitionID, kind: kind,
+            id: id, competitionID: competitionID, kind: kind, roundID: roundID,
             startedAt: startedAt, finishedAt: finishedAt,
             outcome: outcome, error: error)
         timed.opponentClubsCreated = opponentClubsCreated

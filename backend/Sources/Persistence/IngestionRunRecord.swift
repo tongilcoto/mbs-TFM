@@ -20,6 +20,9 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     /// Qué se sincronizó (F7). Ver `AddStandingsToIngestionRun`.
     @Field(key: "kind") public var kind: String
 
+    /// De qué jornada, si va de una. Ver `AddIngestionRunRound`.
+    @OptionalParent(key: "round_id") public var round: RoundRecord?
+
     @Field(key: "opponent_clubs_created") public var opponentClubsCreated: Int
     @Field(key: "opponent_clubs_updated") public var opponentClubsUpdated: Int
     @Field(key: "teams_created") public var teamsCreated: Int
@@ -176,6 +179,62 @@ public struct AddStandingsToIngestionRun: AsyncMigration {
             .deleteField("kind")
             .deleteField("standing_rows_created")
             .deleteField("standing_rows_updated")
+            .update()
+    }
+}
+
+/// **`round_id`: el agujero que F7 destapa, no un campo nuevo.**
+///
+/// `ingestion_runs` decía *"qué competición"* y no *"qué jornada"*, y bastaba
+/// mientras la única pasada posible era la del calendario, que es agnóstica de
+/// jornada por construcción: su endpoint devuelve la competición entera en una
+/// petición (§5.6). La de clasificación es lo contrario —`/api/standings?round=N`
+/// sirve **una**—, así que una pasada **es** una jornada, y sin esta columna las
+/// diez de un alta en la jornada 10 serían **diez filas idénticas**.
+///
+/// # Migración aparte de `AddStandingsToIngestionRun`, y no por gusto
+///
+/// Aquélla **ya está aplicada** —se corrió contra la base de trabajo el mismo día
+/// que se escribió—, así que `D-90` la declara inmutable: `_fluent_migrations`
+/// guarda su **nombre**, no su contenido, y añadirle una línea dejaría al club
+/// existente sin la columna y a un alta limpia con ella. Es exactamente el `md5`
+/// que `A-5`/H-38 comprobó que cuadra, dejando de cuadrar.
+///
+/// # `NULL` no es "no lo sé", es "esta pasada no va de una jornada"
+///
+/// Por eso el `CHECK` ata la pareja en vez de dejar la columna suelta, que es el
+/// mismo trato que recibe `(outcome = 'failed') = (error IS NOT NULL)`: una
+/// pasada de clasificación sin jornada no se puede leer, y una de calendario con
+/// jornada dice algo que no es verdad. Los goleadores de F8 caerán del lado nulo
+/// —`LeagueScorer` es estado vigente único, no *snapshot* por jornada (§3.2)—, y
+/// la expresión ya los admite sin tocarla.
+public struct AddIngestionRunRound: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            // `CASCADE` como el resto del subárbol de `Season` (`D-73`), y por lo
+            // mismo que `competition_id`: purgar una temporada se lleva el
+            // registro de sus sincronizaciones, que sin la jornada no significan
+            // nada.
+            .field("round_id", .uuid, .references(RoundRecord.schema, "id", onDelete: .cascade))
+            .update()
+
+        try await database.checkConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_round",
+            expression: "(kind = 'standings') = (round_id IS NOT NULL)")
+
+        // El índice de la consulta que llega con F7: *"¿está sincronizada la
+        // clasificación de esta jornada?"*. Parcial, porque las filas del
+        // calendario tienen la columna nula y no se consultan por ella.
+        try await database.index(
+            table: IngestionRunRecord.schema, name: "idx_ingestion_runs_round",
+            columns: ["round_id"])
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            .deleteField("round_id")
             .update()
     }
 }

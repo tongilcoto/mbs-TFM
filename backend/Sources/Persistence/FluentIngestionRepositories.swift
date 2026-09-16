@@ -292,6 +292,7 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         record.outcome = run.outcome.rawValue
         record.error = run.error
         record.kind = run.kind.rawValue
+        record.$round.id = run.roundID?.raw
         record.opponentClubsCreated = run.opponentClubsCreated
         record.opponentClubsUpdated = run.opponentClubsUpdated
         record.teamsCreated = run.teamsCreated
@@ -333,6 +334,7 @@ extension IngestionRunRecord {
         var run = try IngestionRun(
             id: IngestionRunID(raw: try requireID()),
             competitionID: CompetitionID(raw: $competition.id), kind: kind,
+            roundID: $round.id.map { RoundID(raw: $0) },
             startedAt: startedAt, finishedAt: finishedAt,
             outcome: outcome, error: error)
         run.standingRowsCreated = standingRowsCreated

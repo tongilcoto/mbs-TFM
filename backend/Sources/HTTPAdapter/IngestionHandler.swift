@@ -295,6 +295,7 @@ extension Domain.IngestionRun {
             id: id.raw.uuidString.lowercased(),
             competitionId: competitionID.raw.uuidString.lowercased(),
             kind: kind.toContract(),
+            roundId: roundID?.raw.uuidString.lowercased(),
             startedAt: startedAt,
             finishedAt: finishedAt,
             outcome: outcome.toContract(),

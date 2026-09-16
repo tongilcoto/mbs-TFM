@@ -6410,6 +6410,18 @@ components:
           readOnly: true
         kind:
           $ref: '#/components/schemas/IngestionKind'
+        roundId:
+          type: [string, 'null']
+          format: uuid
+          readOnly: true
+          description: |
+            De qué jornada es esta pasada, si va de una. **Nula para el calendario**, que es de la
+            competición entera: su endpoint la devuelve en una petición (§5.6), así que no hay jornada que
+            nombrar. La clasificación es lo contrario —`/api/standings?round=N` sirve **una**—, de modo que
+            una pasada **es** una jornada: un alta a mitad de temporada deja tantas filas como jornadas
+            recompuso, y sin esto serían indistinguibles.
+
+            La pareja está atada: `kind == standings` ⟺ hay jornada.
         startedAt:
           type: string
           format: date-time

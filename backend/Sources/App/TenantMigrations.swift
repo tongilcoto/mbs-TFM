@@ -63,6 +63,11 @@ public enum TenantMigrations {
             // que ya existe, así que su sitio en el orden de FK es "después de lo
             // que altera" y nada más (`D-90`).
             AddStandingsToIngestionRun(),
+            // Y ésta **aparte de la anterior aunque sean de la misma fase**:
+            // `AddStandingsToIngestionRun` ya se había aplicado cuando se vio que
+            // faltaba `round_id`, y `D-90` no admite editar una aplicada. La
+            // lección cayendo dentro de la propia fase que la heredaba.
+            AddIngestionRunRound(),
         ]
     }
 }
