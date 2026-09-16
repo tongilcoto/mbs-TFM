@@ -89,4 +89,7 @@ struct FluentRepositories: Repositories {
     var ingestionRuns: any IngestionRunRepository {
         FluentIngestionRunRepository(database: database)
     }
+    var standingRows: any StandingRowRepository {
+        FluentStandingRowRepository(database: database)
+    }
 }

@@ -10,6 +10,8 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 | `RFFM-calendario-temporada-sin-jugar.html` | `docs/Federation APIs examples/` + el mismo nombre | PREFERENTE AFICIONADO Grupo 1, temporada **2026-27**: 34 jornadas, 306 partidos, **ninguno jugado** |
 | `RFFM-calendario-temporada-jugada.html` | `docs/Federation APIs examples/` + el mismo nombre | PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, temporada **2025-26**: 30 jornadas, 240 partidos, **todos jugados** |
 | `RFFM-calendario-coordenada-inexistente.html` | `docs/Federation APIs examples/` + el mismo nombre | Lo que la RFFM responde a una coordenada que **no existe**: `200` y `calendar: null` |
+| `RFFM-standings-temp21-group-24037549-round30-29.txt` | `docs/Federation APIs examples/` + el mismo nombre | **La clasificación** (F7): PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26, jornadas **30 y 29** en un solo fichero, 16 equipos cada una |
+| `RFFM-standings-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/standings` responde a un `idGroup` que **no existe**: `200` y **`null` a secas**, cuatro bytes |
 
 **El nombre dice las dos cosas que hay que saber antes de usarlos.** Son `.html`
 —no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
@@ -35,7 +37,7 @@ con dato real detrás por primera vez:
 
 - confirma la regla de §3.5 de que `Competition` se identifica por
   (`season_id`, `federation_group_id`) y **nunca por el grupo a secas**;
-- y **una coordenada caducada no da 404**: devuelve un calendario perfectamente
+- y **una coordenada equivocada no da 404**: devuelve un calendario perfectamente
   parseable **de otra cosa**. Es lo que obligó a que el canario de Plan §4.4 tenga
   **tres** señales y no dos, y a que la ingesta compare el nombre que trae la
   fuente contra `Competition.federation_name` antes de escribir nada.
@@ -71,11 +73,59 @@ los dos sitios:
 
 ```sh
 for f in RFFM-calendario-temporada-sin-jugar.html RFFM-calendario-temporada-jugada.html \
-         RFFM-calendario-coordenada-inexistente.html; do
+         RFFM-calendario-coordenada-inexistente.html \
+         RFFM-standings-temp21-group-24037549-round30-29.txt \
+         RFFM-standings-coordenada-inexistente.txt; do
   cp "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
   diff -q "docs/Federation APIs examples/$f" "backend/Tests/FederationTests/Fixtures/$f"
 done
 ```
+
+## El de clasificación es del MISMO grupo que el calendario jugado, y ahí está su valor
+
+Se capturó a propósito con `idGroup=24037549`, que es el `grupo` del volcado de temporada jugada. Eso permite
+lo único que ninguno de los dos hace por separado: **calcular la clasificación desde los 240 partidos del
+calendario y compararla con la que publica la federación**. El resultado está medido en
+[Anexo RFFM §F.18](../../../../docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) y decidido en `D-92`:
+
+| | Filas que cuadran | Orden |
+|---|---|---|
+| Jornada 29 | **16/16** | idéntico |
+| Jornada 30 | 14/16 | **un intercambio, puestos 12 y 13** |
+
+El intercambio es un empate a puntos que la RFFM deshace por **enfrentamiento directo** y nosotros por
+diferencia de goles, que es lo que `D-55` dejó fuera del *fallback*. **Son dos jornadas y no una** justamente
+por eso: con una sola no se puede ejercitar la columna PREV, que se calcula comparando con la anterior.
+
+Para mirarlo, son dos bloques JSON pegados en un fichero, cada uno precedido de su URL:
+
+```sh
+python3 -c "
+import json, io
+raw = io.open('backend/Tests/FederationTests/Fixtures/RFFM-standings-temp21-group-24037549-round30-29.txt', encoding='utf-8').read()
+dec = json.JSONDecoder(); i = 0
+while (j := raw.find('{', i)) != -1:
+    obj, end = dec.raw_decode(raw[j:]); i = j + end
+    print(obj['jornada'], obj['competicion'], obj['grupo'], len(obj['clasificacion']), 'equipos')
+"
+```
+
+## Los dos "no" de la RFFM no tienen la misma forma, y ésa es la trampa
+
+Hay dos volcados de coordenada inexistente, uno por ruta, y **no se parecen**:
+
+| | Qué llega | Cómo se detecta |
+|---|---|---|
+| `RFFM-calendario-coordenada-inexistente.html` | la **página entera** con sus props completas y **un campo** a nulo: `props.pageProps.calendar` | mirando ese campo (lo hace `RFFMCalendarParser`) |
+| `RFFM-standings-coordenada-inexistente.txt` | **el documento entero es `null`** — no hay sobre, ni `estado`, ni lista vacía | decodificando a **opcional** y tratando el `nil` como `coordinateNotFound` |
+
+**Los dos son `200`**, medido: en la RFFM el código HTTP no distingue una coordenada mala en ninguna de las
+dos rutas. Así que el 404 que traduce `HTTPFederationTransport` no se dispara aquí nunca — es la mitad
+genérica de una regla que otra federación podrá cumplir.
+
+> **Al escribir el parser de clasificación, no copiar el del calendario.** Decodificar directo al sobre
+> convierte ese `null` en un `DecodingError` → `malformedResponse` → el canario gritando *"¡han cambiado la
+> forma!"* cada vez que alguien se equivoque de número, que es la falsa alarma que `D-84` existe para evitar.
 
 ## No intentes leerlos en Xcode
 
@@ -110,7 +160,7 @@ incluidas las tres cosas que corrigió del anexo anterior.
 ## El tercer volcado: cómo dice la RFFM que no
 
 Se capturó al escribir el canario de F5, y **desmiente una premisa del plan**.
-Plan §4.4 daba por hecho que una coordenada caducada daría **404** —*"un 404
+Plan §4.4 daba por hecho que una coordenada equivocada daría **404** —*"un 404
 tiene que decir una cosa y un parseo fallido otra"*—. Medido: **la RFFM no da 404
 nunca** en la ruta del calendario. Dice que no de dos maneras, y las dos son
 `200`:
@@ -118,6 +168,14 @@ nunca** en la ruta del calendario. Dice que no de dos maneras, y las dos son
 | Coordenada mala | Qué responde |
 |---|---|
 | `competicion`/`grupo` inexistentes | `200` con **`calendar: null`** — es este volcado |
+
+> **El `200` de la primera fila está medido** (2026-09-15): `curl -o /dev/null -w '%{http_code}'` sobre
+> `competicion=99999999&grupo=99999999` devuelve **200**. Hizo falta porque **este fichero es solo el cuerpo**
+> y el código HTTP no se guardó — la fila se apoyaba hasta entonces en que Next.js sirvió
+> `page: "/competicion/calendario"` y no `"/404"`. **Al recapturar un volcado, anotar también el código.**
+> Y ojo con el alcance: esto vale **para el calendario**; de las rutas `/api/…`, que son JSON, no hay
+> medición (`D-84`, acotaciones).
+
 | `temporada` inexistente | `200` con **el calendario entero de otra temporada** y `temporada: ""`. Ignora el parámetro |
 
 La segunda es la peligrosa: 30 jornadas perfectamente parseables que **no son de

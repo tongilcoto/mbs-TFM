@@ -55,9 +55,9 @@ import Testing
 /// parámetro `temporada`, así que basta un dígito mal en `competicion` o `grupo`
 /// —los códigos son densos— para caer en otra competición real. Y los códigos de
 /// competición y grupo **cambian cada temporada, pero los viejos siguen sirviendo
-/// su calendario**, así que una coordenada caducada **no da 404** — se descubrió
-/// capturando los dos volcados de esta fase. Por eso el canario compara también
-/// el nombre.
+/// su calendario** —no caducan: sirven lo suyo para siempre—, así que una
+/// coordenada equivocada **no da 404**. Se descubrió capturando los dos volcados
+/// de esta fase. Por eso el canario compara también el nombre.
 @Suite("FederationCanary · Plan §4.4 · el parser contra la respuesta viva",
        .enabled(if: ProcessInfo.processInfo.environment["FEDERATION_LIVE"] == "1",
                 "canario: exige FEDERATION_LIVE=1 y conexión a internet"))
@@ -148,10 +148,12 @@ struct RFFMCanaryTests {
                 // por el sitio equivocado — y esto se lee justo el día en que algo
                 // cambió de su lado.
                 Issue.record("""
-                    La coordenada no designa nada: \(detail). Ha caducado — \
-                    `competicion`/`grupo` reciben un bloque nuevo cada temporada \
-                    ([Anexo RFFM §F.1]). **No es un cambio de la fuente**: pásale \
-                    otra con FEDERATION_LIVE_SEASON / _COMPETITION / _GROUP.
+                    La coordenada no designa nada: \(detail). Esos \
+                    `competicion`/`grupo` no existen — **no es que hayan caducado**: \
+                    cada temporada recibe un bloque nuevo y los viejos siguen \
+                    sirviendo su calendario ([Anexo RFFM §F.1], `D-84`). **Tampoco es \
+                    un cambio de la fuente**: pásale otra con \
+                    FEDERATION_LIVE_SEASON / _COMPETITION / _GROUP.
                     """)
                 return
             case .unexpectedStatus(let status, let url):
@@ -199,7 +201,7 @@ struct RFFMCanaryTests {
                 "la RFFM dejó de publicar una `temporada` con formato AAAA-BBBB")
 
         // `D-84`: parsea, pero ¿es la competición que creemos? La coordenada
-        // caducada **no da 404**.
+        // equivocada **no da 404**.
         #expect(calendar.competitionName == Self.expectedName, """
             La coordenada devuelve '\(calendar.competitionName ?? "sin nombre")' y se \
             esperaba '\(Self.expectedName)'. La RFFM ignora el parámetro `temporada` (D-84): esto no es un cambio de formato, es que la \

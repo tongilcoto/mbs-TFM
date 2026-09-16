@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**, más **F6-bis** y **F6-ter**. **304 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F7**, incluidas **F6-bis** y **F6-ter**. **394 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -46,7 +46,7 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 304 tests, ~5 s con Docker levantado
+swift test                        # 394 tests, ~10 s con Docker levantado
 ```
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
@@ -407,6 +407,16 @@ simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería
 | F6 · el recorrido por tenant | `TenantTraversal` | **sí** |
 | F6 · los dos endpoints | `IngestionEndpoint` | **sí** |
 | F6-ter · el freno del recorrido de clubes | `IngestTraversalStop` | no |
+| F7 · la fila, el cálculo y la columna PREV | `'StandingRowTests\|StandingTable\|StandingPrevious'` | no |
+| F7 · el parser de la clasificación | `RFFMStandingsParser` | no |
+| F7 · qué jornadas entran y de dónde | `StandingsSyncPlan` | no |
+| F7 · la pasada, con dobles | `IngestStandingsTests` | no |
+| F7 · la tabla y sus CHECK | `StandingPersistence` | **sí** |
+| F7 · los dos volcados hasta Postgres | `StandingIngestionEndToEnd` | **sí** |
+
+> **Y la sorpresa del `--filter`, otra vez, medida aquí mismo**: `--filter Standing` a secas trae **75** —las
+> seis filas de arriba juntas, de cuatro *targets* distintos—. No está mal, pero no es *"el dominio de F7"*.
+> Para eso son los tres nombres de tipo de la primera fila, que dan **31**.
 
 > **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
 > del `@Test`—, y de ahí salen tres sorpresas. **Arrastra tests de suites que no esperas**, así que las
@@ -599,17 +609,19 @@ falle, más unos invariantes baratos (que haya jornadas, que los `codacta` sigan
 | Lo que sale | Qué significa | ¿Hay que hacer algo? |
 |---|---|---|
 | *"No se pudo hablar con la RFFM"* | no hay red, o su servidor está caído | no |
-| *"La coordenada ha caducado"* | `competicion`/`grupo` reciben un bloque nuevo cada temporada | pasarle otra por variable de entorno |
+| *"La coordenada no designa nada"* | esos `competicion`/`grupo` no existen. **No es que hayan caducado**: cada temporada recibe un bloque nuevo, y los viejos siguen sirviendo lo suyo | pasarle otra por variable de entorno |
 | *"Respondió 500"* | fallo suyo | no, salvo que se repita días |
 | **⚠️ *"El parser ya no traga"*** | **han cambiado la forma de la respuesta** | **sí: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser** |
 
 Y una quinta que no es del parser: si la respuesta llega, parsea bien y **es de otra competición**. La RFFM
 **no reutiliza los códigos entre temporadas** —cada una recibe un bloque nuevo— y además **ignora el
-parámetro `temporada`** (`D-84` enmendada), así que una coordenada caducada **no da 404**: devuelve el
-calendario del año pasado, para siempre y sin error. El canario compara también el nombre.
+parámetro `temporada`** (`D-84` enmendada), así que una coordenada equivocada **no da 404**: devuelve el
+calendario que corresponda a esos códigos, para siempre y sin error. **Los códigos no caducan**; lo que
+caduca es la intención de quien copió la URL del año pasado. El canario compara también el nombre.
 
-**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto caduca —`competicion` y `grupo`
-cambian cada temporada—, así que las otras cuatro son configurables sin tocar código:
+**Solo `FEDERATION_LIVE=1` es obligatoria.** La coordenada por defecto **envejece** —seguirá sirviendo su
+temporada para siempre, que dentro de un año ya no será la vigente—, así que las otras cuatro son
+configurables sin tocar código:
 
 | Variable | Por defecto |
 |---|---|

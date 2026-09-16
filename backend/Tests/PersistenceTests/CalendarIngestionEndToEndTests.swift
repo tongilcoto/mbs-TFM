@@ -853,6 +853,16 @@ struct StubFederationClient: FederationClient {
     func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
         calendar
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "StubFederationClient")
+    }
+
 }
 
 /// El reloj fijo del nivel 3. Los dobles del nivel 2 viven en `ApplicationTests`

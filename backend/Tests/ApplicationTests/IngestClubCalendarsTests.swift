@@ -379,7 +379,7 @@ struct IngestClubCalendarsTests {
 
         // La unidad de aislamiento es la **competición**, no el club: `D-83` ya
         // la hace atómica y `D-85` ya deja escrito el fallo, así que parar aquí
-        // solo conseguiría que una coordenada caducada —de las que `D-84` dice
+        // solo conseguiría que una coordenada equivocada —de las que `D-84` dice
         // que las hay, y en silencio— dejara sin sincronizar a todo lo demás.
         #expect(federation.received.map(\.federationGroupID) == ["222", "333"])
     }
@@ -434,7 +434,7 @@ struct IngestClubCalendarsTests {
     /// El reverso, y es la mitad que no se puede perder al arreglar H-23: con la
     /// base **sana**, una competición que falla sigue sin detener el recorrido.
     /// Si la guarda nueva se pasara de celosa, `D-86` dejaría de cumplirse por el
-    /// otro lado — una coordenada caducada volvería a llevarse por delante todo
+    /// otro lado — una coordenada equivocada volvería a llevarse por delante todo
     /// lo que va detrás.
     @Test("con la base sana, un fallo de datos sigue sin detener el recorrido (D-86, H-23)")
     func aDataFailureWithAHealthyDatabaseStillContinues() async throws {

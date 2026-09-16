@@ -43,6 +43,52 @@ struct RFFMFederationClientTests {
             + "?temporada=22&tipojuego=1&competicion=26737701&grupo=26737702")
     }
 
+    /// §F.8 y §F.18. **Ni el mismo nombre de parámetro ni los mismos parámetros**
+    /// que el calendario, y las dos cosas se equivocan escribiéndolas "por
+    /// simetría": `idGroup` es **el único en *camelCase*** de toda la API, y esta
+    /// ruta **no lleva `temporada` ni `tipojuego`**.
+    ///
+    /// Que la coordenada traiga los dos y aquí no se usen está medido y no es
+    /// pereza: el grupo ya determina la competición, y la fuente lo demuestra
+    /// devolviendo un `codigo_competicion` que nadie le envió (§F.18).
+    @Test("construye la URL de la clasificación tal y como la documenta §F.8")
+    func buildsStandingsURL() {
+        #expect(RFFMEndpoints.standings(for: Self.coordinate, round: 30) ==
+            "https://www.rffm.es/api/standings?idGroup=26737702&round=30")
+    }
+
+    /// La jornada es **de la operación, no de la competición** (H-14): con la
+    /// misma coordenada se piden dos fotos distintas, y eso es lo que hace que
+    /// `StandingRow` sea un *snapshot* (`D-33`).
+    @Test("la misma coordenada con dos jornadas pide dos URLs distintas (H-14)")
+    func theRoundTravelsInTheURL() async throws {
+        let transport = SpyTransport(returning: .success("null"))
+        let client = RFFMFederationClient(transport: transport)
+
+        // `null` hace que las dos lancen `coordinateNotFound`; lo que se afirma
+        // aquí es **a dónde fue a preguntar**, no qué trajo.
+        _ = try? await client.fetchStandings(Self.coordinate, round: 29)
+        _ = try? await client.fetchStandings(Self.coordinate, round: 30)
+
+        #expect(transport.requested == [
+            "https://www.rffm.es/api/standings?idGroup=26737702&round=29",
+            "https://www.rffm.es/api/standings?idGroup=26737702&round=30",
+        ])
+    }
+
+    /// El cliente **no interpreta**: pasa el cuerpo al parser y deja subir lo que
+    /// éste levante. Sin esto, un adaptador que se "protegiera" devolviendo una
+    /// tabla vacía convertiría una coordenada mala en una clasificación de cero
+    /// equipos, que es un dato perfectamente creíble y perfectamente falso.
+    @Test("una coordenada que no designa nada sube como tal, no como tabla vacía (D-84)")
+    func theClientDoesNotSwallowTheCoordinateError() async throws {
+        let client = RFFMFederationClient(transport: SpyTransport(returning: .success("null")))
+
+        await #expect(throws: FederationError.self) {
+            try await client.fetchStandings(Self.coordinate, round: 1)
+        }
+    }
+
     /// §F.9. **`3` es fútbol sala y `4` es fútbol-5**, no al revés: es exactamente
     /// donde un mapeo escrito por el orden del enumerado se equivocaría, y el
     /// error sería mudo — devolvería el calendario de otra modalidad, no un 404.

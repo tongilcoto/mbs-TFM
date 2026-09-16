@@ -23,9 +23,12 @@ public import enum Domain.Modality
 ///
 /// # Lo que este puerto todavía no tiene
 ///
-/// Clasificación (F7), goleadores (F8) y acta (`D-57`). Se añaden cuando su fase
-/// los pida, no antes: una firma inventada hoy se escribiría contra un anexo y no
-/// contra un volcado.
+/// Goleadores (F8) y acta (`D-57`). Se añaden cuando su fase los pida, no antes:
+/// una firma inventada hoy se escribiría contra un anexo y no contra un volcado.
+/// La **clasificación** la añadió F7, y siguiendo esa misma regla: su volcado se
+/// capturó **antes** de escribir la firma, y lo que se midió en él cambió dos
+/// decisiones —qué evidencia lleva el sobre y cómo se detecta una coordenada que
+/// no designa nada ([Anexo RFFM §F.18])—.
 ///
 /// > ⚠️ **Antes de añadir el segundo método, leer F6-bis del Plan de desarrollo.**
 /// > El bloque `A-1` de la auditoría midió este puerto contra el volcado de la FCF
@@ -42,6 +45,13 @@ public import enum Domain.Modality
 /// > ([Anexo RFFM §F.8], §F.13) y sus equivalentes de la FCF no
 /// > ([Anexo FCF §C.10.6], §C.10.7). Un sobre nuevo modelado por analogía
 /// > reproduce el problema dos veces más antes de que exista el segundo adaptador.
+/// >
+/// > **F7 la aplicó, y así se ve en `FederationStanding`:** de las 29 claves que
+/// > la RFFM publica por fila y las once del sobre, el DTO lleva **dos** campos de
+/// > sobre y los ocho contadores, y los dos de sobre son anulables porque la FCF
+/// > no tiene equivalente. Lo que quedó fuera —`fecha_jornada`, `puntos_sancion`,
+/// > `promociones[]`, la racha— **no es lo que la fuente no da, sino lo que nadie
+/// > lee todavía**. Falta que F8 haga lo propio con `/api/scorers`.
 /// >
 /// > **Y la evidencia de la coordenada no vive en el sobre** (`D-91`): ni la
 /// > etiqueta de temporada —que en la RFFM es el **eco** de lo que enviamos— ni
@@ -66,6 +76,35 @@ public protocol FederationClient: Sendable {
     /// esta capa es el caso de uso que carga los candidatos, llama a la cadena y
     /// escribe el resultado (F5).
     func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar
+
+    /// La clasificación **tras la jornada pedida** (F7, `D-55`).
+    ///
+    /// # Por qué la jornada va aquí y no en la coordenada (H-14)
+    ///
+    /// Porque es **de la operación, no de la competición**: la coordenada
+    /// identifica *qué* liga, y esto dice *qué foto* de ella. Meterla en
+    /// `FederationCoordinate` obligaría a inventarle un valor a `fetchCalendar`,
+    /// que no la usa.
+    ///
+    /// # Y quien decide si esta llamada sirve de algo es el caso de uso
+    ///
+    /// `D-55` midió que la capacidad que separa a las dos federaciones no es
+    /// *"¿publica clasificación?"* —las dos la publican— sino **"¿puede servir
+    /// una jornada pasada?"**. La FCF **ignora** la jornada y devuelve siempre la
+    /// vigente, y eso es `providesRoundStandings` visto desde este puerto. El
+    /// adaptador no miente ni lanza por ello: devuelve lo que su fuente da, y
+    /// quien sabe si eso vale para la jornada N es el llamante, que lee el
+    /// catálogo del Dominio.
+    ///
+    /// # Qué significa que no esté
+    ///
+    /// `FederationError.coordinateNotFound` si la coordenada no designa nada —y
+    /// **no es un 404**: en la RFFM llega como `200` con el cuerpo a `null`
+    /// ([Anexo RFFM §F.18])—. Una jornada que la competición no tiene es cosa
+    /// medida aparte y hoy sin observar.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding
 }
 
 /// Las coordenadas con las que se llama a una federación (§3.7).
@@ -319,5 +358,136 @@ public struct FederationTeamRef: Equatable, Sendable {
         self.letter = letter
         self.federationClubID = federationClubID
         self.crestURL = crestURL
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARK: - La clasificación (F7)
+//
+// **Este sobre NO está modelado sobre el del calendario, y es la advertencia que
+// el propio puerto se dejó escrita arriba.** `FederationCalendar` se cortó a la
+// medida de la RFFM y de sus cinco campos la FCF publica uno (`A-1`/H-08). Aquí
+// la asimetría se repite —`/api/standings` devuelve `competicion` y `grupo`, y su
+// equivalente catalán no ([Anexo FCF §C.10.6])—, así que **cada campo de abajo
+// tiene que justificar que lo lee alguien**, no que la fuente lo publica.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// La clasificación de **una jornada**, tal y como la publica la fuente.
+///
+/// # Lo que lleva, y quién lo lee
+///
+/// Solo dos cosas además de las filas, y las dos tienen llamante: la **evidencia
+/// de que la coordenada designa lo que creemos** (`D-84`). El resto de lo que la
+/// RFFM publica —desglose casa/fuera, `puntos_local`, `coeficiente`, `color` de
+/// fila, `promociones[]`, `racha_partidos[]`— **se queda fuera** hasta que exista
+/// un lector, que es la regla que F6-bis cobró con `FederationRound.label`:
+/// aquel campo llevaba desde F2 sin más aparición que `self.label = label`.
+///
+/// # Lo que deliberadamente NO lleva, y es la mitad interesante
+///
+/// - **La jornada.** La respuesta trae `jornada`, y es el **eco** de `round`
+///   ([Anexo RFFM §F.18]). Quien llamó ya sabe qué jornada pidió, y publicarlo
+///   aquí solo invitaría a "verificarlo" contra sí mismo, que es la trampa de
+///   `D-91`.
+/// - **`fecha_jornada`.** Ésta **sí** es dato suyo y no eco, y serviría para la
+///   guarda de temporada. Pero hoy no la lee nadie —la temporada la valida el
+///   calendario, que es quien trae 240 fechas— y un campo sin lector es lo que
+///   F6-bis quitó. Está en §F.18 y entra **cuando exista el lector**.
+public struct FederationStanding: Equatable, Sendable {
+    /// El código de competición que la fuente dice que le corresponde al grupo
+    /// pedido.
+    ///
+    /// **Es la evidencia más fuerte que hay en todo el puerto, y el calendario no
+    /// la tiene.** A `/api/standings` se le mandan `idGroup` y `round` y nada
+    /// más, así que este código **no puede ser eco** (§F.18): es la fuente
+    /// diciendo a qué competición pertenece ese grupo. Comparado con
+    /// `Competition.federationCompetitionID` da una igualdad de **identificadores**,
+    /// no de rótulos — mientras que la guarda del calendario solo puede comparar
+    /// el **nombre**, que `D-91` midió que es idéntico entre temporadas.
+    ///
+    /// Anulable porque la FCF no publica nada equivalente: obligarlo sería
+    /// reproducir H-08 en el sobre siguiente.
+    public let federationCompetitionID: String?
+
+    /// El nombre literal de la competición, para la guarda de `D-84` que ya
+    /// existe (`Competition.requireSameSource`). Anulable por lo mismo.
+    public let competitionName: String?
+
+    /// Las filas, **en el orden que publica la fuente**. No se reordenan aquí:
+    /// el orden oficial es un dato y `D-92` mide en qué se diferencia del nuestro.
+    public let rows: [FederationStandingRow]
+
+    public init(
+        federationCompetitionID: String?,
+        competitionName: String?,
+        rows: [FederationStandingRow]
+    ) {
+        self.federationCompetitionID = federationCompetitionID
+        self.competitionName = competitionName
+        self.rows = rows
+    }
+}
+
+/// Una fila de la clasificación publicada.
+///
+/// # El equipo es `FederationTeamRef`, y esa reutilización es la decisión
+///
+/// No un `String` con el nombre ni un id suelto: **el mismo tipo que el
+/// calendario**, porque la fila hay que emparejarla con un `Team` por la cadena
+/// de §3.7 igual que un partido, y `A-1` midió que `FederationTeamRef` aguanta
+/// campo a campo también en la FCF. Con un tipo propio, F7 estaría escribiendo
+/// una segunda cadena de emparejamiento para los mismos equipos.
+///
+/// Y encaja: `codequipo` **es el mismo identificador** que el `codigo_equipo_*`
+/// del calendario ([Anexo RFFM §F.8], confirmado en §F.18), así que la unión es
+/// por id y no degrada a nombre.
+///
+/// # Los contadores no son opcionales, al revés que en `FederationMatch`
+///
+/// Allí un `nil` significa *"la fuente no dijo nada"* y `D-56` construye encima
+/// toda la política de *upsert*. Aquí no: una clasificación es un **bloque**, y
+/// una fila sin posición o sin puntos no es un dato incompleto, es una tabla
+/// rota — con un hueco en la numeración que el *spec* declara imposible
+/// (`position`, `minimum: 1`). Así que el parser exige los ocho y falla con
+/// `malformedResponse` diciendo cuál faltaba. Medido: 32 filas de dos jornadas,
+/// los ocho campos presentes y numéricos en todas.
+public struct FederationStandingRow: Equatable, Sendable {
+    public let team: FederationTeamRef
+    public let position: Int
+    public let played: Int
+    public let won: Int
+    public let drawn: Int
+    public let lost: Int
+    public let goalsFor: Int
+    public let goalsAgainst: Int
+
+    /// Los puntos **que dice la fuente**, sin recalcular.
+    ///
+    /// El *spec* se comprometió con ello y `puntos_sancion` es la razón: una
+    /// tabla con puntos descontados por sanción no cumple `3·G + E`, y es la
+    /// tabla oficial. Es además lo único que el *fallback* calculado no puede
+    /// reproducir ni en teoría (`D-92`).
+    public let points: Int
+
+    public init(
+        team: FederationTeamRef,
+        position: Int,
+        played: Int,
+        won: Int,
+        drawn: Int,
+        lost: Int,
+        goalsFor: Int,
+        goalsAgainst: Int,
+        points: Int
+    ) {
+        self.team = team
+        self.position = position
+        self.played = played
+        self.won = won
+        self.drawn = drawn
+        self.lost = lost
+        self.goalsFor = goalsFor
+        self.goalsAgainst = goalsAgainst
+        self.points = points
     }
 }

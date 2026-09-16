@@ -150,7 +150,7 @@ dependen de eso.
 | **F6** ✅ | El `AsyncCommand`, el recorrido por tenant y la cadencia semanal — **y los dos primeros endpoints desde F0** (detalle en §4.8) | integración + E2E de contrato | §2.3-b, §4.7, §5.6 |
 | **F6-bis** ✅ | Dos mitades, las dos *"antes de que F7 y F8 lo copien"*: **el sobre del puerto de federación** —y con él la guarda de temporada ([D-91])— y **la resiliencia del recorrido** (`4d66aa0`). Detalle abajo | unit puro · niveles 1, 2 y 3 | `A-1` · H-08, H-09, H-10 · `A-3` · H-23, H-24, H-26 · [D-91] |
 | **F6-ter** ✅ | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
-| **F7** | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo) | unit + integración | [D-15], [D-55], `A-5` · H-31 |
+| **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
 | **F8** | `LeagueScorer` | integración | [D-09] |
 | **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
 | **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
@@ -767,7 +767,7 @@ con la batería completa en **217**. Corre en 4 s con Postgres; los de dominio y
 | ¿De dónde salen `Round.start_date` y `end_date`, que la fuente no publica? | Del **mínimo y el máximo de las fechas de sus partidos**. Medido: en la temporada jugada da sábado→domingo en 26 de 30 jornadas → [D-81] |
 | ¿Cómo se genera el `slug` de `OpponentClub`? | **Mecánicamente**, sin lista de formas jurídicas. Y el desempate de colisiones vive en el caso de uso, no en el VO → [D-82] |
 | ¿Dónde están las fronteras transaccionales de una pasada? | **Tres ámbitos, y la red fuera de los tres.** La decisión vive en el caso de uso, no en el adaptador → [D-83] |
-| ¿Una coordenada caducada falla? | **No.** Devuelve `200` y el calendario de **otra competición** → [D-84] |
+| ¿Una coordenada equivocada falla? | **No.** Devuelve `200` y el calendario de **otra competición**. Y los códigos **no** caducan: cambian cada temporada y los viejos siguen sirviendo lo suyo → [D-84] |
 | ¿Dónde queda constancia de una pasada? | En una **tabla**, y escrita **fuera** de la transacción de la pasada → [D-85] |
 | ¿Sirve el volcado que había para la rama de "partido jugado"? | No, y ya no hace falta: el volcado de temporada jugada cierra el deber de §4.3 |
 
@@ -1002,6 +1002,118 @@ Ahí viven además las dos precedencias que el `--help` no puede explicar: `--fo
 > se quedaría esperando para siempre**: nunca se sincronizó, así que nunca sería "vieja", así que el cron
 > nunca la tocaría. Ningún rojo la habría encontrado, porque ningún test tenía motivo para existir hasta que
 > la mutación preguntó.
+
+### 4.9 F7 · La clasificación, ingerida y calculada — **entregada** (2026-09-16)
+
+**La entidad 22 del modelo, y la primera fase con dos fuentes para la misma fila.** [D-15] dice que
+`StandingRow` es **agnóstica a la fuente** —vale igual ingerida que calculada— y F7 es donde esa frase se
+convierte en un `switch` de dos ramas que acaban en el mismo `save`.
+
+**Qué entrega, de abajo arriba:**
+
+| Capa | Qué |
+|---|---|
+| Dominio | `StandingRow`, `StandingTable` (el *fallback* de [D-15]) y la columna PREV de [D-33] |
+| `Application` | `StandingsSyncPlan` —qué jornadas y de dónde— y `IngestStandings`, la pasada |
+| `Federation` | `fetchStandings(_:round:)`, su DTO y `RFFMStandingsParser` contra el volcado real |
+| `Persistence` | `standing_rows` y **tres columnas más** en `ingestion_runs` |
+
+#### Las cuatro decisiones que costaron discusión, y las cuatro las corrigió el desarrollador
+
+**1. La fila guarda lo estructural y NO la aritmética.** Posición ≥ 1 y contadores ≥ 0, sí; `points == 3·G+E`
+y `played == G+E+P`, **no**. El *spec* ya se había comprometido en `points` y la RFFM publica
+`puntos_sancion`: la tabla oficial de un grupo sancionado **no cumple** la identidad. Una invariante de más
+convierte *"la federación hace cuentas que no controlamos"* en una excepción que tira la clasificación entera
+de la jornada. Hay un test por cada sitio donde esa decisión se puede romper —la entidad y el esquema— y una
+**mutación inversa** que caza el intento de añadirla.
+
+**2. El orden del *fallback* es [D-92], y su cuarto criterio no es deportivo.** Puntos, diferencia, goles a
+favor… y el `id` del equipo, para que el orden sea **total**. Lo destapó una mutación: la primera versión
+ordenaba el `Dictionary` de acumuladores, cuyo recorrido depende del proceso, así que el mismo programa con
+los mismos datos podía dar dos tablas distintas en cuanto dos equipos empataran a todo — y sobre esa tabla se
+calcula PREV. **Ningún rojo lo habría encontrado.**
+
+**3. La unidad de una pasada de clasificación es la jornada, no la competición.** Lo decide el endpoint: el
+calendario devuelve la competición entera en **una** petición, y `/api/standings?round=N` sirve **una**
+jornada. De ahí que un alta en la jornada 10 deje **diez** filas en `ingestion_runs`, cada una con su
+desenlace — y de ahí que se viera que a esa tabla **le faltaba `round_id` desde el principio**. No es un
+campo nuevo: es un agujero que no se notaba mientras la única pasada posible era agnóstica de jornada.
+
+**4. El emparejamiento va solo por identificador de federación.** De los tres pasos de la cadena de §3.7 aquí
+solo cabe el primero: los otros dos comparan la clave única entera —nombre, categoría, letra, género,
+modalidad ([D-77])— y una fila de clasificación no trae tres de esas cinco. Y hay una razón mejor que la
+imposibilidad: **la clasificación no crea equipos** ([D-66]), así que una fila que no case no es un equipo
+nuevo sino uno que el calendario aún no ha visto. Degradar a nombre ataría un *snapshot* al equipo
+equivocado, y un *snapshot* no lo corrige nadie. Se descarta con `unknownStandingTeam` y la pasada siguiente
+lo resuelve sola.
+
+#### Lo que la medición cambió, que es el argumento de [D-92]
+
+El volcado de clasificación se capturó **del mismo grupo** que el del calendario, y eso permitió comparar la
+tabla calculada desde los 240 partidos contra la que publica la federación:
+
+| | Filas que cuadran | Orden |
+|---|---|---|
+| Jornada 29 | **16/16** | **idéntico** |
+| Jornada 30 | 14/16 | **un intercambio, puestos 12 y 13** |
+
+El intercambio es un empate a 29 puntos con idéntico 7-8-15 donde la federación pone arriba al de **peor**
+diferencia de goles, porque entre ellos ganó él. Es el **enfrentamiento directo**, que [D-55] deja fuera del
+cálculo — y que hasta ahora era una salvedad escrita y ahora tiene número. **Y no es "el *fallback* está
+roto"**: en la jornada 29 había otro empate a puntos que la diferencia de goles resolvió igual que el
+oficial. Dos empates, uno acertado y uno no.
+
+La comparación está **afirmada contra Postgres** en `StandingIngestionEndToEndTests`, no en una hoja aparte:
+el calendario crea los 16 equipos, la clasificación casa con ellos **por id y con cero descartes**, y la
+jornada 29 calculada se compara campo a campo con el volcado oficial.
+
+#### La comprobación de mutación, y lo que enseñó del instrumento
+
+**57 mutaciones, 57 cazadas.** Cinco sobrevivieron a la primera pasada: **una era un defecto real** —el
+`Dictionary` de arriba— y cuatro eran *"falta un test"*, entre ellas dos que importan:
+
+- **la PREV de un refresco sale del *snapshot* guardado**, que es el caso semanal —el 99% de las pasadas— y
+  sin él la pantalla perdería las flechas justo en la jornada que la gente mira;
+- **la pasada no medía su duración**, y con un reloj fijo un cronómetro roto pasa el test. Es exactamente el
+  defecto que F6 solo encontró ejecutando el sistema contra la base de verdad, y `TickingClock` existe desde
+  entonces — pero había que acordarse de usarlo.
+
+**Y una lección nueva, que es de método y no de código: el instrumento de medir falló tres veces antes que lo
+medido.** Un `$0` sin escapar en el reemplazo de `perl` hizo que una mutación no compilara y el detector lo
+leyó como *"sobrevive"*; el detector comprobaba `error:` **antes** que `✘`, y como un fallo de Postgres trae
+esa palabra dentro, leyó dos mutaciones **cazadas** como fallos de compilación; y un patrón que no casaba
+producía un *"sobrevive"* sin haber mutado nada. Las tres dan **el mismo tipo de error que H-07**: confundir
+*"no se ejecutó"* con un resultado. El guion comprueba ahora las tres cosas —que el fichero cambió, que
+compila, y el `✘` antes que el `error:`—, y la regla que queda escrita es:
+
+> **Una mutación que no compila, o que no llegó a aplicarse, no es una mutación que sobrevive.** Antes de
+> creerse un *"sobrevive"*, comprobar que hubo mutación y que el programa mutado se ejecutó.
+
+#### Los dos deberes heredados, hechos
+
+- **[D-90] delante** (`A-5`/H-31): F7 añade **tres** migraciones y **no edita ni una línea** de las ocho que
+  ya existían. Y la lección cayó dentro de la propia fase: `AddStandingsToIngestionRun` ya estaba aplicada
+  contra la base de trabajo cuando se vio que faltaba `round_id`, así que `round_id` fue a una **cuarta**
+  migración en vez de a la anterior. Se comprobó en `_fluent_migrations` antes de decidirlo, no de memoria.
+- **El volcado antes que la firma**: el DTO del puerto se escribió **después** de capturar
+  `/api/standings`, y lo medido cambió dos decisiones —qué evidencia lleva el sobre y cómo se detecta una
+  coordenada que no designa nada ([Anexo RFFM §F.18])—. Es la regla de [D-74] aplicada dentro de la misma
+  federación.
+
+**394 tests** (304 → 394): 7 + 76 + 62 + 142 + 75 + 24, 0 fallos y 1 omitido —el canario—, con los dos
+*targets* de BD en **6,24 s** y **2,99 s**, que es el testigo de H-07 de que corrieron.
+
+#### Lo que F7 deja apuntado y no resuelve
+
+**`ingestionHealth` y `lastIngestionAt` ([D-89]) se derivan de *"la última pasada de esta competición"*, y
+ahora hay once por disparo.** Con dos clases de pasada, *"la última"* deja de ser una sola cosa: una
+clasificación que va bien podría tapar un calendario que falla. Es una regla de **lectura** y hay que
+decidirla —probablemente *"`failing` si falla cualquiera de las dos"*—; no bloquea nada hasta que el
+backoffice lea esos campos de verdad.
+
+Y la enmienda de [D-92] sigue anotada y sin aplicar: el desempate por enfrentamiento directo es **una
+recursión sobre `StandingTable.upTo`**, no una regla nueva, pero sería su propia mini-fase y habría que
+hacerlo **entero** —la mini-liga de N equipos, no solo el caso de dos—.
 
 ---
 

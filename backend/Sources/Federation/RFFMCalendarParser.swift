@@ -39,7 +39,8 @@ public enum RFFMCalendarParser {
 
         // ── Coordenada mala ≠ formato cambiado (Plan §4.4) ───────────────────
         //
-        // **La RFFM no da 404 nunca**, medido al escribir el canario de F5. Da
+        // **El calendario de la RFFM no da 404 nunca**, visto al escribir el
+        // canario de F5 — y es del calendario, no de sus rutas `/api/…`. Da
         // `200` y uno de estos dos disfraces, y los dos se parecen a un fallo de
         // formato sin serlo:
         //

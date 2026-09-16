@@ -180,7 +180,7 @@ struct RFFMCalendarParserTests {
 
     // ── Coordenada mala ≠ formato cambiado (Plan §4.4, medido en F5) ────────
 
-    /// **El diseño daba por hecho que una coordenada caducada daría 404. No lo
+    /// **El diseño daba por hecho que una coordenada equivocada daría 404. No lo
     /// da.** Medido contra la RFFM al escribir el canario de F5: con
     /// `competicion` y `grupo` inexistentes responde **`200`** y una página
     /// completa cuyo `calendar` es **`null`**.

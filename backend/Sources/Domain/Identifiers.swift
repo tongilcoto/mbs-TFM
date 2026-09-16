@@ -48,3 +48,13 @@ public struct MatchID: Hashable, Sendable {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Fila de clasificación (§3.2, entidad 22).
+///
+/// **Existe porque toda tabla tiene PK** (§3.5), no porque haya un endpoint que
+/// la sirva: `StandingRow` es un modelo de lectura sin `GET /{id}` (`D-34`). Su
+/// identidad de negocio es la pareja (jornada, equipo), que es el `UNIQUE`.
+public struct StandingRowID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}

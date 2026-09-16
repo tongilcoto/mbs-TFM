@@ -1,0 +1,5 @@
+https://www.rffm.es/api/standings?idGroup=99999999&round=1
+
+null
+
+HTTP 200

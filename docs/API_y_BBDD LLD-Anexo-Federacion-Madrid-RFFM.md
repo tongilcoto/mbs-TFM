@@ -906,3 +906,136 @@ los partidos de B y D los de A: `5416238` y `5601639`.
 > de temporada"*. **Medir no es lo último que hay que hacer con un dato: hay que volver a leerlo cuando se
 > construya algo encima.**
 
+
+---
+
+## F.18 Clasificación, sobre el terreno — **volcado real** (medido el 2026-09-15)
+
+`§F.8` describía este endpoint con una muestra de **una fila** y sin la marca de *volcado real* que sí llevan
+§F.10, §F.13 y §F.15. Aquí está el volcado entero, capturado para F7:
+
+```
+https://www.rffm.es/api/standings?idGroup=24037549&round=30
+https://www.rffm.es/api/standings?idGroup=24037549&round=29
+```
+
+→ `RFFM-standings-temp21-group-24037549-round30-29.txt`, los dos bloques en un fichero. **[C]**
+
+**Y es el mismo grupo que el calendario de temporada jugada** (`RFFM-calendario-temporada-jugada.html`:
+PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26, 30 jornadas, 240 partidos, 16 equipos). No es casualidad:
+es lo que permite **comparar la tabla oficial contra la calculada desde sus propios partidos**, que es la
+medición de abajo y la razón de capturar este volcado y no otro.
+
+### Lo que confirma de §F.8
+
+- El mapeo campo a campo, entero.
+- El aviso de leer `ganados`/`perdidos`/`empatados` **por nombre y no por posición**: el orden en el JSON es
+  efectivamente `jugados, ganados, perdidos, empatados`.
+- **`previous_position` no se publica.** No está entre las 29 claves de fila. Se calcula comparando con el
+  *snapshot* anterior, que es lo que [D-33] previó.
+- `codequipo` es el mismo identificador que el `codigo_equipo_*` del calendario → unión directa por id.
+
+### Lo que añade o corrige
+
+| | §F.8 decía | Medido |
+|---|---|---|
+| `promociones[]` | *"vacío en la muestra pero previsiblemente con las líneas de ascenso y descenso"* | **Confirmado**: trae `ASCENSOS` y `DESCENSOS` con su `color_promocion`, y cada fila lleva un `color` a juego (`#41FF1A` arriba, `#FF491C` abajo, `""` en medio) |
+| `racha_partidos[]` | *"los últimos cinco resultados"* | **Siempre 5** elementos, los 16 equipos, las dos jornadas |
+| `puntos_sancion` | la fuente lo publica y el modelo no lo recoge | **`"0"` en las 32 filas** de este grupo. El campo existe; este volcado no lo ejercita |
+| `penaltis`, `coeficiente` | no mencionados | `penaltis` es `"0"` en todas; `coeficiente` viene `""` con `mostrar_coeficiente: "0"` |
+| Claves de fila | 14 en la muestra | **29** |
+
+### La medición que importa: lo calculado contra lo oficial
+
+Tabla calculada desde los 240 partidos del calendario, con el criterio *puntos ↓, diferencia de goles ↓,
+goles a favor ↓*, contra la que publica la federación:
+
+| | Filas que cuadran (PTS, J, G, E, P, GF, GC) | Orden |
+|---|---|---|
+| **Jornada 29** | **16/16** | **idéntico** |
+| **Jornada 30** | **14/16** | **un intercambio, puestos 12 y 13** |
+
+**Las dos filas que bailan son el mismo par, y tienen nombre:**
+
+```
+oficial   12  FUNDACION ADF 'A'            J30 G7 E8 P15  GF 37  GC 60  PTS 29   →  DG −23
+          13  C.D. FUTBOL TRES CANTOS 'A'  J30 G7 E8 P15  GF 45  GC 58  PTS 29   →  DG −13
+```
+
+Mismos puntos, **mismo 7-8-15**, y la federación pone arriba al de **peor** diferencia de goles. Lo que los
+separa está en el propio calendario:
+
+| | Jornada | Resultado |
+|---|---|---|
+| Primera vuelta | j14 | TRES CANTOS **1-1** ADF |
+| Segunda vuelta | j29 | ADF **4-2** TRES CANTOS |
+
+**La RFFM desempata por enfrentamiento directo antes que por diferencia de goles** — la regla del reglamento
+RFEF—, y es exactamente el criterio que [D-55] declara fuera del alcance del *fallback* calculado. **[C]**
+
+> **Ojo con leer esto como *"el cálculo está roto"*, que es la conclusión fácil y es falsa.** En la jornada 29
+> **también** había empate a puntos —TRES CANTOS con DG −13 sobre UNION ZONA NORTE con DG −20, 28 puntos los
+> dos— y ahí la diferencia de goles da el **mismo** orden que el oficial. La muestra son **dos empates, uno
+> acertado y uno no**. Lo que esto mide no es un fallo: es **el tamaño del *"peor dato"*** que [D-55] ya
+> asumía por escrito, ahora con número. La decisión de qué hacer con él es [D-92].
+
+### Dos campos que sirven de guarda, y uno que no
+
+[D-91] pide que un DTO verificable traiga **algo que no pueda ser eco** de lo que enviamos. En este endpoint
+se envían **`idGroup` y `round`**, y nada más:
+
+| Campo de la respuesta | ¿Sirve de evidencia? |
+|---|---|
+| `codigo_grupo` | **No.** Es el eco de `idGroup`. Compararlo con lo que pedimos es comparar un dato consigo mismo (§F.16) |
+| `jornada` | **No.** Eco de `round` |
+| **`codigo_competicion`** (`24037548`) | **Sí.** Nunca se envía: es dato de la fuente, y permite comprobar que el grupo pertenece a la competición que creemos |
+| **`fecha_jornada`** (`23-05-2026` en la j30, `16-05-2026` en la j29) | **Sí.** Fecha real, no eco — sirve además para la guarda de temporada de [D-91] |
+
+Medido de paso: pidiendo `idGroup=24037649` —un grupo **válido y distinto**, el de los volcados de goleadores
+y de acta (PRIMERA INFANTIL Grupo 12)— la respuesta trae `codigo_competicion: 24037637`, que tampoco se
+envió. Confirma que ese campo sigue a la coordenada y no a la petición.
+
+### Pendiente de observar en este endpoint
+
+- ~~**Qué hace `/api/standings` con una coordenada que NO existe.**~~ **MEDIDO el 2026-09-15**, ver abajo.
+
+### Una coordenada que no existe: `200` y `null` a secas — **medido el 2026-09-15**
+
+```
+https://www.rffm.es/api/standings?idGroup=99999999&round=1
+→ HTTP 200
+→ null
+```
+
+→ `RFFM-standings-coordenada-inexistente.txt`. El cuerpo son **cuatro bytes**: `null`. **[C]**
+
+**Tampoco da 404.** Con esto queda cerrado, para las dos rutas medidas de la RFFM, que **el código HTTP no
+distingue nunca una coordenada mala**: ni la página del calendario (§F.15) ni esta API. El 404 del transporte
+(`HTTPFederationTransport`) sigue siendo la mitad genérica de una regla que la otra federación podrá cumplir;
+en Madrid no se dispara en ninguna de las dos.
+
+**Y la forma del "no" NO es la misma, que era justo el riesgo.** Compararlas importa porque la tentación era
+copiar el parser del calendario por analogía:
+
+| | Qué llega con una coordenada inexistente |
+|---|---|
+| **Calendario** (§F.15) | La **página entera**, con sus props completas, y **un campo** a nulo: `props.pageProps.calendar: null` |
+| **`/api/standings`** | **El documento entero es `null`**. No hay sobre, ni `estado`, ni `clasificacion` vacía |
+
+**Consecuencia para el adaptador de F7, y hay que escribirla antes de escribirlo:** la detección **no** se
+hace mirando un campo, porque no hay ningún campo que mirar. Se decodifica el cuerpo como **opcional** y un
+`nil` es `coordinateNotFound`. Hacerlo al revés —decodificar al sobre directamente— convierte esto en un
+`DecodingError`, que el parser clasificaría como `malformedResponse`: exactamente la falsa alarma que [D-84]
+existe para evitar, con el canario gritando *"¡han cambiado la forma!"* cada vez que alguien se equivoque de
+número.
+
+> **Ojo con el `estado` del sobre como guarda alternativa.** En el volcado bueno vale `"1"`, lo que invita a
+> pensar que un `"0"` sería la señal de error. **No lo es aquí**: con coordenada mala no llega sobre ninguno.
+> Si `estado` significa algo, será para otro fallo, y no está observado.
+- **`puntos_sancion` con valor.** Sigue sin ejercitarse: `"0"` en las 32 filas. Es la pieza que decidiría si
+  el modelo tiene que recogerlo — aplazado desde §F.6 y sigue aplazado, ahora con dato de que en un grupo
+  entero de una temporada entera no apareció.
+- **Una clasificación con `jugados` desigual dentro de la misma jornada.** §F.8 lo midió (8 en nueve equipos y
+  9 en cuatro, jornada 9 de SEGUNDA ALEVIN F-7 G17) y este volcado **no lo reproduce**: al ser final de
+  temporada, los 16 equipos tienen 30. La regla *"no asumir `jugados == round`"* sigue viva y su evidencia
+  sigue siendo la de §F.8.

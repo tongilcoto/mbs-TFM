@@ -50,6 +50,16 @@ struct TenantTraversalTests {
             if failingGroups.contains(coordinate.federationGroupID) { throw Broken() }
             return TenantTraversalTests.emptyCalendar
         }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "RecordingClient")
+    }
+
     }
 
     struct SingleClientProvider: FederationClientProvider {
@@ -236,7 +246,7 @@ struct TenantTraversalTests {
 
             // El club de Madrid se sincroniza igual. Con el recorrido abortando,
             // bastaría un club de una federación aún no soportada —o una sola
-            // coordenada caducada, `D-84`— para dejar sin datos a todos los que
+            // coordenada equivocada, `D-84`— para dejar sin datos a todos los que
             // vayan detrás por orden alfabético.
             #expect(client.received.map(\.federationGroupID) == ["222"])
             #expect(outcomes.map(\.slug) == ["jobcat", "jobmad"])
@@ -317,5 +327,16 @@ struct TenantTraversalTests {
             #expect(client.received.map(\.federationGroupID) == ["222"])
             #expect(outcomes.map(\.slug) == ["jobdos"])
         }
+    }
+}
+
+/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+///
+/// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
+/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
+struct StandingsNotStubbed: Error, CustomStringConvertible {
+    let client: String
+    var description: String {
+        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
     }
 }

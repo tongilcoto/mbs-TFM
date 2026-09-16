@@ -240,7 +240,7 @@ extension Competition {
     ///
     /// # Por qué hace falta, y por qué no se supo hasta F5
     ///
-    /// El diseño daba por hecho que una coordenada caducada fallaría: Plan §4.4
+    /// El diseño daba por hecho que una coordenada equivocada fallaría: Plan §4.4
     /// escribe *"un 404 tiene que decir una cosa y un parseo fallido otra"*. Al
     /// capturar los volcados de F5 se vio que **no hay tercera opción implícita**:
     /// la RFFM **ignora el parámetro `temporada`** ([Anexo RFFM §F.16], que

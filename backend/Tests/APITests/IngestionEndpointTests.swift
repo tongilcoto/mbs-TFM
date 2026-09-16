@@ -63,6 +63,16 @@ struct IngestionEndpointTests {
             if failing { throw Broken() }
             return IngestionEndpointTests.emptyCalendar
         }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "StubClient")
+    }
+
     }
 
     /// El *schema* del club, con la **entrada** de la ingesta sembrada (`D-16`).
@@ -552,6 +562,16 @@ struct CollapsingClient: FederationClient {
         if fetches.openScope() { collapse.force() }
         return IngestionEndpointTests.emptyCalendar
     }
+
+    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// motivo equivocado.
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw StandingsNotStubbed(client: "CollapsingClient")
+    }
+
 }
 
 /// Recoge lo que se registra, para que una aserción pueda mirarlo.
@@ -598,5 +618,16 @@ struct CapturingLogHandler: LogHandler {
             .sorted()
             .joined(separator: " ")
         spy.record(level, "\(message) \(flattened)")
+    }
+}
+
+/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+///
+/// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
+/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
+struct StandingsNotStubbed: Error, CustomStringConvertible {
+    let client: String
+    var description: String {
+        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
     }
 }

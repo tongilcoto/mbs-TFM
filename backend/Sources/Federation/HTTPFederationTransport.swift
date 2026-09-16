@@ -105,8 +105,13 @@ public struct HTTPFederationTransport: FederationTransport {
         // **El código, antes que el cuerpo.** Siempre, y con el 404 aparte.
         // El 404 se mapea porque es la respuesta **genérica** a "eso no existe" y
         // este transporte lo comparten los dos adaptadores. Conviene saber que
-        // **la RFFM no lo usa**: con una coordenada inexistente responde `200`
-        // (medido en F5), así que ahí quien levanta esto es el parser. Que aquí
+        // **el calendario de la RFFM no lo usa**: con una coordenada inexistente
+        // sirve la página del calendario con `calendar: null` (F5), así que ahí
+        // quien levanta esto es el parser. El `200` está **medido** (2026-09-15,
+        // `curl -w '%{http_code}'` sobre `competicion`/`grupo` inexistentes), no
+        // deducido del cuerpo. Y ojo con el alcance: vale **para el calendario, no
+        // para las rutas `/api/…`**, que son JSON y de las que no hay medición
+        // (`D-84`, acotaciones). Que aquí
         // no se dispare con la RFFM no lo convierte en código muerto — lo
         // convierte en la mitad genérica de una regla que la otra mitad cumple.
         if response.status == 404 {

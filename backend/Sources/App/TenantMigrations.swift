@@ -35,7 +35,11 @@ import Persistence
 /// limpia pueda aplicarlas de una pasada.
 ///
 /// F0 trajo `Club`; F1, `Season` y `Competition` — la **entrada** de la ingesta
-/// (`D-16`); F5, su **salida**: `OpponentClub`, `Team`, `Round` y `Match`.
+/// (`D-16`); F5, su **salida**: `OpponentClub`, `Team`, `Round` y `Match`. F7
+/// añade `StandingRow`, **intercalada detrás de `Match`**, que es el sitio que el
+/// orden canónico de arriba le reserva: sus tres FK —`Competition`, `Round` y
+/// `Team`— están ya aplicadas ahí. Sobre una base ya migrada eso no rompe nada,
+/// por lo mismo que se explica abajo de `Team` y `OpponentClub`.
 ///
 /// **Las dos primeras se intercalan *antes* de `CreateCompetition`**, que es su
 /// sitio en el orden canónico, y sobre una base ya migrada eso no rompe nada:
@@ -52,7 +56,18 @@ public enum TenantMigrations {
             CreateCompetition(),
             CreateRound(),
             CreateMatch(),
+            CreateStandingRow(),
             CreateIngestionRun(),
+            // F7: tres columnas al registro de pasadas. **Va al final y no junto
+            // a `CreateIngestionRun`** porque no crea una tabla nueva: altera una
+            // que ya existe, así que su sitio en el orden de FK es "después de lo
+            // que altera" y nada más (`D-90`).
+            AddStandingsToIngestionRun(),
+            // Y ésta **aparte de la anterior aunque sean de la misma fase**:
+            // `AddStandingsToIngestionRun` ya se había aplicado cuando se vio que
+            // faltaba `round_id`, y `D-90` no admite editar una aplicada. La
+            // lección cayendo dentro de la propia fase que la heredaba.
+            AddIngestionRunRound(),
         ]
     }
 }
