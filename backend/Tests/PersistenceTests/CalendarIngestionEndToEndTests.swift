@@ -863,10 +863,22 @@ struct StubFederationClient: FederationClient {
         throw NotStubbed(client: "StubFederationClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "StubFederationClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }

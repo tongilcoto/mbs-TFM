@@ -141,17 +141,31 @@ public protocol LeagueScorerRepository: Sendable {
     func save(_ scorer: LeagueScorer) async throws
 
     /// **Retira los que el proveedor dejó de publicar** (`D-94`): borra las filas
-    /// de **esta competición** cuya marca sea anterior a la de la pasada.
+    /// de **esta competición** que no lleven la marca de esta pasada.
     ///
     /// Devuelve cuántas borró, porque ese número va al registro (`D-85`) y es el
     /// que delata una pasada que en vez de limpiar ha vaciado.
     ///
     /// # Las dos mitades del filtro son igual de obligatorias
     ///
-    /// Sin `syncedBefore` esto vacía la competición. **Y sin `competitionID` esto
+    /// Sin `keepingMark` esto vacía la competición. **Y sin `competitionID` esto
     /// vacía el club entero** — que es la clase de fallo que no da error, se lleva
     /// los datos y solo se nota al mirar la pantalla equivocada. Van juntas en la
     /// firma para que no se pueda llamar con una sola.
+    ///
+    /// # Es "distinto de", no "anterior a", y eso lo enseñó un test
+    ///
+    /// La primera versión era `syncedBefore:` con un `<`, que se lee igual de bien
+    /// y **es frágil**: hace depender la regla de la resolución del reloj. Dos
+    /// pasadas que cayeran en el mismo instante —un reintento rápido, un reloj con
+    /// poca resolución— no retirarían nada, porque lo viejo tendría exactamente la
+    /// misma marca que lo nuevo. Lo destapó el test de la retirada con
+    /// `TickingClock`, cuya primera lectura es el instante de partida.
+    ///
+    /// Lo que se quiere decir no es *"lo anterior"* sino **"lo que esta pasada no
+    /// ha tocado"**, y eso se expresa exacto: marca distinta de la mía. Incluye
+    /// las filas **sin marca**, que son las que ninguna pasada ha confirmado —
+    /// dejarlas fuera las haría inmortales.
     ///
     /// # Y por qué la marca y no la resta de conjuntos
     ///
@@ -163,5 +177,5 @@ public protocol LeagueScorerRepository: Sendable {
     /// variante ingenua —*"borro todo y vuelvo a insertar"*— una caída a mitad
     /// dejaría la tabla vacía; aquí eso no es representable.
     @discardableResult
-    func retire(competitionID: CompetitionID, syncedBefore: Date) async throws -> Int
+    func retire(competitionID: CompetitionID, keepingMark: Date) async throws -> Int
 }

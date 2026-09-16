@@ -524,8 +524,14 @@ struct IngestClubCalendarsTests {
         // `D-85` escribe el registro **fuera** de la transacción de la pasada
         // precisamente para esto: la que falla es la que hay que poder leer
         // después, y el recorrido no puede ser lo que la borre.
+        // **Lo que se afirma es que están las dos competiciones y que la fallida
+        // dejó su fila**, no cuántas filas hay: con tres clases de pasada, la que
+        // va bien deja más de una. Contar exacto haría que este test se rompiera
+        // cada vez que se añade una pasada, sin que su regla haya cambiado.
         let outcomes = await store.ingestionRuns.map(\.outcome)
-        #expect(outcomes == [.failed, .succeeded])
+        #expect(outcomes.contains(.failed), "la pasada fallida no dejó constancia")
+        #expect(outcomes.contains(.succeeded), "la que fue bien tampoco")
+        #expect(outcomes.first == .failed, "el recorrido no siguió el orden pedido")
     }
 
     // ── Lo que encontraron las pruebas manuales (F6) ─────────────────────────

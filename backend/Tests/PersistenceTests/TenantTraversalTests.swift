@@ -60,10 +60,22 @@ struct TenantTraversalTests {
         throw NotStubbed(client: "RecordingClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "RecordingClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
     }
@@ -225,8 +237,14 @@ struct TenantTraversalTests {
             // club en la base de otro, y ninguna restricción lo impediría.
             let runsUno = try await Self.runs("jobuno", on: app)
             let runsDos = try await Self.runs("jobdos", on: app)
-            #expect(runsUno.map(\.competitionID) == [uno])
-            #expect(runsDos.map(\.competitionID) == [dos])
+            // **Sobre el conjunto y no sobre la lista**, que es lo que el test
+            // quiere decir: *"las pasadas de este club son de su competición"*.
+            // Cuántas haya depende de cuántas clases de pasada existan —una en
+            // F6, dos en F7, tres en F8— y eso no es lo que aquí se afirma.
+            #expect(Set(runsUno.map(\.competitionID)) == [uno])
+            #expect(!runsUno.isEmpty, "el club no dejó ninguna pasada")
+            #expect(Set(runsDos.map(\.competitionID)) == [dos])
+            #expect(!runsDos.isEmpty, "el club no dejó ninguna pasada")
         }
     }
 
@@ -262,7 +280,9 @@ struct TenantTraversalTests {
             // club que todavía no se puede sincronizar (`D-85`).
             let catalanRuns = try await Self.runs("jobcat", on: app)
             #expect(catalanRuns.isEmpty)
-            #expect(try await Self.runs("jobmad", on: app).map(\.competitionID) == [madrid])
+            let madridRuns = try await Self.runs("jobmad", on: app)
+            #expect(Set(madridRuns.map(\.competitionID)) == [madrid])
+            #expect(!madridRuns.isEmpty)
 
             try await TestEnvironment.dropClubs(slugs, schemaPrefix: Self.prefix, on: app)
         }

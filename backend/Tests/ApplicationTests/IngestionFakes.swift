@@ -72,10 +72,9 @@ actor IngestionStore {
     /// Que el doble las copie no es celo: si aquí se filtrara solo por la marca,
     /// el nivel 2 no podría afirmar nunca *"no toca las otras competiciones"*, y
     /// ése es exactamente el fallo que no da error y se lleva los datos.
-    func retireLeagueScorers(competitionID: CompetitionID, syncedBefore: Date) -> Int {
+    func retireLeagueScorers(competitionID: CompetitionID, keepingMark: Date) -> Int {
         let stale = leagueScorers.filter {
-            $0.competitionID == competitionID
-                && ($0.syncedAt.map { $0 < syncedBefore } ?? true)
+            $0.competitionID == competitionID && $0.syncedAt != keepingMark
         }
         leagueScorers.removeAll { scorer in stale.contains { $0.id == scorer.id } }
         return stale.count
@@ -234,9 +233,9 @@ struct FakeLeagueScorerRepository: LeagueScorerRepository {
     }
 
     @discardableResult
-    func retire(competitionID: CompetitionID, syncedBefore: Date) async throws -> Int {
+    func retire(competitionID: CompetitionID, keepingMark: Date) async throws -> Int {
         await store.retireLeagueScorers(
-            competitionID: competitionID, syncedBefore: syncedBefore)
+            competitionID: competitionID, keepingMark: keepingMark)
     }
 }
 
@@ -289,10 +288,22 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
         throw NotStubbed(client: "SpyFederationClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "SpyFederationClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -359,10 +370,22 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         throw NotStubbed(client: "FlakyFederationClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "FlakyFederationClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -413,10 +436,22 @@ struct OpaqueFailingClient: FederationClient {
         throw NotStubbed(client: "OpaqueFailingClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "OpaqueFailingClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }
@@ -482,10 +517,22 @@ final class OutageInducingClient: FederationClient, @unchecked Sendable {
         throw NotStubbed(client: "OutageInducingClient", operation: "fetchStandings")
     }
 
+    /// **Devuelve el ranking vacío en vez de lanzar, al revés que sus dos
+    /// vecinas — y la asimetría es del código, no del doble.**
+    ///
+    /// `fetchStandings` puede lanzar tranquilamente porque `IngestStandings`
+    /// **no siempre la llama**: si ninguna jornada se ha jugado, su plan sale
+    /// vacío y no toca la red. `IngestScorers` no tiene ese filtro —el ranking
+    /// es de la competición entera, sin jornadas que mirar (§3.2)—, así que
+    /// **toda** pasada pregunta, y un doble que lanzara aquí tumbaría cualquier
+    /// test del recorrido por un motivo que no es el suyo.
+    ///
+    /// Vacío **no es mentira**: es lo que devuelve una liga recién empezada, y
+    /// el *spec* dice que eso es un 200 y no un error (`D-48`).
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        throw NotStubbed(client: "OutageInducingClient", operation: "fetchScorers")
+        FederationScorerTable(competitionName: nil, rows: [])
     }
 
 }

@@ -56,6 +56,20 @@ public struct FederationCapabilities: Equatable, Sendable {
     /// no hay *fallback* posible, porque calcularlo exigiría la plantilla de los
     /// rivales, que no se modela (D-09).
     public let providesScorers: Bool
+
+    /// Público desde F8, y no por simetría: **la guarda de `D-48` no se puede
+    /// probar con el catálogo de verdad**, porque hoy las dos federaciones
+    /// publican goleadores. La regla existe para la tercera, así que su test
+    /// necesita construir una capacidad que el catálogo no tiene.
+    ///
+    /// Lo que esto **no** abre es la puerta a que alguien componga capacidades
+    /// fuera del catálogo en producción: `Club.federationCapabilities` sigue
+    /// derivándolas de `FederationCode`, que es el único sitio donde se declaran
+    /// (`D-17`).
+    public init(providesRoundStandings: Bool, providesScorers: Bool) {
+        self.providesRoundStandings = providesRoundStandings
+        self.providesScorers = providesScorers
+    }
 }
 
 extension FederationCode {

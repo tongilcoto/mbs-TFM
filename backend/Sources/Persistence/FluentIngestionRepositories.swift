@@ -303,6 +303,9 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         record.matchesUpdated = run.matchesUpdated
         record.standingRowsCreated = run.standingRowsCreated
         record.standingRowsUpdated = run.standingRowsUpdated
+        record.leagueScorersCreated = run.leagueScorersCreated
+        record.leagueScorersUpdated = run.leagueScorersUpdated
+        record.leagueScorersRetired = run.leagueScorersRetired
         record.skipped = .init(rows: run.skipped)
         try await record.create(on: database)
     }
@@ -339,6 +342,9 @@ extension IngestionRunRecord {
             outcome: outcome, error: error)
         run.standingRowsCreated = standingRowsCreated
         run.standingRowsUpdated = standingRowsUpdated
+        run.leagueScorersCreated = leagueScorersCreated
+        run.leagueScorersUpdated = leagueScorersUpdated
+        run.leagueScorersRetired = leagueScorersRetired
         run.opponentClubsCreated = opponentClubsCreated
         run.opponentClubsUpdated = opponentClubsUpdated
         run.teamsCreated = teamsCreated
@@ -479,26 +485,30 @@ public struct FluentLeagueScorerRepository: LeagueScorerRepository {
         }
     }
 
-    /// La retirada de `D-94`, **en una sola sentencia y con las dos mitades del
-    /// filtro**.
+    /// La retirada de `D-94`, **con las dos mitades del filtro**.
     ///
-    /// `competition_id` **y** `synced_at <`. Sin la primera esto vacía el club
-    /// entero; sin la segunda, la competición. Y el `synced_at IS NULL` entra
-    /// también en la redada a propósito: una fila sin marca es una fila que
-    /// ninguna pasada ha confirmado, que es exactamente lo que hay que retirar —
-    /// dejarla fuera la haría inmortal.
+    /// `competition_id` **y** la marca. Sin la primera esto vacía el club entero;
+    /// sin la segunda, la competición.
+    ///
+    /// # `IS DISTINCT FROM`, expresado con un `OR`
+    ///
+    /// Lo que hay que retirar es *"lo que esta pasada no ha tocado"*, y en SQL eso
+    /// es `synced_at IS DISTINCT FROM :mark`. Fluent no lo expresa, así que va
+    /// como `!=` **más** el `IS NULL`: un `synced_at != :mark` a secas evalúa a
+    /// `NULL` —no a `true`— en las filas sin marca, y ésas son justo las que
+    /// ninguna pasada ha confirmado. Sin la segunda rama serían inmortales.
     ///
     /// Se cuenta **antes** de borrar y no se usa el número de filas afectadas,
     /// porque Fluent no lo expone de forma portable en `delete()`. Son dos
     /// consultas dentro de la misma transacción (`D-83`), así que entre ellas no
     /// se cuela nadie.
     @discardableResult
-    public func retire(competitionID: CompetitionID, syncedBefore: Date) async throws -> Int {
+    public func retire(competitionID: CompetitionID, keepingMark: Date) async throws -> Int {
         func stale() -> QueryBuilder<LeagueScorerRecord> {
             LeagueScorerRecord.query(on: database)
                 .filter(\.$competition.$id == competitionID.raw)
                 .group(.or) { outdated in
-                    outdated.filter(\.$syncedAt < syncedBefore)
+                    outdated.filter(\.$syncedAt != keepingMark)
                     outdated.filter(\.$syncedAt == .null)
                 }
         }
