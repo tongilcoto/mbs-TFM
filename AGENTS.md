@@ -236,8 +236,10 @@ sin columnas nuevas (Plan §4.6)—, **F5**, la **ingesta del calendario de punt
 entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan §4.7)—, y **F6**, el **job**:
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
 Y las dos que la auditoría añadió: **F6-bis** —el sobre del puerto de federación y la resiliencia del
-recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés.
-**304 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés. Y **F7**, la **clasificación**: la entidad
+22 del modelo con sus **dos fuentes** —ingerida de la federación o calculada desde `Match` (`D-15`)—, su
+puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9).
+**394 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -292,8 +294,8 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
-| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. **Sin** `import Vapor/Fluent` |
-| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo |
+| `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. **Sin** `import Vapor/Fluent` |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
@@ -312,11 +314,16 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son NUEVE migraciones por tenant:
+                                          # hoy son ONCE migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
-                                          #   ingestion_runs
+                                          #   ingestion_runs -> (+kind, +contadores)
+                                          #   -> (+round_id)
+                                          #   Las dos últimas ALTERAN ingestion_runs
+                                          #   y son DOS y no una porque la primera
+                                          #   ya estaba aplicada cuando se vio que
+                                          #   faltaba round_id (`D-90`)
                                           #   El orden es el de FK, y cada fase
                                           #   añade la suya AL FINAL DE LA LISTA
                                           #   QUE LE TOQUE, no al final a secas
@@ -404,8 +411,12 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis** y **F6-ter** entregadas —las dos fases que no estaban previstas y que trajo la
-auditoría—, lo inmediato es **F7**. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su
+Con F0–F6, **F6-bis**, **F6-ter** y **F7** entregadas, lo inmediato es **F8** (`LeagueScorer`), que llega
+con el camino hecho: `/api/scorers` ya tiene volcado en el repositorio y anexo escrito (§F.13), así que no
+hará falta capturar nada. Lo que sí hereda de F7 son **tres reglas**: el `kind` de `IngestionRun` se amplía
+con su caso y el `CHECK` **se deriva solo**; su pasada cae del lado **nulo** de `round_id` —`LeagueScorer` es
+estado vigente único, no *snapshot* por jornada (§3.2)—; y **no copiar la forma del sobre**, que es lo que
+F6-bis avisó y F7 cumplió. **La auditoría está cerrada**: ocho bloques, **cero S1**, 50 hallazgos, y su
 último bloque dejó una fase más — la misma válvula que parió F6-bis. **F6-ter fue una función y su test**:
 `IngestCommand.stopsTraversal(_:)`, la pregunta *"¿este resultado detiene el recorrido?"* sacada del bucle,
 porque `D-86` enmendada tiene **dos** frenos y el del recorrido de **clubes** emparejaba un caso de error entre
@@ -442,15 +453,27 @@ porque el canario necesita exactamente lo mismo que el cron.
 
 **La vara de medir sigue siendo la misma, y va subiendo**: F3 hizo el bucle de Plan §5.1 entero (doce ciclos,
 11/11 mutaciones), F4 lo repitió con **16/16**, F5 con **35 mutaciones, 34 cazadas y 1 equivalente** sobre
-**35 ciclos**, y F6 con **23/23**, F6-bis con **8/8** y F6-ter con **4/5 — y la que sobrevive es el borde
+**35 ciclos**, y F6 con **23/23**, F6-bis con **8/8**, F6-ter con **4/5 — y la que sobrevive es el borde
 declarado de la fase, no un descuido**: lo que queda sin testigo es la línea que *llama* a la regla, porque la
-unidad de trabajo de `ingest` no es inyectable; la regla en sí tiene sus cuatro —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
+unidad de trabajo de `ingest` no es inyectable; la regla en sí tiene sus cuatro. Y **F7 con 57/57**, de las
+que **cinco sobrevivieron a la primera pasada**: una era un defecto real —el orden de la tabla dependía del
+recorrido de un `Dictionary`, que depende del proceso— y cuatro eran *"falta un test"* —tres de ellas son las tres alternativas que `D-91` descartó, así que los tests dicen también por qué la regla es la mediana— — pero **cinco sobrevivieron a la primera pasada y las cinco eran "falta un
 test"**, una de ellas seria: *"la competición que nunca se sincronizó no entra"* pasaba toda la batería, y
 significaba que una competición recién dada de alta se quedaría esperando para siempre. Ningún rojo la habría
 encontrado, porque ningún test tenía motivo para existir hasta que la mutación preguntó. F5 aportó una lectura que no se había dado: una mutación superviviente son *"falta un test"* o
 *"sobra el código"* — **y a veces ninguna de las dos**, porque el programa mutado es el mismo programa
 (cruzar los dos marcadores que `Match` le pasa a `Kickoff` no es observable: `Kickoff` solo pregunta *"¿hay
 marcador?"*, y esa pregunta es simétrica).
+
+**Y una lección de F7 sobre el propio instrumento de medir, que conviene tener delante antes de creerse una
+mutación superviviente.** En esa fase el guion de mutación falló **tres veces, por tres motivos distintos**, y
+las tres veces el fallo se leyó como un resultado: un `$0` sin escapar en el reemplazo de `perl` hizo que una
+mutación **no compilara** y el detector lo contó como *"sobrevive"*; el detector comprobaba `error:` **antes**
+que `✘`, y como un fallo de Postgres trae esa palabra dentro, leyó dos mutaciones **cazadas** como fallos de
+compilación; y un patrón que no casaba producía un *"sobrevive"* sin haber mutado nada. Es el mismo error que
+`H-07`: confundir *"no se ejecutó"* con un resultado. **Una mutación que no compila, o que no llegó a
+aplicarse, no es una mutación que sobrevive** — el guion tiene que comprobar que el fichero cambió, que
+compila, y mirar el `✘` antes que el `error:`.
 
 **Y dos defectos que F6 solo encontró ejecutando el sistema contra la base de trabajo**, no con la batería:
 el motivo de una pasada fallida era ilegible —`PSQLError` esconde su descripción; se arregla con

@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F6**, más **F6-bis** y **F6-ter**. **304 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F7**, incluidas **F6-bis** y **F6-ter**. **394 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -46,7 +46,7 @@ lo que el plan pide: *"los tests son la especificación revisable, no el código
 
 ```sh
 swift run Run --help              # todos los comandos
-swift test                        # 304 tests, ~5 s con Docker levantado
+swift test                        # 394 tests, ~10 s con Docker levantado
 ```
 
 **La BD vive siempre en Docker.** Lo que cambia entre los dos modos de §2 es dónde corre **la API**.
@@ -407,6 +407,16 @@ simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería
 | F6 · el recorrido por tenant | `TenantTraversal` | **sí** |
 | F6 · los dos endpoints | `IngestionEndpoint` | **sí** |
 | F6-ter · el freno del recorrido de clubes | `IngestTraversalStop` | no |
+| F7 · la fila, el cálculo y la columna PREV | `'StandingRowTests\|StandingTable\|StandingPrevious'` | no |
+| F7 · el parser de la clasificación | `RFFMStandingsParser` | no |
+| F7 · qué jornadas entran y de dónde | `StandingsSyncPlan` | no |
+| F7 · la pasada, con dobles | `IngestStandingsTests` | no |
+| F7 · la tabla y sus CHECK | `StandingPersistence` | **sí** |
+| F7 · los dos volcados hasta Postgres | `StandingIngestionEndToEnd` | **sí** |
+
+> **Y la sorpresa del `--filter`, otra vez, medida aquí mismo**: `--filter Standing` a secas trae **75** —las
+> seis filas de arriba juntas, de cuatro *targets* distintos—. No está mal, pero no es *"el dominio de F7"*.
+> Para eso son los tres nombres de tipo de la primera fila, que dan **31**.
 
 > **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
 > del `@Test`—, y de ahí salen tres sorpresas. **Arrastra tests de suites que no esperas**, así que las
