@@ -57,7 +57,7 @@ public enum TenantMigrations {
             CreateRound(),
             CreateMatch(),
             CreateStandingRow(),
-            // F8: la entidad 23. El orden canónico de arriba la pone detrás de
+            // F8: `LeagueScorer`. El orden canónico de arriba la pone detrás de
             // `Goal`, pero `Player`…`Goal` no existen todavía, así que su sitio
             // efectivo es éste. No es una excepción a `D-90`: su única FK es
             // `Competition`, aplicada desde F1.

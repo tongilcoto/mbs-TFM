@@ -1011,7 +1011,7 @@ Ahí viven además las dos precedencias que el `--help` no puede explicar: `--fo
 
 ### 4.9 F7 · La clasificación, ingerida y calculada — **entregada** (2026-09-16)
 
-**La entidad 22 del modelo, y la primera fase con dos fuentes para la misma fila.** [D-15] dice que
+**La entidad 9 de §3.2, y la primera fase con dos fuentes para la misma fila.** [D-15] dice que
 `StandingRow` es **agnóstica a la fuente** —vale igual ingerida que calculada— y F7 es donde esa frase se
 convierte en un `switch` de dos ramas que acaban en el mismo `save`.
 
@@ -1125,7 +1125,7 @@ hacerlo **entero** —la mini-liga de N equipos, no solo el caso de dos—.
 
 ### 4.10 F8 · Los goleadores, y el `CHECK` que se creía vivo — **entregada** (2026-09-16)
 
-**La entidad 23 del modelo, y la fase que cierra la salida de la ingesta.** Con `LeagueScorer` escrita, las
+**La entidad 15 de §3.2, y la fase que cierra la salida de la ingesta.** Con `LeagueScorer` escrita, las
 seis entidades que la ingesta produce tienen su tabla, su puerto y su pasada.
 
 **Qué entrega, de abajo arriba:**
@@ -1176,7 +1176,7 @@ no se destruye, y por eso ningún otro repositorio tiene `delete`. La condición
 clasificación es la foto de una jornada que ya pasó y sigue siendo verdad; un goleador que el proveedor dejó
 de publicar es una fila **indistinguible de las buenas** dentro de una tabla que afirma ser la de hoy.
 
-> **Al añadir la entidad 24: si tiene jornada, es histórico y no se borra.**
+> **Al añadir la séptima salida de la ingesta: si tiene jornada, es histórico y no se borra.**
 
 #### El hallazgo que nadie buscaba: **derivado no significa vivo**
 
@@ -1216,6 +1216,23 @@ tentación de creer que se mantiene solo es exactamente la que produjo el defect
 > **La lectura que se añade a las de F2, F5 y F7:** cuando **varias** mutaciones supervivientes caen en la
 > misma capa, no son N tests que faltan — es **un nivel de la pirámide que falta**. Conviene mirar el patrón
 > antes de escribir el primer test.
+
+#### Y una errata que se propagó por herencia, que es `D-84` aplicada a nosotros mismos
+
+Al repasar el README se contaron las entidades de §3.2 y salieron **21**, con `StandingRow` la **9ª** y
+`LeagueScorer` la **15ª**. F7 había escrito *"la entidad 22 del modelo"* y F8 copió *"la 23"* sin comprobarlo,
+**contradiciendo de frente** el *"las 21 entidades de §3.2"* que el propio README repetía dos secciones más
+abajo. De ahí salió además una *"entidad 24"* que no existe.
+
+El origen del error es identificable y vale la pena: `IngestionRun` **sí** es la 21ª, porque F5 la **añadió**
+de verdad — y de ahí se dedujo que la fase siguiente traería la 22ª. Pero `StandingRow` y `LeagueScorer` **no
+se añadieron**: estaban en §3.2 desde que se cerró. Lo que F7 y F8 hicieron fue **implementarlas**, que es otra
+cosa.
+
+Corregido en los **15** sitios —código, tests, este plan y AGENTS.md—, y lo que queda escrito es el método,
+porque es literalmente [D-84] con nosotros de sistema ajeno: **una convención heredada de la fase anterior no
+se hereda, se comprueba.** La que está bien —`IngestionRun`, la 21ª— lo está por casualidad de que aquella vez
+sí se contó.
 
 Y el guion de mutación llevaba desde el principio los **tres frenos** que F7 tuvo que aprender a base de leer
 mal el instrumento: comprobar que el fichero **cambió**, que **compila**, y mirar el `✘` **antes** que el

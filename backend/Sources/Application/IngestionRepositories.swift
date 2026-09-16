@@ -117,7 +117,8 @@ public protocol StandingRowRepository: Sendable {
 /// fila indistinguible de las buenas dentro de una tabla que afirma ser la de
 /// hoy.
 ///
-/// > **Al añadir la entidad 24: si tiene jornada, es histórico y no se borra.**
+/// > **Al añadir la séptima salida de la ingesta: si tiene jornada, es histórico
+/// > y no se borra.**
 ///
 /// # Por qué se lee por competición y no hay `find`
 ///

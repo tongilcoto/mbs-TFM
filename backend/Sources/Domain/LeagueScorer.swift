@@ -1,6 +1,6 @@
 public import struct Foundation.Date
 
-/// Una fila del ranking de goleadores de la competición (§3.2, entidad 23).
+/// Una fila del ranking de goleadores de la competición (§3.2, **entidad 15**).
 ///
 /// # Se ingiere y **no se calcula** (`D-09`)
 ///

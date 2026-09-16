@@ -39,7 +39,7 @@ public final class StandingRowRecord: Model, @unchecked Sendable {
     public init() {}
 }
 
-/// **La entidad 22 del modelo.** Va **detrás de `Match`** en el orden de FK de
+/// **La entidad 9 de §3.2.** Va **detrás de `Match`** en el orden de FK de
 /// §4.6 —el sitio que el orden canónico de `TenantMigrations` le reserva— porque
 /// depende de `Competition`, `Round` y `Team`, y las tres existen ya ahí.
 ///

@@ -3,7 +3,7 @@ import Testing
 
 @testable import Domain
 
-/// Nivel 1 (§8.1): la entidad 22 del modelo, `StandingRow` (§3.2).
+/// Nivel 1 (§8.1): `StandingRow`, la **entidad 9** de §3.2.
 ///
 /// # Lo que esta suite fija, y es una decisión y no una omisión
 ///

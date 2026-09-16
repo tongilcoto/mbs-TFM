@@ -165,7 +165,8 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   clasificación es la foto de una jornada que ya pasó y sigue siendo verdad; un goleador que el proveedor dejó
   de publicar es una fila **indistinguible de las buenas** dentro de una tabla que afirma ser la de hoy. La
   retirada va por la marca `synced_at` y **dentro del mismo ámbito que la escritura**, para que una caída a
-  mitad no pueda dejar la tabla vacía. Al añadir la entidad 24: **si tiene jornada, es histórico y no se borra**.
+  mitad no pueda dejar la tabla vacía. Al añadir la séptima salida de la ingesta: **si tiene jornada, es
+  histórico y no se borra**.
 - **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas** (`D-88`).
   `GET /v1/ingestion-runs` lee el registro; `POST /v1/ingestion-runs` **pide que el job pase** —el cuerpo no
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
@@ -253,7 +254,7 @@ Y las dos que la auditoría añadió: **F6-bis** —el sobre del puerto de feder
 recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés. Y **F7**, la **clasificación**: la entidad
 22 del modelo con sus **dos fuentes** —ingerida de la federación o calculada desde `Match` (`D-15`)—, su
 puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9). Y **F8**, los **goleadores**: la
-entidad 23, con la clave de *upsert* que §3.5 no tenía (`D-93`), la **única retirada de filas de toda la
+entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`), la **única retirada de filas de toda la
 salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
 mantiene solo** (Plan §4.10).
 **446 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**

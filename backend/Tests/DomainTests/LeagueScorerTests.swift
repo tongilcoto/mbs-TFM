@@ -3,7 +3,7 @@ import Testing
 
 @testable import Domain
 
-/// Nivel 1 (§8.1): la entidad 23 del modelo, `LeagueScorer` (§3.2, [D-09]).
+/// Nivel 1 (§8.1): `LeagueScorer`, la **entidad 15** de §3.2 ([D-09]).
 ///
 /// # En qué se parece a `StandingRow` y en qué NO, que es lo que esta suite fija
 ///

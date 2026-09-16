@@ -45,7 +45,7 @@ public final class LeagueScorerRecord: Model, @unchecked Sendable {
     public init() {}
 }
 
-/// **La entidad 23 del modelo.**
+/// **La entidad 15 de §3.2**, y la que cierra la salida de la ingesta.
 ///
 /// # Dónde va en el orden de FK de §4.6
 ///
