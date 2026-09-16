@@ -1,0 +1,13 @@
+https://www.rffm.es/api/scorers?idGroup=99999999&idCompetition=99999999
+
+null
+
+HTTP 200
+
+Y lo mismo, byte a byte, con el grupo BUENO y la competicion mala o ausente:
+
+https://www.rffm.es/api/scorers?idGroup=24037549&idCompetition=99999999  -> null (HTTP 200)
+https://www.rffm.es/api/scorers?idGroup=24037549                         -> null (HTTP 200)
+
+Los DOS parametros son obligatorios y el par se valida. Es la diferencia con
+/api/standings, que solo pide idGroup. Medido el 2026-09-16.

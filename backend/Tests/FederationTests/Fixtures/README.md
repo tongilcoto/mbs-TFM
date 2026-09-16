@@ -12,6 +12,8 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 | `RFFM-calendario-coordenada-inexistente.html` | `docs/Federation APIs examples/` + el mismo nombre | Lo que la RFFM responde a una coordenada que **no existe**: `200` y `calendar: null` |
 | `RFFM-standings-temp21-group-24037549-round30-29.txt` | `docs/Federation APIs examples/` + el mismo nombre | **La clasificación** (F7): PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26, jornadas **30 y 29** en un solo fichero, 16 equipos cada una |
 | `RFFM-standings-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/standings` responde a un `idGroup` que **no existe**: `200` y **`null` a secas**, cuatro bytes |
+| `RFFM-scorers-group-24037549.txt` | `docs/Federation APIs examples/` + el mismo nombre | **Los goleadores** (F8): **el mismo grupo** que los dos de arriba —PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26—, **218 filas** y 16 equipos ([Anexo RFFM §F.19]) |
+| `RFFM-scorers-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/scorers` responde cuando el par `idGroup`+`idCompetition` no designa nada: `200` y **`null` a secas**, igual que su vecina — **y también si falta `idCompetition`**, que es la diferencia (§F.19) |
 
 **El nombre dice las dos cosas que hay que saber antes de usarlos.** Son `.html`
 —no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
@@ -214,3 +216,24 @@ FEDERATION_LIVE=1 \
 **El filtro es `RFFMCanaryTests`** —el nombre del tipo—, no el rótulo del
 *suite*: `--filter FederationCanary` no casa con nada y se queda en
 *"0 tests"*, que se lee como verde.
+
+
+## El de goleadores se capturó del mismo grupo a propósito (F8)
+
+Ya había un volcado de `/api/scorers` en `docs/` —`RFFM-scorers.txt`, 208 filas— y **no se sustituye**: es de
+**PRIMERA INFANTIL Grupo 12**, otra competición. F8 capturó uno nuevo del grupo **24037549**, que es el de
+`RFFM-calendario-temporada-jugada.html` y el de `RFFM-standings-…`, y eso compra dos cosas:
+
+- **Un end-to-end sobre una sola competición.** El calendario crea los 16 equipos, la clasificación casa con
+  ellos y los goleadores se ingieren en la misma `Competition`, sin tener que fabricar un segundo escenario.
+- **Una afirmación de §F.13 que nadie podía comprobar.** Decía que el `codigo_equipo` del ranking *"casa con
+  el del calendario"*; era una deducción **entre grupos distintos**. Cruzados ahora sobre el mismo:
+  **16/16, cero por cada lado** ([Anexo RFFM §F.19]).
+
+Conservar los dos también tiene precio cero y una ventaja: dos grupos hacen que *"218/218 identificadores de
+jugador únicos"* deje de ser una propiedad de una muestra ([D-93]).
+
+> **Y aquí no hay un tercer fichero de *"todavía sin jugar"***, al revés que el calendario. Un grupo con la
+> liga sin empezar debería devolver la lista vacía, pero **no está medido** y la diferencia importaría: si en
+> ese caso el documento entero llegara a `null`, sería indistinguible de una coordenada mala. Apuntado en
+> §F.19 como pendiente de observar.

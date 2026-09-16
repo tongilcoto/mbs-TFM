@@ -31,6 +31,8 @@
 | **D-90**               | Una migración aplicada es inmutable: lo que se corrige va en una migración nueva                                              | §4.6, §4.7, §9.3                   |
 | **D-91**               | La temporada de un calendario la prueban las fechas de sus partidos, no su etiqueta ni su nombre                              | §3.7, §5.6                         |
 | **D-92**               | El orden del *fallback* calculado: puntos, diferencia, goles a favor — y el enfrentamiento directo fuera                      | §3.2, §4.5, F7                     |
+| **D-93**               | La clave de *upsert* de `LeagueScorer` es el identificador del jugador en la federación                                        | §3.2, §3.5, §4.6, F8               |
+| **D-94**               | `LeagueScorer` es la única salida de la ingesta que borra filas, y `synced_at` es cómo                                         | §3.2, §3.7, §4.3, F8               |
 | **Modelo de datos**    |                                                                                                                               |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                                                   | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                                                       | §3.2, §3.4                         |
@@ -3882,6 +3884,107 @@ estamos"* es justo lo que la regla 2 del plan de auditoría existe para no hacer
 solo tiene la cuenta buena si la tabla se ingiere. Calculándola no hay de dónde sacarlo. Es la mitad de
 [D-55] que es limitación de verdad y no decisión.
 
+---
+
+### D-93 · La clave de *upsert* de `LeagueScorer` es el identificador del jugador en la federación
+
+**Qué hay que decidir, y por qué no estaba decidido.** §3.5 enumera las unicidades del modelo y
+`LeagueScorer` **no aparece en la lista**. Es la única entidad de la *salida de la ingesta* sin clave de
+negocio declarada, y mientras el ranking no se ingería no se notaba. F8 lo ingiere, así que hay que decir por
+qué columna se pisa una fila existente en vez de crear otra.
+
+**La tentación, y por qué no vale.** Los seis campos que §3.2 le da —`competition_id`, `full_name`,
+`team_label`, `goals`, `rank?`, `synced_at?`— sugieren la clave `(competition_id, full_name, team_label)`,
+que es la única que se puede formar con lo que hay. **El propio *spec* la desmiente**, y por escrito: la
+descripción de `LeagueScorerResponse.id` dice que ese identificador es útil como clave de lista *"porque
+`fullName` **no es identificador**: dos jugadores pueden llamarse igual"*. Construir el *upsert* sobre él es
+contradecir el contrato en la misma frase en que lo implementas.
+
+Sus dos fallos son de signos opuestos y los dos son silenciosos:
+
+- **dos homónimos del mismo equipo colapsan en una fila**, y el segundo pisa al primero cada semana;
+- **un jugador que cambia de equipo a mitad de temporada** deja de casar con su fila y produce una segunda,
+  así que aparece dos veces en el ranking hasta que la retirada de [D-94] se lleve la vieja.
+
+**Decisión.** Se añade **`federation_player_id`** a `LeagueScorer` y la unicidad de §3.5 pasa a ser
+**`LeagueScorer(competition_id, federation_player_id)`**.
+
+**Por qué esto no es inventarse una columna.** Es un campo que **las dos federaciones ya publican**, medido en
+los dos volcados y no deducido:
+
+| | Campo | Medido |
+|---|---|---|
+| RFFM | `codigo_jugador` | **208/208** ([Anexo RFFM §F.13]) y **218/218** ([Anexo RFFM §F.19]) únicos y no vacíos |
+| FCF | `codjugador` | **50/50** únicos y no vacíos ([Anexo FCF §C.10.7]) |
+
+Con lo cual esto es [D-06] —*"doble identificador: UUID interno **y** id externo de federación"*— aplicado a
+la séptima entidad, exactamente como `federation_team_id`, `federation_club_id` y `federation_match_id`. La
+diferencia con [D-31] conviene tenerla clara: allí el identificador **podía no venir** y por eso la ingesta no
+puede depender de él; aquí viene en las dos fuentes y en el 100% de las 426 filas observadas.
+
+**No es anulable, y ésa es la asimetría con sus tres hermanas.** `federation_team_id` es anulable porque un
+equipo vive sin él desde que lo crea el club hasta que se engancha ([D-66], [D-67]); `federation_match_id`,
+porque el proveedor puede no publicarlo ([D-31]). Una fila de `LeagueScorer` **no tiene ese estado
+intermedio**: la escribe la ingesta o no existe —no hay `POST`, [D-21]—, así que una sin identificador de
+federación sería una fila que nadie puede volver a encontrar. Se rechaza en el Dominio y el esquema lo repite.
+
+**Y no entra en el DTO.** `LeagueScorerResponse` no lo lleva, por el mismo motivo exacto que no lleva
+`synced_at`: es **maquinaria del *upsert***, no dato del cliente. El *spec* no se toca.
+
+**Lo que se asume a cambio.** Una columna más y una entrada más que mantener en §3.2 y §3.5. Y el caso raro
+que la decisión deja pasar a propósito: si la federación **reasignara** un `codigo_jugador`, la fila vieja
+recibiría los goles del nuevo. No es un riesgo que se pueda mitigar desde aquí —ni se ha observado— y su
+alternativa, no tener clave, es peor.
+
+> **Ojo con el argumento que esta decisión NO usa, aunque sea el que más se oye.** La medición de
+> [Anexo RFFM §F.19] confirmó que el `codigo_equipo` del ranking **casa 16/16** con el del calendario, de modo
+> que se podría unir cada goleador con su `Team`. Eso no se hace, y [D-09] sigue en pie: `team_label` es
+> **texto del proveedor** y el equipo puede ser de otra categoría o venir escrito de otra forma ([D-32]).
+> Esta decisión toma el identificador del **jugador**, que no liga con nada del modelo —no hay `Player` de los
+> rivales, y no lo va a haber—, no el del equipo.
+
+---
+
+### D-94 · `LeagueScorer` es la única salida de la ingesta que **borra** filas, y `synced_at` es cómo
+
+**Qué lo hace distinto.** La regla del resto de la salida de la ingesta es que **lo que la fuente deja de
+publicar no se destruye** ([D-75]): `StandingRowRepository` no tiene `delete`, ni `MatchRepository`, ni
+`RoundRepository`. Y se sostiene porque esas tablas son **histórico**: una fila de clasificación es el
+*snapshot* de una jornada que ya pasó, y una jornada pasada no deja de haber ocurrido porque la fuente deje de
+contarla.
+
+**`LeagueScorer` no es histórico: es *estado vigente único*** (§3.2). No hay *snapshot* por jornada, no hay
+columna PREV, y el *upsert* lo pisa entero en cada sincronización. Con la regla de no borrar, un goleador que
+desaparece del ranking —se lesiona y lo adelantan fuera del *top* que publique la fuente, causa baja, o el
+proveedor recorta la lista, que en la FCF son **exactamente 50 filas**— **se quedaría ahí para siempre**, con
+sus goles congelados y mezclado con los vivos. No sería un dato viejo identificable: sería una fila
+indistinguible de las buenas dentro de una tabla que dice ser la de ahora.
+
+**Decisión.** La pasada de goleadores **retira** las filas de la competición que no venían en la respuesta, y
+el mecanismo es `synced_at`: se marca con el instante de la pasada cada fila escrita, y se borran las de esa
+competición cuyo `synced_at` sea anterior. Es lo que §3.2 ya decía de esa columna —*"marca del upsert (retirar
+filas que el proveedor dejó de publicar)"*— convertido en operación.
+
+**Por qué por marca y no por diferencia de conjuntos.** Comparar *"lo que había"* contra *"lo que vino"* en
+memoria da el mismo resultado y necesita releer la tabla entera para calcular la resta. La marca la resuelve
+el propio `WHERE`, y sobre todo **es correcta si la pasada se interrumpe**: como todo ocurre en la
+transacción de [D-83], o se escriben las nuevas y se retiran las viejas, o no pasa ninguna de las dos cosas.
+Con un borrado previo —*"borro todo y vuelvo a insertar"*— una caída a mitad dejaría la tabla vacía; aquí no
+es representable.
+
+**Por qué no se reinserta todo con `id` nuevo, que es la variante más simple.** Porque el `id` de la fila lo
+publica el *spec* como clave de lista del cliente, y regenerarlo cada semana lo convierte en ruido: la
+pantalla no podría distinguir *"esta fila cambió"* de *"esta fila es otra"*. Y `created_at` dejaría de
+significar nada. El *upsert* por [D-93] conserva las dos cosas.
+
+**Lo que esto NO autoriza.** No es una grieta en [D-75] ni un precedente para las demás. La condición que lo
+justifica es *"la tabla es estado vigente y no histórico"*, y en toda la salida de la ingesta **solo la cumple
+ésta**. Al añadir la séptima entidad: si tiene jornada, es histórico y no se borra.
+
+**Y no borra nunca fuera de su competición.** El `WHERE` lleva `competition_id` además de la marca. Sin él,
+una pasada de una competición retiraría los goleadores de todas las demás — que es la clase de fallo que no
+da error, se lleva los datos y solo se nota al mirar la pantalla equivocada.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4005,3 +4108,5 @@ solo tiene la cuenta buena si la tabla se ingiere. Calculándola no hay de dónd
 [D-90]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-92]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-93]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-94]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
