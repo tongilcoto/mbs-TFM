@@ -6500,9 +6500,12 @@ components:
           minimum: 0
           readOnly: true
           description: |
-            Filas de clasificación escritas (F7). **El volumen no es aritmética**, que es lo que las hace
-            merecer columna: una pasada en régimen escribe 16 filas, y la primera de un alta a mitad de
-            temporada recompone el histórico y escribe 25 jornadas × 16 = 400.
+            Filas de clasificación escritas por **esta pasada** (F7). Cada entidad que la ingesta escribe
+            tiene su par `created`/`updated`, y ésta no es la excepción.
+
+            **No es deducible del resto de la respuesta**: cuántas jornadas tiene la competición es fijo
+            —16 equipos, 30 jornadas—, pero cuántas escribió *esta* pasada no, y no se puede reconstruir
+            después. Una en régimen; veinticinco la primera de un alta a mitad de temporada.
         standingRowsUpdated: { type: integer, minimum: 0, readOnly: true }
 
       # **Los diez viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es

@@ -226,6 +226,36 @@ struct StandingTableTests {
         }
     }
 
+    @Test("con equipos impares, el que descansa no suma y se queda atrás en J")
+    func ateamOnAByeDoesNotAdvance() throws {
+        // **Grupo impar: cada jornada uno descansa.** Es corriente en fútbol
+        // base, y tiene dos consecuencias que hay que no romper: el que descansa
+        // sigue en la tabla —no desaparece de la clasificación por no jugar— y su
+        // `played` se queda por debajo del de los demás.
+        //
+        // Es además el caso que sostiene el aviso de [Anexo RFFM §F.8]: *"no
+        // asumir `jugados == round`"*, que allí se midió con `jugados` valiendo 8
+        // en nueve equipos y 9 en cuatro dentro de la misma jornada.
+        let table = StandingTable.upTo(
+            round: 2,
+            fixtures: [
+                // j1: descansa `c`
+                try Self.fixture(1, Self.a, Self.b, 1, 0),
+                // j2: descansa `b`
+                try Self.fixture(2, Self.a, Self.c, 1, 0),
+            ])
+
+        #expect(table.count == 3)
+        #expect(table.first { $0.teamID == Self.a }?.played == 2)
+        #expect(table.first { $0.teamID == Self.b }?.played == 1)
+        #expect(table.first { $0.teamID == Self.c }?.played == 1)
+
+        // Y el que descansa **no queda el último por descansar**: `b` perdió y
+        // `c` perdió, y los separa la diferencia de goles, no los partidos
+        // jugados. Ordenar por `played` sería inventar un criterio que no existe.
+        #expect(table.map(\.teamID) == [Self.a, Self.b, Self.c])
+    }
+
     @Test("sin partidos no hay tabla, y eso no es un error")
     func noFixturesIsAnEmptyTable() {
         #expect(StandingTable.upTo(round: 1, fixtures: []).isEmpty)

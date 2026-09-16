@@ -135,11 +135,11 @@ public struct CreateIngestionRun: AsyncMigration {
 ///   de ellas. Sin esto, *"esos contadores no van con esto"* se lee como *"no
 ///   hizo nada"*.
 /// - **`standing_rows_created` / `_updated`** — el par que le toca a la entidad
-///   que la pasada escribe, igual que las otras cuatro. **No sobran por ser
-///   deducibles**, que fue el primer impulso: el volumen de una clasificación
-///   parece aritmética —16 equipos por jornada— pero **el número de jornadas no
-///   es determinista**. En régimen son 16 filas; la primera pasada de un alta a
-///   mitad de temporada recompone el histórico y escribe 400.
+///   que la pasada escribe, igual que las otras cuatro. Sin él, la clasificación
+///   sería la única entidad escrita sin contador. Y lo que cuentan no es
+///   deducible después: no es *cuántas jornadas tiene la competición* —eso es
+///   fijo— sino **cuántas filas escribió esta pasada**, que es una en régimen y
+///   veinticinco en la primera de un alta a mitad de temporada.
 ///
 /// # El `DEFAULT` es el backfill, y es exacto
 ///

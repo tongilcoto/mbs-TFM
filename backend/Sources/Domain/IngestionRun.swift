@@ -71,13 +71,19 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
 
     /// Las filas de clasificación escritas (F7).
     ///
-    /// **Y no sobran, aunque lo parezca.** El primer impulso es que el volumen de
-    /// una clasificación es aritmética —16 equipos por jornada— y por tanto no
-    /// hay nada que contar. Es falso: **el número de jornadas no es
-    /// determinista**. Una pasada en régimen escribe 16 filas; la primera de un
-    /// alta a mitad de temporada recompone el histórico y escribe 25 jornadas ×
-    /// 16 = **400**. *"¿Qué pasada escribió 400 filas de golpe?"* es literalmente
-    /// la pregunta que estos contadores existen para contestar.
+    /// **Están por consistencia, y es la razón entera**: cada entidad que la
+    /// ingesta escribe tiene su par `created`/`updated` —clubes, equipos,
+    /// jornadas, partidos—. La clasificación escribe una entidad; sin su par
+    /// sería la única sin él.
+    ///
+    /// > **Ojo con el argumento que NO vale, porque es el primero que se ocurre**
+    /// > y es falso: *"el volumen de una clasificación es aritmética —16 equipos
+    /// > por jornada— así que el contador es deducible"*. Lo deducible es cuántas
+    /// > jornadas tiene la **competición**, que es fijo (16 equipos → 30
+    /// > jornadas). Lo que estos contadores dicen es cuántas filas escribió
+    /// > **esta pasada**, que no se puede reconstruir después: la de régimen
+    /// > escribe una jornada, y la primera de un alta a mitad de temporada
+    /// > recompone el histórico y escribe veinticinco.
     public var standingRowsCreated: Int = 0
     public var standingRowsUpdated: Int = 0
 
