@@ -29,7 +29,7 @@
 
 ## 0. Qué hay montado
 
-Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F7**, incluidas **F6-bis** y **F6-ter**. **394 tests.**
+Del [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) están entregadas **F0 a F8**, incluidas **F6-bis** y **F6-ter**. **446 tests.**
 Qué trajo cada fase y qué preguntas contestó está en **Plan §3 y §4.2–§4.8**; aquí solo lo que se puede
 **tocar**.
 
@@ -413,6 +413,10 @@ simples **no son decorativas**: sin ellas `zsh` se come el `|` como una tubería
 | F7 · la pasada, con dobles | `IngestStandingsTests` | no |
 | F7 · la tabla y sus CHECK | `StandingPersistence` | **sí** |
 | F7 · los dos volcados hasta Postgres | `StandingIngestionEndToEnd` | **sí** |
+| F8 · la entidad 23 y su clave de *upsert* | `LeagueScorerTests` | no |
+| F8 · el parser de goleadores | `RFFMScorersParser` | no |
+| F8 · la pasada, con dobles | `IngestScorersTests` | no |
+| F8 · el `CHECK` de `kind` contra el enumerado | `MigrationIntegrity` | **sí** |
 
 > **Y la sorpresa del `--filter`, otra vez, medida aquí mismo**: `--filter Standing` a secas trae **75** —las
 > seis filas de arriba juntas, de cuatro *targets* distintos—. No está mal, pero no es *"el dominio de F7"*.
@@ -681,6 +685,19 @@ swift run Run provision-tenant atleti -f rffm -s mi_schema
   hay que reaprovisionar nada. **Lo que no se hace nunca es editar una migración ya aplicada** (`D-90`):
   `_fluent_migrations` guarda el nombre y no el contenido, así que tu base la recibiría al recrearla y un club
   en producción **no**, sin un solo aviso. Lo que haya que corregir va en una migración nueva.
+- **Y lo mismo vale para un `CHECK` derivado de un enumerado, que es la trampa que F8 encontró.** `D-02` dice
+  que esos `CHECK` **se derivan y no se teclean**, y `sqlValueList` lo cumple — pero la derivación ocurre
+  **una sola vez**, cuando la migración corre. Lo que queda en el *schema* es el texto de aquel día:
+
+  ```sh
+  docker exec backend-db-1 psql -U tfm -d tfm -c \
+    "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conname LIKE 'chk_%kind%';"
+  ```
+
+  Antes de F8, en `club_atleti`, eso devolvía `ARRAY['calendar','standings']` — sin `scorers`, que ya existía
+  en Swift. **Derivado no significa vivo**: añadir un caso a un enumerado que tenga `CHECK` obliga a una
+  migración nueva que lo **rehaga** (`replaceCheckConstraint`). Sin ella, un alta limpia lo acepta y un club
+  vivo lo rechaza con un `23514`, y solo al ejecutar. Lo vigila `MigrationIntegrityTests`.
 - **`--revert` exige `--yes`**, igual que el `migrate` de serie: borra las tablas de **todos** los clubes de
   `public.tenants` —o del que diga `-t`— y sus datos con ellas. Sin la bandera no toca la base y te dice por
   qué. Y si un club falla a mitad del recorrido, **el comando se para** (`D-86`, §9.3: una migración a medias

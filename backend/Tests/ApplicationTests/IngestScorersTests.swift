@@ -219,6 +219,68 @@ struct IngestScorersTests {
         #expect(try await Self.stored(fixture).count == 2)
     }
 
+    @Test("un jugador al que le CORRIGEN el nombre se actualiza, no se duplica (D-93)")
+    func aPlayerWhoseNameIsFixedIsUpdated() async throws {
+        // **La mutación que destapó este hueco**: cambiar la clave del *upsert* de
+        // `federationPlayerID` a `fullName` sobrevivía a toda la batería. Y no era
+        // un caso rebuscado — la federación corrige acentos y erratas entre
+        // semanas, y con la clave equivocada cada corrección crea una fila nueva y
+        // deja la vieja hasta que la retirada se la lleve. El ranking mostraría al
+        // mismo jugador dos veces durante una pasada entera.
+        let fixture = try await Self.seed()
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(
+                Self.table([Self.row("77", "FROMETA TEJEDOR, RANDEL", goals: 10)])))
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+        let first = try #require(try await Self.stored(fixture).first)
+
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(
+                Self.table([Self.row("77", "FRÓMETA TEJEDOR, RANDEL MIGUEL", goals: 11)])),
+            clock: Self.nextWeek())
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+
+        let stored = try await Self.stored(fixture)
+        #expect(stored.count == 1, "el cambio de nombre creó una fila nueva")
+        #expect(stored.first?.fullName == "FRÓMETA TEJEDOR, RANDEL MIGUEL")
+
+        // **Y el `id` es el mismo, que es lo que de verdad distingue las dos
+        // implementaciones.** Con la clave equivocada el recuento final cuadra
+        // igual —se crea una fila nueva y la vieja la barre la retirada de
+        // `D-94` en esa misma pasada—, así que contar filas no basta: la mutación
+        // sobrevivía a este test hasta que se añadió esta línea.
+        //
+        // Lo observable es que el `id` **cambia**, y eso no es cosmético: el
+        // *spec* lo publica como clave de lista del cliente, así que regenerarlo
+        // convierte *"esta fila cambió"* en *"esta fila es otra"*. Y con él se va
+        // el `createdAt`.
+        #expect(stored.first?.id == first.id, "la corrección del nombre cambió el `id`")
+    }
+
+    @Test("y la fila conserva su `createdAt` entre pasadas (§3.2)")
+    func theRowKeepsItsCreatedAt() async throws {
+        // También lo destapó una mutación: pisar `createdAt` con la marca de cada
+        // pasada no rompía nada visible. Y vaciaría el campo de significado — el
+        // *spec* lo publica, y lo que quiere decir es *"desde cuándo está este
+        // goleador en el ranking"*, no *"cuándo se sincronizó por última vez"*, que
+        // es lo que dice `updatedAt` y, con otra granularidad,
+        // `CompetitionResponse.lastSyncedAt`.
+        let fixture = try await Self.seed()
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(Self.table([Self.row("77", "A", goals: 3)])))
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+        let first = try #require(try await Self.stored(fixture).first)
+
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(Self.table([Self.row("77", "A", goals: 4)])),
+            clock: Self.nextWeek())
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+        let second = try #require(try await Self.stored(fixture).first)
+
+        #expect(second.createdAt == first.createdAt)
+        #expect(second.updatedAt > first.updatedAt, "`updatedAt` sí tiene que moverse")
+    }
+
     @Test("un jugador que cambia de equipo se ACTUALIZA, no se duplica (D-93)")
     func aPlayerWhoChangesTeamIsUpdated() async throws {
         let fixture = try await Self.seed()
