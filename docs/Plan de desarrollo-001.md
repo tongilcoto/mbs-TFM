@@ -923,6 +923,12 @@ regla global con efectos globales, en una batería paralela, no es un test — e
 la regla *"sin filtro son todos"* se afirma sobre una consulta **sin efectos**, y el recorrido de verdad se
 lanza sobre una lista explícita de clubes.
 
+> **Y aun así el paralelismo no sobra, que es la otra mitad y está medida**: con `--no-parallel` los 138 tests
+> de entonces tardaban **3,7 s**; en paralelo, **0,9 s**. Correrlos concurrentes es además **lo que destapó
+> esta carrera** — un orden fijo la habría escondido hasta que apareciera en CI o en la máquina de otro. Así
+> que la batería corre en paralelo y **para leerla** se usa `--no-parallel --disable-xctest`, que además da
+> orden de fichero determinista y un renglón por caso parametrizado.
+
 **Y dos hallazgos del contrato, los dos por lo mismo — que el *spec* declara y el generador no obedece**
 ([D-65], tercera fase que lo cobra):
 
