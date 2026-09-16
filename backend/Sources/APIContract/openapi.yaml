@@ -6398,7 +6398,7 @@ components:
         tiene `updatedAt` ni clave natural, y las dos ausencias son deliberadas: una pasada no se
         modifica, y dos pasadas de la misma competición en el mismo minuto son un reintento, no un
         duplicado.
-      required: [id, competitionId, startedAt, finishedAt, outcome, counters, skipped]
+      required: [id, competitionId, kind, startedAt, finishedAt, outcome, counters, skipped]
       properties:
         id:
           type: string
@@ -6408,6 +6408,8 @@ components:
           type: string
           format: uuid
           readOnly: true
+        kind:
+          $ref: '#/components/schemas/IngestionKind'
         startedAt:
           type: string
           format: date-time
@@ -6437,6 +6439,17 @@ components:
             (D-83).
           items:
             $ref: '#/components/schemas/IngestionSkip'
+
+    IngestionKind:
+      type: string
+      description: |
+        **Qué sincronizó esta pasada** (F7). Hasta F6 sobraba, porque la ingesta tenía una sola operación;
+        desde F7 la clasificación tiene su propio `execute`, así que una competición deja **dos filas por
+        disparo** y sin esto serían indistinguibles — misma competición, misma hora, y los contadores del
+        otro a cero, que se lee como *"no hizo nada"* en vez de como *"esos no van con esto"*.
+
+        Es además lo que le dice al cliente **qué contadores mirar** de los diez que trae `counters`.
+      enum: [calendar, standings]
 
     IngestionHealth:
       type: string
@@ -6471,7 +6484,8 @@ components:
       description: Cuántas filas creó y actualizó la pasada, por entidad.
       required:
         [opponentClubsCreated, opponentClubsUpdated, teamsCreated, teamsUpdated,
-         roundsCreated, roundsUpdated, matchesCreated, matchesUpdated]
+         roundsCreated, roundsUpdated, matchesCreated, matchesUpdated,
+         standingRowsCreated, standingRowsUpdated]
       properties:
         opponentClubsCreated: { type: integer, minimum: 0, readOnly: true }
         opponentClubsUpdated: { type: integer, minimum: 0, readOnly: true }
@@ -6481,6 +6495,19 @@ components:
         roundsUpdated: { type: integer, minimum: 0, readOnly: true }
         matchesCreated: { type: integer, minimum: 0, readOnly: true }
         matchesUpdated: { type: integer, minimum: 0, readOnly: true }
+        standingRowsCreated:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Filas de clasificación escritas (F7). **El volumen no es aritmética**, que es lo que las hace
+            merecer columna: una pasada en régimen escribe 16 filas, y la primera de un alta a mitad de
+            temporada recompone el histórico y escribe 25 jornadas × 16 = 400.
+        standingRowsUpdated: { type: integer, minimum: 0, readOnly: true }
+
+      # **Los diez viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es
+      # `kind`, no la ausencia del campo: un contador ausente y uno a cero se leen igual desde el
+      # cliente, y "esos no van con esto" no es lo mismo que "no hizo nada".
 
     IngestionSkip:
       type: object
@@ -6506,6 +6533,11 @@ components:
         se reporta*—; `unresolved_team` es su arrastre al partido; `missing_match_date` es D-75 negándose
         a inventar una fecha `NOT NULL`; y `duplicate_club_name` es la guarda del `UNIQUE(name)` de §3.5,
         sin la cual una coincidencia de nombre reventaría la transacción de toda la pasada.
+
+        `unknown_standing_team` es de la pasada de **clasificación** (F7) y es el **reverso** de
+        `unresolved_team`: allí el arrastre va del equipo al partido, y aquí la fila **es** del equipo
+        desconocido. La tabla de la federación puede traer un equipo que el calendario todavía no ha
+        mencionado, porque los partidos que lo mencionarían son de jornadas aún sin ingerir.
       enum:
         - ambiguous_opponent_club
         - ambiguous_team
@@ -6514,6 +6546,7 @@ components:
         - missing_match_date
         - unsluggable_club_name
         - duplicate_club_name
+        - unknown_standing_team
 
     TriggerIngestionRequest:
       type: object

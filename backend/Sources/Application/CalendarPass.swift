@@ -56,7 +56,7 @@ final class CalendarPass {
         self.matches = try await repositories.matches.list(competitionID: competition.id)
         self.report = try IngestionRun(
             id: IngestionRunID(raw: ids.next()),
-            competitionID: competition.id,
+            competitionID: competition.id, kind: .calendar,
             startedAt: now, finishedAt: now)
     }
 

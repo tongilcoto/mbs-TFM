@@ -294,6 +294,7 @@ extension Domain.IngestionRun {
         .init(
             id: id.raw.uuidString.lowercased(),
             competitionId: competitionID.raw.uuidString.lowercased(),
+            kind: kind.toContract(),
             startedAt: startedAt,
             finishedAt: finishedAt,
             outcome: outcome.toContract(),
@@ -306,10 +307,24 @@ extension Domain.IngestionRun {
                 roundsCreated: roundsCreated,
                 roundsUpdated: roundsUpdated,
                 matchesCreated: matchesCreated,
-                matchesUpdated: matchesUpdated),
+                matchesUpdated: matchesUpdated,
+                standingRowsCreated: standingRowsCreated,
+                standingRowsUpdated: standingRowsUpdated),
             skipped: skipped.map {
                 .init(reason: $0.reason.toContract(), detail: $0.detail)
             })
+    }
+}
+
+extension Domain.IngestionKind {
+    /// `switch` exhaustivo, como sus hermanos y por lo mismo (`D-61`): es lo que
+    /// hace que añadir `scorers` en F8 **no compile** hasta que el caso exista
+    /// también en el *spec*, que es la fuente de verdad del contrato (`D-25`).
+    func toContract() -> Components.Schemas.IngestionKind {
+        switch self {
+        case .calendar: .calendar
+        case .standings: .standings
+        }
     }
 }
 
@@ -341,6 +356,7 @@ extension Domain.IngestionSkip.Reason {
         case .missingMatchDate: .missing_match_date
         case .unsluggableClubName: .unsluggable_club_name
         case .duplicateClubName: .duplicate_club_name
+        case .unknownStandingTeam: .unknown_standing_team
         }
     }
 }

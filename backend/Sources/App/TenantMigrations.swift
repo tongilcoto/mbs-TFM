@@ -58,6 +58,11 @@ public enum TenantMigrations {
             CreateMatch(),
             CreateStandingRow(),
             CreateIngestionRun(),
+            // F7: tres columnas al registro de pasadas. **Va al final y no junto
+            // a `CreateIngestionRun`** porque no crea una tabla nueva: altera una
+            // que ya existe, así que su sitio en el orden de FK es "después de lo
+            // que altera" y nada más (`D-90`).
+            AddStandingsToIngestionRun(),
         ]
     }
 }

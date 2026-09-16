@@ -1,5 +1,6 @@
 import Domain
 public import Fluent
+import FluentSQL
 import Foundation
 
 /// Modelo de persistencia del registro de pasadas (§4.4).
@@ -16,6 +17,9 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     @Field(key: "outcome") public var outcome: String
     @OptionalField(key: "error") public var error: String?
 
+    /// Qué se sincronizó (F7). Ver `AddStandingsToIngestionRun`.
+    @Field(key: "kind") public var kind: String
+
     @Field(key: "opponent_clubs_created") public var opponentClubsCreated: Int
     @Field(key: "opponent_clubs_updated") public var opponentClubsUpdated: Int
     @Field(key: "teams_created") public var teamsCreated: Int
@@ -24,6 +28,8 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     @Field(key: "rounds_updated") public var roundsUpdated: Int
     @Field(key: "matches_created") public var matchesCreated: Int
     @Field(key: "matches_updated") public var matchesUpdated: Int
+    @Field(key: "standing_rows_created") public var standingRowsCreated: Int
+    @Field(key: "standing_rows_updated") public var standingRowsUpdated: Int
 
     /// Documento, no tabla hija.
     ///
@@ -107,5 +113,69 @@ public struct CreateIngestionRun: AsyncMigration {
 
     public func revert(on database: any Database) async throws {
         try await database.schema(IngestionRunRecord.schema).delete()
+    }
+}
+
+/// **Lo que F7 le añade al registro de pasadas, sin tocar `CreateIngestionRun`.**
+///
+/// # Por qué una migración nueva y no tres líneas en la de F5
+///
+/// Porque `D-90`: `_fluent_migrations` guarda **el nombre** de cada migración
+/// aplicada, no su contenido. Un *schema* que ya aplicó `CreateIngestionRun` **no
+/// recibiría jamás** una edición posterior de su `prepare` —sin error y sin
+/// aviso—, así que el club del desarrollador tendría las tres columnas y un club
+/// vivo no. Es el caso que ya ocurrió una vez con `CreateClub` (`A-5`/H-31).
+///
+/// # Las tres columnas, y por qué cada una
+///
+/// - **`kind`** — hasta F6 la ingesta tenía **una** operación y el registro podía
+///   dar por supuesto de qué hablaba. Con la clasificación teniendo su propio
+///   `execute`, una competición deja **dos filas por disparo**: misma
+///   competición, misma hora, y los ocho contadores del calendario a cero en una
+///   de ellas. Sin esto, *"esos contadores no van con esto"* se lee como *"no
+///   hizo nada"*.
+/// - **`standing_rows_created` / `_updated`** — el par que le toca a la entidad
+///   que la pasada escribe, igual que las otras cuatro. **No sobran por ser
+///   deducibles**, que fue el primer impulso: el volumen de una clasificación
+///   parece aritmética —16 equipos por jornada— pero **el número de jornadas no
+///   es determinista**. En régimen son 16 filas; la primera pasada de un alta a
+///   mitad de temporada recompone el histórico y escribe 400.
+///
+/// # El `DEFAULT` es el backfill, y es exacto
+///
+/// `'calendar'` y `0` no son valores de relleno prudentes: son **lo que esas
+/// filas son**. Toda fila que ya exista se escribió cuando la única pasada
+/// posible era la del calendario, y ninguna escribió una fila de clasificación
+/// porque la tabla no existía. No hay que adivinar nada.
+///
+/// # Lo que NO se toca, y conviene decirlo
+///
+/// Los dos `CHECK` de `CreateIngestionRun`. `outcome` sigue siendo
+/// `succeeded`/`failed` —una clasificación se escribe entera o no se escribe— y
+/// `(outcome = 'failed') = (error IS NOT NULL)` vale igual: un fallo de
+/// clasificación también tiene motivo.
+public struct AddStandingsToIngestionRun: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            .field("kind", .string, .required, .sql(.default("calendar")))
+            .field("standing_rows_created", .int, .required, .sql(.default(0)))
+            .field("standing_rows_updated", .int, .required, .sql(.default(0)))
+            .update()
+
+        // Derivado del enumerado y no tecleado (`D-02`), igual que el de
+        // `outcome`: el caso que F8 añada lo hereda sin tocar SQL.
+        try await database.checkConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_kind",
+            expression: "kind IN (\(IngestionKind.sqlValueList))")
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            .deleteField("kind")
+            .deleteField("standing_rows_created")
+            .deleteField("standing_rows_updated")
+            .update()
     }
 }

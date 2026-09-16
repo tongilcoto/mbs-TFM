@@ -31,6 +31,19 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public let id: IngestionRunID
     public let competitionID: CompetitionID
 
+    /// **Qué se sincronizó en esta pasada** (F7).
+    ///
+    /// Hasta F7 sobraba, porque solo había una clase de pasada. En cuanto la
+    /// clasificación tiene su propio `execute`, una competición deja **dos filas
+    /// por disparo** y sin esto serían indistinguibles: misma competición, misma
+    /// hora, y los contadores del otro a cero — que se lee como *"no hizo nada"*
+    /// en vez de como *"esos contadores no van con esto"*.
+    ///
+    /// No lleva valor por defecto **a propósito**: quien escribe una pasada tiene
+    /// que decir de qué es, y el compilador se encarga de preguntárselo. Un
+    /// `.calendar` por defecto convertiría un olvido en una fila que miente.
+    public let kind: IngestionKind
+
     public let startedAt: Date
     public let finishedAt: Date
 
@@ -56,6 +69,18 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public var matchesCreated: Int = 0
     public var matchesUpdated: Int = 0
 
+    /// Las filas de clasificación escritas (F7).
+    ///
+    /// **Y no sobran, aunque lo parezca.** El primer impulso es que el volumen de
+    /// una clasificación es aritmética —16 equipos por jornada— y por tanto no
+    /// hay nada que contar. Es falso: **el número de jornadas no es
+    /// determinista**. Una pasada en régimen escribe 16 filas; la primera de un
+    /// alta a mitad de temporada recompone el histórico y escribe 25 jornadas ×
+    /// 16 = **400**. *"¿Qué pasada escribió 400 filas de golpe?"* es literalmente
+    /// la pregunta que estos contadores existen para contestar.
+    public var standingRowsCreated: Int = 0
+    public var standingRowsUpdated: Int = 0
+
     /// Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal.
     ///
     /// Va como documento y no como tabla hija: no se consulta por sus campos —se
@@ -67,6 +92,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public init(
         id: IngestionRunID,
         competitionID: CompetitionID,
+        kind: IngestionKind,
         startedAt: Date,
         finishedAt: Date,
         outcome: IngestionOutcome = .succeeded,
@@ -94,6 +120,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
 
         self.id = id
         self.competitionID = competitionID
+        self.kind = kind
         self.startedAt = startedAt
         self.finishedAt = finishedAt
         self.outcome = outcome
@@ -118,7 +145,7 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// aquí un par de fechas al revés.
     public func timed(from startedAt: Date, to finishedAt: Date) throws -> IngestionRun {
         var timed = try IngestionRun(
-            id: id, competitionID: competitionID,
+            id: id, competitionID: competitionID, kind: kind,
             startedAt: startedAt, finishedAt: finishedAt,
             outcome: outcome, error: error)
         timed.opponentClubsCreated = opponentClubsCreated
@@ -129,6 +156,8 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         timed.roundsUpdated = roundsUpdated
         timed.matchesCreated = matchesCreated
         timed.matchesUpdated = matchesUpdated
+        timed.standingRowsCreated = standingRowsCreated
+        timed.standingRowsUpdated = standingRowsUpdated
         timed.skipped = skipped
         return timed
     }
@@ -138,6 +167,31 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
 public struct IngestionRunID: Hashable, Sendable {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
+}
+
+/// **Qué sincronizó una pasada** (F7).
+///
+/// # Por qué existe, y por qué no existía antes
+///
+/// Hasta F6 la ingesta tenía **una** operación —el calendario— y el registro de
+/// `D-85` podía dar por supuesto de qué hablaba. F7 le añade la clasificación
+/// con su propio `execute` (§2.3-b), así que la misma competición deja dos filas
+/// por disparo y hay que poder decir cuál es cuál. F8 añadirá la tercera.
+///
+/// # Se añade aquí y en el *spec*, y en ningún sitio más
+///
+/// Es `String` y `CaseIterable` por el mismo motivo que `IngestionOutcome` y
+/// `FederationCode` (`D-02`): el `CHECK` de la columna **se deriva** de
+/// `sqlValueList` y no se teclea, así que el caso de F8 lo hereda solo. Lo único
+/// que hay que hacer a mano es añadirlo también al `enum` del contrato — y eso
+/// tampoco depende de acordarse, porque el `toContract()` del adaptador es un
+/// `switch` exhaustivo y no compila sin él (`D-61`).
+public enum IngestionKind: String, CaseIterable, Equatable, Sendable {
+    /// La pasada de §5.6: el calendario y sus resultados, de la que salen
+    /// `Round`, `Match`, `Team` y `OpponentClub`.
+    case calendar
+    /// La de F7: la clasificación por jornada, ingerida o calculada (`D-15`).
+    case standings
 }
 
 /// Cómo acabó la pasada (§3.3).
@@ -192,5 +246,19 @@ public struct IngestionSkip: Equatable, Sendable, Codable {
         /// cae al paso 3—. Sin este desenlace, esa fila reventaría el `UNIQUE` y
         /// con él la transacción de toda la pasada.
         case duplicateClubName
+        /// **F7**: una fila de la clasificación cuyo `codequipo` no casa con
+        /// ningún `Team` conocido.
+        ///
+        /// Es el reverso de `unresolvedTeam`, y por eso no vale aquél: allí el
+        /// arrastre va del equipo al partido —*"el partido depende de un equipo
+        /// que se quedó fuera"*—, y aquí la fila **es** del equipo desconocido.
+        /// Pasa de verdad: la tabla de la federación puede traer un equipo que el
+        /// calendario todavía no ha mencionado, porque los partidos que lo
+        /// mencionarían son de jornadas que aún no se han ingerido.
+        ///
+        /// **No hace fallar la pasada** (`D-83`): es una fila menos en una tabla
+        /// de dieciséis, y la pasada siguiente —con el calendario ya al día— la
+        /// resuelve sola.
+        case unknownStandingTeam
     }
 }

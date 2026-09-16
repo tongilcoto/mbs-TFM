@@ -291,6 +291,7 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         record.finishedAt = run.finishedAt
         record.outcome = run.outcome.rawValue
         record.error = run.error
+        record.kind = run.kind.rawValue
         record.opponentClubsCreated = run.opponentClubsCreated
         record.opponentClubsUpdated = run.opponentClubsUpdated
         record.teamsCreated = run.teamsCreated
@@ -299,6 +300,8 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         record.roundsUpdated = run.roundsUpdated
         record.matchesCreated = run.matchesCreated
         record.matchesUpdated = run.matchesUpdated
+        record.standingRowsCreated = run.standingRowsCreated
+        record.standingRowsUpdated = run.standingRowsUpdated
         record.skipped = .init(rows: run.skipped)
         try await record.create(on: database)
     }
@@ -319,11 +322,21 @@ extension IngestionRunRecord {
             throw PersistenceError.corruptEnumeration(
                 table: Self.schema, column: "outcome", value: self.outcome)
         }
+        // Mismo trato que `outcome`, y por el mismo motivo: un valor que el
+        // enumerado no conoce es **esquema corrupto**, no un caso a ignorar. El
+        // `CHECK` de la columna lo impide, así que llegar aquí significa que
+        // alguien escribió por debajo de él.
+        guard let kind = IngestionKind(rawValue: kind) else {
+            throw PersistenceError.corruptEnumeration(
+                table: Self.schema, column: "kind", value: self.kind)
+        }
         var run = try IngestionRun(
             id: IngestionRunID(raw: try requireID()),
-            competitionID: CompetitionID(raw: $competition.id),
+            competitionID: CompetitionID(raw: $competition.id), kind: kind,
             startedAt: startedAt, finishedAt: finishedAt,
             outcome: outcome, error: error)
+        run.standingRowsCreated = standingRowsCreated
+        run.standingRowsUpdated = standingRowsUpdated
         run.opponentClubsCreated = opponentClubsCreated
         run.opponentClubsUpdated = opponentClubsUpdated
         run.teamsCreated = teamsCreated

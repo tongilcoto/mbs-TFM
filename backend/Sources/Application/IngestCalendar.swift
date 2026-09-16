@@ -75,7 +75,7 @@ public struct IngestCalendar: Sendable {
             // llegado a la última jornada.
             let failed = try IngestionRun(
                 id: IngestionRunID(raw: ids.next()),
-                competitionID: competitionID,
+                competitionID: competitionID, kind: .calendar,
                 startedAt: startedAt, finishedAt: clock.now(),
                 outcome: .failed, error: diagnosticText(for: error))
 
