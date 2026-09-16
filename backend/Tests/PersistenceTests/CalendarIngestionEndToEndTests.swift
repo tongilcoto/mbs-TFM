@@ -860,7 +860,13 @@ struct StubFederationClient: FederationClient {
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "StubFederationClient")
+        throw NotStubbed(client: "StubFederationClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "StubFederationClient", operation: "fetchScorers")
     }
 
 }

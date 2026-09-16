@@ -44,6 +44,43 @@ public enum RFFMEndpoints {
             + "&round=\(round)"
     }
 
+    /// El **ranking de goleadores** de la competición ([Anexo RFFM §F.19]).
+    ///
+    /// # Tercera ruta, tercer juego de nombres — y es el argumento de este fichero
+    ///
+    /// El calendario usa `grupo` y `competicion` en minúscula; la clasificación,
+    /// `idGroup` a secas; ésta, **`idGroup` e `idCompetition`**, los dos en
+    /// *camelCase*. Tres rutas de la misma API con tres convenciones: tenerlas
+    /// dispersas por el adaptador es pedir que alguien "corrija" una por simetría
+    /// con otra.
+    ///
+    /// # Y aquí `idCompetition` SÍ hace falta, al revés que en la clasificación
+    ///
+    /// No es una copia de `standings(for:round:)` con un parámetro de más: está
+    /// **medido**. Sin `idCompetition`, o con uno que no case con el grupo, la
+    /// respuesta es `200` + `null` (§F.19) — los dos son obligatorios y **el par
+    /// se valida**. Quien lo quite *"porque en `standings` no está"* convierte
+    /// esta ruta en un silencio que se lee como *"esta liga no tiene goleadores"*.
+    ///
+    /// **Y ese par validado es lo bueno de este endpoint**: es la única ruta
+    /// medida de la RFFM donde `D-84` **no** ocurre. El calendario, con una
+    /// coordenada equivocada, sirve el de otra competición; `/api/standings`
+    /// sirve la del grupo que le pidas. Ésta contesta `null`. El riesgo no
+    /// desaparece del todo —copiar **los dos** códigos del año pasado da un par
+    /// perfectamente válido—, solo se estrecha; y como la respuesta no trae ni una
+    /// fecha, la guarda de temporada de `D-91` **no se puede aplicar aquí**: la
+    /// sigue haciendo el calendario.
+    ///
+    /// Sin `temporada` ni `tipojuego`, igual que la clasificación: el grupo ya los
+    /// determina. Que la coordenada los traiga y aquí no se usen no es descuido —
+    /// el puerto pasa la coordenada entera porque es la unidad que el modelo
+    /// tiene, y cada endpoint coge lo suyo.
+    public static func scorers(for coordinate: FederationCoordinate) -> String {
+        "\(host)/api/scorers"
+            + "?idGroup=\(coordinate.federationGroupID)"
+            + "&idCompetition=\(coordinate.federationCompetitionID)"
+    }
+
     /// La **inversa**: la coordenada que hay dentro de una URL de calendario.
     ///
     /// # Por qué existe, y por qué no pide los números sueltos

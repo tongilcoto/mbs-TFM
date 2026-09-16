@@ -220,13 +220,19 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "SpyFederationClient")
+        throw NotStubbed(client: "SpyFederationClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "SpyFederationClient", operation: "fetchScorers")
     }
 
 }
@@ -284,13 +290,19 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "FlakyFederationClient")
+        throw NotStubbed(client: "FlakyFederationClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "FlakyFederationClient", operation: "fetchScorers")
     }
 
 }
@@ -332,13 +344,19 @@ struct OpaqueFailingClient: FederationClient {
         throw OpaqueError(detail: detail)
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "OpaqueFailingClient")
+        throw NotStubbed(client: "OpaqueFailingClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "OpaqueFailingClient", operation: "fetchScorers")
     }
 
 }
@@ -395,13 +413,19 @@ final class OutageInducingClient: FederationClient, @unchecked Sendable {
         return calendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "OutageInducingClient")
+        throw NotStubbed(client: "OutageInducingClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "OutageInducingClient", operation: "fetchScorers")
     }
 
 }
@@ -430,13 +454,21 @@ final class FailOnNthScope: TenantUnitOfWork, @unchecked Sendable {
     }
 }
 
-/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+/// Un doble al que se le ha pedido una operación del puerto que no prepara.
 ///
 /// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
-/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
-struct StandingsNotStubbed: Error, CustomStringConvertible {
+/// escrito sobre el doble equivocado pasara sin sincronizar nada, y pasaría por el
+/// motivo equivocado — que es el mismo error de método que `H-07`, confundir *"no
+/// se ejecutó"* con un resultado.
+///
+/// **Lleva la operación dentro desde F8**, que es cuando hubo dos: con un tipo por
+/// operación, el mensaje de un doble que no prepara `fetchScorers` diría
+/// `fetchStandings`. Se generaliza al segundo caso y no por anticipado, que es el
+/// criterio de `D-32`.
+struct NotStubbed: Error, CustomStringConvertible {
     let client: String
+    let operation: String
     var description: String {
-        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
+        "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }

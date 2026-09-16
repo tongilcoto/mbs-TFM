@@ -64,13 +64,19 @@ struct IngestionEndpointTests {
             return IngestionEndpointTests.emptyCalendar
         }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "StubClient")
+        throw NotStubbed(client: "StubClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "StubClient", operation: "fetchScorers")
     }
 
     }
@@ -563,13 +569,19 @@ struct CollapsingClient: FederationClient {
         return IngestionEndpointTests.emptyCalendar
     }
 
-    /// F7 no la usa en este doble: **lanza en vez de devolver vacío**, para que un
-    /// test futuro que llegue aquí por accidente falle en vez de pasar por el
+    /// Ni F7 ni F8 las usan en este doble: **lanza en vez de devolver vacío**, para que un
+    /// test futuro que llegue a cualquiera de las dos por accidente falle en vez de pasar por el
     /// motivo equivocado.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "CollapsingClient")
+        throw NotStubbed(client: "CollapsingClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "CollapsingClient", operation: "fetchScorers")
     }
 
 }
@@ -629,5 +641,17 @@ struct StandingsNotStubbed: Error, CustomStringConvertible {
     let client: String
     var description: String {
         "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
+    }
+}
+
+
+/// El mismo `NotStubbed` de `ApplicationTests`, declarado aquí porque los
+/// *targets* de test no se importan entre sí. Ver allí el porqué de llevar la
+/// operación dentro (F8).
+struct NotStubbed: Error, CustomStringConvertible {
+    let client: String
+    let operation: String
+    var description: String {
+        "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }

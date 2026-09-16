@@ -58,3 +58,13 @@ public struct StandingRowID: Hashable, Sendable {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Fila del ranking de goleadores (§3.2, entidad 23).
+///
+/// **Existe porque toda tabla tiene PK** (§3.5), igual que `StandingRowID`, y
+/// tampoco tiene `GET /{id}` (`D-34`). Su identidad de negocio es
+/// (competición, `federation_player_id`), que es el `UNIQUE` de `D-93`.
+public struct LeagueScorerID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}

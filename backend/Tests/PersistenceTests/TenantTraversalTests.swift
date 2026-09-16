@@ -57,7 +57,13 @@ struct TenantTraversalTests {
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
-        throw StandingsNotStubbed(client: "RecordingClient")
+        throw NotStubbed(client: "RecordingClient", operation: "fetchStandings")
+    }
+
+    func fetchScorers(
+        _ coordinate: FederationCoordinate
+    ) async throws -> FederationScorerTable {
+        throw NotStubbed(client: "RecordingClient", operation: "fetchScorers")
     }
 
     }
@@ -330,13 +336,17 @@ struct TenantTraversalTests {
     }
 }
 
-/// Un doble al que se le ha pedido la clasificación sin haberla preparado.
+/// Un doble al que se le ha pedido una operación del puerto que no prepara.
 ///
 /// Existe para que el hueco **se vea**: devolver una tabla vacía haría que un test
-/// de F7 escrito sobre el doble equivocado pasara sin sincronizar nada.
-struct StandingsNotStubbed: Error, CustomStringConvertible {
+/// escrito sobre el doble equivocado pasara sin sincronizar nada — el error de
+/// método de `H-07`, confundir *"no se ejecutó"* con un resultado.
+///
+/// **Lleva la operación dentro desde F8**, que es cuando hubo dos que preparar.
+struct NotStubbed: Error, CustomStringConvertible {
     let client: String
+    let operation: String
     var description: String {
-        "\(client) no prepara `fetchStandings`: usa un doble que sí lo haga (F7)."
+        "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }
