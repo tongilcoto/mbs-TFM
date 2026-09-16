@@ -80,6 +80,14 @@ public struct IngestClubCalendars: Sendable {
 
         let ingest = IngestCalendar(
             unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids)
+        // **La clasificación va detrás del calendario, y el orden importa** (F7):
+        // el *fallback* de `D-15` suma desde `Match`, y el emparejamiento de las
+        // filas ingeridas casa contra `Team`. Las dos cosas las escribe la pasada
+        // de arriba, así que invertir el orden haría que la primera pasada de una
+        // competición calculara sobre partidos que aún no están y descartara por
+        // desconocidos a equipos que se acaban de crear.
+        let ingestStandings = IngestStandings(
+            unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids)
 
         var report = ClubIngestionReport(
             clubSlug: actor.clubSlug, federation: plan.federation)
@@ -95,6 +103,21 @@ public struct IngestClubCalendars: Sendable {
             // (`D-85`).
             do {
                 let run = try await ingest.execute(competitionID: competition.id, actor: actor)
+
+                // **Si la clasificación falla, la competición cuenta como
+                // fallida**, aunque el calendario haya ido bien. Es conservador a
+                // propósito: el código de salida es la única señal que ve el cron
+                // (`D-86`), y un recorrido que se calla media competición es lo
+                // que `D-85` existe para evitar.
+                //
+                // Y no se pierde nada al contarlo así: la pasada del calendario
+                // **ya dejó su fila** con su éxito, y las de clasificación la
+                // suya con su jornada y su motivo (`D-85`, `kind`, `round_id`).
+                // El informe en memoria es más grueso que la tabla; la tabla es la
+                // que se lee tres días después.
+                _ = try await ingestStandings.execute(
+                    competitionID: competition.id, actor: actor)
+
                 report.entries.append(
                     ClubIngestionReport.Entry(
                         competitionID: competition.id, outcome: .synced(run)))
