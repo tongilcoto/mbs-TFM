@@ -1,7 +1,8 @@
 # Anexo de la Federación · Ingeniería inversa de la fuente (FCF, Cataluña)
 
-- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10** y **§C.11**
-- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28 (§C.10) y **2026-09-12** (§C.11)
+- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10**, **§C.11** y **§C.12**
+- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28 (§C.10), **2026-09-12** (§C.11) y **2026-09-20** (§C.12)
+- **Aviso de alcance:** la fuente **no está en condiciones de que se le escriba un adaptador** — §C.12, [D-95]. **F9 está aplazada**
 
 > # ⚠️ Aviso de obsolescencia (2026-08-28)
 >
@@ -16,7 +17,13 @@
 > **enmienda dos puntos de §C.10**.
 >
 > La reobservación **no es exhaustiva**: se hizo para responder una pregunta concreta (la coordenada, ver
-> `D-74`) y se paró al confirmar el alcance del cambio. El trabajo completo es **F9** del plan.
+> `D-74`) y se paró al confirmar el alcance del cambio. El trabajo completo era **F9** del plan.
+>
+> **Y F9 fue a hacerlo, revalidó primero —como manda `D-74`— y se paró** (**§C.12**, 2026-09-20). Lo que
+> encontró no es trabajo de más: es que la fuente publica hoy una clasificación **rota en origen** —cuatro
+> contadores concatenados que su propia web pinta en crudo—, dice que no con un **contenedor vacío**
+> indistinguible de *"no hay datos"*, y **cambió de forma en 23 días, hacia atrás**. La fase se cerró sin
+> escribir adaptador; la decisión y su condición de reapertura son `D-95`.
 >
 > **Y una reobservación no exhaustiva deja inferencias dentro**, que es lo que §C.11 vino a cobrar: §C.10.3
 > dejó marcado como **[I]** qué era el `disciplinaId` femenino y **la inferencia era falsa**. Al leer §C.10,
@@ -802,6 +809,171 @@ alcance de su medición. Y **refuerza `H-09`**, que ya tenía fase.
 
 ---
 
+## C.12 La revalidación que paró F9 — **reobservación del 2026-09-17 / 2026-09-20**
+
+Todo lo de esta sección es **[C]**: peticiones reales al servidor, con los volcados nuevos guardados en
+[`FCF-partidos-forma-cambiada-2026-09-20.txt`](./Federation%20APIs%20examples/FCF-partidos-forma-cambiada-2026-09-20.txt)
+y [`FCF-coordenada-inexistente.txt`](./Federation%20APIs%20examples/FCF-coordenada-inexistente.txt). Lo
+demás se midió sobre los volcados que ya estaban.
+
+**Por qué existe esta sección.** F9 abrió para escribir el adaptador, y lo primero que hizo fue lo que
+[D-74] dejó escrito como regla: **revalidar el anexo antes de escribir el adaptador**. La revalidación
+encontró tres cosas que ninguna de las dos reobservaciones anteriores había mirado, y las tres apuntan al
+mismo sitio: **la fuente no está hoy en condiciones de que se le escriba un adaptador encima**. La fase se
+cerró sin código. La decisión, con su condición de reapertura, es [D-95]; aquí está solo lo medido.
+
+### C.12.1 La clasificación publica cuatro contadores inservibles
+
+`classificacio?grupId=…` devuelve `played`, `won`, `drawn` y `lost` como **la concatenación de la cifra de
+casa y la de fuera, sin separador**. No es un cifrado, no es un formato raro: son dos números pegados.
+
+El grupo `54322937` —LLIGA ELIT GRUP 1, temporada 21, **terminada**— permite comprobarlo sin margen, porque
+de ese mismo grupo hay volcado del calendario **entero y jugado**: se calcula la clasificación desde los 240
+partidos y se compara campo a campo.
+
+| Fila | `played` | `won` | `drawn` | `lost` | Calculado desde los 240 partidos |
+|---|---|---|---|---|---|
+| 1 · SAN JUAN AT. DE MONTCADA | `1515` | `107` | `22` | `36` | 15‖15 · 10‖7 · 2‖2 · 3‖6 |
+| 8 · MANLLEU | `1515` | `91` | `45` | `29` | 15‖15 · 9‖1 · 4‖5 · 2‖9 |
+| 13 · CIUDAD COOPERATIVA | `1515` | `91` | `33` | `311` | 15‖15 · 9‖1 · 3‖3 · 3‖11 |
+| 15 · VILAFRANCA | `1515` | `71` | `62` | `212` | 15‖15 · 7‖1 · 6‖2 · 2‖12 |
+
+**16 filas de 16, los cuatro campos.** `goalsFor` y `goalsAgainst`, en cambio, **sí son totales** — 16/16
+también. O sea que la fila mezcla dos convenciones distintas sin decirlo.
+
+```sh
+# Desde la raíz del repositorio. Reconstruye la clasificación desde el calendario
+# y la compara con la publicada.
+python3 - <<'PY'
+import json, collections
+d = "docs/Federation APIs examples/"
+cal  = json.loads(open(d+"FCF-partidos-temporada-jugada.txt", encoding="utf-8").read().split("Response",1)[1])
+clas = json.loads(open(d+"FCF-clasificacion.txt",             encoding="utf-8").read().split("Response",1)[1])["data"]
+t = collections.defaultdict(lambda: collections.Counter())
+for m in [x for r in cal.values() for x in r]:
+    H, A = t[m["NOMBRE_CASA"]], t[m["NOMBRE_FUERA"]]
+    gh, ga = int(m["GOLES_CASA"]), int(m["GOLES_FUERA"])
+    H["playedH"] += 1; A["playedA"] += 1
+    if   gh > ga: H["wonH"]    += 1; A["lostA"]  += 1
+    elif gh < ga: H["lostH"]   += 1; A["wonA"]   += 1
+    else:         H["drawnH"]  += 1; A["drawnA"] += 1
+ok = sum(all(row[k] == f"{t[row['team']['name']][k+'H']}{t[row['team']['name']][k+'A']}"
+             for k in ("played", "won", "drawn", "lost")) for row in clas)
+print(f"{ok}/{len(clas)} filas son la concatenación casa‖fuera")
+PY
+```
+
+> ⚠️ **Y no es que no sepamos descodificarlo: es que está roto en origen.** El frontal de la propia FCF
+> pinta el campo **en crudo**. En `/_next/static/chunks/28e22bebe3447378.js` la celda **PJ** de su tabla es
+> literalmente `children: e.played`, sin `split`, `slice` ni `parseInt` en ninguno de los cuatro campos. Su
+> web enseña **`1515`** en la columna de partidos jugados. Medido el 2026-09-17:
+>
+> ```sh
+> curl -s https://www.fcf.cat/_next/static/chunks/28e22bebe3447378.js \
+>   | grep -o '\(played\|won\|drawn\|lost\)[^,;]\{0,40\}\(slice\|substring\|split\|parseInt\)'
+> # → sin salida
+> ```
+>
+> El nombre del *chunk* lleva hash y caducará; lo que no caduca es cómo se busca.
+
+**Y la ambigüedad no se puede deshacer con una regla**, que es lo que convierte esto en un muro y no en un
+parseo incómodo. Partir `"107"` admite `1‖07` y `10‖7`; `"311"` admite `3‖11` y `31‖1`; y `"115"` admite
+`1‖15` y `11‖5`, **las dos válidas**. La única comprobación cruzada disponible —`3·G + E = puntos`— **ya
+falla en una fila medida**: ver §C.12.2.
+
+### C.12.2 Hay sanciones de puntos, y `sanction` no las cuenta
+
+En ese mismo grupo, **MANLLEU**: la concatenación da 9‖1 victorias y 4‖5 empates, o sea `3·10 + 9 = 39`
+puntos. La fuente publica **`points: "38.00"`**, y lo confirma su propio `coefficient` (`1.2667 × 30 = 38`).
+Su campo `sanction` vale **`0`**.
+
+Las otras 15 filas cuadran. Así que hay **un punto de sanción que la tabla aplica y no declara**, y el
+endpoint `sanciones?grupId=…&temporada=21` —no documentado hasta ahora— sí devuelve expedientes de ese
+grupo.
+
+**Esto es lo primero que se mide de verdad detrás de [D-92]**, que dijo que los puntos son los del proveedor
+*"porque una tabla con puntos descontados por sanción no cumple `3·G + E`"*. Hasta hoy era un argumento; ya
+es un dato, y es catalán.
+
+### C.12.3 La forma cambió en 23 días, y hacia atrás
+
+La misma URL, `partidos?grupId=58161861`, el 2026-08-28 y el 2026-09-20:
+
+| | volcado del 2026-08-28 | hoy |
+|---|---|---|
+| Claves por partido | **21** | **23** — añade `GRUPO_CERRADO` y `VISIBLE_CALENDARIOWEB` |
+| `NOMBRE_CASA` | `"ARGENTONA, C.F."` | `"ARGENTONA, C.F. A"` |
+
+```sh
+curl -s "https://www.fcf.cat/api/competition/partidos?grupId=58161861" \
+  | jq -r '[.[][] | keys[]] | unique | length'          # → 23
+tail -n +14 "docs/Federation APIs examples/FCF-partidos-temporada-sin-jugar.txt" \
+  | jq -r '[.[][] | keys[]] | unique | length'          # → 21
+```
+
+**Lo llamativo es que el cambio del nombre es retroactivo.** El grupo `54322937` es una liga que terminó en
+mayo y cuyos datos no pueden cambiar; hoy devuelve **también** sus dieciséis nombres con la letra pegada. No
+es *"la temporada nueva se publica distinto"*: es que **reescribieron el campo en datos cerrados**.
+
+Las dos claves nuevas valen `GRUPO_CERRADO: "1"` y `VISIBLE_CALENDARIOWEB: "0"` en los 240 partidos, así que
+por ahora no distinguen nada. **[N]** qué significan.
+
+> Esto no rompe nada del mapeo —un `Decodable` ignora claves que no espera, y la letra al final del nombre
+> ya estaba documentada en §C.6 para el sitio antiguo, ahora confirmada en la API nueva—. Lo que dice es
+> otra cosa: **esta fuente está en obras**. [D-74] ya se llevó medio anexo por delante una vez.
+
+### C.12.4 Cómo dice que no: el contenedor vacío, que es indistinguible de «todavía no hay datos»
+
+Las tres rutas de ingesta, con una coordenada que no existe, responden **`200` con el contenedor vacío**:
+
+| Ruta | Coordenada mala | Sin el parámetro | RFFM, para comparar |
+|---|---|---|---|
+| `partidos?grupId=` | `{}` | `{}` | la página entera con `calendar: null` (§F.15) |
+| `classificacio?grupId=` | `{"data":[],"promociones":[]}` | — | **`null`** a secas (§F.18) |
+| `goleadores?grupId=&temporada=` | `[]` | — | **`null`** a secas (§F.19) |
+
+Los códigos HTTP están en el volcado, junto al cuerpo — que es lo que el volcado equivalente de la RFFM no
+hizo y obligó a medirlo aparte meses después.
+
+**La consecuencia es de diseño y es seria.** En la RFFM, *"esa coordenada no designa nada"* tiene una forma
+propia (`null`) y se distingue de *"la lista está vacía"*. Aquí **no**: un `[]` de goleadores significa a la
+vez *"ese grupo no existe"* y *"todavía no ha marcado nadie"*, que es un estado real en la primera semana de
+liga. Y `LeagueScorer` es la única salida de la ingesta que **borra** ([D-94]): la retirada por marca
+vaciaría la tabla entera ante un `grupId` mal tecleado, y lo haría **dentro** del mismo ámbito que la
+escritura, o sea con éxito y sin fila fallida que lo cuente.
+
+Se puede resolver —tratar el vacío como coordenada mala, a costa de una pasada fallida por semana mientras
+la liga no arranca— pero **es una decisión con coste, no un detalle de parseo**, y no se toma sin adaptador
+delante.
+
+### C.12.5 Lo que sí quedó medido, y no hay que volver a medir
+
+Para quien retome la fase. Todo esto se comprobó en la misma revalidación y **sale bien**:
+
+| Cosa | Medido |
+|---|---|
+| **El escudo** | Resuelve contra `https://files.fcf.cat/escudos/clubes/escudos/<fichero>` — `200`, `image/png`, 71 KB. El **host no viaja en la respuesta**, al revés que en la RFFM (§F.15): es constante del adaptador, y hay que declararla como tal |
+| **La letra del equipo** | Suelta al final del nombre, una mayúscula tras espacio: `"L'ESCALA, F.C. B"`. Confirmado en la API nueva (TERCERA CATALANA GRUP 1, 16/16 equipos). Ojo con `"PALS, AT A"` y con los nombres que traen **dos espacios** antes de la letra |
+| **`CODACTA`** | Presente y único en **240/240**, en los dos volcados de calendario |
+| **La clave del objeto de jornada** | Coincide con el campo `JORNADA` en los **240** partidos de los dos volcados. Aquí **no** hay la trampa de §F.15 (el `jornada` de la RFFM es un rótulo) |
+| **`COMIENZO1`** | `yyyy-MM-dd HH:mm:ss` en 480/480 partidos de los dos volcados, sin excepción y sin huso |
+| **Jugado vs. pendiente** | `CERRADA`/`ESTADO` a `1/1` en los 240 jugados y `0/0` en los 240 sin jugar. El marcador **no** sirve: los pendientes traen `"0"`, no vacío (§C.10.5) |
+| **Cabeceras** | **No hacen falta ninguna.** `curl` sin `User-Agent`, sin `Accept` y sin `Referer` responde `200` en las cinco rutas probadas. §C.1 y §C.8 dicen lo contrario y describen el **sitio antiguo** |
+| **La guarda de [D-84] en Cataluña** | Hay un candidato medido: `grupos?competicioId=<nuestro id de competición>` devuelve los grupos de esa competición —`[{"value":"54322937","label":"GRUP 1"}]`, 39 bytes—, así que se puede exigir que nuestro `grupId` esté en la lista. Compara **identificadores**, no rótulos, y es lo más parecido al `codigo_competicion` que §F.18 celebró en la RFFM. Sigue siendo la mitad *"otra competición"* de `H-09`, y sigue sin escribirse |
+
+### C.12.6 Qué decisiones quedan tocadas
+
+| Decisión | Qué decía | Estado tras esta revalidación |
+|---|---|---|
+| [D-55] · clasificación solo vigente | *"la FCF solo da la vigente"* | ✅ Se mantiene — **y ahora sabemos que la vigente tampoco sirve entera** (§C.12.1) |
+| [D-92] · los puntos son los del proveedor | argumentaba con sanciones hipotéticas | ✅ **Confirmada con dato**: MANLLEU, 39 calculados contra 38 publicados (§C.12.2) |
+| [D-94] · la única salida que borra | la retirada va por marca `synced_at` | ⚠️ **Riesgo nuevo, catalán**: el `[]` de una coordenada mala es indistinguible de un ranking vacío (§C.12.4) |
+| `H-09` · la guarda apagada en Cataluña | quedaba la mitad *"otra competición"* para F9 | ⚠️ **Sigue abierta**, con un candidato medido y sin decidir (§C.12.5) |
+| [D-74] · *"revalidar el anexo antes de escribir el adaptador"* | regla de método | ✅ **Cobrada por segunda vez**, y esta vez paró una fase entera |
+| **F9** · el adaptador de la FCF | siguiente fase del plan | ❌ **Aplazada** — [D-95], con su condición de reapertura |
+
+---
+
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · `§F.x` → [Anexo RFFM](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · `D-nn` → [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)*
 
 <!-- Definiciones de enlace -->
@@ -866,6 +1038,11 @@ alcance de su medición. Y **refuerza `H-09`**, que ya tenía fase.
 [D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-92]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-93]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-94]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-95]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

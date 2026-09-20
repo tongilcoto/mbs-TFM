@@ -82,10 +82,25 @@ extension FederationCode {
             // con endpoint JSON propio (Anexo RFFM §F.13).
             FederationCapabilities(providesRoundStandings: true, providesScorers: true)
         case .fcf:
+            // ⚠️ **Estas capacidades están declaradas y NO ejercitadas**: la FCF
+            // no tiene adaptador y está **fuera del alcance** (`D-95`). El
+            // catálogo sigue diciendo la verdad sobre lo que esa fuente sabe
+            // hacer, que es para lo que existe (`D-17`); lo que no hay es quien
+            // se lo pregunte — `CatalogFederationClientProvider` devuelve `nil`.
+            //
             // Clasificación **solo vigente** (D-55), reverificado el 2026-08-28
             // contra la web nueva: `classificacio?grupId=…` devuelve el mismo
             // cuerpo con `jornada`, `round` o `jornadaId`, así que sigue sin
             // haber histórico y las jornadas anteriores al alta se calculan (D-15).
+            //
+            // **Y la vigente tampoco sirve entera**, medido el 2026-09-20
+            // ([Anexo FCF §C.12.1]): `played`, `won`, `drawn` y `lost` llegan
+            // como la cifra de casa y la de fuera **concatenadas sin separador**
+            // —`played: "1515"`, `won: "107"`—, 16/16 filas contra el calendario
+            // del mismo grupo. Su propio frontal las pinta en crudo, así que es
+            // un defecto de ellos. Esta capacidad **no lo expresa** y no se le
+            // añade un caso hoy: el día que se arregle, la forma buena del
+            // adaptador cambia (`D-95`).
             //
             // Goleadores **sí**, desde el 2026-08-28. El `false` anterior citaba
             // el §C.9 del anexo —"ni endpoint, ni parser"—, que describía el sitio

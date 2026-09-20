@@ -31,11 +31,24 @@ public struct CatalogFederationClientProvider: FederationClientProvider {
         case .rffm:
             rffm
         case .fcf:
-            // **F9.** El `nil` no es un olvido: la FCF está en el catálogo del
-            // Dominio desde F0 —`Club.federation` la acepta y sus capacidades
-            // están declaradas contra el anexo— y su adaptador todavía no se ha
-            // escrito. Quien decide qué hacer con este hueco es el recorrido:
-            // salta el club y **no le deja pasadas fallidas** (`D-85`).
+            // **Fuera del alcance, y decidido: `D-95`.** El `nil` no es un
+            // olvido ni un "todavía no me ha dado tiempo": F9 abrió, revalidó la
+            // fuente como manda `D-74` y **se paró con lo medido delante** — su
+            // clasificación publica cuatro contadores concatenados que su propia
+            // web pinta en crudo, dice que no con un contenedor vacío
+            // indistinguible de "no hay datos", y cambió de forma en 23 días
+            // ([Anexo FCF §C.12]).
+            //
+            // La FCF sigue en el catálogo del Dominio —`Club.federation` la
+            // acepta y sus capacidades están declaradas contra el anexo—, y esa
+            // asimetría es justo lo que este `switch` exhaustivo existe para
+            // hacer visible: **el Dominio sabe qué sabe hacer esa federación; la
+            // raíz de composición sabe que nadie se lo pregunta.**
+            //
+            // Quien decide qué hacer con el hueco es el recorrido: salta el club
+            // y **no le deja pasadas fallidas** (`D-85`) — no hay fallo que
+            // registrar, hay federación sin adaptador. Por HTTP sale como **501**
+            // por las dos puertas de `POST /v1/ingestion-runs` (`H-28`).
             nil
         }
     }

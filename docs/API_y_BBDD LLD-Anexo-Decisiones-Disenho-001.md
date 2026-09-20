@@ -87,6 +87,7 @@
 | **D-84**               | **El calendario de la RFFM no da 404**: si la coordenada no existe devuelve `calendar: null`; si existe pero no es la que crees, el calendario **de otra competición**. Los códigos **no** se reutilizan entre temporadas; `temporada` se ignora | §3.7, §5.6 |
 | **D-88**               | La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara — y el disparador responde 200 o 202 según el coste | §5.1, §5.6, §2.3                   |
 | **D-89**               | El estado de la sincronización viaja con la competición; el registro de pasadas es el detalle, no la lista                    | §3.4, §5.1, §5.2, §5.6             |
+| **D-95**               | La FCF queda fuera del alcance: su fuente no está en condiciones de ingeniería inversa                                        | §3.6, §5.6, F9, F10                |
 | **Contrato de la API** |                                                                                                                               |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                                                              | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos                                               | §5.1                               |
@@ -2247,6 +2248,96 @@ nueva sería el mismo error que [D-56] evita al no tratar un silencio como un da
 
 ---
 
+### D-95 · La FCF queda fuera del alcance: su fuente no está en condiciones de ingeniería inversa
+
+**Contexto.** **F9** era el adaptador de la FCF, y llegaba con los deberes hechos: [D-74] había medido que su
+web nueva publica API JSON con la forma de la RFFM, [Anexo FCF §C.10] tenía los volcados, §C.11 había
+corregido la única inferencia que quedaba dentro, y F6-bis se había adelantado a arreglar el sobre del puerto
+*"antes de que F7 y F8 lo copien"* precisamente para que el segundo adaptador cupiera sin rediseñar nada. El
+plan lo estimaba como la fase barata: *"el calendario entero en **una** petición"*.
+
+La fase abrió, y lo primero que hizo fue lo que [D-74] dejó escrito como regla —**revalidar el anexo antes de
+escribir el adaptador**—. Lo medido está en [Anexo FCF §C.12] y son tres cosas:
+
+1. **La clasificación publica cuatro de sus ocho contadores inservibles.** `played`, `won`, `drawn` y `lost`
+   son **la cifra de casa y la de fuera concatenadas sin separador**: `played: "1515"`, `won: "107"`,
+   `lost: "311"`. Medido 16/16 filas contra los 240 partidos del mismo grupo. `goalsFor` y `goalsAgainst`, en
+   la misma fila, **sí son totales**.
+2. **Dice que no con el contenedor vacío.** Una coordenada inexistente devuelve `200` y `{}` el calendario,
+   `[]` los goleadores, `{"data":[]}` la clasificación — donde la RFFM devuelve `null` y se distingue.
+3. **Cambió de forma en 23 días y hacia atrás.** La misma URL pasó de 21 a 23 claves por partido y empezó a
+   pegar la letra al nombre del equipo, **también en una liga terminada en mayo**.
+
+---
+
+**La alternativa tentadora era escribirlo igual**, porque el calendario —que es el 80 % de la ingesta— está
+impecable: `CODACTA` único en 240/240, la jornada en su clave, `COMIENZO1` con formato constante, el club
+como campo propio. Se descarta, y no por volumen de trabajo:
+
+- **Lo de la clasificación no es un parseo incómodo: es un dato que no está.** La partición no se puede
+  deshacer con una regla —`"115"` admite `1‖15` y `11‖5`, las dos válidas— y la única comprobación cruzada
+  disponible, `3·G + E = puntos`, **ya falla en una fila medida**: MANLLEU calcula 39 y la fuente publica 38,
+  con `sanction: 0` (§C.12.2). Cualquier adaptador que devolviera esos cuatro números los estaría
+  **inventando**, que es exactamente lo que el puerto dice de sí mismo que no se hace: *"un `nil` aquí
+  significa «la fuente no lo dijo»"*.
+- **Y está roto en el lado de ellos, no en el nuestro.** Su propio frontal pinta `children: e.played`, sin
+  partir: la web de la FCF muestra **`1515`** en la columna de partidos jugados. O sea que **es un defecto que
+  van a arreglar**, y el día que lo arreglen la forma buena del adaptador cambia. Construir ahora es
+  comprometerse con una forma que caduca cuando desplieguen.
+- **La tercera medición es la que decide.** Una fuente que reescribe campos de datos cerrados y añade claves
+  sin avisar, en 23 días, no es una fuente estable contra la que fijar un contrato. [D-74] ya se llevó por
+  delante medio anexo una vez; esto es el mismo fenómeno con el cronómetro más corto.
+
+---
+
+**Decisión: la FCF sale del alcance, y sale sin tocar una sola línea de código.** Lo importante es que
+**aplazarla no cuesta nada porque el sistema ya lo hacía bien**:
+
+| Pieza | Qué hace hoy con `fcf` | Por qué está bien |
+|---|---|---|
+| `FederationCode.fcf` | **se queda en el enumerado**, con sus capacidades declaradas | Quitarla no destensaría el `CHECK` de un *schema* que ya existe ([D-90]) y tiraría lo medido |
+| `CatalogFederationClientProvider` | devuelve `nil` | El `switch` exhaustivo obliga a decir *"todavía con nada"*, que es información |
+| `POST /v1/ingestion-runs` | **501** por sus dos puertas, con cuerpo RFC 7807 | Es el arreglo de `H-28`: la guarda se comprobó en `plannedCompetitions` justo para esto |
+| El recorrido del job | salta el club y **no le deja pasadas fallidas** | [D-85]: no hay fallo que registrar, hay federación sin adaptador |
+
+**Lo que sí cambia es el alcance de negocio, y conviene decirlo sin adornos: un club catalán no se puede dar
+de alta con ingesta.** Y eso aterriza en **F10**, que es la fase del enganche ([D-67]): allí el *"no hay
+adaptador"* deja de ser un borde raro y pasa a ser el camino normal para media España. `H-28` ya lo avisaba
+—*"`/federation-link` va precisamente sobre enganchar una federación"*—; lo que F10 tiene que decidir es
+**cómo se lo cuenta el `/preview` a un administrador catalán**, que es una frase en una pantalla y no
+arquitectura.
+
+---
+
+**La condición de reapertura, que es lo que hace que esto no sea un abandono.** F9 se retoma cuando se
+cumplan las dos:
+
+1. **`classificacio` deja de concatenar.** Se comprueba en una llamada:
+   ```sh
+   curl -s "https://www.fcf.cat/api/competition/classificacio?grupId=54322937" \
+     | jq -r '[.data[].played] | unique'     # hoy → ["1515"] · arreglado → ["30"]
+   ```
+2. **Dos capturas separadas de la misma URL devuelven la misma forma**, o sea que se ha acabado la obra.
+
+Y al retomarla quedan **dos decisiones ya identificadas y sin tomar**, las dos con su coste medido en
+§C.12.4 y §C.12.5: qué hacer con el `[]` —tratarlo como coordenada mala protege la retirada de [D-94] al
+precio de una pasada fallida por semana mientras la liga no arranca— y si la guarda de [D-84] se tapa con la
+segunda llamada a `grupos?competicioId=…`, que es la mitad *"otra competición"* de `H-09` y tiene candidato
+medido.
+
+---
+
+**La lección, que es de método y ya va por la tercera vez.** [D-74] la enunció —*"antes de escribir un
+adaptador, revalidar su anexo"*—, F8 la cobró en pequeño con la errata de la numeración de entidades, y aquí
+la regla **ha evitado escribir una fase entera**. Media jornada de `curl` y `jq` contra dos días de adaptador,
+tests y mutación sobre una fuente que iba a cambiar debajo.
+
+Y trae una consecuencia sobre el propio método que conviene guardar: **el sitio donde se mide no es solo el
+JSON**. Lo que convirtió *"esto parece raro"* en *"esto está roto y no es nuestro"* fue bajarse el `chunk` de
+JavaScript de la web del proveedor y ver que él tampoco lo parte. **Cuando un campo no cuadre, mirar qué hace
+la fuente con su propio dato** — es la diferencia entre aplazar una fase con argumento y aplazarla por
+sospecha.
+
 ## Contrato de la API
 
 ### D-21 · El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra
@@ -4082,6 +4173,12 @@ da error, se lleva los datos y solo se nota al mirar la pantalla equivocada.
 [Anexo FCF §C.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.9]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.11]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.11.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.4]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.10.8]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-69]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
