@@ -1,0 +1,44 @@
+Volcado capturado el 2026-09-20 de www.fcf.cat.
+
+COMO DICE QUE NO LA FCF. Las tres rutas de ingesta con una coordenada que no existe.
+Se guarda el CODIGO HTTP junto al cuerpo, que es lo que el volcado de la RFFM no hizo
+y hubo que medir aparte despues (ver el README de Tests/FederationTests/Fixtures).
+
+Resultado: los tres responden 200 con EL CONTENEDOR VACIO, no con `null`. Es la
+diferencia con la RFFM, donde el documento entero llega a `null` (Anexo RFFM §F.18,
+§F.19) o la pagina llega con `calendar: null` (§F.15). Consecuencia analizada en el
+Anexo FCF §C.12.4: aqui "no existe esa coordenada" y "todavia no hay datos" son
+INDISTINGUIBLES.
+
+Se prueba ademas que `grupId` ausente y `grupId` vacio dan lo mismo que un codigo
+inexistente: ni 400, ni error, ni pista.
+
+
+Request URL
+https://www.fcf.cat/api/competition/partidos?grupId=99999999
+Response (HTTP 200)
+{}
+
+
+Request URL
+https://www.fcf.cat/api/competition/partidos?grupId=
+Response (HTTP 200)
+{}
+
+
+Request URL
+https://www.fcf.cat/api/competition/partidos
+Response (HTTP 200)
+{}
+
+
+Request URL
+https://www.fcf.cat/api/competition/classificacio?grupId=99999999
+Response (HTTP 200)
+{"data":[],"promociones":[]}
+
+
+Request URL
+https://www.fcf.cat/api/competition/goleadores?grupId=99999999&temporada=21
+Response (HTTP 200)
+[]

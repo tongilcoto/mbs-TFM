@@ -91,6 +91,15 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   anexo FCF están obsoletas** — describen el sitio de raspado anterior. De las diferencias que ese anexo daba
   por medidas, **solo sobrevive una**: la FCF publica **únicamente la clasificación vigente** (`D-55`,
   reverificado), así que las jornadas anteriores al alta se calculan (`D-15`).
+- **Y aun pareciéndose tanto, la FCF está hoy FUERA DEL ALCANCE, decidido y medido** (`D-95`,
+  [Anexo FCF §C.12]). No por trabajo: porque **su clasificación está rota en origen** —`played`, `won`,
+  `drawn` y `lost` llegan concatenando casa y fuera sin separador, y su propia web los pinta en crudo—,
+  porque **dice que no con el contenedor vacío** en vez de con `null`, lo que ante la retirada de `D-94`
+  vaciaría un ranking entero sin dejar fallo, y porque **cambió de forma en 23 días y hacia atrás**. Al
+  tocar cualquier cosa que mencione la FCF: el catálogo del Dominio **sigue declarando sus capacidades** —es
+  lo que `D-17` pide— y la raíz de composición **devuelve `nil` a propósito**; las dos cosas a la vez son el
+  diseño, no una incoherencia. **No quitar `.fcf` del enumerado** (`D-90`) y **no escribir su adaptador**
+  hasta que se cumpla la condición de reapertura, que está escrita y se comprueba en una llamada.
 - **Esas dos razones caducadas se rehicieron en F3, y ninguna regla cambió: cambiaron de argumento.**
   `D-56` (*ausente o vacío nunca sobrescribe*) ya no se apoya en que la FCF borre nada —no lo hace: 240 de
   240— sino en que **los dos errores no cuestan lo mismo** (`D-75`): ignorar un vacío real se corrige solo en
@@ -257,6 +266,8 @@ puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9). Y *
 entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`), la **única retirada de filas de toda la
 salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
 mantiene solo** (Plan §4.10).
+Y **F9**, que **no escribió código y eso es su resultado**: el adaptador de la **FCF** se aplazó al
+revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11).
 **446 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -434,12 +445,37 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter**, **F7** y **F8** entregadas, lo inmediato es **F9**, el adaptador de la
-**FCF** — API JSON, no raspado ([D-74]). Llega con **tres deberes ya medidos y ninguno heredado de oídas**:
-sus tres volcados están en `docs/Federation APIs examples/`; su ranking de goleadores publica `goles`,
-`penalti` y **`total` como números JSON y no como cadenas**, lo que rompe la regla de §F.11 que vale en
-Madrid; y **`total` no es el total de goles, son partidos jugados** — 0/50 filas cuadran con `goles +
-penalti`, medido en F8. El `goals` del modelo sale de **`goles`**.
+Con F0–F6, **F6-bis**, **F6-ter**, **F7** y **F8** entregadas y **F9 aplazada sin escribir código**
+([D-95], Plan §4.11), lo inmediato es **F10**: `POST /teams/{id}/federation-link` + `/preview`.
+
+**F9 era el adaptador de la FCF y no se escribió, y conviene saber por qué antes de reabrirlo.** La fase
+abrió, hizo lo primero que [D-74] manda —**revalidar el anexo antes de escribir el adaptador**— y la
+revalidación la paró ([Anexo FCF §C.12], medido el 2026-09-20): la clasificación de la FCF publica `played`,
+`won`, `drawn` y `lost` como **la cifra de casa y la de fuera concatenadas sin separador** —`played: "1515"`,
+`won: "107"`, 16/16 filas contra el calendario del mismo grupo—, y **no es que no sepamos descodificarlo**:
+su propio frontal las pinta en crudo, así que su web enseña `1515` en la columna de partidos jugados. Además
+dice que no con **el contenedor vacío** —`{}`, `[]`, `{"data":[]}`, los tres con `200`—, indistinguible de
+*"todavía no hay datos"*, que con la retirada de [D-94] vaciaría el ranking entero ante un `grupId` mal
+tecleado. Y **cambió de forma en 23 días, hacia atrás**: de 21 a 23 claves por partido y la letra pegada al
+nombre del equipo **también en una liga terminada en mayo**.
+
+**Aplazarla no costó tocar nada, y eso es lo que hay que no romper:** `CatalogFederationClientProvider`
+devuelve `nil` para `.fcf`, las dos puertas de `POST /v1/ingestion-runs` dan **501** con cuerpo RFC 7807
+(`H-28`) y el recorrido salta el club **sin dejarle pasadas fallidas** ([D-85]) — no hay fallo que registrar,
+hay federación sin adaptador. **`FederationCode.fcf` se queda en el enumerado**: quitarla no destensaría el
+`CHECK` de un *schema* que ya existe ([D-90]) y tiraría lo medido. La condición de reapertura está escrita y
+se comprueba en una llamada ([D-95]). **La consecuencia de negocio, sin adornos: un club catalán no se puede
+dar de alta con ingesta**, y eso lo hereda F10, que es la fase del enganche.
+
+**Lo que de la FCF sigue siendo bueno y está medido** ([Anexo FCF §C.12.5]), para el día que se retome: el
+host del escudo (`files.fcf.cat`, que **no viaja en la respuesta** al revés que en la RFFM), la letra suelta
+al final del nombre, `CODACTA` único en 240/240, la clave de jornada que **sí** coincide con su campo, el
+formato de `COMIENZO1`, el par `CERRADA`/`ESTADO` como única señal de "jugado" —el marcador no sirve: los
+pendientes traen `"0"`— y que **no hacen falta cabeceras de navegador**, al revés de lo que decía un
+comentario nuestro heredado del §C.1 obsoleto. Su ranking de goleadores publica `goles`, `penalti` y `total`
+como **números JSON y no como cadenas**, lo que rompe la regla de §F.11 que vale en Madrid; y **`total` no es
+el total de goles, son partidos jugados** — 0/50 filas cuadran con `goles + penalti`, medido en F8. El
+`goals` del modelo sale de **`goles`**.
 
 **Y lo que F8 dejó desmentido, que hay que leer antes de añadir el cuarto caso a `IngestionKind`** (el acta
 de `D-57`): *"el `CHECK` de un enumerado se deriva solo"* es **falso** para un *schema* que ya existe. `D-02`
@@ -545,6 +581,12 @@ tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes clo
 El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude Code.
 
 [Anexo FCF §C.10]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12.5]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-85]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-90]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-94]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-95]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

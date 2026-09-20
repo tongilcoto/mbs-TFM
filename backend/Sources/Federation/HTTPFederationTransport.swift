@@ -35,8 +35,17 @@ import NIOHTTP1
 /// cabeceras** (ni `Accept`, ni User-Agent), **sin autenticación**, respuesta
 /// **UTF-8**"*. No se manda ninguna, y menos un `User-Agent` de navegador
 /// inventado: fingir un navegador contra una API que no lo pide es la clase de
-/// cosa que deja de funcionar sin avisar. La FCF **sí** los exige ([Anexo FCF]),
-/// y ése será su adaptador, no éste (F9).
+/// cosa que deja de funcionar sin avisar.
+///
+/// **Y la FCF tampoco las pide, al revés de lo que decía aquí** (`D-95`). Esta
+/// línea afirmaba que *"la FCF **sí** los exige"* citando [Anexo FCF §C.1], que
+/// describe el sitio de **raspado anterior** — el que `D-74` jubiló. Medido el
+/// 2026-09-20 contra la API nueva: `curl` sin `User-Agent`, sin `Accept` y sin
+/// `Referer` responde `200` en las cinco rutas probadas ([Anexo FCF §C.12.5]).
+///
+/// Es `D-84` aplicada a nosotros mismos, y van tres: **una premisa sobre un
+/// sistema de terceros no se hereda de un comentario, se mide.** Este transporte
+/// vale tal cual para las dos federaciones.
 public struct HTTPFederationTransport: FederationTransport {
     /// Lo que hace la petición de verdad.
     ///

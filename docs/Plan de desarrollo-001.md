@@ -152,7 +152,7 @@ dependen de eso.
 | **F6-ter** ✅ | **El segundo freno de [D-86] bajo el arnés**: extraer *"¿este resultado detiene el recorrido?"* de `IngestCommand` como regla pura y probarla. Una función, su test y nada más — está aquí porque cambia una API pública y la regla 2 del plan de auditoría no admite excepciones por tamaño. Detalle abajo | unit puro | `A-7` · H-45, H-48 · [D-86] |
 | **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
 | **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
-| **F9** | Adaptador **FCF** — **API JSON, no raspado**: el calendario entero en **una** petición ([D-74], [Anexo FCF §C.10.4]), más las capacidades del catálogo | unit + integración | [D-17], [D-55], [D-74], Anexo FCF §C.10 |
+| **F9** ⏸️ | Adaptador **FCF** — **APLAZADA sin escribir código** ([D-95]). Se abrió, revalidó el anexo como manda [D-74] y **la revalidación paró la fase**: la fuente publica una clasificación rota en origen, dice que no con un contenedor vacío y cambió de forma en 23 días. Detalle abajo | — (no se escribió) | [D-95], [Anexo FCF §C.12], [D-74], `H-09`, `H-28` |
 | **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
@@ -1277,6 +1277,83 @@ La duración **se mide y no sale cero**: el defecto de F6 no ha vuelto.
 
 ---
 
+### 4.11 F9 · El adaptador de la FCF — **aplazada** (2026-09-20), y por qué eso cuenta como entregar
+
+**Esta fase no escribió una línea de código, y no es un fracaso: es el único resultado honesto.** La
+decisión, con su condición de reapertura, es [D-95]; lo medido está en [Anexo FCF §C.12]. Aquí queda el
+registro de lo que pasó, porque una fase que se cierra sin código deja de existir si nadie la escribe.
+
+**Cómo llegaba.** F9 era la fase barata. [D-74] había medido que la FCF publica API JSON con la forma de la
+RFFM —*"el calendario entero en **una** petición"*—, §C.11 había corregido la última inferencia que quedaba
+dentro del anexo, y **F6-bis se había adelantado a propósito** a arreglar el sobre del puerto *"antes de que
+F7 y F8 lo copien"*, precisamente para que el segundo adaptador cupiera sin rediseñar nada. Todo estaba
+puesto.
+
+**Qué hizo la fase.** Lo primero, lo que [D-74] dejó escrito como regla: **revalidar el anexo antes de
+escribir el adaptador**. Salieron tres cosas, las tres medidas contra el servidor:
+
+1. **La clasificación publica cuatro de sus ocho contadores inservibles.** `played: "1515"`, `won: "107"`,
+   `lost: "311"`: la cifra de casa y la de fuera **concatenadas sin separador**, 16/16 filas verificadas
+   contra los 240 partidos del mismo grupo. Y `goalsFor`/`goalsAgainst`, en la misma fila, sí son totales.
+2. **Dice que no con el contenedor vacío** —`{}`, `[]`, `{"data":[]}`, los tres con `200`—, así que *"esa
+   coordenada no existe"* y *"todavía no hay datos"* son **indistinguibles**. En goleadores eso es serio:
+   `LeagueScorer` es la única salida de la ingesta que borra ([D-94]), y la retirada vaciaría la tabla entera
+   ante un `grupId` mal tecleado, **con éxito y sin fila fallida que lo cuente**.
+3. **Cambió de forma en 23 días y hacia atrás**: de 21 a 23 claves por partido, y la letra del equipo pegada
+   al nombre **también en una liga terminada en mayo**.
+
+**Lo que convirtió la sospecha en decisión, y es la parte de método que hay que guardar.** Lo de la
+clasificación olía a codificación que no sabíamos leer. Lo que lo cerró fue **bajarse el JavaScript de la web
+del proveedor**: su propia tabla pinta `children: e.played`, sin partir, así que **la web de la FCF enseña
+`1515` en la columna de partidos jugados**. No es un dato que no sepamos descodificar: es un defecto suyo, y
+por tanto algo que van a arreglar — y el día que lo arreglen, la forma buena del adaptador cambia.
+
+> **Cuando un campo no cuadre, mirar qué hace la fuente con su propio dato.** Es la diferencia entre aplazar
+> con argumento y aplazar por sospecha, y cuesta una petición.
+
+**Por qué aplazar no cuesta nada, que es lo que hizo que la decisión fuera fácil.** El sistema ya trataba
+bien el caso: `CatalogFederationClientProvider` devuelve `nil` para `.fcf` con un `switch` exhaustivo que
+obliga a declararlo, y las **dos** puertas del `POST /v1/ingestion-runs` responden **501** con su cuerpo RFC
+7807 desde el arreglo de `H-28` (`5c045f4`). El recorrido del job salta el club **sin dejarle pasadas
+fallidas**, que es lo correcto por [D-85]: no hay fallo que registrar, hay federación sin adaptador. Y
+`FederationCode.fcf` **se queda en el enumerado**: quitarla no destensaría el `CHECK` de un *schema* que ya
+existe ([D-90]) y tiraría por la ventana todo lo medido.
+
+**Lo único que se tocó del código fueron dos comentarios que habían caducado**, y los dos por el mismo
+motivo por el que existe esta fase: `HTTPFederationTransport` decía que *"la FCF **sí** exige cabeceras de
+navegador"* citando el §C.1 obsoleto —medido: `curl` sin una sola cabecera responde `200` en las cinco rutas
+probadas—, y el catálogo de capacidades apuntaba a `providesRoundStandings: false` sin saber que **la vigente
+tampoco sirve entera**. Es [D-84] aplicada a nosotros mismos, como en F8: una premisa sobre un sistema ajeno
+no se hereda.
+
+**Lo que esto mueve del plan, y hay que decirlo sin adornos.** **Un club catalán no se puede dar de alta con
+ingesta.** Eso aterriza en **F10**, que es la fase del enganche ([D-67]): allí el *"no hay adaptador"* deja de
+ser un borde raro y pasa a ser el camino normal para media España. `H-28` ya lo avisaba —*"`/federation-link`
+va precisamente sobre enganchar una federación"*—; lo que F10 tiene que decidir es **cómo se lo cuenta el
+`/preview` a un administrador catalán**, que es una frase en una pantalla y no arquitectura.
+
+**Lo que queda escrito para quien la retome**, y por eso la fase no se pierde:
+
+- **La condición de reapertura, comprobable en una llamada** ([D-95]): que `classificacio` deje de
+  concatenar, y que dos capturas separadas de la misma URL den la misma forma.
+- **Las dos decisiones identificadas y sin tomar**, con su coste medido: qué hacer con el `[]` —tratarlo como
+  coordenada mala protege la retirada de [D-94] al precio de una pasada fallida por semana mientras la liga
+  no arranca— y si la guarda de [D-84] se tapa con la segunda llamada a `grupos?competicioId=…`, que es la
+  mitad *"otra competición"* de `H-09` y **tiene candidato medido**.
+- **Lo que sale bien y no hay que volver a medir** ([Anexo FCF §C.12.5]): el host del escudo, la letra al
+  final del nombre, `CODACTA` único en 240/240, la clave de jornada que **sí** coincide con su campo —al
+  revés que en la RFFM—, el formato de `COMIENZO1`, el par `CERRADA`/`ESTADO` y que no hacen falta cabeceras.
+- **Dos volcados nuevos** en `docs/Federation APIs examples/`: el de la forma cambiada, que solo tiene sentido
+  al lado del de agosto, y el de coordenada inexistente — **éste con su código HTTP guardado junto al
+  cuerpo**, que es lo que el volcado equivalente de la RFFM no hizo y obligó a medirlo aparte meses después.
+
+**La lección de la fase, que es la de [D-74] cobrada por tercera vez y la más cara hasta ahora.** Media
+jornada de `curl` y `jq` contra dos días de adaptador, tests y comprobación de mutación sobre una fuente que
+iba a cambiar debajo. **Revalidar el anexo antes de escribir el adaptador** no es higiene documental: es la
+comprobación que decide si la fase se hace.
+
+---
+
 ## 5. El bucle interior · TDD sobre esta arquitectura
 
 Por fase, en este orden:
@@ -1535,3 +1612,8 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.17]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [D-91]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-84]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-94]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-95]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo FCF §C.12]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.12.5]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
