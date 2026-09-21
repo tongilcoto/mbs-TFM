@@ -153,7 +153,8 @@ dependen de eso.
 | **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
 | **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
 | **F9** ⏸️ | Adaptador **FCF** — **APLAZADA sin escribir código** ([D-95]). Se abrió, revalidó el anexo como manda [D-74] y **la revalidación paró la fase**: la fuente publica una clasificación rota en origen, dice que no con un contenedor vacío y cambió de forma en 23 días. Detalle abajo | — (no se escribió) | [D-95], [Anexo FCF §C.12], [D-74], `H-09`, `H-28` |
-| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
+| **F9-bis** | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
+| **F10** | **Troceada en ciclos: [Plan F10-001](../backend/Plan%20F10-001.md).** `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila**, ya decidido ([D-96]: desenlace `accepted`, `finished_at` anulable y orden por `started_at`). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo. Más el **equipo que la fuente publica sin código**, que no viene de la auditoría sino de diseñar el `/preview`: el contrato tiene que admitirlo. La otra mitad —que la pasada lo apunte— es **F9-bis** | E2E de contrato | [D-67], [D-96], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -177,16 +178,30 @@ cara de sano. Medido en A-4: el cliente recibe su `202` con dos competiciones, s
 `ingestionHealth` ([D-89]) evalúa **`ok`**.
 
 El arreglo de A-4 tapó la ceguera del **operador** —el fallo se registra en el log, `77b2056`— pero **no la del
-backoffice**, y no puede: no hay *push*, así que la pantalla solo sabe lo que pueda **leer**. Las dos salidas,
-a decidir en F10 con [D-67] delante:
+backoffice**, y no puede: no hay *push*, así que la pantalla solo sabe lo que pueda **leer**.
 
-- **Escribir la fila al aceptar**, con un desenlace nuevo (`running`/`accepted`) que la pasada cierra. Es lo que
-  hace que el backoffice se entere leyendo lo que ya lee, y lo que convierte *"lleva veinte minutos en curso"*
-  en una frase que la pantalla puede decir. Toca **Dominio, migración y contrato**, y obliga a **enmendar
-  [D-88]**, que hoy dice *"el `POST` no crea la fila"* — la enmienda es de alcance, no de dirección: seguiría
-  sin llevar ni un dato de la pasada.
-- **Que el cliente compare marcas de tiempo** —*"¿ha aparecido una pasada más nueva que mi petición?"*—, que no
-  toca nada del backend y es el N+1 por recarga que [D-89] descartó **a propósito**.
+**Las dos salidas que A-4 dejó evaluadas están decididas: [D-96].** Se escribe la fila **al aceptar**, con un
+desenlace `accepted` que la pasada cierra. La alternativa —que el cliente compare marcas de tiempo— se
+descarta por lo que ya decía [D-89], el N+1 por recarga, y porque **no cubre el caso medido**: comparar exige
+que exista algo más nuevo que la petición, y el fallo es que no existe nada. Lo que F10 tiene que ejecutar,
+con el inventario ya hecho en la decisión:
+
+- **Una migración** ([D-90]) que rehaga `chk_ingestion_runs_outcome` —el `CHECK` derivado **no** alcanza a un
+  *schema* que ya existe, que es lo que pagó F8 con `kind`—, haga `finished_at` **anulable** y añada el índice
+  `(competition_id, started_at)`. Las tres cosas en una.
+- **El orden de la consulta pasa a `started_at`**: una fila aceptada no tiene fecha de fin, y un disparo se
+  ordena por cuándo empezó. Las otras dos salidas —`finishedAt = startedAt` provisional, o anulable
+  conservando el orden— están descartadas con razón en [D-96]; la primera es *"una fila que miente"*, que es el
+  defecto que F6 encontró mirando la tabla de verdad.
+- **Nombrar los tres casos en el `switch` de `outcome`/`error`** del `init`, que hoy acaba en `default: break`
+  y dejaría pasar una `accepted` con error. El `switch` de al lado documenta exactamente este riesgo.
+- **Enmendar la docstring de `IngestionOutcome`**, que dice *"dos valores y no cuatro"* argumentando contra
+  `.partial`, no contra esto.
+- Y **el umbral de [D-89]**: a partir de cuándo una aceptada es sospechosa. Se elige a mano.
+
+> **Y la que no se arregla, que hay que aceptar:** la fila `accepted` **no se cierra sola**. Con la base caída
+> detrás del `202` se queda así para siempre — mejor que hoy, donde no queda nada y la pantalla dice `ok`,
+> pero convierte *"está en curso"* en una afirmación con fecha de caducidad.
 
 **Y F10 hereda tres deberes más, los tres de la frontera de error** (`A-6` y `A-7`), que van juntos porque
 son el mismo sitio: hasta F10 la ingesta **no pasa por HTTP** (§2.3-b), y el `/preview` la ejecuta **en línea
@@ -208,6 +223,24 @@ y dentro de la respuesta**.
   de A-7 fijó **por caso** los cinco casos de `ApplicationError` que la ingesta levanta —404 contra 500 contra
   503 no son intercambiables y hasta entonces lo eran sin que la batería lo notase—, pero eso es el nivel 2.
   **La superficie HTTP sigue sin afirmarse**, y es F10 quien la estrena.
+
+**Y un deber que no viene de la auditoría sino de diseñar el `/preview`: el equipo que la fuente publica
+sin código** (anotado el 2026-09-20). **El contrato tiene que decirlo, no omitirlo.**
+`FederationTeamRef.federationTeamID` es **`String?`** (`Sources/Application/FederationClient.swift:348`) —la
+fuente puede no publicarlo, y el puerto lo promete anulable a propósito— mientras que
+`PreviewTeam.federationTeamId` es **obligatorio** en el *spec*. Esa rama hoy **no es expresable**: o el equipo
+se cae de `teams[]` —y el club desaparece de la lista sin que nadie sepa por qué— o hay que inventarle un
+valor. Se decide **decirlo**: el campo pasa a anulable y la respuesta lo declara, para que la web **habilite
+un campo de entrada manual** en lugar del clic sobre la lista. El caso es raro —en los volcados medidos de la
+RFFM el `codigo_equipo` viene en todas las filas— pero **el enganche es obligatorio** ([D-67]), así que sin
+esa salida manual un club con ese hueco **no se puede dar de alta con ingesta**, que es exactamente la
+consecuencia que [D-95] ya le dejó a esta fase por el lado catalán. Es [D-75] aplicado al contrato: *decir "no
+lo sé" es barato; callarlo pierde el caso*.
+
+**La otra mitad de ese hallazgo no es de F10 y por eso no está aquí**: que la pasada **deje constancia** del
+equipo sin código es un defecto de lo ya entregado, toca `Domain` y `Application` y añade un caso a una
+enumeración pública, así que por la regla 2 de §3 del plan de auditoría es una **mini-fase** y va con su
+nombre: **F9-bis**.
 
 **Y F7 llega con otro deber heredado, éste de una línea** (`A-5`, H-31 → [D-90]): **no se edita una
 migración ya aplicada.** F7, F8 y F10 añaden tres tablas a un esquema que ya tiene clubes con historia, y
@@ -407,6 +440,54 @@ mini-fase. **No se hace aquí**: la fila de esta decía *"una función, su test 
 **304 tests** (300 → 304), 0 fallos, 1 omitido —el canario, que está fuera de la batería por diseño—, medidos
 con `REQUIRE_DB=1 swift test --xunit-output`: **7+64+51+105+53+24**, y los dos *targets* de BD en **6,46 s** y
 **3,46 s**, que es el testigo de H-07 de que corrieron.
+
+#### F9-bis · el equipo sin código de federación, apuntado en la pasada
+
+**Está aquí por la misma razón que F6-ter: la regla 2 de §3 del plan de auditoría no admite excepciones por
+tamaño.** El arreglo es pequeño —un caso nuevo en un enumerado y la línea que lo escribe— pero toca `Domain` y
+`Application` y **cambia una API pública**: `IngestionSkip.Reason` es `public` y `CaseIterable`. Eso deja de
+ser una corrección y pasa a ser mini-fase con su nombre.
+
+**Y no es de F10 aunque se descubriera diseñándola**: el defecto está en la pasada del calendario, entregada
+en F5, y se hereda igual con enganche o sin él.
+
+**Qué encontró.** El silencio es doble, y las dos mitades están medidas en el código:
+
+| Escalón | Qué hace hoy | Dónde |
+|---|---|---|
+| Paso 1 de la cadena | `guard let key else { return nil }` — sin clave **se salta sin decir nada** | `Sources/Domain/MatchingChain.swift:364` |
+| Paso 2 | por nombre, y **solo alcanza rivales** (`ownership == .opponent`) | `MatchingChain.swift:100-107` |
+| `.unmatched` | `createTeam` escribe el equipo con `federationTeamID` **nulo** y **no apunta nada** | `Sources/Application/CalendarPass.swift:314-336` |
+
+La consecuencia no es un duplicado —el paso 2 lo reencuentra por nombre en la pasada siguiente— sino algo más
+callado: **esa fila no la podrá reconocer nunca el paso 1**, así que su identidad queda colgando de un
+emparejamiento **inexacto** para siempre, y el administrador no tiene por dónde enterarse. Es justo la
+pregunta que [D-85] existe para contestar —*"¿por qué falta este partido?"*, hecha días después— y aquí la
+tabla no tiene con qué.
+
+**Qué entrega.** Un `Reason` nuevo en `IngestionSkip`, escrito desde `CalendarPass` cuando la fuente no
+publica el código del equipo. **Su hermano es `unidentifiedScorer`**, y la analogía es la que fija el
+comportamiento: los dos significan **"la fuente ha cambiado"** y no *"los datos aún no cuadran"*, que es lo
+que los separa de los otros ocho; y como aquél, **no hace fallar la pasada** —un equipo sin código sigue
+teniendo sus partidos, igual que 217 goleadores de 218 siguen siendo un ranking—.
+
+**La decisión que la fase tiene que tomar, y es la única.** `IngestionRun.skipped` se documenta a sí misma
+como *"lo que la pasada **no** escribió"*, y aquí el equipo **sí** se escribe. O se ensancha ese significado,
+o la anomalía necesita su propia lista. No se prejuzga porque las dos lecturas tienen argumento y **la barata
+puede ser la mala**: `skipped` es lo que lee una persona días después, y mezclar *"no lo escribí"* con *"lo
+escribí cojo"* en la misma lista es lo que hace que no se lea ninguna.
+
+**El aviso de [D-90] que F8 pagó NO aplica aquí, y se fue a mirar antes de escribirlo.** El reflejo correcto
+es el de F8 —*un caso nuevo en un enumerado con `CHECK` derivado no se propaga solo, porque `sqlValueList`
+([D-02]) deriva la expresión una sola vez, cuando la migración corre*—, y por eso la pregunta se hizo. La
+respuesta, medida: **`IngestionSkip.Reason` no tiene `CHECK`**. Los dos únicos de `ingestion_runs` son sobre
+`outcome` y `kind` (`Sources/Persistence/IngestionRunRecord.swift:113,181`), mientras que `skipped` viaja como
+documento **`jsonb`** (`ibíd.:55,97`), así que el caso nuevo entra sin tocar el esquema. **F9-bis no lleva
+migración.**
+
+> Vale como apunte de método, que es [D-84] aplicada a nosotros mismos: *heredar la lección de la fase
+> anterior es tan barato como heredar la premisa sobre un tercero, y se paga igual.* Aquí habría costado una
+> migración vacía y un rato de comprobación de mutación sobre algo que no existe.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 

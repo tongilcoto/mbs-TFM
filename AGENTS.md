@@ -16,6 +16,9 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
 - [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
   bucles (alcance y TDD) y las fases **F0–F10**: andamiaje primero, después la ingesta.
+- [backend/Plan F10-001.md](./backend/Plan%20F10-001.md) — **la fase en curso, troceada en ciclos**:
+  qué está ya decidido y no se rediscute, el «Leer antes» de cada bloque y el estado. Autocontenido:
+  una sesión nueva arranca de ahí sin releer el LLD entero.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -82,6 +85,12 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   **nueva**. Y si el recorrido encuentra un club roto **se para** —correcto por `D-86`: una migración a
   medias *es* estado a medias— diciendo de quién era.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
+  **Y ese adaptador es dueño del universo de datos de su federación de punta a punta** (`D-97`): su URL, su
+  JSON, dónde pega la letra del equipo, cómo codifica la modalidad. Nada de eso es conocimiento del *core*,
+  y la consecuencia es la que hay que proteger: **cada federación nueva se escribe sin tocar la anterior**.
+  Por eso `coordinate(fromCalendarURL:)` va en `FederationClient` y no en un puerto aparte — el criterio para
+  admitir un método nuevo ahí es *"¿es conocimiento del universo de esa federación?"*, no *"lo necesita un
+  caso de uso"*.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
 - **Los dos proveedores se parecen mucho más de lo que dicen los documentos antiguos, y eso es reciente.**
@@ -176,7 +185,9 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   retirada va por la marca `synced_at` y **dentro del mismo ámbito que la escritura**, para que una caída a
   mitad no pueda dejar la tabla vacía. Al añadir la séptima salida de la ingesta: **si tiene jornada, es
   histórico y no se borra**.
-- **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas** (`D-88`).
+- **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas de resultado**
+  (`D-88`, **enmendada por `D-96`**: sí crea una fila `accepted` —sin un solo campo de la pasada— para
+  que el backoffice pueda enterarse leyendo; quien escribe **el dato** sigue siendo el job).
   `GET /v1/ingestion-runs` lee el registro; `POST /v1/ingestion-runs` **pide que el job pase** —el cuerpo no
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
   responde **200** con una competición (cabe en la respuesta) o **202** con una temporada (decenas de
@@ -587,6 +598,8 @@ El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude 
 [D-90]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-94]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-95]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-96]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-97]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
