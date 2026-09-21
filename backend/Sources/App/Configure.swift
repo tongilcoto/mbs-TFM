@@ -67,6 +67,10 @@ public func configure(
     // Herramienta de operación, no contrato: da de alta la **entrada** de la
     // ingesta desde la URL del calendario, mientras `D-67` (F10) no exista.
     app.asyncCommands.use(SeedCompetitionCommand(), as: "seed-competition")
+    // F10 · C-F.1: la otra mitad del andamiaje de operación. Sin esto la base de
+    // trabajo no puede tener un equipo propio, y sin equipo propio no hay nada
+    // que enganchar con `D-67`. `POST /v1/teams` es del backoffice, no de F10.
+    app.asyncCommands.use(SeedTeamCommand(), as: "seed-team")
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     let handler = APIHandler(

@@ -348,7 +348,36 @@ herramienta, no contrato** (`POST /v1/competitions` del *spec* es otra cosa). Ha
 da error sino que sincroniza otro calendario—, los **rótulos los dice la fuente**, **pasa por el Dominio**, y
 **valida antes de escribir**: coordenada mala o URL incompleta → falla **sin dejar fila**.
 
-### 6.2 `ingest` — la pasada de la federación
+### 6.2 `seed-team` — el equipo propio, para poder engancharlo
+
+`seed-competition` da de alta la **entrada** de la ingesta; esto da de alta el **equipo del club**, que es la
+otra mitad que hace falta para probar el enganche de `D-67`. `POST /v1/teams` es del backoffice y no existe,
+así que sin esta herramienta la base de trabajo **no puede tener un equipo propio**.
+
+```sh
+swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
+```
+
+El equipo nace en el **único estado desde el que se puede enganchar**: propio (`opponent_club_id` nulo ⇒ se
+deriva, no hay columna `is_own`) y **sin emparejar** (`federation_team_id` nulo). Esa fila **no tiene segundo
+escritor**, que es la mitad de `D-66` sin la cual el enganche no se sostiene.
+
+**Las tres que son identidad se teclean y ninguna tiene defecto honesto**: `category`, `gender` y `modality`
+forman la clave única con la letra (§3.5) y quedan congeladas tras el alta (`D-58`). Equivocar una no da un
+rótulo feo, da un **409** el día que la ingesta cree el equipo que éste tenía que haber sido. La hermana puede
+derivar la modalidad de la URL; aquí no hay URL.
+
+**Valida antes de escribir**, igual que `seed-competition`: si ya existe un equipo propio con esa identidad lo
+dice con su UUID en vez de dejar que reviente el `UNIQUE` — un `23505` en crudo no dice cuál de las cinco
+columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La letra nula ES un valor**
+—«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
+
+> **Lo que todavía no hace:** no escribe `TeamRegistration` (`D-68`), porque esa tabla llega en el bloque D de
+> F10. El equipo existe y se puede enganchar, pero **no está inscrito en ninguna temporada** — y ése es
+> justamente el estado que el *spec* evita exigiendo `seasonId` en el alta, porque es **invisible en toda
+> pantalla que filtre por temporada**.
+
+### 6.3 `ingest` — la pasada de la federación
 
 ```sh
 swift run Run ingest                        # todos los clubes, temporada vigente

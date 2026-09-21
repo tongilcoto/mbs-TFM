@@ -343,7 +343,7 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
 | `Federation` | Adaptador secundario | Adaptadores de las APIs de federación. **Sin Vapor ni Fluent**: lo que hace es parsear texto ajeno |
 | `Tenancy` | Infraestructura | Plano de control, `SET LOCAL search_path`, middleware |
-| `App` | — | **Raíz de composición**: el único sitio que cablea las capas. Y los `AsyncCommand`: `migrate-tenants`, `provision-tenant` e `ingest` (F6) |
+| `App` | — | **Raíz de composición**: el único sitio que cablea las capas. Y los `AsyncCommand`: `migrate-tenants`, `provision-tenant`, `ingest` (F6) y las dos herramientas de operación, `seed-competition` y `seed-team` (F10, `C-F.1`) |
 
 ```sh
 cd backend
@@ -388,6 +388,21 @@ swift run Run seed-competition -t atleti -u "<URL del calendario>" \
                                           # (`D-22`), con los rótulos que dice la
                                           # federación y pasando por el Dominio. Valida
                                           # antes de escribir. Hasta que llegue F10 (`D-67`)
+swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
+                                          # LA OTRA MITAD (F10, `C-F.1`): el EQUIPO
+                                          # PROPIO. Nace propio y SIN enganchar —las
+                                          # dos claves nulas—, que es el único estado
+                                          # desde el que `D-67` engancha y el único en
+                                          # que la fila no tiene segundo escritor
+                                          # (`D-66`). `POST /v1/teams` es del
+                                          # backoffice y NO existe: sin esto la base de
+                                          # trabajo no puede tener un equipo propio.
+                                          # Categoría, género y modalidad son IDENTIDAD
+                                          # y no tienen defecto honesto: equivocarlas da
+                                          # un 409, no un rótulo feo. La letra nula ES
+                                          # un valor —«el único equipo»—, no un comodín.
+                                          # NO escribe TeamRegistration todavía (`D-68`,
+                                          # bloque D de F10). Manual: README §6.2
 swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -t <slug[,slug]>  solo esos clubes
                                           #   -c <uuid>         solo esa competición
