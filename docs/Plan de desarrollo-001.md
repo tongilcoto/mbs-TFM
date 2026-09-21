@@ -153,7 +153,7 @@ dependen de eso.
 | **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
 | **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
 | **F9** ⏸️ | Adaptador **FCF** — **APLAZADA sin escribir código** ([D-95]). Se abrió, revalidó el anexo como manda [D-74] y **la revalidación paró la fase**: la fuente publica una clasificación rota en origen, dice que no con un contenedor vacío y cambió de forma en 23 días. Detalle abajo | — (no se escribió) | [D-95], [Anexo FCF §C.12], [D-74], `H-09`, `H-28` |
-| **F9-bis** | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
+| **F9-bis** ✅ | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido, y confirmado al ejecutarlo). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. **Entregada el 2026-09-21**: dos ciclos, 6/6 mutaciones, 448 tests, y la decisión que tenía abierta cerrada en **A** —`skipped` ensancha su significado—. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
 | **F10** | **Troceada en ciclos: [Plan F10-001](../backend/Plan%20F10-001.md).** `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila**, ya decidido ([D-96]: desenlace `accepted`, `finished_at` anulable y orden por `started_at`). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo. Más el **equipo que la fuente publica sin código**, que no viene de la auditoría sino de diseñar el `/preview`: el contrato tiene que admitirlo. La otra mitad —que la pasada lo apunte— es **F9-bis** | E2E de contrato | [D-67], [D-96], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
@@ -441,12 +441,19 @@ mini-fase. **No se hace aquí**: la fila de esta decía *"una función, su test 
 con `REQUIRE_DB=1 swift test --xunit-output`: **7+64+51+105+53+24**, y los dos *targets* de BD en **6,46 s** y
 **3,46 s**, que es el testigo de H-07 de que corrieron.
 
-#### F9-bis · el equipo sin código de federación, apuntado en la pasada
+#### F9-bis · el equipo sin código de federación, apuntado en la pasada — **entregada** (2026-09-21)
 
 **Está aquí por la misma razón que F6-ter: la regla 2 de §3 del plan de auditoría no admite excepciones por
-tamaño.** El arreglo es pequeño —un caso nuevo en un enumerado y la línea que lo escribe— pero toca `Domain` y
-`Application` y **cambia una API pública**: `IngestionSkip.Reason` es `public` y `CaseIterable`. Eso deja de
-ser una corrección y pasa a ser mini-fase con su nombre.
+tamaño.** El arreglo es pequeño —un caso nuevo en un enumerado y la línea que lo escribe— pero **cambia una
+API pública**: `IngestionSkip.Reason` es `public` y `CaseIterable`. Eso deja de ser una corrección y pasa a
+ser mini-fase con su nombre.
+
+**Y toca cuatro *targets*, no los dos que esta entrada anunciaba** —corregido al ejecutarla—: `Domain`,
+`Application`, **`HTTPAdapter` y el *spec***. `IngestionSkip.Reason` **cruza la frontera HTTP**: tiene un
+enumerado espejo en el contrato (`IngestionSkipReason`) y una traducción a mano entre los dos
+(`IngestionHandler.toContract()`), que es exhaustiva a propósito por [D-61]. La consecuencia práctica: el
+compilador **obliga a escribir** la línea del caso nuevo, pero no a escribirla **bien** — mapearla al valor
+del vecino compila igual. Vale como aviso para el día que llegue el motivo número doce.
 
 **Y no es de F10 aunque se descubriera diseñándola**: el defecto está en la pasada del calendario, entregada
 en F5, y se hereda igual con enganche o sin él.
@@ -471,11 +478,23 @@ comportamiento: los dos significan **"la fuente ha cambiado"** y no *"los datos 
 que los separa de los otros ocho; y como aquél, **no hace fallar la pasada** —un equipo sin código sigue
 teniendo sus partidos, igual que 217 goleadores de 218 siguen siendo un ranking—.
 
-**La decisión que la fase tiene que tomar, y es la única.** `IngestionRun.skipped` se documenta a sí misma
-como *"lo que la pasada **no** escribió"*, y aquí el equipo **sí** se escribe. O se ensancha ese significado,
-o la anomalía necesita su propia lista. No se prejuzga porque las dos lecturas tienen argumento y **la barata
-puede ser la mala**: `skipped` es lo que lee una persona días después, y mezclar *"no lo escribí"* con *"lo
-escribí cojo"* en la misma lista es lo que hace que no se lea ninguna.
+**La decisión que la fase tenía que tomar, y era la única. Se cerró en A: `skipped` ensancha su
+significado.** `IngestionRun.skipped` se documentaba a sí misma como *"lo que la pasada **no** escribió"*, y
+aquí el equipo **sí** se escribe. O se ensanchaba ese significado, o la anomalía necesitaba su propia lista.
+No se prejuzgó porque las dos lecturas tenían argumento y **la barata puede ser la mala**.
+
+**Lo que decidió fue un dato que se fue a medir, y que desmontó el argumento fuerte de la lista aparte.** Ese
+argumento habría sido *"los otros diez se curan solos en la pasada siguiente y éste no"* — y es **falso**: en
+cuanto la fuente vuelva a publicar el código, el paso 2 reencuentra el equipo por nombre y
+`UpsertPolicy.matching` **rellena el hueco** (`Team.swift:121`, [D-76]: *"no sobrescribe; rellena hueco"*). El
+caso nuevo es de la misma familia que los diez anteriores. La diferencia que queda es más pequeña de lo que
+parecía —no es *"se cura / no se cura"*, es *"la fila no está / la fila está pero coja"*— y no basta para
+cobrar superficie en cuatro sitios.
+
+**El precio de A está pagado y escrito donde hay que leerlo**: la promesa cambió en sus **dos** sitios
+—`IngestionRun.skipped` y el *spec*— a *"lo que la pasada dejó señalado"*, con la consecuencia dicha para
+quien lee: **la lista se lee por el motivo de cada línea y no se cuenta**, porque su longitud ya no es
+*"cuántas filas faltan"*.
 
 **El aviso de [D-90] que F8 pagó NO aplica aquí, y se fue a mirar antes de escribirlo.** El reflejo correcto
 es el de F8 —*un caso nuevo en un enumerado con `CHECK` derivado no se propaga solo, porque `sqlValueList`
@@ -488,6 +507,32 @@ migración.**
 > Vale como apunte de método, que es [D-84] aplicada a nosotros mismos: *heredar la lección de la fase
 > anterior es tan barato como heredar la premisa sobre un tercero, y se paga igual.* Aquí habría costado una
 > migración vacía y un rato de comprobación de mutación sobre algo que no existe.
+
+**Lo entregado: dos ciclos, dos tests, 446 → 448, y 6/6 mutaciones.**
+
+| Ciclo | Regla | Nivel |
+|---|---|---|
+| 1 | El equipo sin código **se escribe y se apunta**, y la pasada no falla | 2 (dobles, cero I/O) |
+| 2 | El motivo nuevo **cruza la frontera con su propio valor** | 4 (Postgres real + HTTP) |
+
+**Dónde se escribe la línea, que no es donde la tabla de arriba apuntaba.** El descarte va en `createTeam` y
+**no** en `resolveTeam`: el equipo se crea **una vez**, mientras que la referencia sin código llega en cada uno
+de sus ~30 partidos. Apuntarlo arriba llenaría la lista de la misma línea repetida, y **una lista que no se
+puede leer es la que no se lee** — que es el mismo argumento con el que se eligió A.
+
+**Dos cosas que la comprobación de mutación dijo y ningún rojo habría dicho:**
+
+1. **La regla *"y no lo apunta cuando la fuente sí publica el código"* no necesitaba test propio**: invertir la
+   guarda la caza el test **de punta a punta con el volcado real** —240 partidos con código, que pasan a ser
+   240 líneas de descarte—. Se comprobó antes de escribir un ciclo que habría sido ceremonia.
+2. **El `detail` afirmado con `contains` dejaba pasar dos mutaciones.** La letra es la mitad que identifica
+   —el "Infantil A" y el "Infantil B" del mismo club comparten nombre ([D-77])— y un `contains` del nombre la
+   deja caer sin que nada se entere. La aserción pasa a ser el `IngestionSkip` **entero**, con la convención
+   que el propio *spec* daba por ejemplo: `C.D. Galapagar "B"`.
+
+**Y la lección de F6 y F8 —*ejecútalo contra Postgres y mira la tabla*— la cumple el ciclo 2 por
+construcción**: escribe el motivo nuevo en el `jsonb` de un club real y lo lee de vuelta por HTTP. Es lo que
+confirma **ejecutando** lo que arriba estaba solo medido: el caso nuevo entra sin tocar el esquema.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
@@ -1660,6 +1705,9 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-61]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-75]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-76]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-77]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

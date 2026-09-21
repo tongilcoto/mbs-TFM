@@ -363,6 +363,7 @@ extension Domain.IngestionSkip.Reason {
         case .duplicateClubName: .duplicate_club_name
         case .unknownStandingTeam: .unknown_standing_team
         case .unidentifiedScorer: .unidentified_scorer
+        case .unidentifiedTeam: .unidentified_team
         }
     }
 }

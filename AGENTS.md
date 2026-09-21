@@ -278,8 +278,10 @@ entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`
 salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
 mantiene solo** (Plan §4.10).
 Y **F9**, que **no escribió código y eso es su resultado**: el adaptador de la **FCF** se aplazó al
-revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11).
-**446 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11). Y **F9-bis**, la mini-fase que **le pone voz al
+equipo que la fuente publica sin código**: el motivo número once de `IngestionSkip`, y con él el ensanche
+—decidido, no heredado— de lo que esa lista significa.
+**448 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -426,6 +428,13 @@ docker compose down -v
   `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
   `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
   que alguien decida su código HTTP.
+- **`IngestionRun.skipped` ya no es *"lo que la pasada no escribió"*: es *"lo que dejó señalado"*** (F9-bis).
+  Diez de sus **once** motivos son filas ausentes; el once —`unidentifiedTeam`, el equipo que la fuente publica
+  sin código— es una fila que **sí** se escribió, pero coja. La consecuencia para quien la lee: **se lee por el
+  motivo de cada línea y no se cuenta**, porque su longitud ya no es *"cuántas filas faltan"*. Al añadir el
+  motivo número doce: `IngestionSkip.Reason` **cruza la frontera HTTP** —enumerado espejo en el *spec* y
+  traducción a mano en `IngestionHandler.toContract()`—, así que toca **cuatro** *targets* y el `switch`
+  exhaustivo obliga a escribir la línea pero **no** a escribirla bien.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 - **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
@@ -456,8 +465,9 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter**, **F7** y **F8** entregadas y **F9 aplazada sin escribir código**
-([D-95], Plan §4.11), lo inmediato es **F10**: `POST /teams/{id}/federation-link` + `/preview`.
+Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8** y **F9-bis** entregadas y **F9 aplazada sin escribir
+código** ([D-95], Plan §4.11), lo inmediato es **F10**: `POST /teams/{id}/federation-link` + `/preview`,
+troceada en ciclos en [`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md).
 
 **F9 era el adaptador de la FCF y no se escribió, y conviene saber por qué antes de reabrirlo.** La fase
 abrió, hizo lo primero que [D-74] manda —**revalidar el anexo antes de escribir el adaptador**— y la

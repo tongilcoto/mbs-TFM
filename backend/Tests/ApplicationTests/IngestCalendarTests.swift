@@ -263,6 +263,59 @@ struct IngestCalendarTests {
         #expect(report.teamsCreated == 2)
     }
 
+    // ── El equipo que la fuente publica sin código (F9-bis) ─────────────────
+
+    /// **`D-85` con la pregunta que hasta F9-bis no tenía con qué contestarse.**
+    /// La fuente puede publicar un equipo sin su `codequipo`. Entonces el paso 1
+    /// de la cadena **se lo salta sin decir nada** —no tiene con qué buscar
+    /// (`MatchingChain.swift:364`)— y el paso 3 lo crea con la clave **nula**. La
+    /// fila queda escrita y usable, pero su identidad cuelga de un emparejamiento
+    /// **inexacto** mientras la fuente no publique el código, y el administrador
+    /// no tenía por dónde enterarse.
+    ///
+    /// **Es el único de los once motivos que apunta una fila que SÍ se escribió**,
+    /// y es lo que ensancha el significado de `skipped` de *"lo que no escribí"*
+    /// a *"lo que dejé señalado"*. Su hermano es `unidentifiedScorer`: los dos
+    /// significan *"la fuente cambió de forma"* y no *"los datos aún no cuadran"*,
+    /// y como aquél **no hace fallar la pasada** — un equipo sin código sigue
+    /// teniendo sus partidos.
+    @Test("el equipo que la fuente publica sin código se escribe, pero se apunta (D-85, F9-bis)")
+    func aTeamPublishedWithoutItsCodeIsReported() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let calendar = try Self.calendar(matches: [
+            Self.match(
+                home: Self.teamRef(
+                    id: nil, name: "CELTIC CASTILLA C.F.", letter: "A",
+                    club: "0010940034"))
+        ])
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        // La pasada no se rompe por esto: los dos equipos y su partido entran.
+        #expect(report.teamsCreated == 2)
+        #expect(await store.matches.count == 1)
+
+        // Y el que vino sin código está escrito con la clave nula, que es
+        // justamente la fila que hay que poder ir a mirar después.
+        let orphan = try #require(await store.teams.first { $0.federationTeamID == nil })
+        #expect(orphan.letter == "A")
+
+        // La anomalía, apuntada **una sola vez** y con qué encontrarla en la
+        // fuente: el `detail` lo lee una persona días después, no una consulta.
+        // **El `detail` se afirma entero y no por `contains`**: la letra es la
+        // mitad que identifica —el "Infantil A" y el "Infantil B" del mismo club
+        // comparten nombre (`D-77`)— y un `contains` del nombre la deja caer sin
+        // que nada se entere. Lo dijo la comprobación de mutación, no un rojo.
+        #expect(report.skipped == [
+            IngestionSkip(reason: .unidentifiedTeam, detail: "CELTIC CASTILLA C.F. \"A\"")
+        ])
+    }
+
     // ── La jornada y su rango (D-81) ────────────────────────────────────────
 
     /// `D-81` con el reparto real: la jornada 1 del volcado de temporada jugada

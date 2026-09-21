@@ -6446,9 +6446,13 @@ components:
           type: array
           readOnly: true
           description: |
-            Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal. **No hace parcial a la
+            Lo que la pasada **dejó señalado**, y por qué. Vacío es el caso normal. **No hace parcial a la
             pasada**: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo
             (D-83).
+
+            **Diez de los once motivos son filas que no se escribieron; `unidentified_team` es una fila que
+            sí se escribió, pero coja** (F9-bis). Por eso la lista **se lee por el motivo de cada línea y no
+            se cuenta**: su longitud no es *"cuántas filas faltan"*.
           items:
             $ref: '#/components/schemas/IngestionSkip'
 
@@ -6583,6 +6587,15 @@ components:
         No tira la pasada, y ahí está la asimetría con la clasificación: un ranking sin numeración
         aguanta 217 de 218, mientras que una clasificación a la que le falte una fila tiene un hueco en
         una numeración que este mismo *spec* declara imposible.
+
+        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los once que
+        no describe una fila ausente**: el equipo *sí* se escribe, pero sin el código que la fuente no
+        publicó. Es lo que ensancha el significado de la lista, de *"lo que no escribí"* a *"lo que dejé
+        señalado"* — y el motivo es justo lo que distingue un caso del otro, así que hay que leerlo y no
+        contar líneas. Es hermano de `unidentified_scorer`: los dos significan *"la fuente cambió de
+        forma"*. Tampoco tira la pasada —un equipo sin código sigue teniendo sus partidos— y **se cura
+        solo** en cuanto la fuente vuelva a publicar el código: el paso 2 lo reencuentra por nombre y
+        D-76 rellena el hueco.
       enum:
         - ambiguous_opponent_club
         - ambiguous_team
@@ -6593,6 +6606,7 @@ components:
         - duplicate_club_name
         - unknown_standing_team
         - unidentified_scorer
+        - unidentified_team
 
     TriggerIngestionRequest:
       type: object

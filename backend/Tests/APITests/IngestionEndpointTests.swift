@@ -336,6 +336,53 @@ struct IngestionEndpointTests {
         }
     }
 
+    /// **F9-bis, y es el primer test de la batería que afirma un motivo de
+    /// descarte al otro lado de la frontera** (`A-7`·H-46). `IngestionSkip.Reason`
+    /// tiene un **enumerado espejo** en el *spec* y una traducción a mano entre los
+    /// dos (`IngestionHandler.toContract()`), y esa traducción **no es cosmética**:
+    /// el Dominio se serializa tal cual dentro del `jsonb` desde F5 y el contrato
+    /// usa `snake_case` (§5.2), así que los dos lados tienen que divergir a
+    /// propósito. El `switch` es exhaustivo, de modo que el compilador obliga a
+    /// **escribir** la línea del caso nuevo — pero no a escribirla **bien**:
+    /// mapearlo al valor del vecino compila igual de bien y llega al backoffice
+    /// como otra cosa.
+    ///
+    /// La pasada se escribe por el puerto y no ejecutando una ingesta: lo que se
+    /// prueba aquí es la **traducción**, y hacerla llegar por una pasada de verdad
+    /// la mezclaría con el doble de la federación.
+    @Test("el motivo nuevo cruza la frontera con su propio valor (F9-bis, A-7/H-46)")
+    func theNewSkipReasonCrossesTheBoundary() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                var run = try IngestionRun(
+                    id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                    kind: .calendar, startedAt: Self.now, finishedAt: Self.now,
+                    outcome: .succeeded)
+                run.skipped = [
+                    IngestionSkip(
+                        reason: .unidentifiedTeam, detail: "CELTIC CASTILLA C.F. \"A\"")
+                ]
+                try await repositories.ingestionRuns.record(run)
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID.raw.uuidString.lowercased())",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let skipped = try #require(try Self.decodeRuns(response).first?.skipped)
+
+                #expect(skipped.count == 1)
+                #expect(skipped.first?.reason == .unidentified_team)
+                // Y el detalle llega entero: es lo que una persona copia para ir
+                // a buscar la fila en la web de la federación.
+                #expect(skipped.first?.detail == "CELTIC CASTILLA C.F. \"A\"")
+            }
+        }
+    }
+
     @Test("la pasada que falla también se puede leer (D-85)")
     func aFailedPassIsReadable() async throws {
         try await Self.withSeededClub(failingFederation: true) { app, _, competitionID, _ in

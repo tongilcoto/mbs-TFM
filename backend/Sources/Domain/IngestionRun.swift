@@ -133,7 +133,13 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public var leagueScorersUpdated: Int = 0
     public var leagueScorersRetired: Int = 0
 
-    /// Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal.
+    /// Lo que la pasada **dejó señalado**, y por qué. Vacío es el caso normal.
+    ///
+    /// **Diez de los once motivos son filas que no se escribieron; el once
+    /// —`unidentifiedTeam`— es una fila que sí se escribió, pero coja** (F9-bis).
+    /// Ese ensanche es deliberado y tiene una consecuencia para quien lee: la
+    /// lista **se lee por el motivo de cada línea y no se cuenta**, porque su
+    /// longitud ya no es *"cuántas filas faltan"*.
     ///
     /// Va como documento y no como tabla hija: no se consulta por sus campos —se
     /// lee entera, junto a su pasada— y una tabla más significaría una FK, un
@@ -379,5 +385,34 @@ public struct IngestionSkip: Equatable, Sendable, Codable {
         /// dos formas distintas de tabla: los dos errores no cuestan lo mismo en
         /// una y en la otra.
         case unidentifiedScorer
+
+        /// **F9-bis**: la fuente publica un equipo **sin su código**, y la pasada
+        /// lo escribe igual con la clave nula.
+        ///
+        /// # Es el único de los once que apunta una fila que SÍ se escribió
+        ///
+        /// Los otros diez cumplen al pie de la letra lo que `skipped` prometía
+        /// —*"lo que la pasada no escribió"*—. Éste no: el equipo entra, porque un
+        /// equipo sin código sigue teniendo sus partidos y tirarlo se llevaría por
+        /// delante media jornada. Lo que queda cojo es su **identidad**: sin
+        /// código, el paso 1 de la cadena no lo puede reconocer y su fila cuelga de
+        /// un emparejamiento **inexacto** por nombre.
+        ///
+        /// Es lo que ensancha el significado de la lista a *"lo que la pasada dejó
+        /// señalado"*, y la consecuencia para quien la lee está escrita en
+        /// `IngestionRun.skipped`: **se lee por el motivo, no se cuenta**.
+        ///
+        /// # Su hermano es `unidentifiedScorer`, y por eso no hace fallar la pasada
+        ///
+        /// Los dos significan **"la fuente ha cambiado"** y no *"los datos aún no
+        /// cuadran"*, que es lo que los separa de los otros nueve.
+        ///
+        /// # Y se cura solo, que es lo que lo deja en esta lista y no en otra
+        ///
+        /// En cuanto la fuente vuelva a publicar el código, el paso 2 reencuentra
+        /// el equipo por nombre y `UpsertPolicy.matching` **rellena el hueco**
+        /// (`D-76`): no sobrescribe, pero completa lo que falta. Igual que los diez
+        /// anteriores, la pasada siguiente lo resuelve y deja de reportarlo.
+        case unidentifiedTeam
     }
 }
