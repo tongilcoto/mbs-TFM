@@ -73,7 +73,27 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public let roundID: RoundID?
 
     public let startedAt: Date
-    public let finishedAt: Date
+
+    /// Cuándo acabó la pasada. **Nulo exactamente cuando `outcome == .accepted`**
+    /// (`D-96`).
+    ///
+    /// # La alternativa que se descartó, y por qué era peor
+    ///
+    /// `finishedAt = startedAt` provisional habría evitado tocar el tipo, y es
+    /// *"una fila que miente"*. Es además **el defecto exacto que F6 encontró
+    /// mirando la tabla de verdad**: toda pasada con éxito registraba duración
+    /// cero porque el informe se construye al empezar, y la invariante no lo
+    /// delataba —`finishedAt >= startedAt` se cumple trivialmente cuando son
+    /// iguales—. Reintroducirlo a sabiendas para no tocar un tipo sería cambiar
+    /// una molestia del compilador por una mentira en la base.
+    ///
+    /// # Y el orden del registro se muda por esto
+    ///
+    /// `ORDER BY finished_at` con un `NULL` dentro deja al motor decidiendo dónde
+    /// cae la fila recién aceptada — en Postgres, `DESC` la pone **primera**, que
+    /// es correcto por casualidad y no por diseño. Por eso `D-96` muda el orden a
+    /// `started_at`, que nunca es nulo (`C-D.6`).
+    public let finishedAt: Date?
 
     public let outcome: IngestionOutcome
 
@@ -153,11 +173,33 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         kind: IngestionKind,
         roundID: RoundID? = nil,
         startedAt: Date,
-        finishedAt: Date,
+        finishedAt: Date?,
         outcome: IngestionOutcome = .succeeded,
         error: String? = nil
     ) throws {
-        guard finishedAt >= startedAt else {
+        // **La tercera pareja del `init`**, y se escribe como las otras dos: los
+        // casos nombrados, sin `default`. `accepted` ⟺ sin fin.
+        //
+        // El nulo **significa** *"todavía no ha corrido"*, así que los dos lados
+        // hacen falta: sin el segundo, el nulo pasaría a significar *"a saber"* y
+        // una pasada terminada podría no decir cuándo.
+        switch (outcome, finishedAt) {
+        case (.accepted, _?):
+            throw DomainError.invalidValue(
+                field: "finishedAt", reason: "una pasada aceptada todavía no ha acabado"
+            )
+        case (.succeeded, nil), (.failed, nil):
+            throw DomainError.invalidValue(
+                field: "finishedAt", reason: "una pasada que ya acabó tiene que decir cuándo"
+            )
+        case (.accepted, nil), (.succeeded, _?), (.failed, _?):
+            break
+        }
+
+        // **Y la invariante de orden solo aplica si hay final.** No es que se
+        // relaje: es que una pasada sin fin no tiene extremo que comparar, y
+        // exigírselo es lo que el esqueleto de este ciclo hacía mal.
+        if let finishedAt, finishedAt < startedAt {
             throw DomainError.invalidValue(
                 field: "finishedAt", reason: "una pasada no puede acabar antes de empezar"
             )
@@ -188,6 +230,15 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
 
         // El par que el esquema no puede atar: un fallo sin motivo no se puede
         // depurar, y un éxito con motivo es una contradicción.
+        //
+        // **`C-A.4` le quitó el `default: break`, y eso ES el ciclo.** Catorce
+        // líneas más arriba, el `switch` de la jornada lleva escrito el riesgo con
+        // todas las letras —*"con un `default`, el caso que añada la fase
+        // siguiente entraría por él"*— y éste no lo aplicaba. La fase siguiente
+        // llegó: `accepted` (`D-96`) entraba por el `default` con un motivo de
+        // fallo dentro y la fila decía a la vez "todavía no ha corrido" y "falló
+        // por esto". Ahora los tres casos se nombran y el compilador obliga a
+        // decidir por el cuarto, si alguna vez lo hay.
         switch (outcome, error) {
         case (.failed, nil):
             throw DomainError.invalidValue(
@@ -197,7 +248,12 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
             throw DomainError.invalidValue(
                 field: "error", reason: "una pasada con éxito no lleva motivo de fallo"
             )
-        default:
+        case (.accepted, _?):
+            throw DomainError.invalidValue(
+                field: "error",
+                reason: "una pasada aceptada todavía no ha corrido: no lleva motivo de fallo"
+            )
+        case (.failed, _?), (.succeeded, nil), (.accepted, nil):
             break
         }
 
@@ -215,6 +271,57 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// `Competition.lastSyncedAt` (§3.2).
     public var succeeded: Bool { outcome == .succeeded }
 
+    /// **Cierra una pasada aceptada** (`D-96`): `accepted` → `succeeded` o
+    /// `failed`, con su final.
+    ///
+    /// # Es la otra mitad de `D-96` y sin ella la decisión no se sostiene
+    ///
+    /// El `202` escribe la fila antes de responder para que el cliente tenga
+    /// **qué consultar**. Si la pasada terminara escribiendo una fila nueva, esa
+    /// promesa se rompería en el peor sitio: dos filas de la misma pasada, una
+    /// eternamente `accepted`, y el cliente que sigue la suya sin enterarse de
+    /// que ya hay resultado. Lo que la pasada hace no es registrar: es **cerrar
+    /// lo que ya estaba abierto**.
+    ///
+    /// # `startedAt` no se toca, y es decisión
+    ///
+    /// Es cuándo **se pidió**, que es lo que el `202` dejó para consultar, y es
+    /// la clave por la que el registro ordena (`C-D.6`). Sustituirlo por el
+    /// arranque real del job haría que la fila saltara de sitio en la lista justo
+    /// mientras alguien la mira. Para las pasadas que nacen ya corriendo sigue
+    /// estando `timed(from:to:)`, que es de quien conoce los dos extremos.
+    ///
+    /// # Solo se cierra lo abierto, y solo hacia un desenlace
+    ///
+    /// Cerrar una ya cerrada reescribiría un `finishedAt` que el `GET` ya sirvió
+    /// —la fila diría otra cosa que hace un minuto sin que haya pasado nada— y
+    /// "cerrar a `accepted`" no es cerrar, es volver a abrir. Las dos son la misma
+    /// familia que `C-A.2`: una transición sale de **un** estado y llega a otro.
+    public func closed(
+        as outcome: IngestionOutcome, at finishedAt: Date, error: String? = nil
+    ) throws -> IngestionRun {
+        guard self.outcome == .accepted else {
+            throw DomainError.invalidValue(
+                field: "outcome", reason: "solo se cierra una pasada aceptada"
+            )
+        }
+        guard outcome != .accepted else {
+            throw DomainError.invalidValue(
+                field: "outcome",
+                reason: "cerrar es acabar: ni con éxito ni con fallo no es un desenlace"
+            )
+        }
+
+        // Revalida por el `init`, igual que `timed`: es lo que impide cerrar
+        // como fallida sin motivo, o antes de haber empezado.
+        var closed = try IngestionRun(
+            id: id, competitionID: competitionID, kind: kind, roundID: roundID,
+            startedAt: startedAt, finishedAt: finishedAt,
+            outcome: outcome, error: error)
+        closed.carryCounters(from: self)
+        return closed
+    }
+
     /// La misma pasada, con las marcas de tiempo **de quien conoce los dos
     /// extremos**.
     ///
@@ -227,26 +334,38 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     ///
     /// Devuelve una copia y revalida por el `init`, que es lo que impide colar
     /// aquí un par de fechas al revés.
-    public func timed(from startedAt: Date, to finishedAt: Date) throws -> IngestionRun {
+    public func timed(from startedAt: Date, to finishedAt: Date?) throws -> IngestionRun {
         var timed = try IngestionRun(
             id: id, competitionID: competitionID, kind: kind, roundID: roundID,
             startedAt: startedAt, finishedAt: finishedAt,
             outcome: outcome, error: error)
-        timed.opponentClubsCreated = opponentClubsCreated
-        timed.opponentClubsUpdated = opponentClubsUpdated
-        timed.teamsCreated = teamsCreated
-        timed.teamsUpdated = teamsUpdated
-        timed.roundsCreated = roundsCreated
-        timed.roundsUpdated = roundsUpdated
-        timed.matchesCreated = matchesCreated
-        timed.matchesUpdated = matchesUpdated
-        timed.standingRowsCreated = standingRowsCreated
-        timed.standingRowsUpdated = standingRowsUpdated
-        timed.leagueScorersCreated = leagueScorersCreated
-        timed.leagueScorersUpdated = leagueScorersUpdated
-        timed.leagueScorersRetired = leagueScorersRetired
-        timed.skipped = skipped
+        timed.carryCounters(from: self)
         return timed
+    }
+
+    /// Arrastra lo que el `init` no recibe: los trece contadores y la lista de
+    /// descartes.
+    ///
+    /// **Sale del cuerpo de `timed` en el refactor de `C-A.6`**, cuando dejó de
+    /// tener un solo llamante. Copiado a mano en dos sitios, el contador que F8
+    /// añadiera al tercero se olvidaría en uno de ellos y la pasada llegaría al
+    /// backoffice con un cero que se lee como *"no hizo nada"* — que es
+    /// literalmente el defecto que `IngestionKind` existe para evitar.
+    private mutating func carryCounters(from other: IngestionRun) {
+        opponentClubsCreated = other.opponentClubsCreated
+        opponentClubsUpdated = other.opponentClubsUpdated
+        teamsCreated = other.teamsCreated
+        teamsUpdated = other.teamsUpdated
+        roundsCreated = other.roundsCreated
+        roundsUpdated = other.roundsUpdated
+        matchesCreated = other.matchesCreated
+        matchesUpdated = other.matchesUpdated
+        standingRowsCreated = other.standingRowsCreated
+        standingRowsUpdated = other.standingRowsUpdated
+        leagueScorersCreated = other.leagueScorersCreated
+        leagueScorersUpdated = other.leagueScorersUpdated
+        leagueScorersRetired = other.leagueScorersRetired
+        skipped = other.skipped
     }
 }
 
@@ -296,14 +415,42 @@ public enum IngestionKind: String, CaseIterable, Equatable, Sendable {
     case scorers
 }
 
-/// Cómo acabó la pasada (§3.3).
+/// Cómo acabó la pasada (§3.3), **o que todavía no ha acabado**.
 ///
-/// **Dos valores y no cuatro.** La tentación es un `.partial` para la pasada que
-/// escribió pero dejó filas fuera; no existe porque `D-83` no lo permite: la
-/// pasada es atómica, así que o se escribió entera o no se escribió nada. Que
-/// haya descartes **no** la hace parcial — un partido sin fecha es un dato que la
-/// fuente no ha publicado todavía, no un fallo de la pasada.
+/// **Sigue sin haber `.partial`, y ése era el caso que había que negar.** La
+/// tentación es un cuarto valor para la pasada que escribió pero dejó filas
+/// fuera; no existe porque `D-83` no lo permite: la pasada es atómica, así que o
+/// se escribió entera o no se escribió nada. Que haya descartes **no** la hace
+/// parcial — un partido sin fecha es un dato que la fuente no ha publicado
+/// todavía, no un fallo de la pasada.
+///
+/// **Lo que F10 añade no es un desenlace a medias: es el estado previo al
+/// desenlace** (`D-96`), y por eso no contradice nada de lo anterior.
+///
+/// > ⚠️ **Un caso nuevo aquí obliga a una migración que rehaga el `CHECK`**, por
+/// > lo que F8 midió y `D-90` explica: la derivación de `sqlValueList` ocurre
+/// > **una sola vez**, cuando la migración corre, y lo que queda en la base es el
+/// > texto de aquel día. Sin ella, un alta limpia acepta `accepted` y un club
+/// > vivo la rechaza con un `23514` que nadie relaciona con un `enum`. Es `C-D.5`.
 public enum IngestionOutcome: String, CaseIterable, Equatable, Sendable {
+    /// **La pasada está pedida y todavía no ha corrido** (`D-96`, F10).
+    ///
+    /// La escribe el `202` de `/federation-link` **antes de responder**, y la
+    /// propia pasada la cierra después a `.succeeded` o a `.failed`. Es el único
+    /// caso con `finishedAt` nulo.
+    ///
+    /// # Por qué el `202` deja fila, que es lo que esta decisión compra
+    ///
+    /// Sin ella, el cliente que acaba de enganchar no tiene **nada** que
+    /// consultar: el `GET` del registro devuelve la lista de antes, y la única
+    /// forma de saber si su pasada ya pasó sería comparar marcas de tiempo — el
+    /// N+1 que `D-89` rechazó a propósito, y que además **no cubre el caso
+    /// medido** en `H-27`.
+    ///
+    /// **Enmienda a `D-88`**, que decía *"el `POST` no crea la fila"*: sigue sin
+    /// llevar ni un campo de la pasada. Lo que crea no es el resultado, es la
+    /// constancia de que se lo pidieron.
+    case accepted
     case succeeded
     case failed
 }

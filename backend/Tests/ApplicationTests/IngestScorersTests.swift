@@ -545,6 +545,9 @@ struct IngestScorersTests {
         // startedAt` se cumple trivialmente y la invariante del `init` no lo
         // delata. Es el defecto que F6 solo encontró mirando la tabla de verdad, y
         // que en F7 sobrevivió a la primera pasada de mutación.
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`: exigirlo aquí es parte de lo
+        // que se afirma — una pasada con éxito tiene fin (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 }

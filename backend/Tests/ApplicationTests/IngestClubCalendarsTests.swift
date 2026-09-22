@@ -559,7 +559,11 @@ struct IngestClubCalendarsTests {
         // Con la cadencia fuera del proceso (`D-87`), cuánto tarda una pasada es
         // lo que dice si la federación se ha puesto lenta.
         let run = try #require(await store.ingestionRuns.first)
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`, y exigirlo aquí es parte de lo
+        // que este test afirma: una pasada con éxito **tiene** fin. El nulo es
+        // exclusivo de `accepted` (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 
     @Test("el motivo del fallo no se queda en la descripción opaca (D-85)")

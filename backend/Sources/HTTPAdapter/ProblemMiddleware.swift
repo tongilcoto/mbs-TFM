@@ -130,6 +130,26 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "la temporada es '\(seasonLabel)' y el calendario "
                                    + "tiene su mitad en \(Self.isoDay.string(from: median))",
                                base: typeBaseURI, slug: "federation-season-mismatch")
+
+            case .alreadyLinkedToFederation(let existing, let incoming):
+                // **409, y el código lo decide este renglón** (`D-67`, F10). El
+                // caso lo escribió `C-A.2` en el Dominio y el compilador paró
+                // aquí, que es para lo que el `switch` es exhaustivo: un error
+                // nuevo no pasa sin que alguien diga qué se responde.
+                //
+                // **409 y no 422**, como su hermano de arriba: el
+                // `codigo_equipo` que llega es perfectamente válido — lo que no
+                // lo es, es el estado del equipo. Y a diferencia del 409 de
+                // `D-21`, éste **tiene salida**: se engancha otro equipo, o se
+                // corrige la URL antes de confirmar.
+                //
+                // Lo afirma por código `C-E.8`, y `C-E.5` lo sirve además por la
+                // puerta del `Output` generado, que es la que el contrato declara.
+                return Problem(status: .conflict, code: "ALREADY_LINKED_TO_FEDERATION",
+                               title: "El equipo ya está enganchado",
+                               detail: "ya tiene el código '\(existing)' y se ha pedido "
+                                   + "engancharlo a '\(incoming)'",
+                               base: typeBaseURI, slug: "already-linked-to-federation")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────

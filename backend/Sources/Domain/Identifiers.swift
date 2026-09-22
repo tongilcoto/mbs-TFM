@@ -36,6 +36,19 @@ public struct TeamID: Hashable, Sendable {
     public init(raw: UUID) { self.raw = raw }
 }
 
+/// Inscripción de un equipo en una temporada (§3.2, `D-68`).
+///
+/// **Existe porque toda tabla tiene PK**, igual que `StandingRowID`, y no porque
+/// haya un recurso que lo exponga: la ruta es
+/// `PUT /v1/teams/{teamId}/registrations/{seasonId}`, así que **el par (equipo,
+/// temporada) es el recurso** y este id no sale nunca del sistema. Que no haya
+/// `{registrationId}` en ninguna ruta es deliberado: ése fue el síntoma que
+/// delató a `Participation` en su día (`D-27`).
+public struct TeamRegistrationID: Hashable, Sendable {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
 /// Jornada (§3.2). Fija la competición del partido, y por eso la clave de
 /// coordenadas de `Match` no repite `competition_id` (§3.5).
 public struct RoundID: Hashable, Sendable {

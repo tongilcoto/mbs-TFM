@@ -1205,9 +1205,15 @@ paths:
         '409':
           description: |
             El equipo ya está emparejado con otro grupo, ese `federationTeamId` ya pertenece a otro
-            equipo, o la identidad no cuadra: la competición dice un `gender`/`modality` distinto del
-            que el equipo tiene congelado desde su alta (D-66). A diferencia del 409 de D-21, **este
-            tiene salida**: se engancha otro equipo, o se corrige antes de confirmar.
+            equipo, o la identidad no cuadra: la competición dice una `ageCategory`, un `gender` o una
+            `modality` distintos de los que el equipo tiene congelados desde su alta (D-66, D-58, §3.2).
+            A diferencia del 409 de D-21, **este tiene salida**: se engancha otro equipo, o se corrige
+            antes de confirmar.
+
+            **La edad cuenta igual que las otras dos.** Enganchar un cadete a una competición juvenil
+            no da un rótulo feo: la ingesta hereda la categoría a cada equipo que cree desde esa
+            competición (D-07) y, como `category` está en la clave única de `Team` (§3.5), el choque
+            llega después y en otro sitio.
           content:
             application/problem+json:
               schema:
@@ -4774,9 +4780,23 @@ components:
         identityMatches:
           type: boolean
           description: |
-            `true` si el `gender` y la `modality` que propone la competición coinciden con los que el
-            equipo tiene congelados desde su alta (D-66). En `false`, confirmar devolverá **409**: se
-            muestra antes para que el administrador enganche otro equipo en vez de chocar.
+            `true` si **las tres** piezas que la competición presta —`ageCategory`, `gender` y
+            `modality`— coinciden con las que el equipo tiene congeladas desde su alta (D-66, D-58).
+            En `false`, confirmar devolverá **409**: se muestra antes para que el administrador
+            enganche otro equipo en vez de chocar.
+
+            **Son tres y no dos**, que es lo que §3.2 declara al compartir enumerado entre
+            `Competition.ageCategory` y `Team.category`: *"permite validar que un equipo solo participe
+            en una competición de su edad, de su modalidad y de su género"*. Este campo decía dos hasta
+            F10 y el Dominio le hacía caso; la cadena de emparejamiento de la ingesta ya filtraba por
+            las tres desde F4, así que lo corto era esta descripción y no la decisión.
+
+            **No hace falta un campo que diga cuál falla**: los tres valores propuestos viajan en
+            `competition`, así que el cliente puede decir *"tu equipo es cadete y esta competición es
+            juvenil"* sin preguntar otra vez. Esto es el veredicto, no el diagnóstico.
+
+            `letter` **no** entra: no se hereda de la competición — es lo que el administrador elige al
+            reconocer su equipo en `competition.teams[]`.
 
     PreviewSeason:
       type: object

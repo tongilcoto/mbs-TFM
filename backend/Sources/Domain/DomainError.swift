@@ -36,4 +36,16 @@ public enum DomainError: Error, Equatable, Sendable {
     /// Lleva la fecha **sin formatear**: el Dominio no conoce la zona horaria ni
     /// el idioma del que va a leer el problema (§5.4).
     case federationSeasonMismatch(seasonLabel: String, calendarMedian: Date)
+
+    /// El equipo ya está enganchado a **otro** `codigo_equipo` (`D-67`, F10).
+    ///
+    /// Hermano de `notEditableAfterSync` —los dos son **409**, los dos dicen que
+    /// el momento es el problema y no el valor— pero con una diferencia que el
+    /// *spec* subraya: **éste tiene salida**. Se engancha otro equipo, o se
+    /// corrige la URL antes de confirmar.
+    ///
+    /// Lleva los dos códigos porque sin ellos el problema no se puede depurar:
+    /// *"ya está enganchado"* no dice a qué, y el administrador tiene doce
+    /// equipos.
+    case alreadyLinkedToFederation(existing: String, incoming: String)
 }

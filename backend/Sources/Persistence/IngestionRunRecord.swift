@@ -12,7 +12,11 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     @Parent(key: "competition_id") public var competition: CompetitionRecord
 
     @Field(key: "started_at") public var startedAt: Date
-    @Field(key: "finished_at") public var finishedAt: Date
+    /// **Anulable desde `C-A.5`** (`D-96`): nulo exactamente cuando la pasada
+    /// está `accepted`. La **columna** sigue siendo `NOT NULL` hasta `C-D.5`, que
+    /// es la migración que la afloja; hasta entonces nadie escribe una aceptada,
+    /// porque la cascada que las crea es del Bloque C.
+    @OptionalField(key: "finished_at") public var finishedAt: Date?
 
     @Field(key: "outcome") public var outcome: String
     @OptionalField(key: "error") public var error: String?

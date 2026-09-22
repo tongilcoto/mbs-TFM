@@ -341,6 +341,12 @@ extension Domain.IngestionKind {
 extension Domain.IngestionOutcome {
     func toContract() -> Components.Schemas.IngestionOutcome {
         switch self {
+        // `C-A.4` añadió este caso al Dominio y el compilador paró aquí, que es
+        // lo que `D-61` compra. **Obliga a escribir la línea, no a escribirla
+        // bien**: mapearlo a `.succeeded` compilaría igual y el backoffice daría
+        // por terminada una pasada que no ha empezado. Lo que lo afirma es
+        // `C-E.9`, que exige que los tres valores del contrato sean distintos.
+        case .accepted: .accepted
         case .succeeded: .succeeded
         case .failed: .failed
         }

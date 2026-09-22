@@ -161,7 +161,13 @@ struct FakeIngestionRunRepository: IngestionRunRepository {
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
         await store.ingestionRuns
             .filter { $0.competitionID == competitionID }
-            .sorted { $0.finishedAt > $1.finishedAt }
+            // **El nulo de `C-A.5` obliga a decir dónde cae, y aquí se imita lo
+            // que hoy hace el de verdad**: `ORDER BY finished_at DESC` en
+            // Postgres pone los `NULL` **primero**, así que una aceptada
+            // encabeza la lista. No es una decisión de este doble — es la que
+            // `C-D.6` viene a quitar de en medio pasando el orden a
+            // `started_at`, precisamente para que no dependa del motor.
+            .sorted { ($0.finishedAt ?? .distantFuture) > ($1.finishedAt ?? .distantFuture) }
             .prefix(limit)
             .map { $0 }
     }

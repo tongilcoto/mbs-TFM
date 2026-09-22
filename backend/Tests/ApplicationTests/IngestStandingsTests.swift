@@ -394,7 +394,10 @@ struct IngestStandingsTests {
         ).execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
 
         let run = try #require(runs.first)
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`: exigirlo aquí es parte de lo
+        // que se afirma — una pasada con éxito tiene fin (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 
     @Test("sin jornadas jugadas no hay pasada, y no es un error")
