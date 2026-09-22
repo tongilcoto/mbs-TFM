@@ -881,6 +881,16 @@ struct StubFederationClient: FederationClient {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "StubFederationClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }
 
 /// El reloj fijo del nivel 3. Los dobles del nivel 2 viven en `ApplicationTests`

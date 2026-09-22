@@ -71,4 +71,20 @@ public struct RFFMFederationClient: FederationClient {
         let body = try await transport.get(RFFMEndpoints.scorers(for: coordinate))
         return try RFFMScorersParser.parse(body)
     }
+
+    /// La **inversa**: la coordenada que hay dentro de la URL pegada (F10, [D-97]).
+    ///
+    /// Las mismas cuatro líneas que sus tres hermanas —aquí, una— y por el mismo
+    /// motivo: **dónde vive cada cosa en la RFFM es de `RFFMEndpoints`**, que es
+    /// el único sitio donde se escriben sus URLs. Lo propio de este método es que
+    /// es **la única operación del puerto que no habla con la fuente**: entender
+    /// la propia URL es parseo, no una pregunta.
+    ///
+    /// **Y es lo que permite que el caso de uso del enganche no sepa de qué
+    /// federación es la URL que le han pegado**: llega hasta aquí por
+    /// club → `Club.federation` → `FederationClientProvider`, con `any
+    /// FederationClient` delante y nada más.
+    public func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        try RFFMEndpoints.coordinate(fromCalendarURL: url)
+    }
 }
