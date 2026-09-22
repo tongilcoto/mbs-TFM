@@ -48,4 +48,26 @@ public enum DomainError: Error, Equatable, Sendable {
     /// *"ya está enganchado"* no dice a qué, y el administrador tiene doce
     /// equipos.
     case alreadyLinkedToFederation(existing: String, incoming: String)
+
+    /// La URL de calendario que han pegado **no es de esta federación, o no se
+    /// puede leer** (`D-97`, `D-22`, F10).
+    ///
+    /// # Por qué el Dominio tiene un error sobre una URL que no conoce
+    ///
+    /// Porque no la conoce, justamente. El *host* de la RFFM, sus nombres de
+    /// parámetro y su catálogo de `tipojuego` son del **universo de datos de esa
+    /// federación**, y ese universo no sale del adaptador (`D-97`). Lo que sale
+    /// es esto: la única forma del problema que un caso de uso puede entender
+    /// sin saber con qué federación está hablando.
+    ///
+    /// Es hermano de `invalidValue` pero **no es él**, y la diferencia es la que
+    /// decide el código HTTP: un `invalidValue` es un **campo** del modelo que
+    /// dice algo inadmisible; esto es **el sobre** del que tenían que salir los
+    /// cuatro parámetros de la coordenada. Cuando el sobre no se puede abrir no
+    /// hay ningún valor que juzgar.
+    ///
+    /// Lleva la URL y el motivo por separado: el motivo lo escribe el adaptador
+    /// —es lo único que sabe por qué— y la URL la necesita el administrador, que
+    /// tiene doce equipos y acaba de pegar una de doce pestañas.
+    case unreadableFederationURL(url: String, reason: String)
 }

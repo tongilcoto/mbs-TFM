@@ -1,4 +1,5 @@
 public import struct Application.FederationCoordinate
+import struct Foundation.URLComponents
 public import enum Domain.Modality
 
 /// Dónde vive cada cosa en la RFFM ([Anexo RFFM §F.1], §F.7).
@@ -95,7 +96,36 @@ public enum RFFMEndpoints {
     ///
     /// Ningún valor por defecto: inventar una `temporada` ausente sería elegir
     /// por el administrador **cuál** de los calendarios reutilizados se ingiere.
+    /// ¿Es ésta una URL **de la RFFM**? (`C-B.2`, [D-97].)
+    ///
+    /// # Se comprueba el *host*, y solo el *host*
+    ///
+    /// Es lo que el *spec* del enganche pide —*"comprueba que el host
+    /// corresponde a la federación del club"*— y lo que de verdad distingue
+    /// *"te has equivocado de pestaña"* de *"esta URL está incompleta"*. Que
+    /// falte un parámetro ya lo dice `require`, y lo dice mejor.
+    ///
+    /// **La ruta no entra en la guarda a propósito.** Exigir
+    /// `/competicion/calendario` haría que el día que la RFFM mueva su página
+    /// —que es lo que la FCF hizo entera en 2026 ([D-74])— el enganche empezara
+    /// a decir *"esa URL no es de la RFFM"* sobre una URL que sí lo es. Lo que
+    /// pasa con otra ruta del mismo *host* es lo correcto sin guarda ninguna:
+    /// no lleva los cuatro parámetros y se rechaza por eso.
+    ///
+    /// **Ni el esquema ni el `www`**: esta URL se **lee**, nunca se pide —lo que
+    /// se pide se construye con `calendar(for:)`—, así que rechazar un `http://`
+    /// pegado de una pestaña vieja sería negarse a entender algo que se entiende
+    /// perfectamente. El *host* sí, en minúsculas: el DNS no distingue mayúsculas
+    /// y quien pega desde el navegador no elige cómo se las devuelve.
+    static func isOwnCalendarURL(_ url: String) -> Bool {
+        guard let host = URLComponents(string: url)?.host?.lowercased() else { return false }
+        return host == "rffm.es" || host == "www.rffm.es"
+    }
+
     public static func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        guard Self.isOwnCalendarURL(url) else {
+            throw RFFMURLError.notThisFederation(url: url)
+        }
         let query = url.split(separator: "?").last.map(String.init) ?? ""
         var values: [String: String] = [:]
         for pair in query.split(separator: "&") {
@@ -156,6 +186,8 @@ public enum RFFMGameType {
 public enum RFFMURLError: Error, CustomStringConvertible, Equatable {
     case missingParameter(name: String, url: String)
     case unknownGameType(String)
+    /// La URL no es de la RFFM (`C-B.2`): otra federación, u otra cosa.
+    case notThisFederation(url: String)
 
     public var description: String {
         switch self {
@@ -163,6 +195,25 @@ public enum RFFMURLError: Error, CustomStringConvertible, Equatable {
             "A la URL le falta el parámetro '\(name)': \(url)"
         case .unknownGameType(let code):
             "`tipojuego=\(code)` no está en el catálogo ([Anexo RFFM §F.9])."
+        case .notThisFederation(let url):
+            "Esa URL no es de la RFFM: \(url)"
+        }
+    }
+
+    /// Lo mismo, **sin la URL dentro**.
+    ///
+    /// Existe porque al cruzar la frontera la URL viaja aparte, en
+    /// `DomainError.unreadableFederationURL`: repetirla aquí daría un `detail`
+    /// que la dice dos veces. `description` la conserva porque su lector es la
+    /// consola de `seed-competition`, donde no hay nada más que la lleve.
+    public var reason: String {
+        switch self {
+        case .missingParameter(let name, _):
+            "a la URL le falta el parámetro '\(name)'"
+        case .unknownGameType(let code):
+            "`tipojuego=\(code)` no está en el catálogo ([Anexo RFFM §F.9])"
+        case .notThisFederation:
+            "esa URL no es de la RFFM"
         }
     }
 }

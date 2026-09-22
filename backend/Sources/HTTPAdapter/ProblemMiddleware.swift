@@ -150,6 +150,28 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "ya tiene el código '\(existing)' y se ha pedido "
                                    + "engancharlo a '\(incoming)'",
                                base: typeBaseURI, slug: "already-linked-to-federation")
+
+            case .unreadableFederationURL(let url, let reason):
+                // **400, y el criterio lo escribe `invalidValue` cien líneas más
+                // arriba**: el 422 es para el cuerpo que se decodificó y dice
+                // algo que la regla no admite; el 400, *"para lo que ni siquiera
+                // se pudo decodificar"*. Una URL de calendario no es un campo del
+                // modelo — es **el sobre del que salen los cuatro parámetros de
+                // la coordenada** (`D-22`), así que cuando no se puede leer no
+                // hay ningún valor que juzgar: no se decodificó nada.
+                //
+                // Y es además lo único que el contrato deja decir: las dos
+                // puertas del enganche declaran `400`, y **no** declaran 422
+                // (`C-0.5`), así que un cliente generado del *spec* no sabría
+                // leer el otro.
+                //
+                // **El motivo se sirve entero y la URL también**: es un 4xx, así
+                // que `detail` no se calla (solo los 5xx lo esconden), y quien
+                // lo va a leer es el administrador que acaba de pegarla.
+                return Problem(status: .badRequest, code: "UNREADABLE_FEDERATION_URL",
+                               title: "La URL del calendario no se puede leer",
+                               detail: "\(reason): \(url)",
+                               base: typeBaseURI, slug: "unreadable-federation-url")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────

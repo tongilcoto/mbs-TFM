@@ -3,6 +3,7 @@ public import struct Application.FederationCalendar
 public import struct Application.FederationCoordinate
 public import struct Application.FederationStanding
 public import struct Application.FederationScorerTable
+import enum Domain.DomainError
 
 /// El adaptador de la RFFM: implementa el puerto `FederationClient` (§4.3).
 ///
@@ -85,6 +86,19 @@ public struct RFFMFederationClient: FederationClient {
     /// club → `Club.federation` → `FederationClientProvider`, con `any
     /// FederationClient` delante y nada más.
     public func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
-        try RFFMEndpoints.coordinate(fromCalendarURL: url)
+        do {
+            return try RFFMEndpoints.coordinate(fromCalendarURL: url)
+        } catch let error as RFFMURLError {
+            // **Lo que no es de este universo, no sale de este adaptador**
+            // (`C-B.2`, [D-97]). El *host* de la RFFM y sus nombres de parámetro
+            // son conocimiento suyo; lo que el llamante puede entender —sin saber
+            // con qué federación habla— es que lo que pegaron no se puede leer.
+            //
+            // Sin esto, un `RFFMURLError` cruza la frontera HTTP sin que nadie
+            // lo conozca y `ProblemMiddleware` lo sirve por su rama final:
+            // **500**, *"un fallo nuestro"*, cuando lo que hay es un
+            // administrador que se equivocó de pestaña.
+            throw DomainError.unreadableFederationURL(url: url, reason: error.reason)
+        }
     }
 }
