@@ -90,7 +90,13 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   y la consecuencia es la que hay que proteger: **cada federación nueva se escribe sin tocar la anterior**.
   Por eso `coordinate(fromCalendarURL:)` va en `FederationClient` y no en un puerto aparte — el criterio para
   admitir un método nuevo ahí es *"¿es conocimiento del universo de esa federación?"*, no *"lo necesita un
-  caso de uso"*.
+  caso de uso"*. **Escrito en F10 (Bloque B), y con tres cosas que no se ven en la firma:** va **sin
+  implementación por defecto** —así el adaptador que venga no puede nacer sin leer su propia URL, y el
+  compilador lo dice en vez de la ejecución—; **no es `async`**, porque es la única operación del puerto que
+  no habla con la fuente; y **rechazar la URL que no es suya es también del adaptador**, que es quien conoce
+  su *host* — el llamante llega por club → `Club.federation` → `FederationClientProvider` y **no sabe de qué
+  federación es lo que le han pegado**. Lo que sale del adaptador es un `DomainError`, no su error interno:
+  ver el criterio del 400 abajo.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
 - **Los dos proveedores se parecen mucho más de lo que dicen los documentos antiguos, y eso es reciente.**
@@ -281,7 +287,14 @@ Y **F9**, que **no escribió código y eso es su resultado**: el adaptador de la
 revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11). Y **F9-bis**, la mini-fase que **le pone voz al
 equipo que la fuente publica sin código**: el motivo número once de `IngestionSkip`, y con él el ensanche
 —decidido, no heredado— de lo que esa lista significa.
-**448 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+Y **F10**, **en curso**: el enganche del equipo con su federación (`D-67`), troceado en
+[su propio plan](./backend/Plan%20F10-001.md). Entregados de ella los bloques **F** (`seed-team`, la
+herramienta sin la cual la base de trabajo no puede tener un equipo propio), **0** (el contrato: las dos
+operaciones en el `filter` y los cuatro huecos del *spec*), **A** (el Dominio del enganche, con
+`TeamRegistration` y la identidad que tiene que cuadrar **por tres**) y **B**, el **puerto de la
+coordenada**: el adaptador lee su propia URL y **rechaza la que no es suya por ajena**, no por un parámetro
+que falte. Quedan los bloques **C**, **D** y **E**.
+**476 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -337,7 +350,7 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
 | `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. F8, `LeagueScorer` — con eso la salida de la ingesta está **completa**. **Sin** `import Vapor/Fluent` |
-| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`) |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`). F10 añade al puerto de federación **la inversa de la coordenada** —leer la URL que el administrador pega—, que es su **única operación que no habla con la fuente** (`D-97`) |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
@@ -442,7 +455,12 @@ docker compose down -v
 - **El `CHECK` de un enumerado se deriva, nunca se teclea** (§4.6, `D-02`): `sqlValueList` es genérico sobre
   `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
   `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
-  que alguien decida su código HTTP.
+  que alguien decida su código HTTP. **Y ese código no se elige a ojo**: el 422 es para el cuerpo que se
+  decodificó y dice algo que la regla no admite; el **400**, *"para lo que ni siquiera se pudo decodificar"*.
+  Por eso la URL de calendario ilegible de F10 (`unreadableFederationURL`) es un **400** y no un 422 — no es
+  un campo del modelo, es **el sobre** del que salen los cuatro parámetros de la coordenada (`D-22`)—, y por
+  eso hay que mirar **qué códigos declara el *spec* en esa ruta** antes de decidir: un 422 que el contrato no
+  declara no lo sabe leer un cliente generado.
 - **`IngestionRun.skipped` ya no es *"lo que la pasada no escribió"*: es *"lo que dejó señalado"*** (F9-bis).
   Diez de sus **once** motivos son filas ausentes; el once —`unidentifiedTeam`, el equipo que la fuente publica
   sin código— es una fila que **sí** se escribió, pero coja. La consecuencia para quien la lee: **se lee por el
