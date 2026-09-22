@@ -1,5 +1,10 @@
 public import APIContract
-public import Application
+// **`internal` y no `public`**: los dos `public func` de abajo solo exponen
+// tipos de `APIContract` —`Operations.*`—, así que nada de `Application` cruza
+// la firma. Lo que se usa de ahí (`ActorContext`, `ApplicationError`,
+// `IngestClubCalendars`) vive dentro de los cuerpos. Es el mismo trato que
+// `ProblemMiddleware`, y lo pide `UnusedImportAccess`.
+import Application
 import Domain
 import Foundation
 import Logging

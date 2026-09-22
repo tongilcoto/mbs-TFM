@@ -1120,6 +1120,20 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '501':
+          description: |
+            La federación de este club está en el catálogo pero **todavía no tiene adaptador de
+            ingesta** (D-17, D-95). El `preview` llama a la federación **en línea** —es su motivo de
+            existir— así que sin adaptador no hay coordenada que leer ni calendario que enseñar.
+
+            **No se ha roto nada y no hay nada que reintentar**: es alcance que falta, no un fallo. Se
+            responde aquí y no en el enganche porque es la **primera** de las dos puertas, y decirlo en
+            la pantalla de verificación evita que el administrador rellene un formulario que va a
+            rechazarse.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '502':
           description: La federación respondió con un error o con un cuerpo no interpretable.
           content:
@@ -1194,6 +1208,19 @@ paths:
             equipo, o la identidad no cuadra: la competición dice un `gender`/`modality` distinto del
             que el equipo tiene congelado desde su alta (D-66). A diferencia del 409 de D-21, **este
             tiene salida**: se engancha otro equipo, o se corrige antes de confirmar.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '501':
+          description: |
+            La federación de este club está en el catálogo pero **todavía no tiene adaptador de
+            ingesta** (D-17, D-95). No se ha roto nada y no hay nada que reintentar.
+
+            **Se comprueba antes del `202`, no después.** El enganche encola una primera ingesta, y
+            encolar trabajo que nadie sabe hacer dejaría una pasada `accepted` que jamás cierra — un
+            `202` mudo. La consecuencia de negocio, sin adornos: hasta que exista el adaptador de la
+            FCF, **un club catalán no se puede enganchar con ingesta**.
           content:
             application/problem+json:
               schema:
@@ -4196,8 +4223,18 @@ components:
       required: [federationTeamId, rawName]
       properties:
         federationTeamId:
-          type: string
-          description: '`codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al enganchar (D-67).'
+          type: [string, 'null']
+          description: |
+            `codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al enganchar (D-67).
+
+            **Anulable, y sigue siendo obligatorio**: la fuente publica equipos **sin código** —medido, y
+            es lo que F9-bis dejó anotado en la pasada como `unidentified_team`—. Ese equipo **no
+            desaparece de `teams[]`**: viaja con el campo nulo, que es lo que permite a la web enseñarlo
+            y ofrecer entrada manual en vez de dejar un hueco que nadie puede explicar. Filtrarlo aquí
+            sería esconder el caso justo en la pantalla donde un humano tiene que reconocer su club.
+
+            En `null`, **este equipo no se puede elegir como propio**: `ownTeamFederationId` es
+            obligatorio al confirmar (D-67).
           examples: ['3349086']
         rawName:
           type: string
@@ -6427,9 +6464,18 @@ components:
           format: date-time
           readOnly: true
         finishedAt:
-          type: string
+          type: [string, 'null']
           format: date-time
           readOnly: true
+          description: |
+            Cuándo acabó la pasada. **Nulo exactamente cuando `outcome == accepted`** (D-96): una pasada
+            que todavía no ha corrido no tiene fin, y ponerle `finishedAt = startedAt` provisional sería
+            *una fila que miente* — el defecto que F6 destapó mirando la tabla, con la duración cero de
+            las pasadas con éxito.
+
+            **Sigue siendo obligatorio en el cuerpo**: el campo va siempre, con `null` cuando no lo hay.
+            Y el registro **ordena por `startedAt`**, no por éste, porque un `NULL` en la clave de orden
+            deja al motor decidiendo dónde cae la fila recién aceptada.
         outcome:
           $ref: '#/components/schemas/IngestionOutcome'
         error:
@@ -6496,9 +6542,24 @@ components:
     IngestionOutcome:
       type: string
       description: |
-        Cómo acabó la pasada. **Dos valores y no tres**: no hay *parcial* porque la pasada es atómica
-        (D-83) — o se escribió entera o no se escribió nada.
-      enum: [succeeded, failed]
+        Cómo acabó la pasada, **o que todavía no ha acabado**.
+
+        **Sigue sin haber *parcial***, que es lo que D-83 zanjó: la pasada es atómica — o se escribió
+        entera o no se escribió nada. Lo que F10 añade no es un desenlace a medias, es el **estado
+        previo al desenlace**.
+
+        - `accepted` — **la pasada está pedida y todavía no ha corrido** (D-96). La escribe el `202` de
+          `/federation-link` **antes de responder**, y la propia pasada la cierra después a `succeeded`
+          o a `failed`. Es el único valor con `finishedAt` nulo.
+        - `succeeded` / `failed` — la pasada corrió y acabó así.
+
+        **Por qué el `202` deja fila desde que se acepta**: sin ella, el cliente que acaba de enganchar
+        no tiene nada que consultar —el `GET` devuelve la lista de antes— y la única forma de saber si
+        su pasada ya pasó sería comparar marcas de tiempo, que es el N+1 que D-89 rechazó a propósito.
+
+        **Enmienda a D-88**, que decía *"el `POST` no crea la fila"*: sigue sin llevar ni un campo de la
+        pasada. Lo que crea no es el resultado, es la constancia de que se lo pidieron.
+      enum: [accepted, succeeded, failed]
 
     IngestionCounters:
       type: object

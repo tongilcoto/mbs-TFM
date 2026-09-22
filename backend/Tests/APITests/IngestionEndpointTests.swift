@@ -330,7 +330,19 @@ struct IngestionEndpointTests {
                 // fijo, así que todas las pasadas comparten `finishedAt` y
                 // `sorted` —que no es estable— devuelve otra permutación igual de
                 // válida. Lo que hay que afirmar es que la secuencia no sube.
-                #expect(zip(runs, runs.dropFirst()).allSatisfy { $0.finishedAt >= $1.finishedAt },
+                //
+                // **`finishedAt` es anulable desde `D-96`** (`C-0.4`), y aquí eso
+                // es un dato que afirmar, no un estorbo que tapar con un `??`:
+                // estas pasadas ya corrieron, así que ninguna puede traerlo nulo
+                // — el nulo es exclusivo de `accepted`.
+                //
+                // **`C-D.6` vuelve a este renglón**: el orden del registro pasa a
+                // `started_at`, porque un `NULL` en la clave de orden deja al
+                // motor decidiendo dónde cae la fila recién aceptada.
+                let finishes = runs.compactMap(\.finishedAt)
+                #expect(finishes.count == runs.count,
+                        "una pasada que ya corrió no puede venir sin `finishedAt`")
+                #expect(zip(finishes, finishes.dropFirst()).allSatisfy { $0 >= $1 },
                         "el registro no llega de la más reciente a la más antigua")
             }
         }
