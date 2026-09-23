@@ -154,6 +154,7 @@ dependen de eso.
 | **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
 | **F9** ⏸️ | Adaptador **FCF** — **APLAZADA sin escribir código** ([D-95]). Se abrió, revalidó el anexo como manda [D-74] y **la revalidación paró la fase**: la fuente publica una clasificación rota en origen, dice que no con un contenedor vacío y cambió de forma en 23 días. Detalle abajo | — (no se escribió) | [D-95], [Anexo FCF §C.12], [D-74], `H-09`, `H-28` |
 | **F9-bis** ✅ | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido, y confirmado al ejecutarlo). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. **Entregada el 2026-09-21**: dos ciclos, 6/6 mutaciones, 448 tests, y la decisión que tenía abierta cerrada en **A** —`skipped` ensancha su significado—. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
+| **F10-bis** ⏳ | **El ciclo de vida de la pasada aceptada: quién la abre y quién la cierra.** F10 inventa el desenlace `accepted` ([D-96]) y su Bloque C escribe la primera fila; lo que **no existe** es el otro extremo — `IngestionRun.closed(as:at:)` se escribió en `C-A.6` y **no tiene un solo llamante** fuera de sus tests (medido con `grep` el 2026-09-23). Sin él, la pasada encolada crea **su propia** fila y la aceptada queda abierta para siempre: dos filas de la misma pasada, una eternamente `accepted`, y el cliente que sigue la suya sin enterarse de que ya hay resultado — exactamente lo que la cabecera de `closed` declara inaceptable. Y la **otra** puerta del `202` —`POST /ingestion-runs`— sigue sin dejar fila, que es el deber que `H-27` dejó escrito **en el código** y asignado a F10. Es mini-fase y no un arreglo porque cambia el contrato de un puerto (`IngestionRunRepository.record` dice *"solo inserta"*) y toca cuatro *targets*. **Va antes de cerrar F10**, con la migración de [D-96] dentro: sin ella no hay forma de mirar la tabla, y §3 manda mirarla | niveles 2 y 3, y la tabla de verdad | [D-96], [D-85], [D-88], `A-4` · H-27 |
 | **F10** | **Troceada en ciclos: [Plan F10-001](../backend/Plan%20F10-001.md).** `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila**, ya decidido ([D-96]: desenlace `accepted`, `finished_at` anulable y orden por `started_at`). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo. Más el **equipo que la fuente publica sin código**, que no viene de la auditoría sino de diseñar el `/preview`: el contrato tiene que admitirlo. La otra mitad —que la pasada lo apunte— es **F9-bis** | E2E de contrato | [D-67], [D-96], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
@@ -533,6 +534,58 @@ puede leer es la que no se lee** — que es el mismo argumento con el que se eli
 **Y la lección de F6 y F8 —*ejecútalo contra Postgres y mira la tabla*— la cumple el ciclo 2 por
 construcción**: escribe el motivo nuevo en el `jsonb` de un club real y lo lee de vuelta por HTTP. Es lo que
 confirma **ejecutando** lo que arriba estaba solo medido: el caso nuevo entra sin tocar el esquema.
+
+#### F10-bis · el ciclo de vida de la pasada aceptada — **en curso** (abierta el 2026-09-23)
+
+**Está aquí por la regla 2 de §3 del plan de auditoría, como F6-ter y F9-bis**: cambia el contrato de un
+puerto público —`IngestionRunRepository.record`, cuya documentación dice hoy *"solo inserta: una pasada
+ocurrió o no ocurrió, y reescribir la historia de una sincronización no significa nada"*— y toca cuatro
+*targets*: `Application`, `Persistence`, `HTTPAdapter` y una migración. Eso deja de ser un arreglo.
+
+**Y es de F10 por obligación, no por origen** —el mismo argumento que `C-E.9`—: la fase es la que inventa el
+desenlace `accepted`, así que si sale sin esto, sale con una fila que **no cierra nunca**.
+
+**Qué encontró, con las dos mitades medidas el 2026-09-23:**
+
+| Mitad | Qué pasa hoy | Evidencia |
+|---|---|---|
+| **Nadie cierra** | `IngestionRun.closed(as:at:)` existe desde `C-A.6` y **no tiene llamantes** | `grep -rn "\.closed(" Sources/` → vacío |
+| **La otra puerta no abre** | el `202` de `POST /ingestion-runs` no deja fila, y su propio código lo dice y se lo asigna a F10 | `IngestionHandler.runAccepted`, cabecera: *"necesita que quede **fila** desde el instante en que se acepta … va a **F10**"* |
+
+Las dos son el mismo mecanismo visto por sus dos extremos, y por eso van juntas: separarlas dejaría el
+`accepted` escrito por una puerta y cerrado por nadie, o cerrable y escrito solo por una de las dos.
+
+**Cómo se cierra, que es la decisión de diseño de la mini-fase.** No *"la pasada escribe su fila y luego
+cierra la otra"* —eso deja los contadores en la fila equivocada: `closed(as:at:)` arrastra los del informe
+sobre el que se llama, y los de una fila aceptada son **ceros**—. Lo que se hace es **adoptar**: la pasada
+del calendario busca la fila `accepted` de su competición y, si la hay, **construye su informe con el `id` y
+el `startedAt` de esa fila**. Al terminar lo cierra con `closed(as:)`, que arrastra los contadores que la
+pasada acaba de acumular, y `record` lo escribe **por `id`**. Una sola fila, que transita.
+
+Tres consecuencias que conviene ver escritas:
+
+- **`startedAt` no se toca**, y es lo que `C-A.6` ya había decidido: es cuándo **se pidió**, que es lo que el
+  `202` dejó para consultar. Sustituirlo por el arranque real del *job* haría que la fila saltara de sitio en
+  la lista justo mientras alguien la mira.
+- **El camino de fallo adopta igual.** `D-96` dice *"la pasada la cierra a `succeeded` **o a `failed`**"*, y
+  la fila fallida se escribe fuera de la transacción por [D-85]: adoptar no cambia nada de eso, solo el `id`
+  con el que se escribe.
+- **Y sale gratis una propiedad que nadie pidió**: si el proceso muere entre el `202` y la pasada, la fila
+  queda abierta y **la siguiente pasada del cron la cierra**. Es autocurativo por construcción, no por una
+  rutina de limpieza.
+
+**La migración de [D-96] se trae aquí desde `C-D.5`**, y no es una licencia: §3 del plan de F10 manda
+*"al tocar `IngestionRun`, ejecutarlo contra la base de trabajo y mirar la tabla"*, y hoy **ninguna fila
+`accepted` cabe en Postgres** —`finished_at` es `NOT NULL` y el `CHECK` de `outcome` no la admite—. Sin la
+migración, esta mini-fase solo se podría verificar con dobles, que es justo el trampa que F6 y F8 enseñaron
+a no aceptar. **Bloque D pasa de 7 ciclos a 6** y su `C-D.7` cuenta una migración menos (14 en vez de 15;
+la quinceava sigue siendo la de `TeamRegistration`).
+
+**Los ciclos**, en orden: la migración (nivel 3) · `record` pasa a ser *upsert* por `id` (nivel 3) · la
+pasada **adopta** la fila aceptada (nivel 2) · al cerrar conserva `id` y `startedAt` y **los contadores de la
+pasada** (nivel 2) · la pasada que **falla** cierra la aceptada a `failed` (nivel 2) · **sin** fila aceptada
+la pasada abre la suya como siempre —la otra mitad de la guarda— (nivel 2) · el `202` de
+`POST /ingestion-runs` deja fila antes de responder (`H-27`, niveles 2 y 4) · y la tabla de verdad, mirada.
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
