@@ -249,3 +249,84 @@ public struct AddIngestionRunRound: AsyncMigration {
             .update()
     }
 }
+
+/// **F10-bis · La migración de [D-96]: la pasada que todavía no ha corrido.**
+///
+/// Tres cosas en una, porque son la misma decisión vista desde tres columnas:
+///
+/// 1. **`finished_at` deja de ser obligatoria.** Una pasada `accepted` no ha
+///    acabado, así que no tiene cuándo. Las dos alternativas que [D-96] descartó
+///    están escritas allí: `finishedAt = startedAt` provisional es *"una fila que
+///    miente"* —el defecto que F6 destapó mirando la tabla de verdad— y dejar el
+///    orden en `finished_at` deja al `NULL` decidiendo dónde cae en el `ORDER BY`.
+/// 2. **El `CHECK` de `outcome` se rehace.** No lo hereda solo, y eso está
+///    medido: la derivación de [D-02] ocurre **cuando la migración corre** y su
+///    texto se congela en el *schema* (ver `replaceCheckConstraint`). Sin esto, un
+///    club vivo rechazaría la fila nueva con un `23514` que nadie relaciona con un
+///    `enum`. Es la lección de F8 cobrándose por segunda vez, en la fase siguiente.
+/// 3. **El índice pasa a `(competition_id, started_at)`**, que es por donde va a
+///    ordenar la consulta del registro (`C-D.6`). El viejo
+///    —`(competition_id, finished_at)`— **se deja en pie a propósito**: hasta que
+///    ese ciclo cambie el `ORDER BY`, es el que la consulta usa. Quitarlo es de
+///    `C-D.6`, con su propia migración ([D-90]).
+///
+/// **Y se añade un `CHECK` que el esquema no tenía cómo expresar antes**: el par
+/// `(outcome = 'accepted') = (finished_at IS NULL)`, que es la invariante del
+/// `init` del Dominio (`C-A.5`) bajada a la tabla. Mismo reparto que
+/// `chk_ingestion_runs_error` y por el mismo motivo (§4.6): lo que entra por un
+/// `script` no pasa por el Dominio.
+public struct AllowAcceptedIngestionRun: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.dropNotNull(
+            table: IngestionRunRecord.schema, column: "finished_at")
+
+        try await database.replaceCheckConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_outcome",
+            expression: "outcome IN (\(IngestionOutcome.sqlValueList))")
+
+        try await database.checkConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_finished",
+            expression: "(outcome = 'accepted') = (finished_at IS NULL)")
+
+        try await database.index(
+            table: IngestionRunRecord.schema,
+            name: "idx_ingestion_runs_competition_started",
+            columns: ["competition_id", "started_at"])
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.dropIndex(name: "idx_ingestion_runs_competition_started")
+
+        try await database.dropCheckConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_finished")
+
+        // **Volver a `NOT NULL` exige que no quede ni un nulo, y los que hay son
+        // exactamente las pasadas aceptadas.** Se borran, y es lo honesto: lo que
+        // se está revirtiendo es el estado `accepted`, así que una fila en ese
+        // estado no puede sobrevivir a su propia desaparición. No se rellena su
+        // `finished_at` con nada, que sería la fila que miente de [D-96].
+        //
+        // Se filtra por la columna y no por el desenlace a propósito: es la
+        // condición que `SET NOT NULL` va a comprobar, y la única que no depende
+        // de que el `CHECK` que acabamos de tirar fuera cierto.
+        if let sql = database as? any SQLDatabase {
+            try await sql.raw(
+                """
+                DELETE FROM \(ident: IngestionRunRecord.schema) \
+                WHERE \(ident: "finished_at") IS NULL
+                """
+            ).run()
+        }
+
+        try await database.setNotNull(
+            table: IngestionRunRecord.schema, column: "finished_at")
+
+        // **El `CHECK` de `outcome` NO se toca, y es la misma decisión que tomó
+        // F8**: revertir esta migración no revierte el `enum` de Swift, así que
+        // teclear aquí el `ARRAY` de ayer dejaría el *schema* rechazando filas que
+        // el código sigue sabiendo escribir ([D-02]). Sin `accepted` posible por
+        // el `NOT NULL` de arriba, además, no hace falta.
+    }
+}

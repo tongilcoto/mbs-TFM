@@ -292,30 +292,30 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
     private let database: any Database
     public init(database: any Database) { self.database = database }
 
+    /// *Upsert* por `id`, **y eso es F10-bis enmendando su propia
+    /// documentación** ([D-96]).
+    ///
+    /// Era `create` a secas, con un argumento que era bueno mientras toda fila
+    /// naciera acabada: *"una pasada ocurrió o no ocurrió, y reescribir la
+    /// historia de una sincronización no significa nada"*. La fila `accepted`
+    /// crea la excepción y la crea entera — dice *"todavía no ha ocurrido"*, así
+    /// que cerrarla no reescribe ninguna historia: **la termina**. Insertar una
+    /// fila nueva dejaría dos versiones de la misma pasada, una eternamente
+    /// abierta, que es lo que `IngestionRun.closed(as:at:)` llama el peor
+    /// desenlace posible.
+    ///
+    /// La identidad es el `id`, como en todos sus hermanos, y por lo mismo: lo
+    /// pone el caso de uso, así que la fila recién escrita se puede volver a
+    /// tocar en la misma pasada sin releerla.
     public func record(_ run: IngestionRun) async throws {
+        if let existing = try await IngestionRunRecord.find(run.id.raw, on: database) {
+            existing.apply(run)
+            try await existing.update(on: database)
+            return
+        }
         let record = IngestionRunRecord()
         record.id = run.id.raw
-        record.$competition.id = run.competitionID.raw
-        record.startedAt = run.startedAt
-        record.finishedAt = run.finishedAt
-        record.outcome = run.outcome.rawValue
-        record.error = run.error
-        record.kind = run.kind.rawValue
-        record.$round.id = run.roundID?.raw
-        record.opponentClubsCreated = run.opponentClubsCreated
-        record.opponentClubsUpdated = run.opponentClubsUpdated
-        record.teamsCreated = run.teamsCreated
-        record.teamsUpdated = run.teamsUpdated
-        record.roundsCreated = run.roundsCreated
-        record.roundsUpdated = run.roundsUpdated
-        record.matchesCreated = run.matchesCreated
-        record.matchesUpdated = run.matchesUpdated
-        record.standingRowsCreated = run.standingRowsCreated
-        record.standingRowsUpdated = run.standingRowsUpdated
-        record.leagueScorersCreated = run.leagueScorersCreated
-        record.leagueScorersUpdated = run.leagueScorersUpdated
-        record.leagueScorersRetired = run.leagueScorersRetired
-        record.skipped = .init(rows: run.skipped)
+        record.apply(run)
         try await record.create(on: database)
     }
 
@@ -326,6 +326,56 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
             .limit(limit)
             .all()
             .map { try $0.toDomain() }
+    }
+
+    /// **Sin `limit` y ordenada por la más antigua**, y las dos cosas a
+    /// propósito: la fila que esto busca es la que **se quedó abierta**, que es
+    /// justo la que una consulta paginada por *"las últimas N"* no encuentra. Y
+    /// si hubiera dos —dos peticiones para la misma competición antes de que
+    /// pasara el *job*—, se cierra primero la que lleva más esperando.
+    ///
+    /// **El filtro de `outcome` no es decorativo, y lo demostró la mutación**:
+    /// sin él, la pasada del cron encontraría la fila **ya cerrada** de la semana
+    /// pasada e intentaría cerrarla otra vez — y el Dominio se niega con razón.
+    /// La ingesta se caería en la segunda pasada de cada competición.
+    public func findAccepted(
+        competitionID: CompetitionID, kind: IngestionKind
+    ) async throws -> IngestionRun? {
+        try await IngestionRunRecord.query(on: database)
+            .filter(\.$competition.$id == competitionID.raw)
+            .filter(\.$kind == kind.rawValue)
+            .filter(\.$outcome == IngestionOutcome.accepted.rawValue)
+            .sort(\.$startedAt, .ascending)
+            .first()?
+            .toDomain()
+    }
+}
+
+extension IngestionRunRecord {
+    /// Vuelca la entidad sobre la fila. **Sin el `id`**, que es la identidad y no
+    /// un campo: lo pone quien crea.
+    fileprivate func apply(_ run: IngestionRun) {
+        self.$competition.id = run.competitionID.raw
+        self.startedAt = run.startedAt
+        self.finishedAt = run.finishedAt
+        self.outcome = run.outcome.rawValue
+        self.error = run.error
+        self.kind = run.kind.rawValue
+        self.$round.id = run.roundID?.raw
+        self.opponentClubsCreated = run.opponentClubsCreated
+        self.opponentClubsUpdated = run.opponentClubsUpdated
+        self.teamsCreated = run.teamsCreated
+        self.teamsUpdated = run.teamsUpdated
+        self.roundsCreated = run.roundsCreated
+        self.roundsUpdated = run.roundsUpdated
+        self.matchesCreated = run.matchesCreated
+        self.matchesUpdated = run.matchesUpdated
+        self.standingRowsCreated = run.standingRowsCreated
+        self.standingRowsUpdated = run.standingRowsUpdated
+        self.leagueScorersCreated = run.leagueScorersCreated
+        self.leagueScorersUpdated = run.leagueScorersUpdated
+        self.leagueScorersRetired = run.leagueScorersRetired
+        self.skipped = .init(rows: run.skipped)
     }
 }
 

@@ -175,7 +175,7 @@ struct MigrationIntegrityTests {
             // del `ALTER` de arriba dejaría el test pasando por el motivo
             // equivocado — que es exactamente contra lo que avisa `H-07`.
             let beforeSecondBatch = try #require(
-                try await Self.kindCheck(of: schema, on: app),
+                try await Self.check("chk_ingestion_runs_kind", of: schema, on: app),
                 "el primer lote no llegó a crear el CHECK")
             #expect(!beforeSecondBatch.contains("'scorers'"),
                     "el montaje no reprodujo el CHECK viejo: \(beforeSecondBatch)")
@@ -187,7 +187,7 @@ struct MigrationIntegrityTests {
                     "el schema no se migró en dos lotes: no reproduce a un club vivo")
 
             let check = try #require(
-                try await Self.kindCheck(of: schema, on: app),
+                try await Self.check("chk_ingestion_runs_kind", of: schema, on: app),
                 "no existe chk_ingestion_runs_kind")
 
             // **Contra `allCases`, no contra una lista escrita aquí.** Una lista
@@ -205,15 +205,94 @@ struct MigrationIntegrityTests {
         }
     }
 
-    /// La definición de `chk_ingestion_runs_kind` tal y como está **en la base**,
-    /// que es el único sitio donde este defecto se puede ver.
-    static func kindCheck(of schema: String, on app: Application) async throws -> String? {
+    /// La definición de un `CHECK` tal y como está **en la base**, que es el
+    /// único sitio donde este defecto se puede ver.
+    ///
+    /// **Se generalizó en F10-bis**, cuando hizo falta la segunda: `kind` y
+    /// `outcome` son el mismo defecto en dos columnas, y dos consultas idénticas
+    /// con el nombre cambiado se desincronizarían la una de la otra.
+    static func check(
+        _ name: String, of schema: String, on app: Application
+    ) async throws -> String? {
         let sql = app.db(.control) as! any SQLDatabase
         return try await sql.raw("""
             SELECT pg_get_constraintdef(con.oid) AS line
             FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
-            WHERE n.nspname = \(bind: schema) AND con.conname = 'chk_ingestion_runs_kind'
+            WHERE n.nspname = \(bind: schema) AND con.conname = \(bind: name)
             """).first(decodingColumn: "line", as: String.self)
+    }
+
+    // ── F10-bis · el mismo defecto, la columna de al lado ───────────────────
+
+    /// **La lección de F8 cobrándose por segunda vez, y otra vez la destapó la
+    /// mutación.**
+    ///
+    /// `C-A.4` añade `accepted` a `IngestionOutcome` y `AllowAcceptedIngestionRun`
+    /// rehace su `CHECK`. Quitar ese `replaceCheckConstraint` **sobrevivía a toda
+    /// la batería**: en los tests cada tenant nace limpio, así que
+    /// `CreateIngestionRun` deriva el `CHECK` con el enumerado de **hoy** y los
+    /// tres valores entran igual. El que se rompe es el **club vivo**, que es el
+    /// único que no se puede fabricar ejecutando el código de ahora.
+    ///
+    /// Así que se fabrica como F8 enseñó: migrar hasta el lote anterior y
+    /// escribir a mano el `CHECK` que aquel código dejó —`succeeded`/`failed`,
+    /// que es lo que `IngestionOutcome` tenía antes de `C-A.4`—. Sin ese montaje
+    /// el test pasa por el motivo equivocado, que es lo que `H-07` avisa.
+    ///
+    /// > **Al añadir el cuarto caso a `IngestionOutcome`**, este test se pone
+    /// > rojo hasta que exista su migración. Que es el trabajo.
+    @Test("el CHECK de `outcome` admite TODOS los casos, también en un club vivo (D-02, D-90)")
+    func theOutcomeCheckAdmitsEveryCase() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)outcomecheck"
+            let sql = app.db(.control) as! any SQLDatabase
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+            try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+
+            let all = TenantMigrations.all()
+            let upToScorers = try #require(
+                all.firstIndex { $0.name.hasSuffix("AddScorersToIngestionRun") },
+                "AddScorersToIngestionRun ya no está en la lista: el corte no significa nada")
+            try await MigrateTenantsCommand.migrate(
+                schema: schema, migrations: Array(all.prefix(upToScorers + 1)), on: app)
+
+            // El `CHECK` tal y como lo dejó `CreateIngestionRun` cuando
+            // `IngestionOutcome` tenía dos casos, que es hasta `C-A.4`.
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                DROP CONSTRAINT \(ident: "chk_ingestion_runs_outcome")
+                """).run()
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                ADD CONSTRAINT \(ident: "chk_ingestion_runs_outcome")
+                CHECK (outcome IN ('succeeded', 'failed'))
+                """).run()
+
+            // Testigo del montaje, por lo mismo que en el test de `kind`.
+            let beforeSecondBatch = try #require(
+                try await Self.check("chk_ingestion_runs_outcome", of: schema, on: app),
+                "el primer lote no llegó a crear el CHECK")
+            #expect(!beforeSecondBatch.contains("'accepted'"),
+                    "el montaje no reprodujo el CHECK viejo: \(beforeSecondBatch)")
+
+            // Y ahora el resto, que es lo que le pasa a un club vivo al desplegar.
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            #expect(try await Self.batches(of: schema, on: app) == 2,
+                    "el schema no se migró en dos lotes: no reproduce a un club vivo")
+
+            let check = try #require(
+                try await Self.check("chk_ingestion_runs_outcome", of: schema, on: app),
+                "no existe chk_ingestion_runs_outcome")
+
+            for outcome in IngestionOutcome.allCases {
+                let diagnostic = "el CHECK del schema no admite `\(outcome.rawValue)`: \(check)."
+                    + " Un caso nuevo del enumerado NO llega solo a un schema ya migrado:"
+                    + " hace falta una migración que lo rehaga (D-90)."
+                #expect(check.contains("'\(outcome.rawValue)'"), "\(diagnostic)")
+            }
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
     }
 
     /// H-30/H-38: **el `revert` deshace de verdad**, y la prueba no es que no
@@ -261,7 +340,14 @@ struct MigrationIntegrityTests {
             // aritmética: la tabla oficial de un grupo sancionado no cumple
             // `points = 3·G + E` (`D-92`), y los goles del ranking son de
             // jugadores ajenos, sin nada nuestro contra lo que cuadrarlos (§3.7).
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 18,
+            //
+            // **19 desde F10-bis** (18 en F8): el que sube es
+            // `chk_ingestion_runs_finished`, la pareja de [D-96] —*"aceptada si y
+            // solo si no hay final"*— bajada a la tabla. El `CHECK` de `outcome`
+            // **no** suma: se rehizo, no se añadió, que es justo la distinción que
+            // el párrafo de arriba aprendió en F8 y la razón de que este recuento
+            // por sí solo no baste.
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 19,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")

@@ -99,14 +99,48 @@ public protocol MatchRepository: Sendable {
 /// pasada que falla, que es la que nadie ve porque no hay usuario delante
 /// (§2.3-b). Se escribe en su propio ámbito, después, gane o pierda (`D-85`).
 public protocol IngestionRunRepository: Sendable {
-    /// Escribe el registro. **Solo inserta**: una pasada ocurrió o no ocurrió, y
-    /// reescribir la historia de una sincronización no significa nada.
+    /// Escribe el registro, **por `id`**.
+    ///
+    /// # Decía "solo inserta", y F10-bis lo enmienda con su argumento
+    ///
+    /// El texto era: *"una pasada ocurrió o no ocurrió, y reescribir la historia
+    /// de una sincronización no significa nada"*. Era bueno **mientras toda fila
+    /// naciera acabada**. [D-96] crea la excepción y la crea entera: una fila
+    /// `accepted` dice *"todavía no ha ocurrido"*, así que cerrarla no reescribe
+    /// ninguna historia — **la termina**.
+    ///
+    /// Escribir el resultado como fila nueva dejaría **dos versiones de la misma
+    /// pasada**, una eternamente abierta y el cliente siguiendo la suya sin
+    /// enterarse de que ya hay resultado: el desenlace que
+    /// `IngestionRun.closed(as:at:)` describe como el peor posible.
+    ///
+    /// Lo que **no** cambia es que una pasada acabada no se retoca: lo impide el
+    /// Dominio, que solo deja cerrar lo que está abierto (`C-A.6`).
     func record(_ run: IngestionRun) async throws
 
     /// Las últimas pasadas de una competición, **de la más reciente a la más
     /// antigua**, que es el orden en el que se leen: la pregunta es *"¿qué pasó
     /// la última vez?"*.
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun]
+
+    /// **La pasada que está pedida y todavía no ha corrido**, si la hay
+    /// ([D-96], F10-bis).
+    ///
+    /// Es lo que permite que la pasada **adopte** en vez de abrir otra fila. Va
+    /// por `kind` porque el `202` promete una cosa concreta —el calendario— y las
+    /// de clasificación y goleadores que vengan detrás son suyas, no lo que
+    /// alguien pidió.
+    ///
+    /// # Por qué es su propia consulta y no un filtro sobre `list`
+    ///
+    /// Porque `list` está paginada por definición —*"las últimas N"*— y una fila
+    /// aceptada que se quedó abierta hace tres semanas **no está en las últimas
+    /// N**. Buscarla con un `limit` sería fijar un número que nada justifica y
+    /// fallar en silencio justo en el caso que esto viene a arreglar: el de la
+    /// pasada que nadie cerró.
+    func findAccepted(
+        competitionID: CompetitionID, kind: IngestionKind
+    ) async throws -> IngestionRun?
 }
 
 /// Puerto de salida de `StandingRow` (§4.3, F7).

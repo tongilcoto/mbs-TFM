@@ -138,3 +138,61 @@ extension Database {
         ).run()
     }
 }
+
+// ── F10-bis · lo que hace falta para AFLOJAR una columna, no para crearla ────
+//
+// Los cuatro de aquí abajo existen porque [D-90] obliga a corregir con una
+// migración **nueva**, y corregir hacia atrás no es lo mismo que crear: Fluent
+// expresa bien el alta de una tabla y **nada** de lo que hay que deshacerle
+// después a una columna que ya existe. Llevan la misma guarda que sus tres
+// hermanos de arriba, y por el mismo motivo (`A-5`, H-35): un esquema al que le
+// falta un `CHECK` no falla — acepta lo que el Dominio rechaza.
+extension Database {
+    /// `DROP NOT NULL`. Lo pide [D-96]: `finished_at` deja de ser obligatoria
+    /// porque una pasada **aceptada** todavía no ha acabado.
+    func dropNotNull(table: String, column: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "dropNotNull", object: column)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) ALTER COLUMN \(ident: column) DROP NOT NULL"
+        ).run()
+    }
+
+    /// `SET NOT NULL`, que es el camino de vuelta y **solo funciona si no queda
+    /// ningún nulo**: quien lo llame tiene que haberlos resuelto antes.
+    func setNotNull(table: String, column: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "setNotNull", object: column)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) ALTER COLUMN \(ident: column) SET NOT NULL"
+        ).run()
+    }
+
+    /// Tira un `CHECK` sin volver a ponerlo, que es lo que un `revert` necesita
+    /// y `replaceCheckConstraint` no hace.
+    func dropCheckConstraint(table: String, name: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "dropCheckConstraint", object: name)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) DROP CONSTRAINT IF EXISTS \(ident: name)"
+        ).run()
+    }
+
+    /// Tira un índice creado a mano. Los que nacen con una columna se van con
+    /// ella (`deleteField`); éstos no tienen quien se los lleve.
+    ///
+    /// **Sin cualificar con el *schema***, igual que `index(table:name:columns:)`
+    /// al crearlo: la migración corre con el `search_path` del tenant puesto
+    /// (§6.2), así que el nombre resuelve donde tiene que resolver. Cualificarlo
+    /// aquí y no allí sería pedirle al llamante un dato que el ámbito ya sabe.
+    func dropIndex(name: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "dropIndex", object: name)
+        }
+        try await sql.raw("DROP INDEX IF EXISTS \(ident: name)").run()
+    }
+}

@@ -500,16 +500,23 @@ struct IngestionEndpointTests {
     @Test("lo que el 202 aceptó y no llegó a hacerse se dice por el log (H-27)")
     func acceptedWorkThatVanishesIsReported() async throws {
         try await Self.withSeededClub { app, seasonID, competitionID, otherID in
-            // El ámbito 1 —el del plan, el que decide el `202`— pasa; el
-            // siguiente no. Es la forma exacta de H-27 medida a mano: el cliente
-            // recibe su `202` y la base se cae detrás. El mismo patrón que A-3
-            // usó para H-24, y por lo mismo: parar el contenedor desde un test de
-            // esta suite se lo llevaría por delante a las demás.
+            // Los ámbitos de **aceptar** pasan; el siguiente no. Es la forma
+            // exacta de H-27 medida a mano: el cliente recibe su `202` y la base
+            // se cae detrás. El mismo patrón que A-3 usó para H-24, y por lo
+            // mismo: parar el contenedor desde un test de esta suite se lo
+            // llevaría por delante a las demás.
+            //
+            // **Eran dos ámbitos y ahora son tres, y el cambio es la mitad buena
+            // de F10-bis**: aceptar ya no es solo planificar —ámbito 1—, también
+            // **deja la fila** que el cliente va a consultar —ámbito 2—, así que
+            // el trabajo de fondo empieza en el 3. Si el corte se dejara en el 2,
+            // este test mediría otra cosa: un `POST` que falla **antes** de
+            // responder, que es un caso mejor y no el que `H-27` describe.
             let spy = LogSpy()
             let handler = APIHandler(
                 unitOfWork: CollapsingUnitOfWork(
                     inner: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
-                    collapse: Collapse(failsFromScope: 2)),
+                    collapse: Collapse(failsFromScope: 3)),
                 federationClients: StubProvider(failing: false),
                 clock: FixedClock(instant: Self.syncInstant),
                 background: InlineBackgroundWork(),

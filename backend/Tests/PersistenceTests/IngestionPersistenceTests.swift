@@ -153,6 +153,148 @@ struct IngestionPersistenceTests {
 
     // ── Ida y vuelta de las cuatro entidades (§4.4) ─────────────────────────
 
+    // ── F10-bis · B-1 · la fila aceptada cabe en la tabla ───────────────────
+
+    /// **La migración de [D-96]**, y es lo primero de la mini-fase porque sin
+    /// ella no hay nada que mirar: hoy `finished_at` es `NOT NULL` y el `CHECK`
+    /// de `outcome` se derivó cuando el enumerado tenía dos casos, así que
+    /// **ninguna fila `accepted` cabe en Postgres**.
+    ///
+    /// Que el Dominio ya la admita (`C-A.5`) no basta y es justo el reparto que
+    /// §4.6 y [D-02] describen: la invariante vive en los dos sitios, y aquí se
+    /// comprueba el de abajo.
+    ///
+    /// **Las dos mitades**, como toda guarda: que la fila aceptada entre y se
+    /// lea, y que el par siga atado —una fila que diga *"aceptada"* **con** fecha
+    /// de final no cabe—. Lo segundo se intenta por SQL crudo porque el Dominio
+    /// no deja construirla: es el mismo motivo por el que `theKindCheckAdmits…`
+    /// baja a `pg_constraint`.
+    @Test("la pasada aceptada cabe en la tabla, y sin final (D-96, F10-bis)")
+    func anAcceptedRunFitsInTheTable() async throws {
+        try await Self.withCompetition("accepted-row") { competitionID, tenant in
+            let run = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("13-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+
+            try await tenant.scope { try await $0.ingestionRuns.record(run) }
+
+            let stored = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
+            }
+            #expect(stored.count == 1)
+            #expect(stored.first?.outcome == .accepted)
+            #expect(stored.first?.finishedAt == nil)
+
+            // La otra mitad: el par sigue atado en el esquema. Se ataca la tabla
+            // como lo haría un *script*, que es contra quien el `CHECK` protege.
+            await #expect(throws: (any Error).self) {
+                try await tenant.raw.raw(
+                    """
+                    UPDATE \(ident: tenant.schema).\(ident: "ingestion_runs")
+                    SET \(ident: "finished_at") = now()
+                    WHERE \(ident: "id") = \(bind: run.id.raw)
+                    """
+                ).run()
+            }
+        }
+    }
+
+    // ── F10-bis · B-2 · `record` cierra lo que ya estaba abierto ────────────
+
+    /// **`record` deja de ser solo-inserta, y es una enmienda a su propia
+    /// documentación.**
+    ///
+    /// El puerto decía *"solo inserta: una pasada ocurrió o no ocurrió, y
+    /// reescribir la historia de una sincronización no significa nada"*, y el
+    /// argumento era bueno **mientras toda fila naciera acabada**. [D-96] crea la
+    /// excepción y la crea entera: una fila `accepted` dice *"todavía no ha
+    /// ocurrido"*, así que cerrarla no reescribe ninguna historia — **la
+    /// termina**. Escribirla como fila nueva es lo que dejaría dos versiones de la
+    /// misma pasada, que es lo que la cabecera de `closed(as:at:)` llama el peor
+    /// desenlace posible.
+    ///
+    /// Lo que se afirma es por el `id`, que es la identidad de la pasada: dos
+    /// escrituras del mismo `id` son **una** fila, con lo último que se dijo.
+    @Test("escribir dos veces la misma pasada la cierra, no la duplica (D-96, F10-bis)")
+    func recordingTwiceClosesTheSameRow() async throws {
+        try await Self.withCompetition("run-upsert") { competitionID, tenant in
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("13-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+
+            var pass = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
+            pass.matchesCreated = 240
+            let closed = pass
+            try await tenant.scope { try await $0.ingestionRuns.record(closed) }
+
+            let stored = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
+            }
+
+            #expect(stored.count == 1, "la pasada quedó duplicada: \(stored.count) filas")
+            #expect(stored.first?.id == accepted.id)
+            #expect(stored.first?.outcome == .succeeded)
+            #expect(stored.first?.finishedAt == Self.date("14-09-2025"))
+            // **Y `started_at` no se toca**, que es lo que `C-A.6` decidió: es
+            // cuándo se PIDIÓ, que es lo que el `202` dejó para consultar.
+            #expect(stored.first?.startedAt == Self.date("13-09-2025"))
+            // Los contadores son los de la pasada, no los ceros de la aceptada.
+            #expect(stored.first?.matchesCreated == 240)
+        }
+    }
+
+    /// **Lo que `findAccepted` busca es lo que está ABIERTO**, y esto lo pidió
+    /// la comprobación de mutación: quitar el filtro de `outcome` al adaptador
+    /// **sobrevivía** a toda la batería, porque el test de nivel 2 de al lado
+    /// interroga al doble y no a esta consulta.
+    ///
+    /// Lo que rompe no es un caso raro, es **el caso normal de la segunda
+    /// semana**: sin el filtro, la pasada del cron encontraría la fila
+    /// `succeeded` de la semana pasada e intentaría cerrarla otra vez. El
+    /// Dominio se niega con razón —*"solo se cierra una pasada aceptada"*
+    /// (`C-A.6`)—, así que la ingesta se caería en la segunda pasada de cada
+    /// competición.
+    ///
+    /// Se afirman las dos mitades: la cerrada no se devuelve, y la abierta sí.
+    @Test("`findAccepted` ignora la pasada ya cerrada y encuentra la abierta (F10-bis)")
+    func findAcceptedOnlyReturnsTheOpenRun() async throws {
+        try await Self.withCompetition("find-accepted") { competitionID, tenant in
+            let lastWeek = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("06-09-2025"),
+                finishedAt: Self.date("06-09-2025"), outcome: .succeeded)
+            try await tenant.scope { try await $0.ingestionRuns.record(lastWeek) }
+
+            let onlyClosed = try await tenant.scope {
+                try await $0.ingestionRuns.findAccepted(
+                    competitionID: competitionID, kind: .calendar)
+            }
+            #expect(onlyClosed == nil, "adoptaría la pasada de la semana pasada")
+
+            let open = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("13-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(open) }
+
+            let found = try await tenant.scope {
+                try await $0.ingestionRuns.findAccepted(
+                    competitionID: competitionID, kind: .calendar)
+            }
+            #expect(found?.id == open.id)
+            // Y la clase importa: lo que el `202` promete es el calendario, así
+            // que una aceptada de otra clase no es la suya.
+            let otherKind = try await tenant.scope {
+                try await $0.ingestionRuns.findAccepted(
+                    competitionID: competitionID, kind: .scorers)
+            }
+            #expect(otherKind == nil)
+        }
+    }
+
     @Test("OpponentClub: guarda y recupera la entidad entera, anulables incluidos (§4.4)")
     func opponentClubRoundTrip() async throws {
         try await Self.withTenant("club-rt") { tenant in

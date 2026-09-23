@@ -73,7 +73,11 @@ actor IngestionStore {
     func save(_ value: TeamRegistration) {
         upsert(&teamRegistrations, value) { $0.id == value.id }
     }
-    func record(_ value: IngestionRun) { writes += 1; ingestionRuns.append(value) }
+    /// **Upsert por `id`, como el adaptador de verdad desde F10-bis** ([D-96]):
+    /// escribir dos veces la misma pasada la **cierra**, no la duplica. Un doble
+    /// que siguiera añadiendo dejaría al nivel 2 incapaz de ver el defecto que
+    /// esta mini-fase existe para arreglar.
+    func record(_ value: IngestionRun) { upsert(&ingestionRuns, value) { $0.id == value.id } }
     func save(standingRow value: StandingRow) {
         upsert(&standingRows, value) { $0.id == value.id }
     }
@@ -192,6 +196,21 @@ struct FakeClubRepository: ClubRepository {
 struct FakeIngestionRunRepository: IngestionRunRepository {
     let store: IngestionStore
     func record(_ run: IngestionRun) async throws { await store.record(run) }
+
+    /// **La más antigua de las abiertas**, igual que el adaptador de verdad: si
+    /// el doble devolviera otra, el nivel 2 mediría un orden distinto que el 3
+    /// —el mismo criterio con el que los repositorios de clasificación y
+    /// goleadores copian su `sort`—.
+    func findAccepted(
+        competitionID: CompetitionID, kind: IngestionKind
+    ) async throws -> IngestionRun? {
+        await store.ingestionRuns
+            .filter {
+                $0.competitionID == competitionID && $0.kind == kind
+                    && $0.outcome == .accepted
+            }
+            .min { $0.startedAt < $1.startedAt }
+    }
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
         await store.ingestionRuns
             .filter { $0.competitionID == competitionID }

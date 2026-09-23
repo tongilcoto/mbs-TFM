@@ -221,6 +221,18 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   por eso la negativa vive en el Dominio (`Team.requireIdentityMatches`) y no en el caso de uso: la otra
   puerta que afirma esta correspondencia a mano —`POST /teams` + `PUT /registrations`, del backoffice—
   **sigue sin fase**, y tendría que acordarse de escribirla otra vez.
+- **Y la abre el `202`, la cierra la pasada, y el mecanismo es el mismo por las dos puertas** (F10-bis).
+  `IngestionOutcome.accepted` no es un estado que alguien ponga y otro mire: es **una fila que transita**. La
+  escribe quien acepta —el enganche de `D-67` y el `POST /v1/ingestion-runs`, los dos `202`— y la **cierra la
+  propia pasada**, que **adopta** su `id` y su `startedAt` en vez de escribir una fila nueva. Adoptar y no
+  *"escribo la mía y cierro la otra"* tiene un motivo exacto: `closed(as:at:)` arrastra los contadores **del
+  informe sobre el que se llama**, y los de una fila aceptada son ceros — cerrando la otra, el resultado
+  quedaría en una fila y los contadores en ninguna. Consecuencias al tocar esto: `record` es ***upsert* por
+  `id`** y ya no *"solo inserta"* (la excepción está razonada en el puerto), `findAccepted` **filtra por
+  `outcome` y por `kind`** —sin lo primero, la pasada del cron adoptaría la fila cerrada de la semana pasada
+  y la ingesta se caería en la segunda pasada de cada competición, medido con mutación—, y **aceptar dos
+  veces no deja dos filas**, porque la pasada cierra una. De regalo, una propiedad que nadie pidió: si el
+  proceso muere entre el `202` y la pasada, **la siguiente del cron cierra lo que quedó abierto**.
 - **La fila `accepted` de `D-96` va DENTRO del ámbito de su cascada, al revés que la constancia de `D-85`.**
   No es una incoherencia: son dos cosas distintas con el mismo nombre de tabla. El registro de `D-85` vive
   en su **propio** ámbito precisamente para que el `rollback` de la pasada fallida no se lleve la constancia

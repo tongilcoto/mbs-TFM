@@ -79,6 +79,13 @@ public enum TenantMigrations {
             // derivación ocurre cuando la migración corre, y su texto se queda
             // congelado en el *schema*. `D-90` un piso más abajo.
             AddScorersToIngestionRun(),
+            // F10-bis: la migración de `D-96` — `finished_at` anulable, el
+            // `CHECK` de `outcome` **rehecho** (la lección de F8 cobrándose en la
+            // fase siguiente) y el índice por `started_at`. **Otra vez aparte**,
+            // por `D-90`: las tres de arriba ya estaban aplicadas cuando llegó
+            // ésta. Y otra vez al final de lo que altera, que es su único
+            // requisito de orden: no crea tabla, así que no tiene FK que respetar.
+            AllowAcceptedIngestionRun(),
         ]
     }
 }

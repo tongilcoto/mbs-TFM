@@ -38,10 +38,22 @@ final class CalendarPass {
 
     private(set) var report: IngestionRun
 
+    /// # El informe nace `accepted`, y eso es F10-bis
+    ///
+    /// Antes nacía con los dos extremos puestos al mismo instante y lo corregía
+    /// `timed(from:to:)` al salir. Ahora nace **abierto** —sin final, que es lo
+    /// que [D-96] dice de una pasada que todavía no ha corrido— y se cierra al
+    /// terminar con `closed(as:)`. Una sola forma de acabar, y la que permite
+    /// **adoptar**: si el `202` dejó fila, `identity` es la suya y esta pasada
+    /// **es** esa fila, no una segunda.
+    ///
+    /// - Parameter identity: el `id` y el `startedAt` con los que se escribirá.
+    ///   Los pone el llamante porque solo él sabe si hay una fila que adoptar.
     init(
         competition: Competition,
         season: Season,
         repositories: any Repositories,
+        identity: (id: IngestionRunID, startedAt: Date),
         ids: any UUIDProvider,
         now: Date
     ) async throws {
@@ -55,9 +67,10 @@ final class CalendarPass {
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
         self.report = try IngestionRun(
-            id: IngestionRunID(raw: ids.next()),
+            id: identity.id,
             competitionID: competition.id, kind: .calendar,
-            startedAt: now, finishedAt: now)
+            startedAt: identity.startedAt, finishedAt: nil,
+            outcome: .accepted)
     }
 
     func run(_ calendar: FederationCalendar) async throws {

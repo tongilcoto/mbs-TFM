@@ -173,7 +173,12 @@ extension APIHandler {
             // El plan se calcula **antes** de responder, y no solo para poder
             // decir qué entra: es lo que hace que una `seasonId` inexistente dé
             // 404 aquí y no un `202` seguido de un fallo que nadie ve.
-            let planned = try await useCase.plannedCompetitions(scope: scope, actor: actor)
+            // **Aceptar, no solo planificar** (F10-bis, `H-27`): además de decidir
+            // qué entra —lo que hace que una `seasonId` inexistente dé 404 y no un
+            // `202` con un fallo invisible detrás—, deja una fila `accepted` por
+            // competición, que es lo único que el backoffice puede consultar
+            // mientras el trabajo ocurre.
+            let planned = try await useCase.accept(scope: scope, actor: actor)
             await background.enqueue {
                 await self.runAccepted(
                     useCase, scope: scope, actor: actor, planned: planned)
