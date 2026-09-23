@@ -250,4 +250,38 @@ struct TeamTests {
 
         #expect(!team.identityMatches(Self.scope(modality: .futbol11)))
     }
+
+    // ── C-C.15 · la misma regla, negándose (D-58, §3.2) ─────────────────────
+
+    /// **La guarda vive junto al dato que protege**, no en quien la invoca
+    /// —mismo idioma que `Competition.requireSameSource` y
+    /// `Season.requireOwnsCalendar`—. Con solo el predicado, la negativa vivía
+    /// en el caso de uso, y la siguiente puerta que afirme esta correspondencia
+    /// a mano —`POST /teams` + `PUT /registrations`, del backoffice, que sigue
+    /// sin fase— tendría que acordarse de volver a escribirla.
+    ///
+    /// El error lleva **las dos ternas enteras** porque quien lo lee es un
+    /// administrador mirando dos rótulos: con los dos lados delante no hace
+    /// falta un campo que diga cuál de los tres falla.
+    @Test("la guarda dice las dos ternas, no cuál de las tres falla (D-58, C-C.15)")
+    func requiringTheIdentityNamesBothSides() throws {
+        let team = try Self.team(category: .cadete, gender: .masculino, modality: .futbol11)
+
+        #expect(throws: DomainError.competitionIdentityMismatch(
+            team: "cadete/masculino/futbol_11",
+            competition: "juvenil/masculino/futbol_11")) {
+            try team.requireIdentityMatches(Self.scope(ageCategory: .juvenil))
+        }
+    }
+
+    /// Y la otra mitad de toda guarda, que es la que impide que un *"no"* fijo
+    /// pase por regla (lección de `M6`, Bloque B): lo que sí cuadra, pasa.
+    @Test("y lo que cuadra no se rechaza (D-66, C-C.15)")
+    func requiringTheIdentityLetsAMatchThrough() throws {
+        let team = try Self.team(category: .cadete, gender: .masculino, modality: .futbol11)
+
+        #expect(throws: Never.self) {
+            try team.requireIdentityMatches(Self.scope())
+        }
+    }
 }

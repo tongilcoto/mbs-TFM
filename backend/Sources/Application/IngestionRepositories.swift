@@ -37,7 +37,49 @@ public protocol TeamRepository: Sendable {
     /// (`D-67`).
     func list() async throws -> [Team]
 
+    /// **Uno por su id**, que es lo que estrena F10 (`C-D.1`).
+    ///
+    /// Hasta aquí este puerto solo sabía servir la lista entera, y era
+    /// suficiente: la ingesta carga todos los candidatos para emparejar (§3.7) y
+    /// nadie llegaba a un equipo **por su id**. El enganche sí — la ruta es
+    /// `/v1/teams/{id}/federation-link` (`D-67`), así que el equipo llega
+    /// designado desde fuera y lo primero que hay que poder decir es *"ése no
+    /// existe"* (**404**, `C-E.6`).
+    ///
+    /// Filtrar `list()` en el caso de uso habría dado la misma respuesta
+    /// trayéndose el tenant entero para descartarlo, y habría dejado la decisión
+    /// de *"no está"* repartida entre dos capas.
+    func find(_ id: TeamID) async throws -> Team?
+
     func save(_ team: Team) async throws
+}
+
+/// Puerto de salida de `TeamRegistration` (`D-68`, §4.3).
+///
+/// # Por qué la consulta es por la pareja y no por la terna
+///
+/// Porque **la terna es lo que se decide**, no lo que se busca. La cascada del
+/// enganche tiene que distinguir tres situaciones sobre el mismo `(equipo,
+/// temporada)`: que ya esté inscrito **en esta competición** —no hay nada que
+/// hacer—, que exista la fila **con competición nula** —la de junio, que se
+/// *completa*— o que no haya ninguna. Preguntando por la terna entera, los dos
+/// últimos casos llegan indistinguibles como `nil` y el enganche añadiría una
+/// segunda fila al equipo que el club ya había inscrito.
+///
+/// # Y por qué no hay `delete`
+///
+/// Por lo mismo que sus vecinas (`D-75`): lo que se escribió no se destruye. Dar
+/// de baja una inscripción es del backoffice, que no tiene fase.
+public protocol TeamRegistrationRepository: Sendable {
+    /// Las inscripciones de **ese equipo en esa temporada**. Son pocas por
+    /// definición —liga y copa (`D-12`)— y el `UNIQUE` de tres columnas con
+    /// `NULLS NOT DISTINCT` (`C-D.3`) garantiza que no se repitan.
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration]
+
+    /// *Upsert* por `id`, igual que los demás: el id lo pone el caso de uso.
+    /// **Completar la fila de junio es un `save` con el mismo `id`**, no una
+    /// fila nueva.
+    func save(_ registration: TeamRegistration) async throws
 }
 
 /// Puerto de salida de `Match` (§4.3).

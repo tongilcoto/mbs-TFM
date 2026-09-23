@@ -97,4 +97,9 @@ public enum PersistenceError: Error, Equatable, Sendable {
     /// `NULLS NOT DISTINCT`— (`A-5`, H-35). **Lanza en vez de callarse**: un
     /// esquema sin sus `CHECK` no falla, acepta lo que el Dominio rechaza.
     case schemaHelperNeedsSQL(helper: String, object: String)
+    /// **El puerto existe y su adaptador todavía no** — el esqueleto del Bloque C
+    /// de F10 (`TeamRegistrationRepository`, `C-D.2`). Lanza en vez de callarse
+    /// por la misma razón que el de arriba: una escritura que dice que sí sin
+    /// tabla detrás es un dato perdido sin error.
+    case notImplemented(port: String, cycle: String)
 }

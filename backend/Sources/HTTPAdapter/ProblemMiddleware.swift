@@ -151,6 +151,30 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "engancharlo a '\(incoming)'",
                                base: typeBaseURI, slug: "already-linked-to-federation")
 
+            case .competitionIdentityMismatch(let team, let competition):
+                // **409, y el mismo argumento que su hermano de arriba**
+                // (`D-67`, F10): los datos que llegan son perfectamente válidos
+                // —una URL que se lee, un `codigo_equipo` que existe—; lo que no
+                // encaja es **el estado**, que es lo que separa un 409 de un 422.
+                //
+                // Y como `alreadyLinkedToFederation`, **tiene salida**: se
+                // engancha otro equipo, o se corrige antes de confirmar. El
+                // `/preview` lo dice por adelantado con `identityMatches`
+                // (`C-C.4`), así que llegar aquí es haber confirmado a pesar del
+                // aviso.
+                //
+                // **El `detail` lleva las dos ternas enteras** porque quien lo
+                // lee es un administrador mirando dos rótulos: con los dos lados
+                // delante no hace falta un campo que diga cuál de los tres falla.
+                //
+                // Lo afirma por código `C-E.8`, y `C-E.5` lo sirve además por la
+                // puerta del `Output` generado.
+                return Problem(status: .conflict, code: "COMPETITION_IDENTITY_MISMATCH",
+                               title: "El equipo y la competición no cuadran",
+                               detail: "el equipo es \(team) y la competición es "
+                                   + "\(competition)",
+                               base: typeBaseURI, slug: "competition-identity-mismatch")
+
             case .unreadableFederationURL(let url, let reason):
                 // **400, y el criterio lo escribe `invalidValue` cien líneas más
                 // arriba**: el 422 es para el cuerpo que se decodificó y dice
@@ -212,6 +236,45 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return Problem(status: .notFound, code: "SEASON_NOT_FOUND",
                                title: "Temporada desconocida", detail: id,
                                base: typeBaseURI, slug: "season-not-found")
+
+            case .teamNotFound(let id):
+                // **404, y el código lo decide este renglón** (`D-67`, F10). El
+                // caso lo estrena el Bloque C —el enganche es el primer caso de
+                // uso que llega a un equipo **por su id**— y el compilador paró
+                // aquí, que es para lo que el `switch` es exhaustivo.
+                //
+                // Mismo criterio que `unknownSeason` y opuesto al de
+                // `seasonNotFound`: el id lo puso quien llama, así que es un dato
+                // **suyo** que no existe, no un *schema* roto. Y las dos puertas
+                // del enganche declaran `404` (`C-0.5`), que es la otra mitad del
+                // criterio: solo se puede devolver lo que el contrato admite.
+                //
+                // Lo afirma por código `C-E.6`.
+                return Problem(status: .notFound, code: "TEAM_NOT_FOUND",
+                               title: "Equipo desconocido", detail: id,
+                               base: typeBaseURI, slug: "team-not-found")
+
+            case .seasonLabelUnavailable(let federationSeasonID):
+                // **400, y el criterio es el de `unreadableFederationURL`**: el
+                // 422 es para el cuerpo que se decodificó y dice algo que la
+                // regla no admite; el 400, *"para lo que ni siquiera se pudo
+                // decodificar"*. Aquí no hay ningún valor que juzgar — **falta**
+                // el que hacía falta, y el `spec` no lo puede exigir porque solo
+                // es obligatorio cuando la temporada no existe, que es una
+                // condición que un esquema no sabe expresar.
+                //
+                // Y es lo único que el contrato deja decir: las dos puertas del
+                // enganche declaran `400` y **no** declaran 422 (`C-0.5`).
+                //
+                // **El `detail` dice qué hacer**, no solo qué pasó: quien lo lee
+                // es el administrador que acaba de pegar la URL, y la salida
+                // —dar de alta la temporada antes— no es deducible del título.
+                return Problem(status: .badRequest, code: "SEASON_LABEL_UNAVAILABLE",
+                               title: "La federación no dice qué temporada es",
+                               detail: "No hay etiqueta para la temporada "
+                                   + "'\(federationSeasonID)' y no se inventa (D-91). "
+                                   + "Da de alta la temporada con su etiqueta y repite.",
+                               base: typeBaseURI, slug: "season-label-unavailable")
 
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club

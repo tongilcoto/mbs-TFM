@@ -85,6 +85,9 @@ struct FluentRepositories: Repositories {
         FluentOpponentClubRepository(database: database)
     }
     var teams: any TeamRepository { FluentTeamRepository(database: database) }
+    var teamRegistrations: any TeamRegistrationRepository {
+        FluentTeamRegistrationRepository(database: database)
+    }
     var matches: any MatchRepository { FluentMatchRepository(database: database) }
     var ingestionRuns: any IngestionRunRepository {
         FluentIngestionRunRepository(database: database)

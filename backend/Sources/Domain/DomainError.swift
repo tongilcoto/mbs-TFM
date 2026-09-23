@@ -70,4 +70,27 @@ public enum DomainError: Error, Equatable, Sendable {
     /// —es lo único que sabe por qué— y la URL la necesita el administrador, que
     /// tiene doce equipos y acaba de pegar una de doce pestañas.
     case unreadableFederationURL(url: String, reason: String)
+
+    /// **El equipo y la competición no son de la misma identidad** (`D-58`,
+    /// `D-66`, §3.2, F10 · `C-C.15`).
+    ///
+    /// §3.2 declara que `Competition.age_category` usa el mismo enumerado que
+    /// `Team.category` *"lo que permite **validar** que un equipo solo participe
+    /// en una competición de su edad, de su modalidad y de su género"*, y
+    /// `D-58` lo remacha: *"la validación se amplía por tercera vez"*.
+    ///
+    /// # Qué pasa si no se levanta
+    ///
+    /// Que el Cadete A queda enganchado a una competición **juvenil** y la
+    /// ingesta hereda `juvenil` a cada equipo que cree desde ella (`D-07`). Con
+    /// `category` en la clave única de `Team` (§3.5), el choque llega **después
+    /// y en otro sitio**: es lo que `D-58` llama *"no degrada, colisiona"*.
+    ///
+    /// # Las dos ternas enteras, y no cuál falla
+    ///
+    /// Quien lo lee es un administrador mirando dos rótulos. Con los dos lados
+    /// delante, la pantalla puede decir *"tu equipo es cadete y esta competición
+    /// es juvenil"* sin preguntar otra vez — que es el mismo criterio con el que
+    /// el `/preview` no lleva campo de diagnóstico (`C-C.4`).
+    case competitionIdentityMismatch(team: String, competition: String)
 }

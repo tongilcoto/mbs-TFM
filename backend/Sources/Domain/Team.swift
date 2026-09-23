@@ -125,6 +125,36 @@ public struct Team: Identifiable, Equatable, Sendable {
             && modality == scope.modality
     }
 
+    /// **La misma regla, pero negándose** (`C-C.15`, `D-58`, §3.2).
+    ///
+    /// # Por qué hacen falta las dos formas
+    ///
+    /// Las dos puertas del enganche preguntan lo mismo y hacen cosas distintas:
+    /// el `/preview` quiere el **veredicto** para enseñarlo —`identityMatches`
+    /// viaja en su respuesta (`C-C.4`)— y el enganche tiene que **pararse**. Con
+    /// solo el predicado, la negativa vivía en el caso de uso y la siguiente
+    /// puerta que afirme esta correspondencia a mano —`POST /teams` +
+    /// `PUT /registrations`, del backoffice, que sigue sin fase— tendría que
+    /// acordarse de escribirla otra vez.
+    ///
+    /// Es el mismo idioma que `Competition.requireSameSource` y
+    /// `Season.requireOwnsCalendar`: **la guarda vive junto al dato que
+    /// protege**, no en quien la invoca.
+    ///
+    /// # Y por qué el error lleva las dos ternas enteras
+    ///
+    /// Porque el que lo lee es un administrador mirando dos rótulos, no un
+    /// programa: *"tu equipo es cadete y esta competición es juvenil"* se dice
+    /// con los dos lados delante. Un campo que dijera **cuál** de los tres falla
+    /// no haría falta — los tres valores ya están.
+    public func requireIdentityMatches(_ scope: CompetitionScope) throws {
+        guard !identityMatches(scope) else { return }
+        throw DomainError.competitionIdentityMismatch(
+            team: "\(category.rawValue)/\(gender.rawValue)/\(modality.rawValue)",
+            competition: "\(scope.ageCategory.rawValue)/\(scope.gender.rawValue)/"
+                + "\(scope.modality.rawValue)")
+    }
+
     /// La proyección al candidato de la cadena de §3.7 (F4).
     ///
     /// # Por qué pide el nombre del club por fuera

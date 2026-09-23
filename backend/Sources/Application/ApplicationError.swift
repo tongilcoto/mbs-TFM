@@ -35,6 +35,33 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// fila en `ingestion_runs`: es un club que aún no se puede sincronizar.
     case federationAdapterMissing(federation: String)
 
+    /// **El equipo que designa la ruta no existe** (F10, `C-E.6` → **404**).
+    ///
+    /// Lo estrena el enganche, que es el primer caso de uso que llega a un equipo
+    /// **por su id**: `/v1/teams/{id}/federation-link` (`D-67`). Hasta aquí la
+    /// ingesta solo cargaba la lista entera para emparejar (§3.7), así que
+    /// *"ese equipo no está"* no era una situación que nadie pudiera provocar.
+    ///
+    /// Es 404 y no 500, al revés que `tenantNotProvisioned`: el id lo puso quien
+    /// llama, así que es un dato suyo que no existe, no un *schema* roto. Mismo
+    /// criterio que `unknownSeason`.
+    case teamNotFound(id: String)
+
+    /// **La fuente no publicó etiqueta de temporada y hay que crear una**
+    /// (F10, `C-C.8` → **400**).
+    ///
+    /// No es validación por validar: **`Season.label` deriva la ventana de
+    /// fechas** que la guarda de `D-91` usa como evidencia (§3.2). Una temporada
+    /// rotulada a ojo acepta cualquier calendario o rechaza todos, así que
+    /// inventarla no degrada el rótulo — desarma la comprobación de al lado.
+    ///
+    /// El sobre no promete la etiqueta desde F6-bis (H-08): la FCF no la publica
+    /// y en la RFFM es el eco de nuestro propio parámetro ([Anexo RFFM §F.16]).
+    /// Por eso el cuerpo del enganche la lleva; cuando tampoco viene ahí, la
+    /// salida es dar de alta la temporada antes (`POST /v1/seasons`) — que es lo
+    /// mismo que dice `seed-competition` desde F6.
+    case seasonLabelUnavailable(federationSeasonID: String)
+
     /// **La base no responde** (H-23, `D-86` enmendada).
     ///
     /// No es el fallo de una competición: es el fallo del sitio donde se apuntan

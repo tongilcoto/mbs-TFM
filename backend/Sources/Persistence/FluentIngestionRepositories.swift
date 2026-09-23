@@ -47,6 +47,15 @@ public struct FluentTeamRepository: TeamRepository {
             .map { try $0.toDomain() }
     }
 
+    /// **ESQUELETO del Bloque C, y está mal a propósito.** `C-D.1` lo escribe.
+    ///
+    /// Devuelve *"no está"* siempre: un valor **válido y equivocado**, que es lo
+    /// que el método pide (Plan §5.1). Nace aquí y no en el Bloque D porque el
+    /// puerto lo estrena el Bloque C —el caso de uso del enganche llega al equipo
+    /// **por su id**— y sin esta línea el *build* se queda rojo hasta `C-D.1`,
+    /// que es justo lo que el esqueleto de `C-0.1` compró para los bloques A–D.
+    public func find(_ id: TeamID) async throws -> Team? { nil }
+
     public func save(_ team: Team) async throws {
         if let existing = try await TeamRecord.find(team.id.raw, on: database) {
             existing.apply(team)
@@ -547,5 +556,39 @@ extension LeagueScorerRecord {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+    }
+}
+
+
+// ── TeamRegistration · ESQUELETO del Bloque C (`D-68`) ───────────────────────
+
+/// **No hay tabla todavía**: `C-D.2` escribe el `…Record` y `C-D.3` su
+/// migración, con el `UNIQUE` de tres columnas (`NULLS NOT DISTINCT`) y la FK
+/// compuesta a la temporada.
+///
+/// # Por qué este esqueleto **lanza** en vez de devolver un valor equivocado
+///
+/// El criterio de Plan §5.1 —*"un valor válido pero equivocado"*— supone que hay
+/// un valor que devolver. Aquí no lo hay: `save` no tiene tipo de retorno, así
+/// que el único *"valor equivocado"* posible sería **no hacer nada y decir que
+/// sí**. Eso no es un esqueleto, es una escritura que se pierde en silencio —
+/// exactamente el desenlace que `D-85` y `D-86` existen para evitar. Un `throw`
+/// es ruidoso, recuperable y trae escrito el ciclo que lo sustituye; no es un
+/// `fatalError()`, que trapearía y se llevaría el proceso entero.
+///
+/// Nada lo llama todavía: los *handlers* del enganche son `C-E.3`/`C-E.4` y
+/// llegan **después** del Bloque D, que es el orden en que hay que dejarlo.
+public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration] {
+        throw PersistenceError.notImplemented(
+            port: "TeamRegistrationRepository.list", cycle: "C-D.2")
+    }
+
+    public func save(_ registration: TeamRegistration) async throws {
+        throw PersistenceError.notImplemented(
+            port: "TeamRegistrationRepository.save", cycle: "C-D.2")
     }
 }
