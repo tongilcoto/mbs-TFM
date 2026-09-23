@@ -151,6 +151,50 @@ struct IngestionPersistenceTests {
         }
     }
 
+    // ── F10 · C-D.1 · el equipo por su id ───────────────────────────────────
+
+    /// **`TeamRepository.find(_:)`**, que hasta F10 no existía y no era un olvido:
+    /// la ingesta carga la lista entera para emparejar (§3.7), así que nadie
+    /// llegaba a un equipo **por su id**. El enganche sí — la ruta es
+    /// `/v1/teams/{id}/federation-link` ([D-67]) y el equipo llega designado desde
+    /// fuera.
+    ///
+    /// **Las dos mitades, y las dos hacen falta.** Que traiga **ése y no otro** es
+    /// lo que separa esta consulta de `list().first`; que devuelva `nil` cuando no
+    /// está es lo único sobre lo que `C-E.6` puede levantar su **404**, y sin esa
+    /// mitad la ruta contestaría *"no existe"* y *"existe pero no lo encuentro"*
+    /// con la misma cara.
+    ///
+    /// Se siembran **dos** equipos a propósito: con uno solo, una implementación
+    /// que devolviera *"el primero que haya"* pasaría el test entero.
+    @Test("find trae ese equipo y no otro, y nil si no está (C-D.1, D-67)")
+    func findBringsTheDesignatedTeam() async throws {
+        try await Self.withTenant("team-find") { tenant in
+            let cadeteA = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: nil,
+                category: .cadete, letter: "A", gender: .masculino,
+                modality: .futbol11, createdAt: Date(), updatedAt: Date())
+            let cadeteB = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: nil,
+                category: .cadete, letter: "B", gender: .masculino,
+                modality: .futbol11, createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.teams.save(cadeteA)
+                try await $0.teams.save(cadeteB)
+            }
+
+            let encontrado = try #require(
+                try await tenant.scope { try await $0.teams.find(cadeteB.id) })
+            #expect(encontrado.id == cadeteB.id)
+            #expect(encontrado.letter == "B", "el designado, no el primero de la tabla")
+
+            let ninguno = try await tenant.scope {
+                try await $0.teams.find(TeamID(raw: UUID()))
+            }
+            #expect(ninguno == nil, "sobre esto levanta C-E.6 su 404")
+        }
+    }
+
     // ── Ida y vuelta de las cuatro entidades (§4.4) ─────────────────────────
 
     // ── F10-bis · B-1 · la fila aceptada cabe en la tabla ───────────────────
@@ -243,6 +287,48 @@ struct IngestionPersistenceTests {
             #expect(stored.first?.startedAt == Self.date("13-09-2025"))
             // Los contadores son los de la pasada, no los ceros de la aceptada.
             #expect(stored.first?.matchesCreated == 240)
+        }
+    }
+
+    /// **`C-D.6`: el registro se ordena por `started_at`, no por `finished_at`.**
+    ///
+    /// Es la otra mitad de [D-96], y no es cosmética. La consulta contesta *"¿qué
+    /// pasó la última vez?"*, y desde que existe la fila `accepted` hay filas
+    /// **sin final**: ordenando por `finished_at DESC`, Postgres pone los `NULL`
+    /// **primero**, así que una pasada aceptada hace tres semanas se colaría por
+    /// delante de la que acabó hoy. El `202` dejó constancia de **cuándo se
+    /// pidió**, y ése es el eje que siempre tiene valor.
+    ///
+    /// Las tres filas están puestas para que los dos criterios den órdenes
+    /// **distintos**: con `started_at` la aceptada queda en medio; con
+    /// `finished_at` se iría a la cabeza. Con dos filas el test no distinguiría
+    /// un criterio del otro.
+    @Test("el registro se ordena por started_at, y la aceptada no se cuela (C-D.6, D-96)")
+    func theLogIsOrderedByStartedAt() async throws {
+        try await Self.withCompetition("run-order") { competitionID, tenant in
+            let vieja = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("01-09-2025"),
+                finishedAt: Self.date("01-09-2025"), outcome: .succeeded)
+            let aceptada = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("05-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+            let reciente = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("10-09-2025"),
+                finishedAt: Self.date("10-09-2025"), outcome: .succeeded)
+
+            let stored = try await tenant.scope { repositories -> [IngestionRun] in
+                for run in [vieja, aceptada, reciente] {
+                    try await repositories.ingestionRuns.record(run)
+                }
+                return try await repositories.ingestionRuns.list(
+                    competitionID: competitionID, limit: 10)
+            }
+
+            #expect(stored.map(\.id) == [reciente.id, aceptada.id, vieja.id],
+                    "ordenado por finished_at, el NULL de la aceptada se va a la cabeza")
         }
     }
 

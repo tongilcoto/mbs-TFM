@@ -86,6 +86,21 @@ public enum TenantMigrations {
             // ésta. Y otra vez al final de lo que altera, que es su único
             // requisito de orden: no crea tabla, así que no tiene FK que respetar.
             AllowAcceptedIngestionRun(),
+            // F10 · `C-D.2`/`C-D.3`: `TeamRegistration` ([D-68]). **Detrás de
+            // `CreateCompetition`, no entre `Team` y `Competition`** como
+            // pintaba el orden canónico de arriba: aquel sitio era el de la
+            // fila `(equipo, temporada)`, y la enmienda de [D-68] le añadió
+            // `competition_id` **a la clave**, con FK compuesta a la temporada
+            // de la competición. Cambió de quién depende, luego cambia su
+            // sitio — que es [D-90] aplicado, no una excepción.
+            CreateTeamRegistration(),
+            // F10 · `C-D.6`: se retira `idx_ingestion_runs_competition`, que
+            // desde que `list` ordena por `started_at` no tiene un solo lector.
+            // **Aparte de la de arriba aunque sean de la misma fase**: no son la
+            // misma razón, y una migración que hace dos cosas no se revierte a
+            // medias. Al final de lo que altera, que es su único requisito de
+            // orden ([D-90]).
+            DropFinishedAtIngestionRunIndex(),
         ]
     }
 }

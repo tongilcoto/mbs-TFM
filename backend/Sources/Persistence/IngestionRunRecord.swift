@@ -330,3 +330,30 @@ public struct AllowAcceptedIngestionRun: AsyncMigration {
         // el `NOT NULL` de arriba, además, no hace falta.
     }
 }
+
+/// **F10 · `C-D.6`: se retira el índice que se quedó sin consulta.**
+///
+/// `CreateIngestionRun` creó `idx_ingestion_runs_competition` sobre
+/// (`competition_id`, `finished_at`) porque ése era el orden del registro.
+/// F10-bis añadió su pareja por `started_at` y **dejó el viejo en pie a
+/// propósito** —hasta este ciclo seguía siendo el que la consulta usaba—. Con
+/// `list` ya ordenando por `started_at` ([D-96]), no le queda un solo lector.
+///
+/// **Va en una migración propia y no editando `AllowAcceptedIngestionRun`**, que
+/// es lo que [D-90] obliga: aquélla ya está aplicada. Y va en una migración
+/// propia también dentro de F10 —no junto a `CreateTeamRegistration`— porque no
+/// son la misma razón: una crea la tabla de [D-68], ésta retira un índice
+/// obsoleto. Una migración que hace dos cosas no se puede revertir a medias.
+public struct DropFinishedAtIngestionRunIndex: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.dropIndex(name: "idx_ingestion_runs_competition")
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.index(
+            table: IngestionRunRecord.schema, name: "idx_ingestion_runs_competition",
+            columns: ["competition_id", "finished_at"])
+    }
+}

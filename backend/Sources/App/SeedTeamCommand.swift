@@ -39,12 +39,18 @@ public import Vapor
 ///
 /// # Lo que NO hace todavía, y conviene saberlo antes de mirar una pantalla
 ///
-/// **No escribe `TeamRegistration`** (`D-68`), porque esa tabla llega en el
-/// Bloque D de F10. El *spec* sí exige `seasonId` en el alta, y por un motivo que
-/// aquí se hereda entero: sin inscripción existe el estado *"equipo creado,
+/// **No escribe `TeamRegistration`**, y desde el Bloque D de F10 ya no es porque
+/// la tabla no exista: existe (`C-D.2`/`C-D.3`). Es porque **quien la escribe es
+/// la cascada del enganche** (`C-C.10`, [D-67]), que es la que sabe en qué
+/// competición queda inscrito el equipo. Esta herramienta deja el equipo en el
+/// único estado desde el que [D-67] engancha: propio, sin enganchar y **sin
+/// inscribir**.
+///
+/// El *spec* sí exige `seasonId` en el alta de `POST /v1/teams`, y por un motivo
+/// que aquí se hereda entero: sin inscripción existe el estado *"equipo creado,
 /// inscrito en ninguna parte"*, **invisible en todas las pantallas** que filtran
-/// por temporada. Mientras tanto el equipo existe y se puede enganchar — que es
-/// para lo que esta herramienta está.
+/// por temporada. Ese alta es del backoffice y **no tiene fase**; mientras tanto
+/// el equipo existe y se puede enganchar, que es para lo que esto está.
 public struct SeedTeamCommand: AsyncCommand {
     public struct Signature: CommandSignature {
         @Option(name: "tenant", short: "t", help: "Slug del club.")
@@ -134,7 +140,7 @@ public struct SeedTeamCommand: AsyncCommand {
         context.console.success("""
             Equipo listo: \(id)
               \(category.rawValue) \(signature.letter ?? "—") · \(gender.rawValue) · \(modality.rawValue)
-              propio, SIN enganchar y SIN inscribir (TeamRegistration llega en el bloque D de F10)
+              propio, SIN enganchar y SIN inscribir (la inscribe la cascada de D-67)
 
               curl -s -X POST http://\(slug).localhost:8080/v1/teams/\(id)/federation-link/preview \\
                 -H 'Content-Type: application/json' \\

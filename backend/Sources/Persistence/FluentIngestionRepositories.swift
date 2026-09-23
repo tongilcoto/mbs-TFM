@@ -47,14 +47,18 @@ public struct FluentTeamRepository: TeamRepository {
             .map { try $0.toDomain() }
     }
 
-    /// **ESQUELETO del Bloque C, y está mal a propósito.** `C-D.1` lo escribe.
+    /// **Uno por su id** (`C-D.1`, [D-67]).
     ///
-    /// Devuelve *"no está"* siempre: un valor **válido y equivocado**, que es lo
-    /// que el método pide (Plan §5.1). Nace aquí y no en el Bloque D porque el
-    /// puerto lo estrena el Bloque C —el caso de uso del enganche llega al equipo
-    /// **por su id**— y sin esta línea el *build* se queda rojo hasta `C-D.1`,
-    /// que es justo lo que el esqueleto de `C-0.1` compró para los bloques A–D.
-    public func find(_ id: TeamID) async throws -> Team? { nil }
+    /// `TeamRecord.find` y no una consulta con filtro: la clave primaria es la
+    /// identidad, igual que en `save`. Y **sin `deleted_at` que mirar** — `Team`
+    /// no lleva borrado lógico ([D-75]), así que *"no está"* es exactamente *"no
+    /// hay fila"*.
+    ///
+    /// El `nil` no es un caso degenerado: es sobre lo que `C-E.6` levanta su
+    /// **404**, porque el equipo llega designado desde fuera de la ruta.
+    public func find(_ id: TeamID) async throws -> Team? {
+        try await TeamRecord.find(id.raw, on: database)?.toDomain()
+    }
 
     public func save(_ team: Team) async throws {
         if let existing = try await TeamRecord.find(team.id.raw, on: database) {
@@ -319,10 +323,21 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
         try await record.create(on: database)
     }
 
+    /// **Ordenada por `started_at`** (`C-D.6`, [D-96]), y el eje importa desde
+    /// que hay filas sin final.
+    ///
+    /// Era `finished_at DESC`, que era correcto mientras toda pasada naciera
+    /// acabada. Con la fila `accepted` deja de serlo en el peor sentido: en
+    /// Postgres un `ORDER BY … DESC` pone los `NULL` **primero**, así que una
+    /// pasada aceptada hace tres semanas se colaría por delante de la que acabó
+    /// hoy — y esta consulta existe para contestar *"¿qué pasó la última vez?"*.
+    ///
+    /// `started_at` es además el eje honesto: es cuándo se **pidió**, que es de
+    /// lo que el `202` dejó constancia y lo único que toda fila tiene siempre.
     public func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
         try await IngestionRunRecord.query(on: database)
             .filter(\.$competition.$id == competitionID.raw)
-            .sort(\.$finishedAt, .descending)
+            .sort(\.$startedAt, .descending)
             .limit(limit)
             .all()
             .map { try $0.toDomain() }
@@ -610,35 +625,90 @@ extension LeagueScorerRecord {
 }
 
 
-// ── TeamRegistration · ESQUELETO del Bloque C (`D-68`) ───────────────────────
+// ── TeamRegistration (`D-68`, `C-D.2`) ──────────────────────────────────────
 
-/// **No hay tabla todavía**: `C-D.2` escribe el `…Record` y `C-D.3` su
-/// migración, con el `UNIQUE` de tres columnas (`NULLS NOT DISTINCT`) y la FK
-/// compuesta a la temporada.
+/// Adaptador de `TeamRegistrationRepository` (`C-D.2`), que sustituye al
+/// esqueleto que el Bloque C dejó lanzando. Con él se va el caso
+/// `PersistenceError.notImplemented`, que se queda **sin un solo llamante** —la
+/// misma forma que `timed(from:to:)` en F10-bis y que `FederationRound.label`
+/// en F6-bis (`A-1`·H-08)—: un puerto sin adaptador ya no es un estado que este
+/// código sepa representar.
 ///
-/// # Por qué este esqueleto **lanza** en vez de devolver un valor equivocado
-///
-/// El criterio de Plan §5.1 —*"un valor válido pero equivocado"*— supone que hay
-/// un valor que devolver. Aquí no lo hay: `save` no tiene tipo de retorno, así
-/// que el único *"valor equivocado"* posible sería **no hacer nada y decir que
-/// sí**. Eso no es un esqueleto, es una escritura que se pierde en silencio —
-/// exactamente el desenlace que `D-85` y `D-86` existen para evitar. Un `throw`
-/// es ruidoso, recuperable y trae escrito el ciclo que lo sustituye; no es un
-/// `fatalError()`, que trapearía y se llevaría el proceso entero.
-///
-/// Nada lo llama todavía: los *handlers* del enganche son `C-E.3`/`C-E.4` y
-/// llegan **después** del Bloque D, que es el orden en que hay que dejarlo.
+/// **Misma forma que sus vecinos**: `save` hace *upsert* por `id` —así la
+/// cascada del enganche completa la fila de junio con el **mismo** id en vez de
+/// añadir una segunda— y no hay `delete`, porque lo que se escribió no se
+/// destruye ([D-75]).
 public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
     private let database: any Database
     public init(database: any Database) { self.database = database }
 
+    /// Las de **ese par**, que es lo que el puerto promete y no una comodidad:
+    /// la cascada del enganche pregunta *"¿qué tiene este equipo en esta
+    /// temporada?"* para distinguir la fila de junio —que completa— de una
+    /// inscripción ya hecha. Sin el filtro de temporada vería las del año pasado
+    /// y creería que no hay nada que hacer.
+    ///
+    /// **El equipo se lee una vez, no una por fila**: el `init` del Dominio lo
+    /// exige entero para poder comprobar la guarda de [D-68] —*"un rival no se
+    /// inscribe"*—, y todas las filas de esta consulta son del mismo equipo por
+    /// construcción. Que no esté es corrupción, no un caso de negocio: la FK lo
+    /// impide.
     public func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration] {
-        throw PersistenceError.notImplemented(
-            port: "TeamRegistrationRepository.list", cycle: "C-D.2")
+        let rows = try await TeamRegistrationRecord.query(on: database)
+            .filter(\.$team.$id == teamID.raw)
+            .filter(\.$season.$id == seasonID.raw)
+            .all()
+        guard !rows.isEmpty else { return [] }
+
+        guard let teamRecord = try await TeamRecord.find(teamID.raw, on: database) else {
+            throw PersistenceError.notFound(table: TeamRecord.schema)
+        }
+        let team = try teamRecord.toDomain()
+        return try rows.map { try $0.toDomain(team: team) }
     }
 
     public func save(_ registration: TeamRegistration) async throws {
-        throw PersistenceError.notImplemented(
-            port: "TeamRegistrationRepository.save", cycle: "C-D.2")
+        if let existing = try await TeamRegistrationRecord.find(
+            registration.id.raw, on: database
+        ) {
+            existing.apply(registration)
+            try await existing.update(on: database)
+        } else {
+            let record = TeamRegistrationRecord()
+            record.id = registration.id.raw
+            record.apply(registration)
+            try await record.create(on: database)
+        }
+    }
+}
+
+extension TeamRegistrationRecord {
+    /// **El `Team` llega de fuera y no se lee aquí**, porque el `init` del
+    /// Dominio lo exige entero: *"ser propio se deriva de `opponentClubID`"*, así
+    /// que con solo el id la guarda de [D-68] no se podría comprobar al
+    /// reconstituir. Quien llama ya lo tiene —todas las filas de un `list` son
+    /// del **mismo** equipo por construcción— y así se lee una vez y no una por
+    /// fila.
+    func toDomain(team: Team) throws -> TeamRegistration {
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(
+                table: Self.schema, id: try requireID().uuidString)
+        }
+        return try TeamRegistration(
+            id: TeamRegistrationID(raw: try requireID()),
+            team: team,
+            seasonID: SeasonID(raw: $season.id),
+            competitionID: $competition.id.map { CompetitionID(raw: $0) },
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    /// Vuelca la entidad sobre la fila. **Sin el `id`**, que es la identidad y no
+    /// un campo: lo pone quien crea.
+    fileprivate func apply(_ registration: TeamRegistration) {
+        self.$team.id = registration.teamID.raw
+        self.$season.id = registration.seasonID.raw
+        self.$competition.id = registration.competitionID?.raw
     }
 }

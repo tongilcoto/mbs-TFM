@@ -295,6 +295,112 @@ struct MigrationIntegrityTests {
         }
     }
 
+    /// **`C-D.7` · el ancla del recuento, y es ancla y no regla.**
+    ///
+    /// No hay aquí un comportamiento que pueda romperse: lo que hay es un número
+    /// que **obliga a mirar** qué se añadió, exactamente como el recuento de
+    /// `CHECK` de más abajo. Una fase que añada una migración pone este test en
+    /// rojo y tiene que explicarse en el renglón; una que añada **dos sin
+    /// querer** —editando una aplicada y creando su sustituta— también.
+    ///
+    /// **13 en F8, 14 con F10-bis, 16 con el Bloque D de F10**: la tabla de
+    /// [D-68] con la FK compuesta y los dos índices de `Match` (`C-D.3`/`C-D.4`),
+    /// y aparte la retirada del índice por `finished_at` (`C-D.6`). **Son dos y
+    /// no una** porque no son la misma razón, y una migración que hace dos cosas
+    /// no se revierte a medias.
+    ///
+    /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
+    /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
+    /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
+    /// diga, que es la misma forma de fallar de H-31.
+    @Test("las migraciones por tenant son 16, y ningún nombre se repite (C-D.7, D-90)")
+    func theTenantMigrationListIsAnchored() throws {
+        let nombres = TenantMigrations.all().map(\.name)
+        #expect(nombres.count == 16,
+                "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
+        #expect(Set(nombres).count == nombres.count,
+                "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
+    }
+
+    /// **`A-5`·H-36: §4.6 manda dos índices compuestos en `Match` y no existía
+    /// ninguno.** La sección es explícita —*"índice compuesto en
+    /// `Match`(`competition_id`, `home_team_id`) y (`competition_id`,
+    /// `away_team_id`): son los que sostienen la composición de la competición
+    /// ahora que no hay tabla pivote (§3.4, [D-27])"*— y `CreateMatch` creaba
+    /// **cuatro de una sola columna**.
+    ///
+    /// La auditoría lo anotó como **discrepancia código↔diseño** y no como
+    /// rendimiento (que está fuera de alcance), y la regla obliga a decir cuál de
+    /// los dos lados está mal: el diseño tiene el argumento escrito y [D-27]
+    /// sigue en pie, así que **falta el índice**. Cae en F10 porque es cambio de
+    /// esquema y por [D-90] va en una migración **nueva** — la de
+    /// `TeamRegistration`, que es la que esta fase ya escribe.
+    ///
+    /// **Se afirma sobre el catálogo y por columnas, no por nombre**: lo que §4.6
+    /// pide es la pareja de columnas en ese orden, y un índice con el nombre
+    /// correcto sobre las columnas equivocadas cumpliría un test por nombre sin
+    /// sostener nada.
+    @Test("los dos índices compuestos de Match existen y son compuestos (A-5·H-36, §4.6)")
+    func matchHasItsCompositeIndexes() async throws {
+        try await Self.withApp { app in
+            try await Self.cleanUp(["idx"], on: app)
+            let schema = try await Self.provision("idx", on: app)
+
+            let inventory = try await Self.inventory(of: schema, on: app)
+            for lado in ["home_team_id", "away_team_id"] {
+                #expect(
+                    inventory.contains {
+                        $0.contains("ON TENANT.matches")
+                            && $0.contains("(competition_id, \(lado))")
+                    },
+                    "falta el índice compuesto (competition_id, \(lado)) de §4.6"
+                )
+            }
+
+            try await Self.cleanUp(["idx"], on: app)
+        }
+    }
+
+    /// **`C-D.6` · el índice viejo se retira, y lo pidió la mutación.**
+    ///
+    /// `CreateIngestionRun` dejó `idx_ingestion_runs_competition` sobre
+    /// (`competition_id`, `finished_at`) porque ése era el orden del registro.
+    /// F10-bis añadió su pareja por `started_at` y dejó el viejo en pie **a
+    /// propósito**, porque hasta `C-D.6` seguía siendo el que la consulta usaba.
+    /// Ya no lo usa nadie.
+    ///
+    /// **Sin este test, vaciar `DropFinishedAtIngestionRunIndex` pasaba toda la
+    /// batería** (`M14` sobrevivía): el inventario del `revert` compara los dos
+    /// lados entre sí, así que no nota lo que **sobra** en los dos. Es la misma
+    /// forma de fallar que las dos anclas absolutas de más abajo vienen a tapar.
+    @Test("el índice por finished_at ya no está, y sí el de started_at (C-D.6, D-96)")
+    func theFinishedAtRunIndexIsRetired() async throws {
+        try await Self.withApp { app in
+            try await Self.cleanUp(["dropidx"], on: app)
+            let schema = try await Self.provision("dropidx", on: app)
+
+            let inventory = try await Self.inventory(of: schema, on: app)
+            // **Por igualdad exacta sobre el renglón de `pg_class`, y lo pidió la
+            // mutación.** La primera versión preguntaba por un `contains` de
+            // `idx_ingestion_runs_competition"` —con una comilla que `pg_indexes`
+            // no escribe—, así que no casaba con nada y **pasaba siempre**:
+            // `M14` sobrevivía a un test que no afirmaba nada. Es la misma
+            // lección que `M3` del Bloque B, en otro sitio: el verde de una
+            // aserción vacía es indistinguible del verde de una que funciona.
+            #expect(!inventory.contains("i idx_ingestion_runs_competition"),
+                    "sigue el índice por finished_at, que ya no tiene un solo lector")
+            // **Y la otra mitad**: retirar el viejo no puede llevarse al que la
+            // consulta usa ahora. Sin esto, tirar los dos también pasaría.
+            #expect(inventory.contains {
+                        $0.contains("ON TENANT.ingestion_runs")
+                            && $0.contains("(competition_id, started_at)")
+                    },
+                    "falta el índice por started_at, que es el que sostiene el orden de C-D.6")
+
+            try await Self.cleanUp(["dropidx"], on: app)
+        }
+    }
+
     /// H-30/H-38: **el `revert` deshace de verdad**, y la prueba no es que no
     /// falle: es que volver a migrar deja el esquema **exactamente** como estaba.
     ///
