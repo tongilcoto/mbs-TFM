@@ -288,8 +288,14 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     /// Es cuándo **se pidió**, que es lo que el `202` dejó para consultar, y es
     /// la clave por la que el registro ordena (`C-D.6`). Sustituirlo por el
     /// arranque real del job haría que la fila saltara de sitio en la lista justo
-    /// mientras alguien la mira. Para las pasadas que nacen ya corriendo sigue
-    /// estando `timed(from:to:)`, que es de quien conoce los dos extremos.
+    /// mientras alguien la mira.
+    ///
+    /// **Y ya no hay una segunda forma de acabar.** Esta frase decía *"para las
+    /// pasadas que nacen ya corriendo sigue estando `timed(from:to:)`"*, y F10-bis
+    /// quitó esa función: la pasada del calendario adopta la fila abierta cuando
+    /// la hay y abre la suya —también abierta— cuando no, así que **toda pasada
+    /// nace sin final y acaba cerrándose**. Una sola forma, que es lo que hace
+    /// que `accepted` signifique siempre lo mismo.
     ///
     /// # Solo se cierra lo abierto, y solo hacia un desenlace
     ///
@@ -312,8 +318,8 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
             )
         }
 
-        // Revalida por el `init`, igual que `timed`: es lo que impide cerrar
-        // como fallida sin motivo, o antes de haber empezado.
+        // Revalida por el `init`: es lo que impide cerrar como fallida sin
+        // motivo, o antes de haber empezado.
         var closed = try IngestionRun(
             id: id, competitionID: competitionID, kind: kind, roundID: roundID,
             startedAt: startedAt, finishedAt: finishedAt,
@@ -322,35 +328,15 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         return closed
     }
 
-    /// La misma pasada, con las marcas de tiempo **de quien conoce los dos
-    /// extremos**.
-    ///
-    /// Existe porque el informe se construye al **empezar** la pasada, cuando
-    /// todavía no se sabe cuándo va a terminar: con las suyas, toda pasada con
-    /// éxito registraba `startedAt == finishedAt` —duración cero— mientras la
-    /// fallida sí se medía. La invariante del `init` no lo delataba, porque
-    /// `finishedAt >= startedAt` se cumple trivialmente; lo destaparon las
-    /// pruebas manuales de F6 al mirar la tabla de verdad.
-    ///
-    /// Devuelve una copia y revalida por el `init`, que es lo que impide colar
-    /// aquí un par de fechas al revés.
-    public func timed(from startedAt: Date, to finishedAt: Date?) throws -> IngestionRun {
-        var timed = try IngestionRun(
-            id: id, competitionID: competitionID, kind: kind, roundID: roundID,
-            startedAt: startedAt, finishedAt: finishedAt,
-            outcome: outcome, error: error)
-        timed.carryCounters(from: self)
-        return timed
-    }
-
     /// Arrastra lo que el `init` no recibe: los trece contadores y la lista de
     /// descartes.
     ///
-    /// **Sale del cuerpo de `timed` en el refactor de `C-A.6`**, cuando dejó de
-    /// tener un solo llamante. Copiado a mano en dos sitios, el contador que F8
-    /// añadiera al tercero se olvidaría en uno de ellos y la pasada llegaría al
-    /// backoffice con un cero que se lee como *"no hizo nada"* — que es
-    /// literalmente el defecto que `IngestionKind` existe para evitar.
+    /// **Salió del cuerpo de `timed` en el refactor de `C-A.6`**, cuando dejó de
+    /// tener un solo llamante — y volvió a tener uno solo cuando F10-bis quitó
+    /// `timed`. Se queda como método aparte igualmente: es **el sitio exacto
+    /// donde un campo nuevo se pierde en silencio**, porque el `init` no se queja
+    /// (tiene valor por defecto) y la fila sale con un cero que parece un dato.
+    /// Tenerlo con nombre es lo que permite que un test apunte ahí.
     private mutating func carryCounters(from other: IngestionRun) {
         opponentClubsCreated = other.opponentClubsCreated
         opponentClubsUpdated = other.opponentClubsUpdated

@@ -41,7 +41,8 @@ final class CalendarPass {
     /// # El informe nace `accepted`, y eso es F10-bis
     ///
     /// Antes nacía con los dos extremos puestos al mismo instante y lo corregía
-    /// `timed(from:to:)` al salir. Ahora nace **abierto** —sin final, que es lo
+    /// `timed(from:to:)` al salir —una función que F10-bis quitó, porque con esto
+    /// se quedó sin llamantes—. Ahora nace **abierto** —sin final, que es lo
     /// que [D-96] dice de una pasada que todavía no ha corrido— y se cierra al
     /// terminar con `closed(as:)`. Una sola forma de acabar, y la que permite
     /// **adoptar**: si el `202` dejó fila, `identity` es la suya y esta pasada

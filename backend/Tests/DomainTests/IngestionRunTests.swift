@@ -213,16 +213,21 @@ struct IngestionRunTests {
         #expect(try Self.run(kind: .standings).roundID != nil)
     }
 
-    @Test("`timed` conserva la jornada (F7)")
-    func timedCarriesTheRound() throws {
-        // `timed` reconstruye por el `init`, así que un campo que no copie se
-        // pierde — y aquí perderlo no daría un cero silencioso: haría **lanzar**
-        // al propio `init`, porque la pareja no cuadraría. Vale como prueba de
-        // que la guarda de arriba también protege la copia.
-        let run = try Self.run(kind: .standings)
-        let timed = try run.timed(
-            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 90))
-        #expect(timed.roundID == run.roundID)
+    /// **Era un test de `timed(from:to:)` y ahora lo es de `closed(as:at:)`**
+    /// (F10-bis): la función se quitó por quedarse sin llamantes, pero lo que
+    /// este test afirma **no era de ella** — es de la copia, y la copia sigue
+    /// estando en `closed`. Borrarlo con la función habría tirado la guarda junto
+    /// con lo guardado.
+    ///
+    /// Cerrar reconstruye por el `init`, así que un campo que no se copie se
+    /// pierde — y aquí perderlo no daría un cero silencioso: haría **lanzar** al
+    /// propio `init`, porque la pareja `kind`/`roundID` no cuadraría. Vale como
+    /// prueba de que la guarda de arriba también protege la copia.
+    @Test("cerrar conserva la jornada (F7, F10-bis)")
+    func closingCarriesTheRound() throws {
+        let run = try Self.run(kind: .standings, finished: nil, outcome: .accepted)
+        let closed = try run.closed(as: .succeeded, at: Date(timeIntervalSince1970: 90))
+        #expect(closed.roundID == run.roundID)
     }
 
     @Test("la clase de pasada viaja y se conserva (F7)")
@@ -234,21 +239,23 @@ struct IngestionRunTests {
         #expect(try Self.run().kind == .calendar)
     }
 
-    @Test("`timed` conserva la clase y los contadores de clasificación (F7)")
-    func timedCarriesTheNewFields() throws {
-        // `timed` copia campo a campo, así que es el sitio exacto donde un campo
-        // nuevo se pierde en silencio: el `init` no se queja porque tiene valor
-        // por defecto, y la fila sale con un cero que parece un dato.
-        var run = try Self.run(kind: .standings)
+    /// El hermano del de arriba, y el que de verdad vigila a `carryCounters`:
+    /// copia campo a campo, así que **es el sitio exacto donde un campo nuevo se
+    /// pierde en silencio** — el `init` no se queja porque tiene valor por
+    /// defecto, y la fila sale con un cero que parece un dato.
+    ///
+    /// También era de `timed` hasta F10-bis, por lo mismo que su vecino.
+    @Test("cerrar conserva la clase y los contadores de clasificación (F7, F10-bis)")
+    func closingCarriesTheNewFields() throws {
+        var run = try Self.run(kind: .standings, finished: nil, outcome: .accepted)
         run.standingRowsCreated = 400
         run.standingRowsUpdated = 16
 
-        let timed = try run.timed(
-            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 90))
+        let closed = try run.closed(as: .succeeded, at: Date(timeIntervalSince1970: 90))
 
-        #expect(timed.kind == .standings)
-        #expect(timed.standingRowsCreated == 400)
-        #expect(timed.standingRowsUpdated == 16)
+        #expect(closed.kind == .standings)
+        #expect(closed.standingRowsCreated == 400)
+        #expect(closed.standingRowsUpdated == 16)
     }
 
     /// El par que el esquema ata con un `CHECK` y el tipo ata aquí: **una pasada
