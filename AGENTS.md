@@ -207,6 +207,27 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   temporada, competición)***, que es lo que el backoffice llama *"un equipo"*; hoy costaría N+1 peticiones.
   No es fallo del modelo (la participación se deriva por diseño, `D-27`/`D-28`): es una vista derivada que
   falta.
+- **La cascada del enganche presta la categoría del EQUIPO a la competición que crea, y eso no es una
+  elección entre varias** (F10, Bloque C). La federación **no publica la categoría de edad** —va en el
+  nombre, como el género— y `FederationLinkRequest` no la lleva: el contrato pide `gender` y no la edad. Así
+  que cuando la cascada de `D-67` crea la `Competition`, `ageCategory` sale del equipo que se está
+  enganchando, `modality` de la coordenada (`tipojuego`) y `gender` del cuerpo. La consecuencia hay que
+  leerla entera para no confundirla con un descuido: **en el alta de una competición nueva la edad cuadra
+  por construcción**, y de las tres que `identityMatches` compara (`D-58`, §3.2) las que de verdad muerden
+  son las otras dos. La tercera se cobra cuando **la competición ya existe** —la que dio de alta otro equipo
+  o `seed-competition`—, que es exactamente el caso de `D-58`: el Cadete A enganchado a la juvenil. Por eso
+  el `/preview` enseña **la identidad de la fila** cuando la hay y **los rótulos de la fuente** siempre: los
+  rótulos están para *reconocer* el grupo (`D-16`), la identidad para *decidir* si esto va a dar un 409. Y
+  por eso la negativa vive en el Dominio (`Team.requireIdentityMatches`) y no en el caso de uso: la otra
+  puerta que afirma esta correspondencia a mano —`POST /teams` + `PUT /registrations`, del backoffice—
+  **sigue sin fase**, y tendría que acordarse de escribirla otra vez.
+- **La fila `accepted` de `D-96` va DENTRO del ámbito de su cascada, al revés que la constancia de `D-85`.**
+  No es una incoherencia: son dos cosas distintas con el mismo nombre de tabla. El registro de `D-85` vive
+  en su **propio** ámbito precisamente para que el `rollback` de la pasada fallida no se lleve la constancia
+  **del fallo**; la fila `accepted` es la constancia de que **esto se ha aceptado**, y sin la cascada no hay
+  nada que aceptar — una fila prometiendo una pasada sobre una competición que el `rollback` se llevó es
+  peor que no tener fila. Al tocar cualquiera de las dos: la pregunta no es *"¿dentro o fuera?"* sino
+  *"¿qué deja de ser verdad si la transacción se deshace?"*.
 - **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
   en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
   ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
@@ -350,7 +371,7 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
 | `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. F8, `LeagueScorer` — con eso la salida de la ingesta está **completa**. **Sin** `import Vapor/Fluent` |
-| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`). F10 añade al puerto de federación **la inversa de la coordenada** —leer la URL que el administrador pega—, que es su **única operación que no habla con la fuente** (`D-97`) |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`). F10 añade al puerto de federación **la inversa de la coordenada** —leer la URL que el administrador pega—, que es su **única operación que no habla con la fuente** (`D-97`)— y los **dos casos de uso del enganche** (`PreviewFederationLink`, `LinkTeamToFederation`), con `TeamRegistrationRepository` y `TeamRepository.find(_:)` como puertos nuevos |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
