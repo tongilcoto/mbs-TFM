@@ -402,7 +402,7 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son TRECE migraciones por tenant:
+                                          # hoy son DIECISÉIS migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
@@ -410,13 +410,30 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   ingestion_runs -> (+kind, +contadores)
                                           #   -> (+round_id) -> (+contadores de
                                           #   goleadores Y EL CHECK DE kind REHECHO)
-                                          #   Las tres últimas ALTERAN ingestion_runs
-                                          #   y son TRES y no una porque cada una ya
+                                          #   -> (F10-bis: finished_at ANULABLE, el
+                                          #   CHECK de outcome REHECHO y el índice
+                                          #   por started_at) -> (F10: la tabla
+                                          #   team_registrations, con el UNIQUE
+                                          #   NULLS NOT DISTINCT de tres columnas,
+                                          #   la FK COMPUESTA a la temporada de la
+                                          #   competición y, de paso, los dos
+                                          #   índices compuestos de matches que
+                                          #   §4.6 mandaba y no existían —H-36—)
+                                          #   -> (F10: se RETIRA el índice de
+                                          #   ingestion_runs por finished_at, que
+                                          #   desde que la consulta ordena por
+                                          #   started_at no tiene ningún lector)
+                                          #   Las que ALTERAN ingestion_runs son
+                                          #   varias y no una porque cada una ya
                                           #   estaba aplicada cuando llegó la
                                           #   siguiente (`D-90`). Y la de F8 rehace
                                           #   el CHECK de `kind` porque un enumerado
                                           #   derivado NO se mantiene solo: se
-                                          #   deriva al migrar y ahí se congela
+                                          #   deriva al migrar y ahí se congela.
+                                          #   Las dos últimas van SEPARADAS aunque
+                                          #   sean de la misma fase: no son la misma
+                                          #   razón, y una migración que hace dos
+                                          #   cosas no se revierte a medias
                                           #   El orden es el de FK, y cada fase
                                           #   añade la suya AL FINAL DE LA LISTA
                                           #   QUE LE TOQUE, no al final a secas
@@ -447,8 +464,12 @@ swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
                                           # y no tienen defecto honesto: equivocarlas da
                                           # un 409, no un rótulo feo. La letra nula ES
                                           # un valor —«el único equipo»—, no un comodín.
-                                          # NO escribe TeamRegistration todavía (`D-68`,
-                                          # bloque D de F10). Manual: README §6.2
+                                          # NO escribe TeamRegistration, y desde el
+                                          # bloque D de F10 ya no es porque la tabla
+                                          # falte: quien la escribe es LA CASCADA DEL
+                                          # ENGANCHE (`D-68`, `C-C.10`), que es la que
+                                          # sabe en qué competición queda inscrito.
+                                          # Manual: README §6.2
 swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -t <slug[,slug]>  solo esos clubes
                                           #   -c <uuid>         solo esa competición
