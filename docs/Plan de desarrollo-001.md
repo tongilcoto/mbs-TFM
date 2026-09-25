@@ -662,6 +662,42 @@ igual.
 **Entregada el 2026-09-25**: **536 → 537 tests**, **4/4 mutaciones**, y el test del 404 de `C-E.6` pasa de
 comparar **sin caja** a comparar **exacto**, que es lo que no podía hacer antes.
 
+##### Y lo que salió de repasar el arnés detrás de ella — **no es mini-fase**
+
+Al preguntar *"¿están todos los tests repasados?"* se miró el arnés en vez del código, y salieron **cuatro
+campos que cruzaban la frontera sin que nadie los afirmara**. No va como mini-fase porque **solo toca
+`Tests/`** —un *target*, ninguna API pública, ningún doble movido—: es la regla 2 al revés. Va aquí porque el
+método vale más que los tests.
+
+| Campo | Qué pasaba |
+|---|---|
+| `IngestionRunResponse.counters` | **Trece** asignaciones a mano, en columna, con nombres por parejas (`Created`/`Updated`) repetidos en cinco familias. Afirmadas en los niveles 1, 2 y 3 —la entidad las lleva bien— y el salto a DTO **sin mirar**. Cruzar dos compila y llega al backoffice como otra cosa |
+| `PreviewTeam.crestUrl` | **Todas** las *fixtures* del proyecto pasaban `crestURL: nil`, así que el campo no se ejercía nunca. Contra la RFFM viene siempre (16 de 16 medido) |
+| `IngestionRunResponse.roundId` | El único **anulable** de los tres identificadores, y solo aparece en la pasada de clasificación — que la *suite* no provoca, porque con un calendario vacío no hay jornada jugada |
+| `ClubResponse.crestUrl` | Nulo **a propósito** hasta que exista el adaptador de Storage. Un anulable que siempre viaja nulo es indistinguible de uno que nadie mira |
+
+*(El quinto candidato, `ClubResponse.settings`, **no** es un hueco: el *spec* lo declara con
+`properties: {}`, así que no hay valor que pueda estar mal.)*
+
+**La lección, que es la que se repite:** lo que se queda sin arnés no es lo complicado, es **lo que ningún
+montaje llega a ejercer** — un anulable que todas las *fixtures* dejan en nulo, o un camino que la batería no
+provoca. Ninguno de los cuatro se habría encontrado leyendo el código.
+
+**Y el método que los encontró cuesta dos minutos y se puede repetir**: cruzar **los campos que el contrato
+declara** contra el árbol de tests, y mirar los que tienen cero aciertos. Es la misma pregunta que `A-7`
+hacía sobre los códigos `Problem`, aplicada a los campos.
+
+**Los valores del test tienen que ser distintos.** Con ceros o con el mismo número repetido, una permutación
+de los trece contadores es **invisible**: el test pasaría igual con los campos cruzados. Es la misma mitad
+que hace falta en el test de los enumerados espejo (`C-E.9`) y en el del identificador de arriba.
+
+**Hecho el 2026-09-25**: 537 → **539 tests** —el `roundId` uno y los contadores otro; los dos escudos son
+**aserciones dentro de tests que ya existían**, y por eso no suben el recuento—, **5/5 mutaciones** —cruzar dos contadores de la misma familia,
+cruzar dos familias, tocar el único sin hermano (`leagueScorersRetired`, el de [D-94]), tirar el escudo del
+`/preview` y devolver uno inventado en el club—. Y de paso se remidió lo que `A-7`·H-46 dejó con número: los
+códigos `Problem` afirmados **por código** pasan de **3 de 14** a **15 de 30**, con los quince que faltan
+listados por su nombre en la fila de H-46.
+
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
