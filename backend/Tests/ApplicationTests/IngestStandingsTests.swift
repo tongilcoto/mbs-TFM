@@ -57,6 +57,17 @@ struct IngestStandingsTests {
             }
             return table
         }
+
+        /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+        ///
+        /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+        /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+        /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+        /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+        /// escrito sobre el doble equivocado (`H-07`).
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            throw NotStubbed(client: "StandingsClient", operation: "coordinate(fromCalendarURL:)")
+        }
     }
 
     struct Fixture: Sendable {
@@ -394,7 +405,10 @@ struct IngestStandingsTests {
         ).execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
 
         let run = try #require(runs.first)
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`: exigirlo aquí es parte de lo
+        // que se afirma — una pasada con éxito tiene fin (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 
     @Test("sin jornadas jugadas no hay pasada, y no es un error")

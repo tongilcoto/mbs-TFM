@@ -153,7 +153,16 @@ dependen de eso.
 | **F7** ✅ | `StandingRow` (RFFM histórica) + ***fallback* calculado** desde `Match` — **y su migración se añade con [D-90] delante** (ver abajo). Detalle abajo | unit + integración | [D-15], [D-55], [D-92], `A-5` · H-31 |
 | **F8** ✅ | `LeagueScorer` — con la clave de *upsert* que §3.5 no tenía ([D-93]), la **única retirada de filas** de la salida de la ingesta ([D-94]) y el `CHECK` de un enumerado que **no se mantenía solo**. Detalle abajo | integración | [D-09], [D-48], [D-93], [D-94], [D-90] |
 | **F9** ⏸️ | Adaptador **FCF** — **APLAZADA sin escribir código** ([D-95]). Se abrió, revalidó el anexo como manda [D-74] y **la revalidación paró la fase**: la fuente publica una clasificación rota en origen, dice que no con un contenedor vacío y cambió de forma en 23 días. Detalle abajo | — (no se escribió) | [D-95], [Anexo FCF §C.12], [D-74], `H-09`, `H-28` |
-| **F10** | `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila** (ver abajo). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo | E2E de contrato | [D-67], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
+| **F9-bis** ✅ | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido, y confirmado al ejecutarlo). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. **Entregada el 2026-09-21**: dos ciclos, 6/6 mutaciones, 448 tests, y la decisión que tenía abierta cerrada en **A** —`skipped` ensancha su significado—. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
+| **F10-bis** ✅ | **El ciclo de vida de la pasada aceptada: quién la abre y quién la cierra.** F10 inventa el desenlace `accepted` ([D-96]) y su Bloque C escribe la primera fila; lo que **no existe** es el otro extremo — `IngestionRun.closed(as:at:)` se escribió en `C-A.6` y **no tiene un solo llamante** fuera de sus tests (medido con `grep` el 2026-09-23). Sin él, la pasada encolada crea **su propia** fila y la aceptada queda abierta para siempre: dos filas de la misma pasada, una eternamente `accepted`, y el cliente que sigue la suya sin enterarse de que ya hay resultado — exactamente lo que la cabecera de `closed` declara inaceptable. Y la **otra** puerta del `202` —`POST /ingestion-runs`— sigue sin dejar fila, que es el deber que `H-27` dejó escrito **en el código** y asignado a F10. Es mini-fase y no un arreglo porque cambia el contrato de un puerto (`IngestionRunRepository.record` dice *"solo inserta"*) y toca cuatro *targets*. **Va antes de cerrar F10**, con la migración de [D-96] dentro: sin ella no hay forma de mirar la tabla, y §3 manda mirarla. **Entregada el 2026-09-23**: cinco ciclos, **14/14** mutaciones, 494 → 502 tests, y verificada contra la base de trabajo y la RFFM de verdad. Detalle abajo | niveles 2 y 3, y la tabla de verdad | [D-96], [D-85], [D-88], `A-4` · H-27 |
+| **F10** ✅ | **Troceada en ciclos: [Plan F10-001](../backend/Plan%20F10-001.md).** `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila**, ya decidido ([D-96]: desenlace `accepted`, `finished_at` anulable y orden por `started_at`). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo. Más el **equipo que la fuente publica sin código**, que no viene de la auditoría sino de diseñar el `/preview`: el contrato tiene que admitirlo. La otra mitad —que la pasada lo apunte— es **F9-bis** | E2E de contrato | [D-67], [D-96], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
+
+> **F10 entregada el 2026-09-24**, en siete bloques y **47 ciclos**, con **541 tests** y todas sus
+> mutaciones cazadas. Los tres deberes de frontera que heredaba están cerrados: `FederationError` se
+> distingue en producción (H-15), la guarda de tenant dejó de ser una tautología (H-42) y los `Problem`
+> que la fase estrena se afirman **por código** (H-46). El detalle, bloque a bloque y con lo que cada uno
+> midió, en [Plan F10-001 §5](../backend/Plan%20F10-001.md).
+| **F10-ter** ✅ | **El identificador que no sabía escribirse.** Un `UUID` admite las dos cajas, así que la forma hay que elegirla —RFC 4122 §3 elige **minúscula**— y hasta aquí no vivía en ningún sitio: se repetía a mano en cada punto de salida, con **14 sitios que se acordaban y 14 que no** (medido el 2026-09-25). Los que no eran los que meten el id en el texto de un error, así que el `detail` de un problema **no casaba** con el id que el cliente había enviado. Es mini-fase por la regla 2 —dos *targets* y una conformidad nueva en once tipos públicos—, y la regla cobró pieza: los identificadores se habían contado **por fichero** y eran **once**, no diez. Lo encontró F10 (§7 de su plan) y no es suyo. **Entregada el 2026-09-25**: 536 → 537 tests, **4/4** mutaciones. Detalle abajo | unit puro + frontera | RFC 4122 §3, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -177,16 +186,30 @@ cara de sano. Medido en A-4: el cliente recibe su `202` con dos competiciones, s
 `ingestionHealth` ([D-89]) evalúa **`ok`**.
 
 El arreglo de A-4 tapó la ceguera del **operador** —el fallo se registra en el log, `77b2056`— pero **no la del
-backoffice**, y no puede: no hay *push*, así que la pantalla solo sabe lo que pueda **leer**. Las dos salidas,
-a decidir en F10 con [D-67] delante:
+backoffice**, y no puede: no hay *push*, así que la pantalla solo sabe lo que pueda **leer**.
 
-- **Escribir la fila al aceptar**, con un desenlace nuevo (`running`/`accepted`) que la pasada cierra. Es lo que
-  hace que el backoffice se entere leyendo lo que ya lee, y lo que convierte *"lleva veinte minutos en curso"*
-  en una frase que la pantalla puede decir. Toca **Dominio, migración y contrato**, y obliga a **enmendar
-  [D-88]**, que hoy dice *"el `POST` no crea la fila"* — la enmienda es de alcance, no de dirección: seguiría
-  sin llevar ni un dato de la pasada.
-- **Que el cliente compare marcas de tiempo** —*"¿ha aparecido una pasada más nueva que mi petición?"*—, que no
-  toca nada del backend y es el N+1 por recarga que [D-89] descartó **a propósito**.
+**Las dos salidas que A-4 dejó evaluadas están decididas: [D-96].** Se escribe la fila **al aceptar**, con un
+desenlace `accepted` que la pasada cierra. La alternativa —que el cliente compare marcas de tiempo— se
+descarta por lo que ya decía [D-89], el N+1 por recarga, y porque **no cubre el caso medido**: comparar exige
+que exista algo más nuevo que la petición, y el fallo es que no existe nada. Lo que F10 tiene que ejecutar,
+con el inventario ya hecho en la decisión:
+
+- **Una migración** ([D-90]) que rehaga `chk_ingestion_runs_outcome` —el `CHECK` derivado **no** alcanza a un
+  *schema* que ya existe, que es lo que pagó F8 con `kind`—, haga `finished_at` **anulable** y añada el índice
+  `(competition_id, started_at)`. Las tres cosas en una.
+- **El orden de la consulta pasa a `started_at`**: una fila aceptada no tiene fecha de fin, y un disparo se
+  ordena por cuándo empezó. Las otras dos salidas —`finishedAt = startedAt` provisional, o anulable
+  conservando el orden— están descartadas con razón en [D-96]; la primera es *"una fila que miente"*, que es el
+  defecto que F6 encontró mirando la tabla de verdad.
+- **Nombrar los tres casos en el `switch` de `outcome`/`error`** del `init`, que hoy acaba en `default: break`
+  y dejaría pasar una `accepted` con error. El `switch` de al lado documenta exactamente este riesgo.
+- **Enmendar la docstring de `IngestionOutcome`**, que dice *"dos valores y no cuatro"* argumentando contra
+  `.partial`, no contra esto.
+- Y **el umbral de [D-89]**: a partir de cuándo una aceptada es sospechosa. Se elige a mano.
+
+> **Y la que no se arregla, que hay que aceptar:** la fila `accepted` **no se cierra sola**. Con la base caída
+> detrás del `202` se queda así para siempre — mejor que hoy, donde no queda nada y la pantalla dice `ok`,
+> pero convierte *"está en curso"* en una afirmación con fecha de caducidad.
 
 **Y F10 hereda tres deberes más, los tres de la frontera de error** (`A-6` y `A-7`), que van juntos porque
 son el mismo sitio: hasta F10 la ingesta **no pasa por HTTP** (§2.3-b), y el `/preview` la ejecuta **en línea
@@ -208,6 +231,24 @@ y dentro de la respuesta**.
   de A-7 fijó **por caso** los cinco casos de `ApplicationError` que la ingesta levanta —404 contra 500 contra
   503 no son intercambiables y hasta entonces lo eran sin que la batería lo notase—, pero eso es el nivel 2.
   **La superficie HTTP sigue sin afirmarse**, y es F10 quien la estrena.
+
+**Y un deber que no viene de la auditoría sino de diseñar el `/preview`: el equipo que la fuente publica
+sin código** (anotado el 2026-09-20). **El contrato tiene que decirlo, no omitirlo.**
+`FederationTeamRef.federationTeamID` es **`String?`** (`Sources/Application/FederationClient.swift:348`) —la
+fuente puede no publicarlo, y el puerto lo promete anulable a propósito— mientras que
+`PreviewTeam.federationTeamId` es **obligatorio** en el *spec*. Esa rama hoy **no es expresable**: o el equipo
+se cae de `teams[]` —y el club desaparece de la lista sin que nadie sepa por qué— o hay que inventarle un
+valor. Se decide **decirlo**: el campo pasa a anulable y la respuesta lo declara, para que la web **habilite
+un campo de entrada manual** en lugar del clic sobre la lista. El caso es raro —en los volcados medidos de la
+RFFM el `codigo_equipo` viene en todas las filas— pero **el enganche es obligatorio** ([D-67]), así que sin
+esa salida manual un club con ese hueco **no se puede dar de alta con ingesta**, que es exactamente la
+consecuencia que [D-95] ya le dejó a esta fase por el lado catalán. Es [D-75] aplicado al contrato: *decir "no
+lo sé" es barato; callarlo pierde el caso*.
+
+**La otra mitad de ese hallazgo no es de F10 y por eso no está aquí**: que la pasada **deje constancia** del
+equipo sin código es un defecto de lo ya entregado, toca `Domain` y `Application` y añade un caso a una
+enumeración pública, así que por la regla 2 de §3 del plan de auditoría es una **mini-fase** y va con su
+nombre: **F9-bis**.
 
 **Y F7 llega con otro deber heredado, éste de una línea** (`A-5`, H-31 → [D-90]): **no se edita una
 migración ya aplicada.** F7, F8 y F10 añaden tres tablas a un esquema que ya tiene clubes con historia, y
@@ -407,6 +448,262 @@ mini-fase. **No se hace aquí**: la fila de esta decía *"una función, su test 
 **304 tests** (300 → 304), 0 fallos, 1 omitido —el canario, que está fuera de la batería por diseño—, medidos
 con `REQUIRE_DB=1 swift test --xunit-output`: **7+64+51+105+53+24**, y los dos *targets* de BD en **6,46 s** y
 **3,46 s**, que es el testigo de H-07 de que corrieron.
+
+#### F9-bis · el equipo sin código de federación, apuntado en la pasada — **entregada** (2026-09-21)
+
+**Está aquí por la misma razón que F6-ter: la regla 2 de §3 del plan de auditoría no admite excepciones por
+tamaño.** El arreglo es pequeño —un caso nuevo en un enumerado y la línea que lo escribe— pero **cambia una
+API pública**: `IngestionSkip.Reason` es `public` y `CaseIterable`. Eso deja de ser una corrección y pasa a
+ser mini-fase con su nombre.
+
+**Y toca cuatro *targets*, no los dos que esta entrada anunciaba** —corregido al ejecutarla—: `Domain`,
+`Application`, **`HTTPAdapter` y el *spec***. `IngestionSkip.Reason` **cruza la frontera HTTP**: tiene un
+enumerado espejo en el contrato (`IngestionSkipReason`) y una traducción a mano entre los dos
+(`IngestionHandler.toContract()`), que es exhaustiva a propósito por [D-61]. La consecuencia práctica: el
+compilador **obliga a escribir** la línea del caso nuevo, pero no a escribirla **bien** — mapearla al valor
+del vecino compila igual. Vale como aviso para el día que llegue el motivo número doce.
+
+**Y no es de F10 aunque se descubriera diseñándola**: el defecto está en la pasada del calendario, entregada
+en F5, y se hereda igual con enganche o sin él.
+
+**Qué encontró.** El silencio es doble, y las dos mitades están medidas en el código:
+
+| Escalón | Qué hace hoy | Dónde |
+|---|---|---|
+| Paso 1 de la cadena | `guard let key else { return nil }` — sin clave **se salta sin decir nada** | `Sources/Domain/MatchingChain.swift:364` |
+| Paso 2 | por nombre, y **solo alcanza rivales** (`ownership == .opponent`) | `MatchingChain.swift:100-107` |
+| `.unmatched` | `createTeam` escribe el equipo con `federationTeamID` **nulo** y **no apunta nada** | `Sources/Application/CalendarPass.swift:314-336` |
+
+La consecuencia no es un duplicado —el paso 2 lo reencuentra por nombre en la pasada siguiente— sino algo más
+callado: **esa fila no la podrá reconocer nunca el paso 1**, así que su identidad queda colgando de un
+emparejamiento **inexacto** para siempre, y el administrador no tiene por dónde enterarse. Es justo la
+pregunta que [D-85] existe para contestar —*"¿por qué falta este partido?"*, hecha días después— y aquí la
+tabla no tiene con qué.
+
+**Qué entrega.** Un `Reason` nuevo en `IngestionSkip`, escrito desde `CalendarPass` cuando la fuente no
+publica el código del equipo. **Su hermano es `unidentifiedScorer`**, y la analogía es la que fija el
+comportamiento: los dos significan **"la fuente ha cambiado"** y no *"los datos aún no cuadran"*, que es lo
+que los separa de los otros ocho; y como aquél, **no hace fallar la pasada** —un equipo sin código sigue
+teniendo sus partidos, igual que 217 goleadores de 218 siguen siendo un ranking—.
+
+**La decisión que la fase tenía que tomar, y era la única. Se cerró en A: `skipped` ensancha su
+significado.** `IngestionRun.skipped` se documentaba a sí misma como *"lo que la pasada **no** escribió"*, y
+aquí el equipo **sí** se escribe. O se ensanchaba ese significado, o la anomalía necesitaba su propia lista.
+No se prejuzgó porque las dos lecturas tenían argumento y **la barata puede ser la mala**.
+
+**Lo que decidió fue un dato que se fue a medir, y que desmontó el argumento fuerte de la lista aparte.** Ese
+argumento habría sido *"los otros diez se curan solos en la pasada siguiente y éste no"* — y es **falso**: en
+cuanto la fuente vuelva a publicar el código, el paso 2 reencuentra el equipo por nombre y
+`UpsertPolicy.matching` **rellena el hueco** (`Team.swift:121`, [D-76]: *"no sobrescribe; rellena hueco"*). El
+caso nuevo es de la misma familia que los diez anteriores. La diferencia que queda es más pequeña de lo que
+parecía —no es *"se cura / no se cura"*, es *"la fila no está / la fila está pero coja"*— y no basta para
+cobrar superficie en cuatro sitios.
+
+**El precio de A está pagado y escrito donde hay que leerlo**: la promesa cambió en sus **dos** sitios
+—`IngestionRun.skipped` y el *spec*— a *"lo que la pasada dejó señalado"*, con la consecuencia dicha para
+quien lee: **la lista se lee por el motivo de cada línea y no se cuenta**, porque su longitud ya no es
+*"cuántas filas faltan"*.
+
+**El aviso de [D-90] que F8 pagó NO aplica aquí, y se fue a mirar antes de escribirlo.** El reflejo correcto
+es el de F8 —*un caso nuevo en un enumerado con `CHECK` derivado no se propaga solo, porque `sqlValueList`
+([D-02]) deriva la expresión una sola vez, cuando la migración corre*—, y por eso la pregunta se hizo. La
+respuesta, medida: **`IngestionSkip.Reason` no tiene `CHECK`**. Los dos únicos de `ingestion_runs` son sobre
+`outcome` y `kind` (`Sources/Persistence/IngestionRunRecord.swift:113,181`), mientras que `skipped` viaja como
+documento **`jsonb`** (`ibíd.:55,97`), así que el caso nuevo entra sin tocar el esquema. **F9-bis no lleva
+migración.**
+
+> Vale como apunte de método, que es [D-84] aplicada a nosotros mismos: *heredar la lección de la fase
+> anterior es tan barato como heredar la premisa sobre un tercero, y se paga igual.* Aquí habría costado una
+> migración vacía y un rato de comprobación de mutación sobre algo que no existe.
+
+**Lo entregado: dos ciclos, dos tests, 446 → 448, y 6/6 mutaciones.**
+
+| Ciclo | Regla | Nivel |
+|---|---|---|
+| 1 | El equipo sin código **se escribe y se apunta**, y la pasada no falla | 2 (dobles, cero I/O) |
+| 2 | El motivo nuevo **cruza la frontera con su propio valor** | 4 (Postgres real + HTTP) |
+
+**Dónde se escribe la línea, que no es donde la tabla de arriba apuntaba.** El descarte va en `createTeam` y
+**no** en `resolveTeam`: el equipo se crea **una vez**, mientras que la referencia sin código llega en cada uno
+de sus ~30 partidos. Apuntarlo arriba llenaría la lista de la misma línea repetida, y **una lista que no se
+puede leer es la que no se lee** — que es el mismo argumento con el que se eligió A.
+
+**Dos cosas que la comprobación de mutación dijo y ningún rojo habría dicho:**
+
+1. **La regla *"y no lo apunta cuando la fuente sí publica el código"* no necesitaba test propio**: invertir la
+   guarda la caza el test **de punta a punta con el volcado real** —240 partidos con código, que pasan a ser
+   240 líneas de descarte—. Se comprobó antes de escribir un ciclo que habría sido ceremonia.
+2. **El `detail` afirmado con `contains` dejaba pasar dos mutaciones.** La letra es la mitad que identifica
+   —el "Infantil A" y el "Infantil B" del mismo club comparten nombre ([D-77])— y un `contains` del nombre la
+   deja caer sin que nada se entere. La aserción pasa a ser el `IngestionSkip` **entero**, con la convención
+   que el propio *spec* daba por ejemplo: `C.D. Galapagar "B"`.
+
+**Y la lección de F6 y F8 —*ejecútalo contra Postgres y mira la tabla*— la cumple el ciclo 2 por
+construcción**: escribe el motivo nuevo en el `jsonb` de un club real y lo lee de vuelta por HTTP. Es lo que
+confirma **ejecutando** lo que arriba estaba solo medido: el caso nuevo entra sin tocar el esquema.
+
+#### F10-bis · el ciclo de vida de la pasada aceptada — **entregada** (2026-09-23)
+
+**Está aquí por la regla 2 de §3 del plan de auditoría, como F6-ter y F9-bis**: cambia el contrato de un
+puerto público —`IngestionRunRepository.record`, cuya documentación dice hoy *"solo inserta: una pasada
+ocurrió o no ocurrió, y reescribir la historia de una sincronización no significa nada"*— y toca cuatro
+*targets*: `Application`, `Persistence`, `HTTPAdapter` y una migración. Eso deja de ser un arreglo.
+
+**Y es de F10 por obligación, no por origen** —el mismo argumento que `C-E.9`—: la fase es la que inventa el
+desenlace `accepted`, así que si sale sin esto, sale con una fila que **no cierra nunca**.
+
+**Qué encontró, con las dos mitades medidas el 2026-09-23:**
+
+| Mitad | Qué pasa hoy | Evidencia |
+|---|---|---|
+| **Nadie cierra** | `IngestionRun.closed(as:at:)` existe desde `C-A.6` y **no tiene llamantes** | `grep -rn "\.closed(" Sources/` → vacío |
+| **La otra puerta no abre** | el `202` de `POST /ingestion-runs` no deja fila, y su propio código lo dice y se lo asigna a F10 | `IngestionHandler.runAccepted`, cabecera: *"necesita que quede **fila** desde el instante en que se acepta … va a **F10**"* |
+
+Las dos son el mismo mecanismo visto por sus dos extremos, y por eso van juntas: separarlas dejaría el
+`accepted` escrito por una puerta y cerrado por nadie, o cerrable y escrito solo por una de las dos.
+
+**Cómo se cierra, que es la decisión de diseño de la mini-fase.** No *"la pasada escribe su fila y luego
+cierra la otra"* —eso deja los contadores en la fila equivocada: `closed(as:at:)` arrastra los del informe
+sobre el que se llama, y los de una fila aceptada son **ceros**—. Lo que se hace es **adoptar**: la pasada
+del calendario busca la fila `accepted` de su competición y, si la hay, **construye su informe con el `id` y
+el `startedAt` de esa fila**. Al terminar lo cierra con `closed(as:)`, que arrastra los contadores que la
+pasada acaba de acumular, y `record` lo escribe **por `id`**. Una sola fila, que transita.
+
+Tres consecuencias que conviene ver escritas:
+
+- **`startedAt` no se toca**, y es lo que `C-A.6` ya había decidido: es cuándo **se pidió**, que es lo que el
+  `202` dejó para consultar. Sustituirlo por el arranque real del *job* haría que la fila saltara de sitio en
+  la lista justo mientras alguien la mira.
+- **El camino de fallo adopta igual.** `D-96` dice *"la pasada la cierra a `succeeded` **o a `failed`**"*, y
+  la fila fallida se escribe fuera de la transacción por [D-85]: adoptar no cambia nada de eso, solo el `id`
+  con el que se escribe.
+- **Y sale gratis una propiedad que nadie pidió**: si el proceso muere entre el `202` y la pasada, la fila
+  queda abierta y **la siguiente pasada del cron la cierra**. Es autocurativo por construcción, no por una
+  rutina de limpieza.
+
+**La migración de [D-96] se trae aquí desde `C-D.5`**, y no es una licencia: §3 del plan de F10 manda
+*"al tocar `IngestionRun`, ejecutarlo contra la base de trabajo y mirar la tabla"*, y hoy **ninguna fila
+`accepted` cabe en Postgres** —`finished_at` es `NOT NULL` y el `CHECK` de `outcome` no la admite—. Sin la
+migración, esta mini-fase solo se podría verificar con dobles, que es justo el trampa que F6 y F8 enseñaron
+a no aceptar. **Bloque D pasa de 7 ciclos a 6** y su `C-D.7` cuenta una migración menos (14 en vez de 15;
+la quinceava sigue siendo la de `TeamRegistration`).
+
+**Los ciclos entregados son cinco, y el plan anunciaba ocho renglones.** Dos se fundieron y uno no hizo
+falta, y las tres cosas se corrigen aquí en vez de fingir el recuento:
+
+| # | Regla | Nivel |
+|---|---|---|
+| `B-1` | La migración de [D-96]: `finished_at` anulable, el `CHECK` de `outcome` **rehecho**, el par `(accepted ⟺ sin final)` bajado a la tabla y el índice por `started_at` | 3 |
+| `B-2` | `record` pasa a ser ***upsert* por `id`**: escribir dos veces la misma pasada la **cierra**, no la duplica | 3 |
+| `B-3` | La pasada del calendario **adopta** la fila aceptada — su `id`, su `startedAt` y los contadores de la pasada | 2 |
+| `B-4` | La pasada que **falla** cierra la aceptada a `failed`, no abre otra | 2 |
+| `B-5` | El `202` de `POST /ingestion-runs` deja fila antes de responder (`H-27`), y **aceptar dos veces no deja dos filas** | 2 |
+
+> **«Adopta» y «al cerrar conserva `id`, `startedAt` y contadores» eran el mismo ciclo**: una regla, un
+> test, cuatro aserciones. Separarlos habría sido contar dos veces lo mismo.
+>
+> **Y «sin fila aceptada, la pasada abre la suya» no necesitó ciclo propio**: es lo que hacen los **26
+> tests de `IngestCalendar` que ya existían**, todos sobre competiciones sin fila abierta. La mutación lo
+> confirma —`M5` y `M7`, *"no busca fila que adoptar"* y *"adopta el `startedAt` pero no el `id`"*, mueren
+> por esos tests—. Escribir un test más habría sido decorar.
+
+**La comprobación de mutación: 14/14, cero supervivientes, cero inválidas — pero no a la primera, y lo que
+encontró es lo que justifica el instrumento.** Tres mutaciones sobrevivieron a la primera vuelta y **dos de
+ellas eran agujeros de verdad**, no ruido:
+
+- **`M14` · `findAccepted` sin el filtro de `outcome` pasaba la batería entera.** Lo que eso rompe no es un
+  caso raro: es **la segunda semana**. Sin el filtro, la pasada del cron encuentra la fila `succeeded` de la
+  semana pasada e intenta cerrarla, y el Dominio se niega con razón —*"solo se cierra una pasada
+  aceptada"*—. La ingesta se caería en la segunda pasada de **cada** competición. Faltaban **dos** tests, no
+  uno: el de nivel 2 no podía cazarlo —interroga al doble— así que el que hacía falta era el del adaptador.
+- **`M2` · quitar el `replaceCheckConstraint` de `outcome` también pasaba.** Es **la lección de F8
+  cobrándose por segunda vez**: en los tests cada tenant nace limpio, así que `CreateIngestionRun` deriva el
+  `CHECK` con el enumerado de hoy y los tres valores entran igual. El que se rompe es el **club vivo**, que
+  es el único que no se puede fabricar ejecutando el código de ahora. Se escribe el test gemelo del que F8
+  dejó para `kind` —migrar hasta el lote anterior, falsificar el `CHECK` viejo, migrar el resto— y de paso
+  se generaliza el ayudante, porque dos consultas idénticas con el nombre cambiado se desincronizan.
+- **Y una lección del propio guion**: clasificaba como *"inválida"* toda pasada sin `✘` que tuviera un
+  `error:` en la salida, y `error:` aparece en los **logs** de la suite de API. Así se escondieron esos dos
+  supervivientes detrás de la palabra *"inválida"*, que es la que el método usa para *"no cuenta"*. Se
+  corrige: manda el `✘`, y *"no hay `✘`"* solo significa que sobrevive si la batería **dijo que pasó**.
+
+**Y la lección de F6 y F8 —*ejecútalo contra Postgres y mira la tabla*— cumplida de punta a punta**, contra
+la base de trabajo y la RFFM de verdad: `migrate-tenants` aplica la migración a `club_atleti` (columna
+anulable, `CHECK` con los tres valores, el par atado, los dos índices), un `POST /v1/ingestion-runs` de
+temporada contesta **202** y deja **dos filas `accepted` sin final**, y veinte segundos después **esas mismas
+dos filas** —mismo `id`— están `succeeded` con su `finished_at`, con `started_at` intacto en el instante en
+que se pidió. Antes de esto habrían sido ocho filas en vez de seis, dos de ellas abiertas para siempre.
+
+#### F10-ter · el identificador que no sabía escribirse — **entregada** (2026-09-25)
+
+**Está aquí por la regla 2 de §3 del plan de auditoría, como F6-ter, F9-bis y F10-bis**: toca el Dominio y la
+capa de Aplicación —dos *targets*— y **añade una conformidad a once tipos públicos**. Por tamaño habría sido
+un arreglo de media hora; la regla no admite excepciones por tamaño, y esta vez cobró pieza (abajo).
+
+**El defecto.** Un `UUID` se puede escribir en mayúsculas o en minúsculas sin cambiar de valor, así que la
+forma **hay que elegirla**; RFC 4122 §3 elige minúscula y es la que viaja en todo cuerpo del contrato.
+Foundation entrega mayúsculas, de modo que la conversión hacía falta en cada punto de salida y **se repetía a
+mano**. Medido el 2026-09-25: **14 sitios se acordaban y 14 no**. Los que no, los que meten el id en el texto
+de un error — con la consecuencia de que un cliente que comparase el `detail` de un problema contra el id que
+envió **no casaba**.
+
+**El reparto mitad y mitad es el argumento entero**: no falló la gente, faltaba el sitio. Es la cuarta vez que
+el libro encuentra *"la garantía depende de repetirlo a mano"* (H-17, H-26, H-38 y ésta), y la primera en que
+el remedio no es un test sino **un tipo**: `TypedIdentifier` decide la forma una sola vez, los once
+identificadores la heredan, y los 28 puntos de salida pasan a escribirse igual —`"\(id)"`—, que además es
+**más corto que las dos formas anteriores**. `raw` sigue ahí para quien necesite el `UUID` de verdad.
+
+**Lo encontró F10 y no es suyo**: salió del Bloque E, al afirmar por código el `Problem` del 404
+(`C-E.6`). Quedó apuntado en §7 de su plan con la nota de que tocarlo eran *"siete sitios en tres targets"* —
+**eran catorce en dos**, y contarlos bien fue lo primero que hizo esta mini-fase.
+
+**Y la regla 2 cobró pieza, que es lo que hay que leer de aquí.** Los identificadores eran *"los diez de
+`Identifiers.swift`"* — contados **por fichero**. `IngestionRunID` vive en `IngestionRun.swift`, se quedó sin
+conformar, y el `jobId` del `202` salió como `IngestionRunID(raw: …)` en lugar de como un UUID. **Son once.**
+Lo cazó un test de nivel 4 en el acto, y la lección es la de siempre en este proyecto: *un inventario que se
+hace mirando un fichero no es un inventario*. El test que fija la regla enumera los once a mano —Swift no deja
+recorrer los tipos que cumplen un protocolo— y dice en su propio texto por qué, para que el doce no se caiga
+igual.
+
+**Entregada el 2026-09-25**: **536 → 537 tests**, **4/4 mutaciones**, y el test del 404 de `C-E.6` pasa de
+comparar **sin caja** a comparar **exacto**, que es lo que no podía hacer antes.
+
+##### Y lo que salió de repasar el arnés detrás de ella — **no es mini-fase**
+
+Al preguntar *"¿están todos los tests repasados?"* se miró el arnés en vez del código, y salieron **cuatro
+campos que cruzaban la frontera sin que nadie los afirmara**. No va como mini-fase porque **solo toca
+`Tests/`** —un *target*, ninguna API pública, ningún doble movido—: es la regla 2 al revés. Va aquí porque el
+método vale más que los tests.
+
+| Campo | Qué pasaba |
+|---|---|
+| `IngestionRunResponse.counters` | **Trece** asignaciones a mano, en columna, con nombres por parejas (`Created`/`Updated`) repetidos en cinco familias. Afirmadas en los niveles 1, 2 y 3 —la entidad las lleva bien— y el salto a DTO **sin mirar**. Cruzar dos compila y llega al backoffice como otra cosa |
+| `PreviewTeam.crestUrl` | **Todas** las *fixtures* del proyecto pasaban `crestURL: nil`, así que el campo no se ejercía nunca. Contra la RFFM viene siempre (16 de 16 medido) |
+| `IngestionRunResponse.roundId` | El único **anulable** de los tres identificadores, y solo aparece en la pasada de clasificación — que la *suite* no provoca, porque con un calendario vacío no hay jornada jugada |
+| `ClubResponse.crestUrl` | Nulo **a propósito** hasta que exista el adaptador de Storage. Un anulable que siempre viaja nulo es indistinguible de uno que nadie mira |
+
+*(El quinto candidato, `ClubResponse.settings`, **no** es un hueco: el *spec* lo declara con
+`properties: {}`, así que no hay valor que pueda estar mal.)*
+
+**La lección, que es la que se repite:** lo que se queda sin arnés no es lo complicado, es **lo que ningún
+montaje llega a ejercer** — un anulable que todas las *fixtures* dejan en nulo, o un camino que la batería no
+provoca. Ninguno de los cuatro se habría encontrado leyendo el código.
+
+**Y el método que los encontró cuesta dos minutos y se puede repetir**: cruzar **los campos que el contrato
+declara** contra el árbol de tests, y mirar los que tienen cero aciertos. Es la misma pregunta que `A-7`
+hacía sobre los códigos `Problem`, aplicada a los campos.
+
+**Los valores del test tienen que ser distintos.** Con ceros o con el mismo número repetido, una permutación
+de los trece contadores es **invisible**: el test pasaría igual con los campos cruzados. Es la misma mitad
+que hace falta en el test de los enumerados espejo (`C-E.9`) y en el del identificador de arriba.
+
+**Hecho el 2026-09-25**: 537 → **539 tests** —el `roundId` uno y los contadores otro; los dos escudos son
+**aserciones dentro de tests que ya existían**, y por eso no suben el recuento—, **5/5 mutaciones** —cruzar dos contadores de la misma familia,
+cruzar dos familias, tocar el único sin hermano (`leagueScorersRetired`, el de [D-94]), tirar el escudo del
+`/preview` y devolver uno inventado en el club—. Y de paso se remidió lo que `A-7`·H-46 dejó con número: los
+códigos `Problem` afirmados **por código** pasan de **3 de 14** a **15 de 30**, con los quince que faltan
+listados por su nombre en la fila de H-46.
+
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 
@@ -1579,6 +1876,9 @@ Lo que sí hace falta del desarrollador, y no puede delegarse:
 [D-74]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-56]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-67]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-61]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-85]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-75]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-76]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-77]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

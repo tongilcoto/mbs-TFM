@@ -151,6 +151,36 @@ public protocol FederationClient: Sendable {
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable
+
+    /// La **inversa de la coordenada**: qué hay dentro de la URL del calendario
+    /// que un administrador acaba de pegar (F10, [D-97], [D-22]).
+    ///
+    /// # Por qué está en este puerto y no en un puerto aparte
+    ///
+    /// Porque **el adaptador es dueño del universo de datos de su federación de
+    /// punta a punta** —su URL, su JSON, dónde pega la letra del equipo— y nada
+    /// de eso es conocimiento del Dominio. El criterio para admitir un método
+    /// nuevo aquí es ése, *"¿es conocimiento del universo de esa federación?"*, y
+    /// no *"lo necesita un caso de uso"*. La consecuencia a proteger es la de
+    /// siempre: **cada federación nueva se escribe sin tocar la anterior**.
+    ///
+    /// El llamante no sabe —ni puede saber— de qué federación es la URL: llega
+    /// hasta aquí por club → `Club.federation` → `FederationClientProvider`. Por
+    /// eso **también es cosa del adaptador rechazar la que no es suya**: quien
+    /// conoce su propio *host* es él.
+    ///
+    /// # No es `async`, y eso dice lo que hace
+    ///
+    /// Es parseo de una cadena, no una pregunta a la fuente. Un adaptador que
+    /// necesitara la red para entender su propia URL estaría haciendo otra cosa.
+    ///
+    /// # Y lo que falta se rechaza, no se completa
+    ///
+    /// Ningún valor por defecto ([D-22]): inventar una `temporada` ausente sería
+    /// elegir por el administrador **cuál** de los calendarios reutilizados se
+    /// ingiere, y un dígito de más o de menos no da error — sirve otro calendario
+    /// en silencio ([D-84]).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate
 }
 
 /// Las coordenadas con las que se llama a una federación (§3.7).

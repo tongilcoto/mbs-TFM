@@ -10,7 +10,7 @@ struct IngestionRunTests {
     static func run(
         kind: IngestionKind = .calendar,
         roundID: RoundID? = nil,
-        started: TimeInterval = 0, finished: TimeInterval = 60,
+        started: TimeInterval = 0, finished: TimeInterval? = 60,
         outcome: IngestionOutcome = .succeeded, error: String? = nil
     ) throws -> IngestionRun {
         try IngestionRun(
@@ -18,8 +18,158 @@ struct IngestionRunTests {
             competitionID: CompetitionID(raw: UUID()), kind: kind,
             roundID: roundID ?? (kind == .standings ? RoundID(raw: UUID()) : nil),
             startedAt: Date(timeIntervalSince1970: started),
-            finishedAt: Date(timeIntervalSince1970: finished),
+            finishedAt: finished.map { Date(timeIntervalSince1970: $0) },
             outcome: outcome, error: error)
+    }
+
+    // ── C-A.4 · el tercer caso, y el `default` que lo habría dejado pasar ────
+
+    /// **`D-96`: el `202` deja fila desde que se acepta.** `accepted` es el
+    /// estado previo al desenlace — la pasada está pedida y todavía no ha
+    /// corrido—, así que **no puede traer motivo de fallo**: no ha tenido ocasión
+    /// de fallar. Es la misma contradicción que `(.succeeded, _?)` y merece el
+    /// mismo trato.
+    ///
+    /// # La ironía que este test conserva a propósito
+    ///
+    /// Catorce líneas más arriba, en el mismo `init`, el `switch` de
+    /// `kind`/`roundID` lleva escrito el riesgo con todas las letras: *"con un
+    /// `default`, el caso que añada la fase siguiente entraría por él y aceptaría
+    /// una jornada en silencio"*. El `switch` de al lado —éste— **no lo
+    /// aplicó**, y se quedó con su `default: break`.
+    ///
+    /// **La fase siguiente llegó.** Sin nombrar los tres casos, una pasada
+    /// `accepted` con un motivo de fallo dentro entra por el `default`, se
+    /// escribe, y llega al backoffice diciendo a la vez *"todavía no ha corrido"*
+    /// y *"falló por esto"*.
+    @Test("una pasada aceptada no ha tenido ocasión de fallar: no lleva motivo (D-96)")
+    func anAcceptedRunCannotCarryAnError() {
+        #expect(throws: DomainError.invalidValue(
+            field: "error",
+            reason: "una pasada aceptada todavía no ha corrido: no lleva motivo de fallo"
+        )) {
+            // `finished: nil` para que lo que falle sea **esta** regla y no la
+            // de `C-A.5`, que llegó después y se dispara antes.
+            try Self.run(finished: nil, outcome: .accepted, error: "la RFFM no contesta")
+        }
+    }
+
+    /// El otro lado, que es el camino normal del `202`: aceptada y sin motivo.
+    @Test("la pasada que el 202 deja escrita es válida sin motivo (D-96)")
+    func anAcceptedRunIsValidWithoutAnError() throws {
+        // `finished: nil` lo trajo `C-A.5`: cuando este test se escribió, la
+        // regla de que una aceptada no tiene fin todavía no existía.
+        let accepted = try Self.run(finished: nil, outcome: .accepted)
+
+        #expect(accepted.outcome == .accepted)
+        #expect(accepted.error == nil)
+        #expect(!accepted.succeeded)
+    }
+
+    // ── C-A.5 · una aceptada no tiene fin, y la invariante no aplica ─────────
+
+    /// **`D-96`, y la alternativa que descartó.** La salida fácil era
+    /// `finishedAt = startedAt` provisional, y es *"una fila que miente"* — el
+    /// defecto exacto que F6 encontró mirando la tabla de verdad: toda pasada con
+    /// éxito registraba duración cero y **la invariante no lo delataba**, porque
+    /// `finishedAt >= startedAt` se cumple trivialmente cuando son iguales.
+    /// Repetirlo aquí sería reintroducirlo a sabiendas.
+    @Test("una pasada aceptada no tiene fin: todavía no ha corrido (D-96)")
+    func anAcceptedRunHasNoFinish() throws {
+        let accepted = try Self.run(finished: nil, outcome: .accepted)
+
+        #expect(accepted.finishedAt == nil)
+    }
+
+    /// El otro lado de la pareja, y hace falta igual que en la jornada: sin él, el
+    /// nulo dejaría de significar *"aceptada"* y pasaría a significar *"a saber"*.
+    @Test("una pasada que ya acabó tiene que decir cuándo (D-96)")
+    func aTerminatedRunMustSayWhenItFinished() {
+        #expect(throws: DomainError.invalidValue(
+            field: "finishedAt",
+            reason: "una pasada que ya acabó tiene que decir cuándo"
+        )) {
+            try Self.run(finished: nil, outcome: .succeeded)
+        }
+    }
+
+    /// Y el reverso: una aceptada **con** fin es la misma contradicción por el
+    /// otro lado — dice que no ha corrido y a la vez cuándo terminó.
+    @Test("una pasada aceptada con fecha de fin se contradice (D-96)")
+    func anAcceptedRunCannotCarryAFinish() {
+        #expect(throws: DomainError.invalidValue(
+            field: "finishedAt",
+            reason: "una pasada aceptada todavía no ha acabado"
+        )) {
+            try Self.run(outcome: .accepted)
+        }
+    }
+
+    // ── C-A.6 · cerrar la aceptada (D-96) ───────────────────────────────────
+
+    /// El desenlace que el `202` prometió: la pasada corre, termina bien, y la
+    /// fila que ya existía **se cierra** en vez de aparecer una segunda.
+    ///
+    /// **`startedAt` no se toca, y es una decisión, no un descuido.** Es el
+    /// instante en que el administrador lo pidió — lo que el `202` le dejó para
+    /// consultar— y es la clave por la que el registro ordena (`C-D.6`). Moverlo
+    /// al arranque real del job haría que la fila saltara de sitio en la lista
+    /// justo cuando alguien la está mirando.
+    @Test("una aceptada se cierra con éxito y conserva cuándo se pidió (D-96)")
+    func anAcceptedRunClosesAsSucceeded() throws {
+        var accepted = try Self.run(finished: nil, outcome: .accepted)
+        accepted.matchesCreated = 240
+
+        let closed = try accepted.closed(
+            as: .succeeded, at: Date(timeIntervalSince1970: 90))
+
+        #expect(closed.outcome == .succeeded)
+        #expect(closed.finishedAt == Date(timeIntervalSince1970: 90))
+        #expect(closed.startedAt == accepted.startedAt)
+        #expect(closed.id == accepted.id)
+        #expect(closed.matchesCreated == 240)
+    }
+
+    /// El otro desenlace, con su motivo — que el `init` ya exige (`D-85`).
+    @Test("una aceptada se cierra como fallida diciendo por qué (D-96, D-85)")
+    func anAcceptedRunClosesAsFailed() throws {
+        let accepted = try Self.run(finished: nil, outcome: .accepted)
+
+        let closed = try accepted.closed(
+            as: .failed, at: Date(timeIntervalSince1970: 90),
+            error: "la RFFM devolvió 503")
+
+        #expect(closed.outcome == .failed)
+        #expect(closed.error == "la RFFM devolvió 503")
+        #expect(closed.finishedAt == Date(timeIntervalSince1970: 90))
+    }
+
+    /// **Solo se cierra lo que está abierto.** Cerrar una pasada ya terminada
+    /// reescribiría cuándo acabó, que es un dato que ya se sirvió por el `GET`:
+    /// la fila diría otra cosa que hace un minuto sin que nada haya pasado. Es la
+    /// misma familia que `C-A.2` — una transición sale de **un** estado.
+    @Test("una pasada ya cerrada no se vuelve a cerrar (D-96)")
+    func aClosedRunDoesNotCloseAgain() throws {
+        let finished = try Self.run(outcome: .succeeded)
+
+        #expect(throws: DomainError.invalidValue(
+            field: "outcome", reason: "solo se cierra una pasada aceptada"
+        )) {
+            try finished.closed(as: .failed, at: Date(timeIntervalSince1970: 90),
+                                error: "tarde")
+        }
+    }
+
+    /// Y no se cierra **a** `accepted`: eso no es cerrar, es volver a abrir.
+    @Test("cerrar a «aceptada» no es cerrar (D-96)")
+    func closingToAcceptedIsNotClosing() throws {
+        let accepted = try Self.run(finished: nil, outcome: .accepted)
+
+        #expect(throws: DomainError.invalidValue(
+            field: "outcome", reason: "cerrar es acabar: ni con éxito ni con fallo no es un desenlace"
+        )) {
+            try accepted.closed(as: .accepted, at: Date(timeIntervalSince1970: 90))
+        }
     }
 
     // ── La pareja de la jornada (F7) ─────────────────────────────────────────
@@ -63,16 +213,21 @@ struct IngestionRunTests {
         #expect(try Self.run(kind: .standings).roundID != nil)
     }
 
-    @Test("`timed` conserva la jornada (F7)")
-    func timedCarriesTheRound() throws {
-        // `timed` reconstruye por el `init`, así que un campo que no copie se
-        // pierde — y aquí perderlo no daría un cero silencioso: haría **lanzar**
-        // al propio `init`, porque la pareja no cuadraría. Vale como prueba de
-        // que la guarda de arriba también protege la copia.
-        let run = try Self.run(kind: .standings)
-        let timed = try run.timed(
-            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 90))
-        #expect(timed.roundID == run.roundID)
+    /// **Era un test de `timed(from:to:)` y ahora lo es de `closed(as:at:)`**
+    /// (F10-bis): la función se quitó por quedarse sin llamantes, pero lo que
+    /// este test afirma **no era de ella** — es de la copia, y la copia sigue
+    /// estando en `closed`. Borrarlo con la función habría tirado la guarda junto
+    /// con lo guardado.
+    ///
+    /// Cerrar reconstruye por el `init`, así que un campo que no se copie se
+    /// pierde — y aquí perderlo no daría un cero silencioso: haría **lanzar** al
+    /// propio `init`, porque la pareja `kind`/`roundID` no cuadraría. Vale como
+    /// prueba de que la guarda de arriba también protege la copia.
+    @Test("cerrar conserva la jornada (F7, F10-bis)")
+    func closingCarriesTheRound() throws {
+        let run = try Self.run(kind: .standings, finished: nil, outcome: .accepted)
+        let closed = try run.closed(as: .succeeded, at: Date(timeIntervalSince1970: 90))
+        #expect(closed.roundID == run.roundID)
     }
 
     @Test("la clase de pasada viaja y se conserva (F7)")
@@ -84,21 +239,23 @@ struct IngestionRunTests {
         #expect(try Self.run().kind == .calendar)
     }
 
-    @Test("`timed` conserva la clase y los contadores de clasificación (F7)")
-    func timedCarriesTheNewFields() throws {
-        // `timed` copia campo a campo, así que es el sitio exacto donde un campo
-        // nuevo se pierde en silencio: el `init` no se queja porque tiene valor
-        // por defecto, y la fila sale con un cero que parece un dato.
-        var run = try Self.run(kind: .standings)
+    /// El hermano del de arriba, y el que de verdad vigila a `carryCounters`:
+    /// copia campo a campo, así que **es el sitio exacto donde un campo nuevo se
+    /// pierde en silencio** — el `init` no se queja porque tiene valor por
+    /// defecto, y la fila sale con un cero que parece un dato.
+    ///
+    /// También era de `timed` hasta F10-bis, por lo mismo que su vecino.
+    @Test("cerrar conserva la clase y los contadores de clasificación (F7, F10-bis)")
+    func closingCarriesTheNewFields() throws {
+        var run = try Self.run(kind: .standings, finished: nil, outcome: .accepted)
         run.standingRowsCreated = 400
         run.standingRowsUpdated = 16
 
-        let timed = try run.timed(
-            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 90))
+        let closed = try run.closed(as: .succeeded, at: Date(timeIntervalSince1970: 90))
 
-        #expect(timed.kind == .standings)
-        #expect(timed.standingRowsCreated == 400)
-        #expect(timed.standingRowsUpdated == 16)
+        #expect(closed.kind == .standings)
+        #expect(closed.standingRowsCreated == 400)
+        #expect(closed.standingRowsUpdated == 16)
     }
 
     /// El par que el esquema ata con un `CHECK` y el tipo ata aquí: **una pasada

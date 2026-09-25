@@ -130,6 +130,94 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "la temporada es '\(seasonLabel)' y el calendario "
                                    + "tiene su mitad en \(Self.isoDay.string(from: median))",
                                base: typeBaseURI, slug: "federation-season-mismatch")
+
+            case .alreadyLinkedToFederation(let existing, let incoming):
+                // **409, y el código lo decide este renglón** (`D-67`, F10). El
+                // caso lo escribió `C-A.2` en el Dominio y el compilador paró
+                // aquí, que es para lo que el `switch` es exhaustivo: un error
+                // nuevo no pasa sin que alguien diga qué se responde.
+                //
+                // **409 y no 422**, como su hermano de arriba: el
+                // `codigo_equipo` que llega es perfectamente válido — lo que no
+                // lo es, es el estado del equipo. Y a diferencia del 409 de
+                // `D-21`, éste **tiene salida**: se engancha otro equipo, o se
+                // corrige la URL antes de confirmar.
+                //
+                // Lo afirma por código `C-E.8`, y `C-E.5` lo sirve además por la
+                // puerta del `Output` generado, que es la que el contrato declara.
+                return Problem(status: .conflict, code: "ALREADY_LINKED_TO_FEDERATION",
+                               title: "El equipo ya está enganchado",
+                               detail: "ya tiene el código '\(existing)' y se ha pedido "
+                                   + "engancharlo a '\(incoming)'",
+                               base: typeBaseURI, slug: "already-linked-to-federation")
+
+            case .federationTeamIDTaken(let code, let owner):
+                // **409, y es la tercera causa del mismo 409 que el *spec*
+                // declara** (`C-E.10`): *"ese `federationTeamId` ya pertenece a
+                // otro equipo"*. Sus dos hermanas ya estaban; ésta llegaba a
+                // Postgres y volvía como un `23505` dentro de un **500** con el
+                // SQL en crudo — encontrado ejecutando contra la base de trabajo,
+                // que es lo que §3 del plan manda y lo que ningún test de la
+                // batería veía, porque en los montajes el código estaba libre.
+                //
+                // Mismo criterio que sus dos hermanas: lo que llega es válido, lo
+                // que no encaja es **el estado**, y **tiene salida** — se elige
+                // otro código, o se reclama el equipo que ya lo tiene con
+                // `/ownership` (`D-20`).
+                //
+                // **El `detail` lleva el `id` del dueño** y no solo el código:
+                // sin él, la salida —ir a mirar ese equipo— exige una búsqueda
+                // que la pantalla no puede hacer con lo que se le ha dicho.
+                return Problem(status: .conflict, code: "FEDERATION_TEAM_ID_TAKEN",
+                               title: "Ese código de equipo ya es de otro equipo",
+                               detail: "el código '\(code)' lo tiene el equipo \(owner)",
+                               base: typeBaseURI, slug: "federation-team-id-taken")
+
+            case .competitionIdentityMismatch(let team, let competition):
+                // **409, y el mismo argumento que su hermano de arriba**
+                // (`D-67`, F10): los datos que llegan son perfectamente válidos
+                // —una URL que se lee, un `codigo_equipo` que existe—; lo que no
+                // encaja es **el estado**, que es lo que separa un 409 de un 422.
+                //
+                // Y como `alreadyLinkedToFederation`, **tiene salida**: se
+                // engancha otro equipo, o se corrige antes de confirmar. El
+                // `/preview` lo dice por adelantado con `identityMatches`
+                // (`C-C.4`), así que llegar aquí es haber confirmado a pesar del
+                // aviso.
+                //
+                // **El `detail` lleva las dos ternas enteras** porque quien lo
+                // lee es un administrador mirando dos rótulos: con los dos lados
+                // delante no hace falta un campo que diga cuál de los tres falla.
+                //
+                // Lo afirma por código `C-E.8`, y `C-E.5` lo sirve además por la
+                // puerta del `Output` generado.
+                return Problem(status: .conflict, code: "COMPETITION_IDENTITY_MISMATCH",
+                               title: "El equipo y la competición no cuadran",
+                               detail: "el equipo es \(team) y la competición es "
+                                   + "\(competition)",
+                               base: typeBaseURI, slug: "competition-identity-mismatch")
+
+            case .unreadableFederationURL(let url, let reason):
+                // **400, y el criterio lo escribe `invalidValue` cien líneas más
+                // arriba**: el 422 es para el cuerpo que se decodificó y dice
+                // algo que la regla no admite; el 400, *"para lo que ni siquiera
+                // se pudo decodificar"*. Una URL de calendario no es un campo del
+                // modelo — es **el sobre del que salen los cuatro parámetros de
+                // la coordenada** (`D-22`), así que cuando no se puede leer no
+                // hay ningún valor que juzgar: no se decodificó nada.
+                //
+                // Y es además lo único que el contrato deja decir: las dos
+                // puertas del enganche declaran `400`, y **no** declaran 422
+                // (`C-0.5`), así que un cliente generado del *spec* no sabría
+                // leer el otro.
+                //
+                // **El motivo se sirve entero y la URL también**: es un 4xx, así
+                // que `detail` no se calla (solo los 5xx lo esconden), y quien
+                // lo va a leer es el administrador que acaba de pegarla.
+                return Problem(status: .badRequest, code: "UNREADABLE_FEDERATION_URL",
+                               title: "La URL del calendario no se puede leer",
+                               detail: "\(reason): \(url)",
+                               base: typeBaseURI, slug: "unreadable-federation-url")
             }
 
         // ── Aplicación ───────────────────────────────────────────────────────
@@ -171,6 +259,45 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Temporada desconocida", detail: id,
                                base: typeBaseURI, slug: "season-not-found")
 
+            case .teamNotFound(let id):
+                // **404, y el código lo decide este renglón** (`D-67`, F10). El
+                // caso lo estrena el Bloque C —el enganche es el primer caso de
+                // uso que llega a un equipo **por su id**— y el compilador paró
+                // aquí, que es para lo que el `switch` es exhaustivo.
+                //
+                // Mismo criterio que `unknownSeason` y opuesto al de
+                // `seasonNotFound`: el id lo puso quien llama, así que es un dato
+                // **suyo** que no existe, no un *schema* roto. Y las dos puertas
+                // del enganche declaran `404` (`C-0.5`), que es la otra mitad del
+                // criterio: solo se puede devolver lo que el contrato admite.
+                //
+                // Lo afirma por código `C-E.6`.
+                return Problem(status: .notFound, code: "TEAM_NOT_FOUND",
+                               title: "Equipo desconocido", detail: id,
+                               base: typeBaseURI, slug: "team-not-found")
+
+            case .seasonLabelUnavailable(let federationSeasonID):
+                // **400, y el criterio es el de `unreadableFederationURL`**: el
+                // 422 es para el cuerpo que se decodificó y dice algo que la
+                // regla no admite; el 400, *"para lo que ni siquiera se pudo
+                // decodificar"*. Aquí no hay ningún valor que juzgar — **falta**
+                // el que hacía falta, y el `spec` no lo puede exigir porque solo
+                // es obligatorio cuando la temporada no existe, que es una
+                // condición que un esquema no sabe expresar.
+                //
+                // Y es lo único que el contrato deja decir: las dos puertas del
+                // enganche declaran `400` y **no** declaran 422 (`C-0.5`).
+                //
+                // **El `detail` dice qué hacer**, no solo qué pasó: quien lo lee
+                // es el administrador que acaba de pegar la URL, y la salida
+                // —dar de alta la temporada antes— no es deducible del título.
+                return Problem(status: .badRequest, code: "SEASON_LABEL_UNAVAILABLE",
+                               title: "La federación no dice qué temporada es",
+                               detail: "No hay etiqueta para la temporada "
+                                   + "'\(federationSeasonID)' y no se inventa (D-91). "
+                                   + "Da de alta la temporada con su etiqueta y repite.",
+                               base: typeBaseURI, slug: "season-label-unavailable")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha
@@ -205,6 +332,81 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "Competición \(competitionID): los datos están escritos; "
                                    + "falló el registro de D-85 (\(reason)).",
                                base: typeBaseURI, slug: "run-not-recorded")
+            }
+
+        // ── La fuente ajena (§4.3, §5.4) ─────────────────────────────────────
+        //
+        // **Las cuatro señales dejan de ser el mismo 500** (`A-6`/H-15, `C-E.1`).
+        // `FederationError` nació con la taxonomía cuidada —*"un caso de uso
+        // tiene que poder distinguir «la fuente no contesta» de «la fuente
+        // contesta algo que no entiendo»"*— y hasta aquí **no la distinguía
+        // nadie en producción**: se lanzaba solo dentro de `Sources/Federation/`
+        // y se discriminaba solo en `Tests/`.
+        //
+        // Lo que lo destapa es F10: el `/preview` llama a la federación **dentro
+        // de la petición** (§2.3-c), así que *"la RFFM está caída"* y *"la RFFM
+        // cambió de formato"* llegan a un cliente que tiene que reaccionar
+        // distinto a cada una. El `202` de `D-88` respondía antes de llamar, y
+        // por eso no se notaba.
+        //
+        // **Los códigos los fija el contrato, no el gusto**: las dos puertas del
+        // enganche declaran **504** —*"la federación no respondió dentro del
+        // timeout"*— y **502** —*"respondió con un error o con un cuerpo no
+        // interpretable"*—. Solo se puede devolver lo que el *spec* admite.
+        case let federation as FederationError:
+            switch federation {
+            case .transportFailure(let url, let reason):
+                // **504 y no 502**: no hubo respuesta que interpretar. Es la
+                // única de las cuatro en que no llegamos a hablar con la fuente,
+                // y la distinción no es cosmética — ante un 504 un cliente
+                // reintenta más tarde; ante un 502, avisa.
+                return Problem(status: .gatewayTimeout, code: "FEDERATION_UNREACHABLE",
+                               title: "La federación no respondió",
+                               detail: "\(url): \(reason)",
+                               base: typeBaseURI, slug: "federation-unreachable")
+
+            case .malformedResponse(let field, let reason):
+                // **502**: la respuesta llegó y no tiene la forma documentada en
+                // el anexo. Es *"la fuente cambió de forma"*, que es lo que el
+                // canario de Plan §4.4 existe para ver venir — y el `field` es la
+                // coordenada **dentro del cuerpo ajeno**, no una columna nuestra:
+                // lo que hay que mirar para arreglarlo es el volcado.
+                return Problem(status: .badGateway, code: "FEDERATION_MALFORMED_RESPONSE",
+                               title: "La federación respondió algo que no se entiende",
+                               detail: "\(field): \(reason)",
+                               base: typeBaseURI, slug: "federation-malformed-response")
+
+            case .unexpectedStatus(let status, let url):
+                // **502**, y existe porque [Anexo RFFM §F.7] documenta el fallo
+                // de la app heredada: *"imprime el código HTTP pero no lo
+                // valida"*, así que un 500 ajeno acababa en el parser de JSON y
+                // salía un error engañoso sobre el cuerpo.
+                return Problem(status: .badGateway, code: "FEDERATION_UNEXPECTED_STATUS",
+                               title: "La federación respondió con un error",
+                               detail: "\(status) en \(url)",
+                               base: typeBaseURI, slug: "federation-unexpected-status")
+
+            case .coordinateNotFound(let detail):
+                // **502, y es el que costó decidir.** La lectura alternativa era
+                // un 400 —*"la URL que has pegado no apunta a nada"*—, y la
+                // descarta lo medido, no el gusto:
+                //
+                // 1. Para cuando se pregunta a la fuente, la URL **ya pasó** por
+                //    `coordinate(fromCalendarURL:)`, que rechaza con 400 la que
+                //    no se puede leer (`C-B.2`, `D-97`). Los cuatro parámetros
+                //    están bien formados; lo que falla es la respuesta.
+                // 2. Y por [D-84] **no se puede afirmar que la coordenada no
+                //    exista**: la RFFM devuelve `200` con `calendar: null` igual
+                //    para una coordenada inventada que para lo que hoy no
+                //    publique. Un 400 le diría al administrador *"tu URL está
+                //    mal"* afirmando algo que está medido que no se sabe.
+                //
+                // El `detail` lleva la coordenada entera, que es lo único
+                // accionable: con ella se compara contra la web de la federación.
+                return Problem(status: .badGateway, code: "FEDERATION_COORDINATE_NOT_FOUND",
+                               title: "La coordenada no devuelve calendario",
+                               detail: detail,
+                               base: typeBaseURI, slug: "federation-coordinate-not-found")
             }
 
         // ── Tenancy (§6.1) ───────────────────────────────────────────────────
@@ -256,7 +458,15 @@ public struct ProblemMiddleware: AsyncMiddleware {
             // nuestro. Sin esto, un `DomainError` que escapara de un handler
             // pasaría de 422 a 500 solo por venir envuelto.
             let inner = server.underlyingError
-            if inner is DomainError || inner is ApplicationError || inner is TenancyError {
+            if inner is DomainError || inner is ApplicationError || inner is TenancyError
+                // **`FederationError` entra en la lista con `C-E.1`, y sin esto
+                // el `switch` de arriba no lo vería nunca**: lo que sale de un
+                // *handler* llega aquí **envuelto**, así que las cuatro señales
+                // seguirían dando 500 aunque tuvieran su caso escrito. Es la
+                // mitad silenciosa de H-15 — la traducción existía y el
+                // desenvoltorio no la alcanzaba.
+                || inner is FederationError
+            {
                 return translate(inner)
             }
             let status = HTTPStatus(statusCode: Int(server.httpStatus.code))

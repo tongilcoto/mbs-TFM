@@ -31,3 +31,5 @@ filter:
     - updateClub          # F0 — el camino de escritura, para tener con qué practicar
     - listIngestionRuns   # F6 — el registro de las pasadas (D-85), para el backoffice
     - triggerIngestion    # F6 — el disparador manual del job (D-87)
+    - previewFederationLink   # F10 — paso 1 del enganche (D-67): lee la coordenada, no persiste
+    - linkTeamToFederation    # F10 — paso 2 (D-67): escribe el enganche en cascada y encola la ingesta

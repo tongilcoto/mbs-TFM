@@ -188,7 +188,8 @@ public struct IngestClubCalendars: Sendable {
         }
     }
 
-    /// Qué competiciones entrarían en este recorrido, **sin ejecutarlo**.
+    /// Qué competiciones entran en este recorrido, **antes de ejecutarlo**, y la
+    /// constancia de que se han aceptado.
     ///
     /// Existe por el `202` de `POST /ingestion-runs` (`D-87`): la respuesta tiene
     /// que decir *qué* se ha aceptado antes de que el trabajo ocurra. Y de paso
@@ -207,7 +208,7 @@ public struct IngestClubCalendars: Sendable {
     /// `D-88` dice que planificar antes de responder existe para evitar — *"un
     /// `202` seguido de un fallo que nadie ve"*—, y detrás del `202` no lo ve nadie
     /// literalmente (H-27).
-    public func plannedCompetitions(
+    public func accept(
         scope: IngestionScope = IngestionScope(), actor: ActorContext
     ) async throws -> [CompetitionID] {
         let plan = try await plan(scope: scope, actor: actor)
@@ -215,7 +216,40 @@ public struct IngestClubCalendars: Sendable {
             throw ApplicationError.federationAdapterMissing(
                 federation: plan.federation.rawValue)
         }
-        return plan.competitions.map(\.id)
+
+        // **Y deja constancia antes de responder** (F10-bis, `H-27`, [D-96]).
+        //
+        // Se llamaba `plannedCompetitions` y solo miraba. Lo que falta al mirar
+        // lo dice el propio código del `202` en su cabecera: *"que la pantalla se
+        // entere —sin push, que es como es— necesita que quede **fila** desde el
+        // instante en que se acepta"*. Sin ella, detrás del `202` **las tres
+        // formas de enterarse se caen a la vez**: la respuesta ya salió, la fila
+        // de la pasada se escribe en la base —que es lo que falla en el caso
+        // malo— y el código de salida de [D-86] es del comando, no de un servidor
+        // que no termina.
+        //
+        // El nombre cambia porque lo que hace cambió: **aceptar** es planificar
+        // *y* dejarlo escrito. Sigue sin llevar ni un campo de la pasada, que es
+        // lo que [D-88] pedía y [D-96] no contradice.
+        let now = clock.now()
+        return try await unitOfWork.withRepositories(actor: actor) { repositories in
+            for competition in plan.competitions {
+                // **Aceptar dos veces no deja dos filas.** Un doble clic —o el
+                // cron solapándose con el botón— dejaría una abierta que nadie
+                // cerraría nunca, porque la pasada cierra **una**: el defecto que
+                // esta mini-fase quita de en medio, reapareciendo por la puerta
+                // de al lado.
+                guard try await repositories.ingestionRuns.findAccepted(
+                    competitionID: competition.id, kind: .calendar) == nil
+                else { continue }
+
+                try await repositories.ingestionRuns.record(try IngestionRun(
+                    id: IngestionRunID(raw: ids.next()),
+                    competitionID: competition.id, kind: .calendar,
+                    startedAt: now, finishedAt: nil, outcome: .accepted))
+            }
+            return plan.competitions.map(\.id)
+        }
     }
 
     /// Qué se va a sincronizar, resuelto en **un solo ámbito** y antes de tocar
@@ -242,7 +276,7 @@ public struct IngestClubCalendars: Sendable {
                 for competitionID in requested {
                     guard let competition = try await repositories.competitions.find(competitionID)
                     else {
-                        throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                        throw ApplicationError.competitionNotFound(id: "\(competitionID)")
                     }
                     competitions.append(competition)
                 }
@@ -266,7 +300,7 @@ public struct IngestClubCalendars: Sendable {
                 // sería el `D-84` de nuestra propia casa: quien pidió recomponer
                 // la 2024/25 vería una pasada con éxito y los datos de otra.
                 guard let found = seasons.first(where: { $0.id == requested }) else {
-                    throw ApplicationError.unknownSeason(id: "\(requested.raw)")
+                    throw ApplicationError.unknownSeason(id: "\(requested)")
                 }
                 season = found
             } else {

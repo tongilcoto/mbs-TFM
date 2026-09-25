@@ -231,11 +231,11 @@ public struct IngestScorers: Sendable {
         try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)
             else {
-                throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }
             guard let season = try await repositories.seasons.find(competition.seasonID)
             else {
-                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID)")
             }
             guard let club = try await repositories.clubs.current() else {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)

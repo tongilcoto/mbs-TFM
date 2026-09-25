@@ -1,4 +1,5 @@
 public import Domain
+import struct Foundation.Date
 
 /// Caso de uso: **la pasada de ingesta del calendario** (§2.3-b, §5.6).
 ///
@@ -54,6 +55,19 @@ public struct IngestCalendar: Sendable {
         competitionID: CompetitionID, actor: ActorContext
     ) async throws -> IngestionRun {
         let startedAt = clock.now()
+        // **Qué fila se está cerrando, si es que hay alguna** (F10-bis, [D-96]).
+        //
+        // Lo pone el ámbito 1 en cuanto lo sabe, y vive aquí fuera porque **el
+        // camino de fallo también adopta**: `D-96` dice que la pasada cierra la
+        // aceptada a `succeeded` **o a `failed`**, y si sólo adoptara el camino
+        // de éxito, una pasada que revienta dejaría la fila abierta para siempre
+        // — justo el defecto que esta mini-fase arregla, escondido en la rama que
+        // nadie mira.
+        //
+        // `nil` cuando no hay nada que adoptar **o cuando ni se pudo mirar**: si
+        // el ámbito 1 es lo que falla, se escribe una fila nueva, que es lo único
+        // honesto que se puede hacer sin haber podido leer.
+        var adopted: IngestionRun?
         let run: IngestionRun
         do {
             // **Las marcas de tiempo las pone quien conoce los dos extremos.**
@@ -62,8 +76,15 @@ public struct IngestCalendar: Sendable {
             // cero — que es lo que hacía, y solo se vio ejecutándola contra la
             // base de trabajo. La fallida sí se medía: la asimetría era el
             // síntoma.
-            run = try await sync(competitionID: competitionID, actor: actor)
-                .timed(from: startedAt, to: clock.now())
+            //
+            // **Desde F10-bis eso lo hace `closed(as:)` y no `timed(from:to:)`**:
+            // el informe nace abierto, así que cerrarlo ya es ponerle el final, y
+            // el principio es el que tenía — el de la fila adoptada cuando la
+            // hay, que es **cuándo se pidió** y no cuándo arrancó el *job*.
+            run = try await sync(
+                competitionID: competitionID, actor: actor,
+                startedAt: startedAt, adopted: &adopted
+            ).closed(as: .succeeded, at: clock.now())
         } catch {
             // `D-85`: **la pasada que falla es la que nadie ve**, porque no hay
             // usuario esperando una respuesta (§2.3-b). Es la que más falta hace
@@ -74,9 +95,9 @@ public struct IngestCalendar: Sendable {
             // deshizo, así que no se escribió nada aunque la pasada hubiera
             // llegado a la última jornada.
             let failed = try IngestionRun(
-                id: IngestionRunID(raw: ids.next()),
+                id: adopted?.id ?? IngestionRunID(raw: ids.next()),
                 competitionID: competitionID, kind: .calendar,
-                startedAt: startedAt, finishedAt: clock.now(),
+                startedAt: adopted?.startedAt ?? startedAt, finishedAt: clock.now(),
                 outcome: .failed, error: diagnosticText(for: error))
 
             // Si el registro tampoco se puede escribir, **manda el error
@@ -102,7 +123,7 @@ public struct IngestCalendar: Sendable {
             try await record(run, actor: actor)
         } catch {
             throw ApplicationError.runNotRecorded(
-                competitionID: "\(competitionID.raw)",
+                competitionID: "\(competitionID)",
                 reason: diagnosticText(for: error))
         }
         return run
@@ -117,24 +138,36 @@ public struct IngestCalendar: Sendable {
     }
 
     private func sync(
-        competitionID: CompetitionID, actor: ActorContext
+        competitionID: CompetitionID, actor: ActorContext,
+        startedAt: Date, adopted: inout IngestionRun?
     ) async throws -> IngestionRun {
         // ── Ámbito 1: leer la coordenada ────────────────────────────────
-        let coordinate = try await unitOfWork.withRepositories(actor: actor) { repositories in
+        //
+        // **Y de paso, la fila que haya que cerrar.** Va aquí y no en un ámbito
+        // propio porque son la misma pregunta —*"¿qué voy a sincronizar y por
+        // cuenta de quién?"*— y porque un ámbito más antes de la red es una
+        // conexión más retenida mientras se espera a un tercero (§6.4). Los tres
+        // de `D-83` siguen siendo tres.
+        let plan = try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)
             else {
-                throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }
             guard let season = try await repositories.seasons.find(competition.seasonID)
             else {
-                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID)")
             }
-            return FederationCoordinate(
-                federationSeasonID: season.federationSeasonID,
-                federationCompetitionID: competition.federationCompetitionID,
-                federationGroupID: competition.federationGroupID,
-                modality: competition.modality)
+            return (
+                coordinate: FederationCoordinate(
+                    federationSeasonID: season.federationSeasonID,
+                    federationCompetitionID: competition.federationCompetitionID,
+                    federationGroupID: competition.federationGroupID,
+                    modality: competition.modality),
+                accepted: try await repositories.ingestionRuns.findAccepted(
+                    competitionID: competitionID, kind: .calendar))
         }
+        adopted = plan.accepted
+        let coordinate = plan.coordinate
 
         // ── Fuera de todo ámbito: la red ────────────────────────────────
         let calendar = try await federation.fetchCalendar(coordinate)
@@ -143,7 +176,7 @@ public struct IngestCalendar: Sendable {
         return try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)
             else {
-                throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }
             // La temporada se relee **aquí dentro**, y es el mismo intercambio
             // que `D-83` ya asumió con la competición: un `SELECT` por PK a
@@ -152,11 +185,19 @@ public struct IngestCalendar: Sendable {
             // fechas del calendario con la ventana de la temporada.
             guard let season = try await repositories.seasons.find(competition.seasonID)
             else {
-                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID)")
             }
 
             let pass = try await CalendarPass(
                 competition: competition, season: season, repositories: repositories,
+                // **Adoptar es esto**: la pasada escribe con el `id` de la fila
+                // que el `202` dejó abierta, así que al cerrarla es **esa** fila
+                // la que pasa a `succeeded`, con los contadores de esta pasada.
+                // Sin fila que adoptar, un `id` nuevo y la pasada abre la suya,
+                // que es lo que hace el cron.
+                identity: (
+                    id: plan.accepted?.id ?? IngestionRunID(raw: ids.next()),
+                    startedAt: plan.accepted?.startedAt ?? startedAt),
                 ids: ids, now: clock.now())
             try await pass.run(calendar)
             return pass.report

@@ -152,7 +152,7 @@ public struct SeedCompetitionCommand: AsyncCommand {
             return competition.id
         }
 
-        let id = competitionID.raw.uuidString.lowercased()
+        let id = "\(competitionID)"
         context.console.success("""
             Competición lista: \(id)
 

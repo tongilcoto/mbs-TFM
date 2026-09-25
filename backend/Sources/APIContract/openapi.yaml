@@ -1120,6 +1120,20 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '501':
+          description: |
+            La federación de este club está en el catálogo pero **todavía no tiene adaptador de
+            ingesta** (D-17, D-95). El `preview` llama a la federación **en línea** —es su motivo de
+            existir— así que sin adaptador no hay coordenada que leer ni calendario que enseñar.
+
+            **No se ha roto nada y no hay nada que reintentar**: es alcance que falta, no un fallo. Se
+            responde aquí y no en el enganche porque es la **primera** de las dos puertas, y decirlo en
+            la pantalla de verificación evita que el administrador rellene un formulario que va a
+            rechazarse.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '502':
           description: La federación respondió con un error o con un cuerpo no interpretable.
           content:
@@ -1191,9 +1205,28 @@ paths:
         '409':
           description: |
             El equipo ya está emparejado con otro grupo, ese `federationTeamId` ya pertenece a otro
-            equipo, o la identidad no cuadra: la competición dice un `gender`/`modality` distinto del
-            que el equipo tiene congelado desde su alta (D-66). A diferencia del 409 de D-21, **este
-            tiene salida**: se engancha otro equipo, o se corrige antes de confirmar.
+            equipo, o la identidad no cuadra: la competición dice una `ageCategory`, un `gender` o una
+            `modality` distintos de los que el equipo tiene congelados desde su alta (D-66, D-58, §3.2).
+            A diferencia del 409 de D-21, **este tiene salida**: se engancha otro equipo, o se corrige
+            antes de confirmar.
+
+            **La edad cuenta igual que las otras dos.** Enganchar un cadete a una competición juvenil
+            no da un rótulo feo: la ingesta hereda la categoría a cada equipo que cree desde esa
+            competición (D-07) y, como `category` está en la clave única de `Team` (§3.5), el choque
+            llega después y en otro sitio.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '501':
+          description: |
+            La federación de este club está en el catálogo pero **todavía no tiene adaptador de
+            ingesta** (D-17, D-95). No se ha roto nada y no hay nada que reintentar.
+
+            **Se comprueba antes del `202`, no después.** El enganche encola una primera ingesta, y
+            encolar trabajo que nadie sabe hacer dejaría una pasada `accepted` que jamás cierra — un
+            `202` mudo. La consecuencia de negocio, sin adornos: hasta que exista el adaptador de la
+            FCF, **un club catalán no se puede enganchar con ingesta**.
           content:
             application/problem+json:
               schema:
@@ -4196,8 +4229,18 @@ components:
       required: [federationTeamId, rawName]
       properties:
         federationTeamId:
-          type: string
-          description: '`codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al enganchar (D-67).'
+          type: [string, 'null']
+          description: |
+            `codigo_equipo` (§3.7). Es lo que se envía como `ownTeamFederationId` al enganchar (D-67).
+
+            **Anulable, y sigue siendo obligatorio**: la fuente publica equipos **sin código** —medido, y
+            es lo que F9-bis dejó anotado en la pasada como `unidentified_team`—. Ese equipo **no
+            desaparece de `teams[]`**: viaja con el campo nulo, que es lo que permite a la web enseñarlo
+            y ofrecer entrada manual en vez de dejar un hueco que nadie puede explicar. Filtrarlo aquí
+            sería esconder el caso justo en la pantalla donde un humano tiene que reconocer su club.
+
+            En `null`, **este equipo no se puede elegir como propio**: `ownTeamFederationId` es
+            obligatorio al confirmar (D-67).
           examples: ['3349086']
         rawName:
           type: string
@@ -4737,9 +4780,23 @@ components:
         identityMatches:
           type: boolean
           description: |
-            `true` si el `gender` y la `modality` que propone la competición coinciden con los que el
-            equipo tiene congelados desde su alta (D-66). En `false`, confirmar devolverá **409**: se
-            muestra antes para que el administrador enganche otro equipo en vez de chocar.
+            `true` si **las tres** piezas que la competición presta —`ageCategory`, `gender` y
+            `modality`— coinciden con las que el equipo tiene congeladas desde su alta (D-66, D-58).
+            En `false`, confirmar devolverá **409**: se muestra antes para que el administrador
+            enganche otro equipo en vez de chocar.
+
+            **Son tres y no dos**, que es lo que §3.2 declara al compartir enumerado entre
+            `Competition.ageCategory` y `Team.category`: *"permite validar que un equipo solo participe
+            en una competición de su edad, de su modalidad y de su género"*. Este campo decía dos hasta
+            F10 y el Dominio le hacía caso; la cadena de emparejamiento de la ingesta ya filtraba por
+            las tres desde F4, así que lo corto era esta descripción y no la decisión.
+
+            **No hace falta un campo que diga cuál falla**: los tres valores propuestos viajan en
+            `competition`, así que el cliente puede decir *"tu equipo es cadete y esta competición es
+            juvenil"* sin preguntar otra vez. Esto es el veredicto, no el diagnóstico.
+
+            `letter` **no** entra: no se hereda de la competición — es lo que el administrador elige al
+            reconocer su equipo en `competition.teams[]`.
 
     PreviewSeason:
       type: object
@@ -6427,9 +6484,18 @@ components:
           format: date-time
           readOnly: true
         finishedAt:
-          type: string
+          type: [string, 'null']
           format: date-time
           readOnly: true
+          description: |
+            Cuándo acabó la pasada. **Nulo exactamente cuando `outcome == accepted`** (D-96): una pasada
+            que todavía no ha corrido no tiene fin, y ponerle `finishedAt = startedAt` provisional sería
+            *una fila que miente* — el defecto que F6 destapó mirando la tabla, con la duración cero de
+            las pasadas con éxito.
+
+            **Sigue siendo obligatorio en el cuerpo**: el campo va siempre, con `null` cuando no lo hay.
+            Y el registro **ordena por `startedAt`**, no por éste, porque un `NULL` en la clave de orden
+            deja al motor decidiendo dónde cae la fila recién aceptada.
         outcome:
           $ref: '#/components/schemas/IngestionOutcome'
         error:
@@ -6446,9 +6512,13 @@ components:
           type: array
           readOnly: true
           description: |
-            Lo que la pasada **no** escribió, y por qué. Vacío es el caso normal. **No hace parcial a la
+            Lo que la pasada **dejó señalado**, y por qué. Vacío es el caso normal. **No hace parcial a la
             pasada**: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo
             (D-83).
+
+            **Diez de los once motivos son filas que no se escribieron; `unidentified_team` es una fila que
+            sí se escribió, pero coja** (F9-bis). Por eso la lista **se lee por el motivo de cada línea y no
+            se cuenta**: su longitud no es *"cuántas filas faltan"*.
           items:
             $ref: '#/components/schemas/IngestionSkip'
 
@@ -6492,9 +6562,24 @@ components:
     IngestionOutcome:
       type: string
       description: |
-        Cómo acabó la pasada. **Dos valores y no tres**: no hay *parcial* porque la pasada es atómica
-        (D-83) — o se escribió entera o no se escribió nada.
-      enum: [succeeded, failed]
+        Cómo acabó la pasada, **o que todavía no ha acabado**.
+
+        **Sigue sin haber *parcial***, que es lo que D-83 zanjó: la pasada es atómica — o se escribió
+        entera o no se escribió nada. Lo que F10 añade no es un desenlace a medias, es el **estado
+        previo al desenlace**.
+
+        - `accepted` — **la pasada está pedida y todavía no ha corrido** (D-96). La escribe el `202` de
+          `/federation-link` **antes de responder**, y la propia pasada la cierra después a `succeeded`
+          o a `failed`. Es el único valor con `finishedAt` nulo.
+        - `succeeded` / `failed` — la pasada corrió y acabó así.
+
+        **Por qué el `202` deja fila desde que se acepta**: sin ella, el cliente que acaba de enganchar
+        no tiene nada que consultar —el `GET` devuelve la lista de antes— y la única forma de saber si
+        su pasada ya pasó sería comparar marcas de tiempo, que es el N+1 que D-89 rechazó a propósito.
+
+        **Enmienda a D-88**, que decía *"el `POST` no crea la fila"*: sigue sin llevar ni un campo de la
+        pasada. Lo que crea no es el resultado, es la constancia de que se lo pidieron.
+      enum: [accepted, succeeded, failed]
 
     IngestionCounters:
       type: object
@@ -6583,6 +6668,15 @@ components:
         No tira la pasada, y ahí está la asimetría con la clasificación: un ranking sin numeración
         aguanta 217 de 218, mientras que una clasificación a la que le falte una fila tiene un hueco en
         una numeración que este mismo *spec* declara imposible.
+
+        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los once que
+        no describe una fila ausente**: el equipo *sí* se escribe, pero sin el código que la fuente no
+        publicó. Es lo que ensancha el significado de la lista, de *"lo que no escribí"* a *"lo que dejé
+        señalado"* — y el motivo es justo lo que distingue un caso del otro, así que hay que leerlo y no
+        contar líneas. Es hermano de `unidentified_scorer`: los dos significan *"la fuente cambió de
+        forma"*. Tampoco tira la pasada —un equipo sin código sigue teniendo sus partidos— y **se cura
+        solo** en cuanto la fuente vuelva a publicar el código: el paso 2 lo reencuentra por nombre y
+        D-76 rellena el hueco.
       enum:
         - ambiguous_opponent_club
         - ambiguous_team
@@ -6593,6 +6687,7 @@ components:
         - duplicate_club_name
         - unknown_standing_team
         - unidentified_scorer
+        - unidentified_team
 
     TriggerIngestionRequest:
       type: object

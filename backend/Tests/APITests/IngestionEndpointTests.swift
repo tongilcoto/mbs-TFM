@@ -91,6 +91,16 @@ struct IngestionEndpointTests {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+        /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+        ///
+        /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+        /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+        /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+        /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+        /// escrito sobre el doble equivocado (`H-07`).
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            throw NotStubbed(client: "StubClient", operation: "coordinate(fromCalendarURL:)")
+        }
     }
 
     /// El *schema* del club, con la **entrada** de la ingesta sembrada (`D-16`).
@@ -330,8 +340,217 @@ struct IngestionEndpointTests {
                 // fijo, así que todas las pasadas comparten `finishedAt` y
                 // `sorted` —que no es estable— devuelve otra permutación igual de
                 // válida. Lo que hay que afirmar es que la secuencia no sube.
-                #expect(zip(runs, runs.dropFirst()).allSatisfy { $0.finishedAt >= $1.finishedAt },
+                //
+                // **`finishedAt` es anulable desde `D-96`** (`C-0.4`), y aquí eso
+                // es un dato que afirmar, no un estorbo que tapar con un `??`:
+                // estas pasadas ya corrieron, así que ninguna puede traerlo nulo
+                // — el nulo es exclusivo de `accepted`.
+                //
+                // **`C-D.6` vuelve a este renglón**: el orden del registro pasa a
+                // `started_at`, porque un `NULL` en la clave de orden deja al
+                // motor decidiendo dónde cae la fila recién aceptada.
+                let finishes = runs.compactMap(\.finishedAt)
+                #expect(finishes.count == runs.count,
+                        "una pasada que ya corrió no puede venir sin `finishedAt`")
+                #expect(zip(finishes, finishes.dropFirst()).allSatisfy { $0 >= $1 },
                         "el registro no llega de la más reciente a la más antigua")
+            }
+        }
+    }
+
+    /// **F9-bis, y es el primer test de la batería que afirma un motivo de
+    /// descarte al otro lado de la frontera** (`A-7`·H-46). `IngestionSkip.Reason`
+    /// tiene un **enumerado espejo** en el *spec* y una traducción a mano entre los
+    /// dos (`IngestionHandler.toContract()`), y esa traducción **no es cosmética**:
+    /// el Dominio se serializa tal cual dentro del `jsonb` desde F5 y el contrato
+    /// usa `snake_case` (§5.2), así que los dos lados tienen que divergir a
+    /// propósito. El `switch` es exhaustivo, de modo que el compilador obliga a
+    /// **escribir** la línea del caso nuevo — pero no a escribirla **bien**:
+    /// mapearlo al valor del vecino compila igual de bien y llega al backoffice
+    /// como otra cosa.
+    ///
+    /// La pasada se escribe por el puerto y no ejecutando una ingesta: lo que se
+    /// prueba aquí es la **traducción**, y hacerla llegar por una pasada de verdad
+    /// la mezclaría con el doble de la federación.
+    @Test("el motivo nuevo cruza la frontera con su propio valor (F9-bis, A-7/H-46)")
+    func theNewSkipReasonCrossesTheBoundary() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                var run = try IngestionRun(
+                    id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                    kind: .calendar, startedAt: Self.now, finishedAt: Self.now,
+                    outcome: .succeeded)
+                run.skipped = [
+                    IngestionSkip(
+                        reason: .unidentifiedTeam, detail: "CELTIC CASTILLA C.F. \"A\"")
+                ]
+                try await repositories.ingestionRuns.record(run)
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID.raw.uuidString.lowercased())",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let skipped = try #require(try Self.decodeRuns(response).first?.skipped)
+
+                #expect(skipped.count == 1)
+                #expect(skipped.first?.reason == .unidentified_team)
+                // Y el detalle llega entero: es lo que una persona copia para ir
+                // a buscar la fila en la web de la federación.
+                #expect(skipped.first?.detail == "CELTIC CASTILLA C.F. \"A\"")
+            }
+        }
+    }
+
+    /// **`roundId` cruza la frontera, y hasta hoy no lo afirmaba nadie**
+    /// (`A-7`·H-46, hueco encontrado el 2026-09-25).
+    ///
+    /// Es el único identificador del `IngestionRunResponse` **anulable**, y eso
+    /// es justo lo que lo dejó sin arnés: los otros dos se afirman de paso en
+    /// cualquier test del registro, y éste solo aparece cuando la pasada es de
+    /// **clasificación** —`(kind = 'standings') = (round_id IS NOT NULL)`, que el
+    /// esquema hace cumplir con un `CHECK`—, y ninguna de las que la *suite*
+    /// provoca lo es: con un calendario vacío no hay jornada jugada, así que el
+    /// plan de `IngestStandings` sale vacío y no escribe fila.
+    ///
+    /// Por eso la pasada se siembra **a mano**, como en el test de F9-bis de
+    /// arriba: lo que se prueba aquí no es el recorrido —eso es nivel 3— sino
+    /// **el borde**, que un `RoundID` salga al JSON como un UUID y con la forma
+    /// canónica.
+    ///
+    /// # Y la mitad que hace el test honesto: el nulo también se afirma
+    ///
+    /// Sin ella, `roundId` podría devolver siempre algo y nadie lo notaría. Una
+    /// pasada de calendario **tiene que traerlo a `null`**, que es lo que
+    /// distingue *"esta pasada no va de una jornada"* de *"va de una que no sé
+    /// cuál es"*.
+    @Test("el `roundId` de una pasada de clasificación cruza la frontera (F7, A-7/H-46)")
+    func theRoundIDCrossesTheBoundary() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+            let roundID = RoundID(raw: UUID())
+
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                // La jornada existe de verdad: `round_id` es una FK con
+                // `ON DELETE CASCADE`, así que una inventada no entra.
+                try await repositories.rounds.save(
+                    try Round(
+                        id: roundID, competitionID: competitionID, number: 7,
+                        startDate: Self.instant("2026-02-28"),
+                        endDate: Self.instant("2026-03-01"),
+                        createdAt: Self.now, updatedAt: Self.now))
+
+                try await repositories.ingestionRuns.record(
+                    try IngestionRun(
+                        id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                        kind: .standings, roundID: roundID,
+                        startedAt: Self.now, finishedAt: Self.now,
+                        outcome: .succeeded))
+
+                // Y su vecina de calendario, que es la que tiene que decir `null`.
+                try await repositories.ingestionRuns.record(
+                    try IngestionRun(
+                        id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                        kind: .calendar,
+                        startedAt: Self.now, finishedAt: Self.now,
+                        outcome: .succeeded))
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID)",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let runs = try Self.decodeRuns(response)
+
+                let standings = try #require(runs.first { $0.kind == .standings })
+                #expect(standings.roundId == "\(roundID)")
+
+                let calendar = try #require(runs.first { $0.kind == .calendar })
+                #expect(calendar.roundId == nil)
+            }
+        }
+    }
+
+    /// **Los trece contadores cruzan la frontera cada uno por su sitio**
+    /// (`A-7`·H-46, hueco encontrado el 2026-09-25).
+    ///
+    /// # Qué estaba sin cubrir, y por qué importa justo aquí
+    ///
+    /// Los contadores se afirman en los niveles 1, 2 y 3 —la **entidad** los
+    /// lleva bien—, pero el salto de entidad a DTO **no lo miraba nadie**: son
+    /// trece asignaciones a mano, escritas en columna, con nombres que van por
+    /// parejas (`Created`/`Updated`) y que se repiten en cinco familias. Cambiar
+    /// dos de sitio **compila**, pasa la batería entera y llega al backoffice
+    /// como otra cosa: una pasada que creó 300 partidos diciendo que actualizó
+    /// 300, que es lo contrario de lo que se mira cuando algo va mal.
+    ///
+    /// Es la misma familia que `C-E.9` —lo que el compilador obliga a escribir
+    /// no lo obliga a escribirlo **bien**— y la misma que el `roundId` de aquí
+    /// arriba.
+    ///
+    /// # Los trece valores son DISTINTOS, y es la mitad que hace el test
+    ///
+    /// Con ceros, o con el mismo número repetido, una permutación es
+    /// **invisible**: el test pasaría igual con los trece campos cruzados. Por
+    /// eso van 1..13, y por eso esta fila **no podría existir en producción**
+    /// —una pasada de calendario no escribe goleadores—: lo que está bajo prueba
+    /// es **el mapeo**, no la pasada. La pasada tiene sus propios tests en los
+    /// niveles 2 y 3.
+    @Test("los trece contadores llegan cada uno a su campo (F7, F8, A-7/H-46)")
+    func everyCounterReachesItsOwnField() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                var run = try IngestionRun(
+                    id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                    kind: .calendar, startedAt: Self.now, finishedAt: Self.now,
+                    outcome: .succeeded)
+                run.opponentClubsCreated = 1
+                run.opponentClubsUpdated = 2
+                run.teamsCreated = 3
+                run.teamsUpdated = 4
+                run.roundsCreated = 5
+                run.roundsUpdated = 6
+                run.matchesCreated = 7
+                run.matchesUpdated = 8
+                run.standingRowsCreated = 9
+                run.standingRowsUpdated = 10
+                run.leagueScorersCreated = 11
+                run.leagueScorersUpdated = 12
+                run.leagueScorersRetired = 13
+                try await repositories.ingestionRuns.record(run)
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID)",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let counters = try #require(try Self.decodeRuns(response).first?.counters)
+
+                #expect(counters.opponentClubsCreated == 1)
+                #expect(counters.opponentClubsUpdated == 2)
+                #expect(counters.teamsCreated == 3)
+                #expect(counters.teamsUpdated == 4)
+                #expect(counters.roundsCreated == 5)
+                #expect(counters.roundsUpdated == 6)
+                #expect(counters.matchesCreated == 7)
+                #expect(counters.matchesUpdated == 8)
+                #expect(counters.standingRowsCreated == 9)
+                #expect(counters.standingRowsUpdated == 10)
+                #expect(counters.leagueScorersCreated == 11)
+                #expect(counters.leagueScorersUpdated == 12)
+                // **El que no tiene hermano en ninguna otra entidad**: solo los
+                // goleadores se retiran (`D-94`), y es el número que hay que
+                // poder mirar cuando una pasada vacía la tabla.
+                #expect(counters.leagueScorersRetired == 13)
             }
         }
     }
@@ -431,16 +650,23 @@ struct IngestionEndpointTests {
     @Test("lo que el 202 aceptó y no llegó a hacerse se dice por el log (H-27)")
     func acceptedWorkThatVanishesIsReported() async throws {
         try await Self.withSeededClub { app, seasonID, competitionID, otherID in
-            // El ámbito 1 —el del plan, el que decide el `202`— pasa; el
-            // siguiente no. Es la forma exacta de H-27 medida a mano: el cliente
-            // recibe su `202` y la base se cae detrás. El mismo patrón que A-3
-            // usó para H-24, y por lo mismo: parar el contenedor desde un test de
-            // esta suite se lo llevaría por delante a las demás.
+            // Los ámbitos de **aceptar** pasan; el siguiente no. Es la forma
+            // exacta de H-27 medida a mano: el cliente recibe su `202` y la base
+            // se cae detrás. El mismo patrón que A-3 usó para H-24, y por lo
+            // mismo: parar el contenedor desde un test de esta suite se lo
+            // llevaría por delante a las demás.
+            //
+            // **Eran dos ámbitos y ahora son tres, y el cambio es la mitad buena
+            // de F10-bis**: aceptar ya no es solo planificar —ámbito 1—, también
+            // **deja la fila** que el cliente va a consultar —ámbito 2—, así que
+            // el trabajo de fondo empieza en el 3. Si el corte se dejara en el 2,
+            // este test mediría otra cosa: un `POST` que falla **antes** de
+            // responder, que es un caso mejor y no el que `H-27` describe.
             let spy = LogSpy()
             let handler = APIHandler(
                 unitOfWork: CollapsingUnitOfWork(
                     inner: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
-                    collapse: Collapse(failsFromScope: 2)),
+                    collapse: Collapse(failsFromScope: 3)),
                 federationClients: StubProvider(failing: false),
                 clock: FixedClock(instant: Self.syncInstant),
                 background: InlineBackgroundWork(),
@@ -622,6 +848,16 @@ struct CollapsingClient: FederationClient {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "CollapsingClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }
 
 /// Recoge lo que se registra, para que una aserción pueda mirarlo.

@@ -55,13 +55,18 @@ extension FluentTenantUnitOfWork {
             // comparación en `TenantResolutionMiddleware`, y ahí es donde irá
             // cuando el *claim* exista: corta antes de tocar datos. Esta guarda
             // solo se abrocha si alguien abre un ámbito de tenant — que hoy son
-            // todos, pero no es lo mismo que "siempre". Y **hoy no puede
-            // dispararse por HTTP**, porque `currentActor()` deriva el actor de
-            // este mismo `TenantContext`: la igualdad es una tautología hasta que
-            // el actor venga del *claim*. Se conserva por eso y porque el camino
-            // del comando (§2.3-b) llega sin ambiente, donde la rama de abajo es
-            // la que corre. Lo afirma `ErrorBoundaryTests`, con el actor
-            // construido a mano.
+            // todos, pero no es lo mismo que "siempre".
+            //
+            // **Y desde `C-E.2` sí puede dispararse por HTTP.** Decía aquí que
+            // no, y era cierto: `currentActor()` derivaba el actor de este mismo
+            // `TenantContext`, así que la igualdad era una **tautología**. Ahora
+            // el actor sale de un puerto (`ActorResolver`), y lo que queda
+            // tautológico es solo **el adaptador de producción**, que lo lee del
+            // `Host` — la deuda declarada de F0, no esta guarda. Lo afirman dos
+            // tests: `ErrorBoundaryTests` con el actor construido a mano (el
+            // cinturón) y `ActorSeamTests` por la ruta HTTP entera, con un
+            // resolutor que discrepa (la puerta). El día que el actor salga del
+            // *claim* firmado, los dos siguen valiendo sin tocarlos.
             guard ambient.slug == actor.clubSlug.value else {
                 throw TenancyError.tenantMismatch(
                     host: ambient.slug, claim: actor.clubSlug.value)
@@ -85,6 +90,9 @@ struct FluentRepositories: Repositories {
         FluentOpponentClubRepository(database: database)
     }
     var teams: any TeamRepository { FluentTeamRepository(database: database) }
+    var teamRegistrations: any TeamRegistrationRepository {
+        FluentTeamRegistrationRepository(database: database)
+    }
     var matches: any MatchRepository { FluentMatchRepository(database: database) }
     var ingestionRuns: any IngestionRunRepository {
         FluentIngestionRunRepository(database: database)

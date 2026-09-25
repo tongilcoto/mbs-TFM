@@ -38,10 +38,23 @@ final class CalendarPass {
 
     private(set) var report: IngestionRun
 
+    /// # El informe nace `accepted`, y eso es F10-bis
+    ///
+    /// Antes nacía con los dos extremos puestos al mismo instante y lo corregía
+    /// `timed(from:to:)` al salir —una función que F10-bis quitó, porque con esto
+    /// se quedó sin llamantes—. Ahora nace **abierto** —sin final, que es lo
+    /// que [D-96] dice de una pasada que todavía no ha corrido— y se cierra al
+    /// terminar con `closed(as:)`. Una sola forma de acabar, y la que permite
+    /// **adoptar**: si el `202` dejó fila, `identity` es la suya y esta pasada
+    /// **es** esa fila, no una segunda.
+    ///
+    /// - Parameter identity: el `id` y el `startedAt` con los que se escribirá.
+    ///   Los pone el llamante porque solo él sabe si hay una fila que adoptar.
     init(
         competition: Competition,
         season: Season,
         repositories: any Repositories,
+        identity: (id: IngestionRunID, startedAt: Date),
         ids: any UUIDProvider,
         now: Date
     ) async throws {
@@ -55,9 +68,10 @@ final class CalendarPass {
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
         self.report = try IngestionRun(
-            id: IngestionRunID(raw: ids.next()),
+            id: identity.id,
             competitionID: competition.id, kind: .calendar,
-            startedAt: now, finishedAt: now)
+            startedAt: identity.startedAt, finishedAt: nil,
+            outcome: .accepted)
     }
 
     func run(_ calendar: FederationCalendar) async throws {
@@ -208,6 +222,16 @@ final class CalendarPass {
 
     /// Con qué encontrar la fila en la fuente cuando se reporta. Texto para un
     /// humano, no una clave.
+    /// El equipo tal y como lo publica la fuente, con la convención que el
+    /// *spec* da por ejemplo: `C.D. Galapagar "B"`. **La letra va porque sin ella
+    /// el nombre no identifica** —el "Infantil A" y el "Infantil B" del mismo club
+    /// comparten nombre (`D-77`)— y esto lo lee una persona buscando la fila en la
+    /// web de la federación.
+    private func describe(_ ref: FederationTeamRef) -> String {
+        guard let letter = ref.letter else { return ref.name }
+        return "\(ref.name) \"\(letter)\""
+    }
+
     private func describe(_ match: FederationMatch) -> String {
         let acta = match.federationMatchID.map { "[\($0)] " } ?? ""
         return "\(acta)\(match.home.name) - \(match.away.name)"
@@ -314,6 +338,22 @@ final class CalendarPass {
     private func createTeam(
         _ ref: FederationTeamRef, clubID: OpponentClubID
     ) async throws -> TeamID {
+        // **F9-bis**: sin código, el paso 1 de la cadena se lo salta sin decir
+        // nada y esta fila nace con la clave nula. No se descarta —un equipo sin
+        // código sigue teniendo sus partidos, igual que 217 goleadores de 218
+        // siguen siendo un ranking— pero **se apunta**, que es lo único que
+        // faltaba: `D-85` existe para contestar *"¿por qué falta esto?"* días
+        // después, y esta fila no tenía con qué.
+        //
+        // **Va aquí y no en `resolveTeam`** a propósito: el equipo se crea una
+        // vez, mientras que la referencia sin código llega en cada uno de sus
+        // ~30 partidos. Apuntarlo arriba llenaría la lista de la misma línea
+        // repetida, y una lista que no se puede leer es la que no se lee.
+        if ref.federationTeamID == nil {
+            report.skipped.append(
+                IngestionSkip(reason: .unidentifiedTeam, detail: describe(ref)))
+        }
+
         let team = try Team(
             id: TeamID(raw: ids.next()),
             // `D-66`: todo lo que la ingesta crea es **rival**. No hay rama que

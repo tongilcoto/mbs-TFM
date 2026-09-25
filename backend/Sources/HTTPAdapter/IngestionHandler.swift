@@ -1,5 +1,10 @@
 public import APIContract
-public import Application
+// **`internal` y no `public`**: los dos `public func` de abajo solo exponen
+// tipos de `APIContract` —`Operations.*`—, así que nada de `Application` cruza
+// la firma. Lo que se usa de ahí (`ActorContext`, `ApplicationError`,
+// `IngestClubCalendars`) vive dentro de los cuerpos. Es el mismo trato que
+// `ProblemMiddleware`, y lo pide `UnusedImportAccess`.
+import Application
 import Domain
 import Foundation
 import Logging
@@ -35,7 +40,7 @@ extension APIHandler {
         -> Operations.listIngestionRuns.Output
     {
         let actor: ActorContext
-        do { actor = try Self.currentActor() } catch {
+        do { actor = try actors.currentActor() } catch {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
                              title: "La petición no identifica ningún club"))))
@@ -69,7 +74,7 @@ extension APIHandler {
                 guard try await repositories.competitions.find(CompetitionID(raw: competitionID))
                     != nil
                 else {
-                    throw ApplicationError.competitionNotFound(id: "\(competitionID)")
+                    throw ApplicationError.competitionNotFound(id: "\(CompetitionID(raw: competitionID))")
                 }
                 return try await repositories.ingestionRuns.list(
                     competitionID: CompetitionID(raw: competitionID), limit: limit)
@@ -86,7 +91,7 @@ extension APIHandler {
         -> Operations.triggerIngestion.Output
     {
         let actor: ActorContext
-        do { actor = try Self.currentActor() } catch {
+        do { actor = try actors.currentActor() } catch {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
                              title: "La petición no identifica ningún club"))))
@@ -168,13 +173,18 @@ extension APIHandler {
             // El plan se calcula **antes** de responder, y no solo para poder
             // decir qué entra: es lo que hace que una `seasonId` inexistente dé
             // 404 aquí y no un `202` seguido de un fallo que nadie ve.
-            let planned = try await useCase.plannedCompetitions(scope: scope, actor: actor)
+            // **Aceptar, no solo planificar** (F10-bis, `H-27`): además de decidir
+            // qué entra —lo que hace que una `seasonId` inexistente dé 404 y no un
+            // `202` con un fallo invisible detrás—, deja una fila `accepted` por
+            // competición, que es lo único que el backoffice puede consultar
+            // mientras el trabajo ocurre.
+            let planned = try await useCase.accept(scope: scope, actor: actor)
             await background.enqueue {
                 await self.runAccepted(
                     useCase, scope: scope, actor: actor, planned: planned)
             }
             return .accepted(.init(body: .json(.init(
-                competitionIds: planned.map { $0.raw.uuidString.lowercased() }))))
+                competitionIds: planned.map { "\($0)" }))))
 
         } catch ApplicationError.competitionNotFound(let id) {
             return .notFound(.init(body: .application_problem_plus_json(
@@ -229,7 +239,7 @@ extension APIHandler {
         planned: [CompetitionID]
     ) async {
         let ids: @Sendable ([CompetitionID]) -> String = { list in
-            list.map { $0.raw.uuidString.lowercased() }.joined(separator: ", ")
+            list.map { "\($0)" }.joined(separator: ", ")
         }
         do {
             let report = try await useCase.execute(scope: scope, actor: actor)
@@ -292,10 +302,10 @@ extension Domain.IngestionRun {
     /// que de verdad se leen.
     func toResponse() -> Components.Schemas.IngestionRunResponse {
         .init(
-            id: id.raw.uuidString.lowercased(),
-            competitionId: competitionID.raw.uuidString.lowercased(),
+            id: "\(id)",
+            competitionId: "\(competitionID)",
             kind: kind.toContract(),
-            roundId: roundID?.raw.uuidString.lowercased(),
+            roundId: roundID.map { "\($0)" },
             startedAt: startedAt,
             finishedAt: finishedAt,
             outcome: outcome.toContract(),
@@ -336,6 +346,12 @@ extension Domain.IngestionKind {
 extension Domain.IngestionOutcome {
     func toContract() -> Components.Schemas.IngestionOutcome {
         switch self {
+        // `C-A.4` añadió este caso al Dominio y el compilador paró aquí, que es
+        // lo que `D-61` compra. **Obliga a escribir la línea, no a escribirla
+        // bien**: mapearlo a `.succeeded` compilaría igual y el backoffice daría
+        // por terminada una pasada que no ha empezado. Lo que lo afirma es
+        // `C-E.9`, que exige que los tres valores del contrato sean distintos.
+        case .accepted: .accepted
         case .succeeded: .succeeded
         case .failed: .failed
         }
@@ -363,6 +379,7 @@ extension Domain.IngestionSkip.Reason {
         case .duplicateClubName: .duplicate_club_name
         case .unknownStandingTeam: .unknown_standing_team
         case .unidentifiedScorer: .unidentified_scorer
+        case .unidentifiedTeam: .unidentified_team
         }
     }
 }

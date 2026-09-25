@@ -3323,7 +3323,7 @@ la respuesta de una es la forma de mirar la otra.
 | Operación | Qué hace |
 |---|---|
 | `GET ?competitionId=…&limit=…` | La cola reciente de pasadas de esa competición, de la más nueva a la más vieja |
-| `POST` | Pide que la ingesta pase. **No crea la fila** |
+| `POST` | Pide que la ingesta pase. **No crea la fila** — *enmendado por [D-96]:* crea una fila `accepted`, sin un solo campo de la pasada, que el job cierra |
 
 **El `POST` no rompe la frontera de propiedad de §5.1**, aunque lo parezca. La regla —*"el BFF corrige lo que
 la ingesta trae; no crea ni borra filas emparejadas"*— habla de **escribir el dato**. Aquí el cuerpo de la
@@ -4076,6 +4076,118 @@ justifica es *"la tabla es estado vigente y no histórico"*, y en toda la salida
 una pasada de una competición retiraría los goleadores de todas las demás — que es la clase de fallo que no
 da error, se lleva los datos y solo se nota al mirar la pantalla equivocada.
 
+---
+
+### D-96 · La pasada aceptada deja fila desde el instante del `202`, con un desenlace `accepted`
+
+**El problema, y está medido.** `IngestionOutcome` tiene dos valores —`succeeded` y `failed`—, así que entre
+el `202` y el final del trabajo **no existe fila ninguna**. Si el trabajo muere ahí en medio no queda un
+hueco: queda el estado anterior, intacto y con cara de sano. Medido en el bloque `A-4` del plan de auditoría
+(`H-27`): con la base parada a los 5 s de un `202` que aceptó dos competiciones, la segunda se pierde sin
+dejar nada, y `GET /v1/ingestion-runs` sigue devolviendo como más reciente una pasada `succeeded` de las
+**12:22:00**, *anterior* al `202` de las **12:24** — con lo que `ingestionHealth` ([D-89]) evalúa **`ok`**.
+
+El arreglo de A-4 (`77b2056`) tapó la ceguera del **operador**: el fallo se registra en el log. No tapó la del
+**backoffice**, y no puede — no hay *push*, así que la pantalla solo sabe lo que pueda **leer**.
+
+**Decisión.** El camino que acepta trabajo **escribe la fila antes de responder**, con un tercer desenlace
+`accepted` que la pasada cierra a `succeeded` o a `failed`. Vale para las dos puertas del `202`: la de
+[D-88] y la del enganche de [D-67].
+
+**Por qué no la alternativa —que el cliente compare marcas de tiempo.** Es el N+1 por recarga que [D-89]
+descartó **a propósito**, y además **no cubre el caso medido**: comparar exige que exista algo más nuevo que
+la petición, y el fallo es justamente que no existe nada. El cliente compararía contra las 12:22 y concluiría
+`ok`, igual que hoy.
+
+**Por qué `accepted` y no `running`.** `running` afirma algo que puede ser falso: si el proceso muere al
+arrancar, nunca llegó a correr. `accepted` es lo único que el `202` sabe con certeza en el instante en que
+responde — alguien lo pidió y se admitió. La misma disciplina de [D-84]: no escribir como hecho lo que es eco
+de la propia petición.
+
+**Y `finishedAt` pasa a anulable, con el orden mudado a `startedAt`.** Es el coste real de la decisión, y no
+el enumerado. Hoy `finished_at` es `NOT NULL`, la invariante del Dominio exige `finishedAt >= startedAt`, y
+—lo que lo hace caro— **la única consulta de la tabla ordena por ella**: `idx_ingestion_runs_competition
+(competition_id, finished_at)` y el `.sort(\.$finishedAt, .descending)` del repositorio. Una fila aceptada no
+tiene fecha de fin. Las tres salidas, y por qué ésta:
+
+| Salida | Por qué no / por qué sí |
+|---|---|
+| `finishedAt = startedAt` provisional | **No.** Es una fila que *miente*: dice duración cero, que es exactamente el defecto que F6 encontró mirando la tabla de verdad y que `timed(from:to:)` existe para corregir. Repetirlo a propósito es peor que el problema |
+| Anulable, conservando el orden por `finished_at` | **No.** Deja el `NULL` decidiendo dónde cae en el `ORDER BY`, que es una pregunta sin respuesta natural |
+| **Anulable, ordenando por `started_at`** | **Sí.** La pregunta que la tabla contesta es *"¿qué pasó con mi disparo?"*, y un disparo se ordena por cuándo **empezó**. El índice nuevo va en la migración que de todas formas hay que escribir, así que el coste marginal es **cero** |
+
+**Lo que hay que tocar, inventariado antes de decidir:**
+
+- **Migración nueva que rehaga el `CHECK`** ([D-90]). `chk_ingestion_runs_outcome` se deriva de
+  `IngestionOutcome.sqlValueList` ([D-02]) **una sola vez, cuando la migración corre**, así que el caso nuevo
+  **no llega** a un *schema* que ya existe. Es literalmente lo que pagó F8 con `kind`. Va con el índice por
+  `started_at` y con la columna anulable, en una sola migración.
+- **El otro `CHECK` aguanta sin tocarlo**, comprobado: `(outcome = 'failed') = (error IS NOT NULL)` sigue
+  siendo cierto para `accepted` sin error — `false = false`.
+- **Pero el `switch` del Dominio, no.** La pareja `outcome`/`error` del `init` acaba en `default: break`, así
+  que una fila `accepted` **con** error entraría por ahí y se aceptaría en silencio. Hay que nombrar los tres
+  casos. Y la ironía conviene guardarla: catorce líneas más arriba, el `switch` de `kind`/`roundID` documenta
+  exactamente este riesgo —*"con un `default`, el caso que añada la fase siguiente entraría por él"*— y el de
+  al lado no lo aplicó. **La fase siguiente llegó.**
+- **La docstring de `IngestionOutcome` hay que enmendarla, porque parece prohibir esto y no lo hace.** Dice
+  *"dos valores y no cuatro"*, pero el argumento que desarrolla es contra **`.partial`** y se apoya en la
+  atomicidad de [D-83]: *"o se escribió entera o no se escribió nada"*. `accepted` no es una pasada parcial;
+  es una pasada **que aún no ha pasado**. No la contradice, pero hoy se lee como si la cerrara.
+- **Lo que no cuesta nada, comprobado:** `IngestionRun.succeeded` es `outcome == .succeeded`, así que una fila
+  `accepted` **no mueve `Competition.lastSyncedAt`** sin tocar una línea.
+- **El contrato**: el `enum [succeeded, failed]` del *spec* gana su tercer valor, y [D-89] tiene que decidir
+  **a partir de cuándo una aceptada es sospechosa**, que es un umbral y se elige a mano.
+
+**Lo que esta decisión NO arregla, y hay que aceptarlo con los ojos abiertos.** La fila `accepted` **no se
+cierra sola**: en el caso exacto de `H-27` —la base caída detrás del `202`— se queda así para siempre. Es una
+mejora y no un defecto: hoy no queda nada y la pantalla dice `ok`; con esto queda una fila vieja en `accepted`
+que la pantalla puede leer como *"lleva veinte minutos aceptada"*. Pero convierte *"está en curso"* en una
+afirmación con **fecha de caducidad**, y quien la lea tiene que saberlo.
+
+**Enmienda a [D-88].** Aquella decisión dice *"el `POST` no crea la fila"*. Deja de ser cierto en la letra y
+sigue siéndolo en el espíritu: **el cuerpo de la petición sigue sin llevar ni un solo campo de la pasada**
+—lleva qué sincronizar—, y quien escribe **el dato** sigue siendo el job. Lo que el `POST` crea no es el
+resultado: es la constancia de que se lo pidieron.
+
+---
+
+### D-97 · El adaptador es dueño del universo de datos de su federación, y leer su URL es parte de ese universo
+
+**Lo que lo obligó a decidirse.** Convertir la URL del calendario en la coordenada de cuatro números vive hoy
+en `RFFMEndpoints.coordinate(fromCalendarURL:)`, dentro del *target* `Federation`. Su único llamante ha sido
+`seed-competition`, que es un `AsyncCommand` y por tanto vive en `App`, **la raíz de composición, desde donde
+se ve todo**. F10 mueve esa misma operación a un **caso de uso** (`PreviewFederationLink`), y ahí deja de
+alcanzar: `Application` no puede importar `Federation` — lo impide el grafo de `Package.swift`, que **es** la
+Regla de dependencia de §2.2 y no una convención de carpetas.
+
+No falta código y no está mal puesto: **cambió el llamante de capa**.
+
+**Decisión.** `FederationClient` —el puerto que ya significa *"esto es lo que sé hacer con una federación"*—
+gana `coordinate(fromCalendarURL:)`. El caso de uso llega a él por el camino que el recorrido de la ingesta ya
+recorre: **club → `Club.federation` → `FederationClientProvider` → adaptador**.
+
+**El principio, que es más ancho que el método y es la razón de verdad.** El adaptador es dueño del universo
+de datos de su federación **de punta a punta**: cómo escribe sus URLs, cómo escribe su JSON, dónde pega la
+letra del equipo, cómo codifica la modalidad. Nada de eso es conocimiento del *core* — está **fuera** del
+universo de datos del proyecto, que es lo que el Dominio modela. La consecuencia es la que hay que proteger:
+**cada federación nueva se escribe sin tocar la anterior.** El día que se reabra F9, el adaptador de la FCF no
+debería obligar a mover una línea del de la RFFM.
+
+**Por qué no un puerto nuevo** (`FederationURLParser`). Es más limpio en el papel y es ceremonia para un
+método: un `protocol`, su implementación, su cableado en la raíz de composición y su doble en cada test, para
+expresar una capacidad que el puerto de al lado ya reúne por definición.
+
+**Por qué no colgarlo del `FederationClientProvider`, que fue la primera propuesta y se cayó al medirla.** El
+argumento era que hay un huevo y una gallina —*"para saber quién sabe leer la URL hay que saber de qué
+federación es"*— y **es falso**: la federación se sabe **antes** de mirar la URL, porque es un dato del club
+([D-17], §3.6) y hay una por tenant. El camino es recto y no circular. Queda como recordatorio de [D-84]
+aplicada al propio diseño: *una premisa sobre la forma de tu propio código también se comprueba.*
+
+**Lo que esto NO autoriza.** No es permiso para que el puerto crezca con cualquier cosa. El criterio que
+admite un método nuevo es el de esta entrada —*¿es conocimiento del universo de datos de esa federación?*— y
+no *"lo necesita un caso de uso"*. Comprobar el *host* contra `Club.federation` cae dentro; decidir qué hacer
+cuando no cuadra, no: eso es del caso de uso.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4207,3 +4319,6 @@ da error, se lleva los datos y solo se nota al mirar la pantalla equivocada.
 [D-92]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-93]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-94]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-95]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-96]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-97]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

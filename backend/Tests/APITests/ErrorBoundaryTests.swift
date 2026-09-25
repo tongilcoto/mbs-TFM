@@ -244,3 +244,96 @@ struct ErrorBoundaryTests {
         }
     }
 }
+
+/// Nivel 4: **la guarda de §6.1 vista desde fuera** (`C-E.2`, `A-6`/H-42).
+///
+/// Su hermana de arriba —`actorAndAmbientTenantMustAgree`— afirma el **cinturón**
+/// llamando al `UnitOfWork` con el actor construido a mano. Lo que le faltaba
+/// para ser la regla entera es la otra mitad: que por **el camino HTTP** eso
+/// llegue a ocurrir, y hasta `C-E.2` no podía — `currentActor()` construía el
+/// actor *desde* el ambiente, así que comparaba un valor consigo mismo y
+/// `tenantMismatch` era **inalcanzable en producción por las dos vías**.
+///
+/// Lo que el ciclo cambia es de dónde sale el actor: de un puerto
+/// (`ActorResolver`) en vez de del ambiente. En producción el adaptador sigue
+/// leyéndolo del `Host` —la deuda declarada de F0—, así que el comportamiento no
+/// cambia; lo que cambia es que **la discrepancia es representable**, y por
+/// tanto probable. El día que el actor salga del *claim* firmado (§7.2), este
+/// test deja de ser hipotético **sin tocar una línea**.
+@Suite("Tenancy · §6.1 · la puerta del actor",
+       .serialized,
+       .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
+struct ActorSeamTests {
+
+    static let prefix = "e2e_"
+
+    /// El actor que **no** es el del ambiente: es lo que un *claim* firmado
+    /// pondrá el día que exista, y hoy lo pone un test.
+    struct FixedActorResolver: ActorResolver {
+        let slug: String
+        func currentActor() throws -> ActorContext {
+            ActorContext(clubSlug: try Slug(slug))
+        }
+    }
+
+    @Test("si el actor y el club del dominio discrepan, la petición se rechaza (§6.1 · C-E.2)")
+    func aDisagreeingActorIsRejectedOverHTTP() async throws {
+        let slugs = ["e2uno", "e2dos"]
+        try await TestEnvironment.withApp(
+            actors: FixedActorResolver(slug: "e2dos")
+        ) { app in
+            try await TestEnvironment.dropClubs(slugs, schemaPrefix: Self.prefix, on: app)
+            for slug in slugs {
+                try await TestEnvironment.provisionClub(
+                    slug, federation: .rffm, schemaPrefix: Self.prefix, on: app)
+            }
+
+            // El `Host` dice `e2uno` y el actor dice `e2dos`: **no se elige uno,
+            // se rechaza** (§6.1). Los dos clubes existen a propósito — si el 403
+            // saliera por "no existe", no probaría nada.
+            try await app.testing().test(
+                .GET, "/v1/club",
+                beforeRequest: { request async throws in
+                    request.headers.add(name: "X-Club", value: "e2uno")
+                }
+            ) { response async throws in
+                #expect(response.status == .forbidden)
+                let problem = try JSONDecoder().decode(
+                    Components.Schemas.Problem.self,
+                    from: Data(response.body.readableBytesView))
+                #expect(problem.code == "TENANT_MISMATCH")
+                #expect(problem.detail?.contains("e2uno") == true)
+                #expect(problem.detail?.contains("e2dos") == true)
+            }
+
+            try await TestEnvironment.dropClubs(slugs, schemaPrefix: Self.prefix, on: app)
+        }
+    }
+
+    /// **Y la otra mitad de toda guarda: que no rechace lo que sí cuadra.**
+    ///
+    /// Sin esto, la mutación obvia —rechazar siempre— pasaría por verde, que es
+    /// exactamente lo que el Bloque B aprendió con `M6`.
+    @Test("y el actor que coincide pasa (§6.1 · C-E.2)")
+    func anAgreeingActorPasses() async throws {
+        let slug = "e2solo"
+        try await TestEnvironment.withApp(
+            actors: FixedActorResolver(slug: slug)
+        ) { app in
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+            try await TestEnvironment.provisionClub(
+                slug, federation: .rffm, schemaPrefix: Self.prefix, on: app)
+
+            try await app.testing().test(
+                .GET, "/v1/club",
+                beforeRequest: { request async throws in
+                    request.headers.add(name: "X-Club", value: slug)
+                }
+            ) { response async throws in
+                #expect(response.status == .ok)
+            }
+
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+        }
+    }
+}

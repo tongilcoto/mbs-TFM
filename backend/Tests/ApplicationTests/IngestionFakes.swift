@@ -28,6 +28,16 @@ actor IngestionStore {
     var ingestionRuns: [IngestionRun] = []
     var standingRows: [StandingRow] = []
     var leagueScorers: [LeagueScorer] = []
+    /// `D-68`, F10. La escribe el club y la **completa** el enganche.
+    var teamRegistrations: [TeamRegistration] = []
+
+    /// **Cuántas escrituras ha recibido el almacén**, sea cual sea la tabla.
+    ///
+    /// Existe por `C-C.1`: *"el `/preview` no persiste nada"* es una afirmación
+    /// sobre **todas** las tablas, y comprobarla contando filas obliga a enumerar
+    /// las que hoy hay —y a acordarse de la que añada la fase siguiente—. Un
+    /// contador en el punto de paso no se puede olvidar.
+    var writes = 0
 
     /// Cuántas veces se abrió un ámbito de tenant. Lo mira el test de
     /// atomicidad: la pasada escribe en **uno**.
@@ -52,13 +62,22 @@ actor IngestionStore {
 
     func openScope() { scopesOpened += 1 }
 
+    func seed(teamRegistrations rows: [TeamRegistration]) { self.teamRegistrations += rows }
+
     func save(_ value: Season) { upsert(&seasons, value) { $0.id == value.id } }
     func save(_ value: Competition) { upsert(&competitions, value) { $0.id == value.id } }
     func save(_ value: Round) { upsert(&rounds, value) { $0.id == value.id } }
     func save(_ value: OpponentClub) { upsert(&opponentClubs, value) { $0.id == value.id } }
     func save(_ value: Team) { upsert(&teams, value) { $0.id == value.id } }
     func save(_ value: Match) { upsert(&matches, value) { $0.id == value.id } }
-    func record(_ value: IngestionRun) { ingestionRuns.append(value) }
+    func save(_ value: TeamRegistration) {
+        upsert(&teamRegistrations, value) { $0.id == value.id }
+    }
+    /// **Upsert por `id`, como el adaptador de verdad desde F10-bis** ([D-96]):
+    /// escribir dos veces la misma pasada la **cierra**, no la duplica. Un doble
+    /// que siguiera añadiendo dejaría al nivel 2 incapaz de ver el defecto que
+    /// esta mini-fase existe para arreglar.
+    func record(_ value: IngestionRun) { upsert(&ingestionRuns, value) { $0.id == value.id } }
     func save(standingRow value: StandingRow) {
         upsert(&standingRows, value) { $0.id == value.id }
     }
@@ -81,6 +100,7 @@ actor IngestionStore {
     }
 
     private func upsert<T>(_ list: inout [T], _ value: T, where match: (T) -> Bool) {
+        writes += 1
         if let index = list.firstIndex(where: match) { list[index] = value } else {
             list.append(value)
         }
@@ -134,7 +154,25 @@ struct FakeOpponentClubRepository: OpponentClubRepository {
 struct FakeTeamRepository: TeamRepository {
     let store: IngestionStore
     func list() async throws -> [Team] { await store.teams }
+    func find(_ id: TeamID) async throws -> Team? {
+        await store.teams.first { $0.id == id }
+    }
     func save(_ team: Team) async throws { await store.save(team) }
+}
+
+/// El de F10 (`D-68`). **Filtra por la pareja, como el puerto pide**: quien
+/// decide qué hacer con las filas que salen es la cascada del enganche, no el
+/// repositorio.
+struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
+    let store: IngestionStore
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration] {
+        await store.teamRegistrations.filter {
+            $0.teamID == teamID && $0.seasonID == seasonID
+        }
+    }
+    func save(_ registration: TeamRegistration) async throws {
+        await store.save(registration)
+    }
 }
 
 struct FakeMatchRepository: MatchRepository {
@@ -158,10 +196,31 @@ struct FakeClubRepository: ClubRepository {
 struct FakeIngestionRunRepository: IngestionRunRepository {
     let store: IngestionStore
     func record(_ run: IngestionRun) async throws { await store.record(run) }
+
+    /// **La más antigua de las abiertas**, igual que el adaptador de verdad: si
+    /// el doble devolviera otra, el nivel 2 mediría un orden distinto que el 3
+    /// —el mismo criterio con el que los repositorios de clasificación y
+    /// goleadores copian su `sort`—.
+    func findAccepted(
+        competitionID: CompetitionID, kind: IngestionKind
+    ) async throws -> IngestionRun? {
+        await store.ingestionRuns
+            .filter {
+                $0.competitionID == competitionID && $0.kind == kind
+                    && $0.outcome == .accepted
+            }
+            .min { $0.startedAt < $1.startedAt }
+    }
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun] {
         await store.ingestionRuns
             .filter { $0.competitionID == competitionID }
-            .sorted { $0.finishedAt > $1.finishedAt }
+            // **El nulo de `C-A.5` obliga a decir dónde cae, y aquí se imita lo
+            // que hoy hace el de verdad**: `ORDER BY finished_at DESC` en
+            // Postgres pone los `NULL` **primero**, así que una aceptada
+            // encabeza la lista. No es una decisión de este doble — es la que
+            // `C-D.6` viene a quitar de en medio pasando el orden a
+            // `started_at`, precisamente para que no dependa del motor.
+            .sorted { ($0.finishedAt ?? .distantFuture) > ($1.finishedAt ?? .distantFuture) }
             .prefix(limit)
             .map { $0 }
     }
@@ -191,6 +250,9 @@ struct FakeRepositories: Repositories {
         FakeOpponentClubRepository(store: store)
     }
     var teams: any TeamRepository { FakeTeamRepository(store: store) }
+    var teamRegistrations: any TeamRegistrationRepository {
+        FakeTeamRegistrationRepository(store: store)
+    }
     var matches: any MatchRepository { FakeMatchRepository(store: store) }
     var ingestionRuns: any IngestionRunRepository {
         FakeIngestionRunRepository(store: store)
@@ -263,14 +325,30 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
     private let error: (any Error)?
     private(set) var received: [FederationCoordinate] = []
 
-    init(returning calendar: FederationCalendar) {
+    /// **Lo que este doble contesta al leer una URL** (F10, `C-B.1`).
+    ///
+    /// `nil` —el valor por defecto, y el de todos los tests de F5 a F8— mantiene
+    /// el `throw NotStubbed` de abajo: quien no lo prepare sigue sin poder leer
+    /// una URL por accidente. Darle valor es lo que permite al nivel 2 del
+    /// enganche llegar a la coordenada **por el puerto**, que es lo que [D-97]
+    /// exige y lo que un `static` del adaptador no alcanzaría.
+    private let stubbedCoordinate: FederationCoordinate?
+
+    /// Las URL que se le han pedido leer. Lo mira el caso de uso del enganche:
+    /// la URL tiene que llegar **al adaptador**, no descomponerse por el camino.
+    private(set) var urlsRead: [String] = []
+
+    init(returning calendar: FederationCalendar,
+         readingURLAs stubbedCoordinate: FederationCoordinate? = nil) {
         self.calendar = calendar
         self.error = nil
+        self.stubbedCoordinate = stubbedCoordinate
     }
 
     init(failingWith error: any Error, calendar: FederationCalendar) {
         self.calendar = calendar
         self.error = error
+        self.stubbedCoordinate = nil
     }
 
     func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
@@ -306,6 +384,21 @@ final class SpyFederationClient: FederationClient, @unchecked Sendable {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        urlsRead.append(url)
+        guard let stubbedCoordinate else {
+            throw NotStubbed(
+                client: "SpyFederationClient", operation: "coordinate(fromCalendarURL:)")
+        }
+        return stubbedCoordinate
+    }
 }
 
 struct FixedClock: Clock {
@@ -388,6 +481,16 @@ final class FlakyFederationClient: FederationClient, @unchecked Sendable {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "FlakyFederationClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }
 
 /// Un reloj que **avanza** un segundo en cada consulta.
@@ -454,6 +557,16 @@ struct OpaqueFailingClient: FederationClient {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "OpaqueFailingClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }
 
 // ── H-23: la base que se cae a mitad de recorrido ──────────────────────────
@@ -535,6 +648,16 @@ final class OutageInducingClient: FederationClient, @unchecked Sendable {
         FederationScorerTable(competitionName: nil, rows: [])
     }
 
+    /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+    ///
+    /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+    /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+    /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+    /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+    /// escrito sobre el doble equivocado (`H-07`).
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "OutageInducingClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }
 
 // ── H-24: falla solo el ámbito del registro ────────────────────────────────

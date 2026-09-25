@@ -40,7 +40,11 @@ public func configure(
     // temporada del año en curso y **caducaría** el 1 de julio siguiente, con el
     // fallo apareciendo meses después y sin relación con el cambio que lo
     // destapó.
-    clock: any Clock = SystemClock()
+    clock: any Clock = SystemClock(),
+    // `C-E.2`: de dónde sale el actor. En producción, del tenant ambiental —la
+    // deuda declarada de F0—; un test puede poner uno que **discrepe** y hacer
+    // saltar la guarda de §6.1 sin esperar a JWKS.
+    actors: any ActorResolver = AmbientTenantActorResolver()
 ) async throws {
     // ── Datos ────────────────────────────────────────────────────────────────
     // Un solo *pool*, sin `search_path`: es el del plano de control y también
@@ -67,13 +71,18 @@ public func configure(
     // Herramienta de operación, no contrato: da de alta la **entrada** de la
     // ingesta desde la URL del calendario, mientras `D-67` (F10) no exista.
     app.asyncCommands.use(SeedCompetitionCommand(), as: "seed-competition")
+    // F10 · C-F.1: la otra mitad del andamiaje de operación. Sin esto la base de
+    // trabajo no puede tener un equipo propio, y sin equipo propio no hay nada
+    // que enganchar con `D-67`. `POST /v1/teams` es del backoffice, no de F10.
+    app.asyncCommands.use(SeedTeamCommand(), as: "seed-team")
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     let handler = APIHandler(
         unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
         federationClients: federationClients,
         clock: clock,
-        background: background
+        background: background,
+        actors: actors
     )
 
     // El transporte se registra sobre un `RoutesBuilder` ya decorado, que es lo

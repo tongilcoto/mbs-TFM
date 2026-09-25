@@ -24,7 +24,10 @@ public protocol TenantUnitOfWork: Sendable {
 ///
 /// Crece con cada fase: F0 trajo `clubs`; F1, la entrada de la ingesta (`D-16`);
 /// F5, su **salida** — las cuatro entidades que la pasada del calendario escribe—;
-/// F7, `standingRows`.
+/// F7, `standingRows`. F10 añade `teamRegistrations`, que **no es ninguna de las
+/// dos cosas**: la escribe el club (`D-68`) y la completa el enganche (`D-67`),
+/// así que entra aquí por la misma puerta que `Season` y `Competition` —la
+/// entrada— aunque la fase que la trae sea la de la ingesta.
 public protocol Repositories: Sendable {
     var clubs: any ClubRepository { get }
     var seasons: any SeasonRepository { get }
@@ -32,6 +35,7 @@ public protocol Repositories: Sendable {
     var rounds: any RoundRepository { get }
     var opponentClubs: any OpponentClubRepository { get }
     var teams: any TeamRepository { get }
+    var teamRegistrations: any TeamRegistrationRepository { get }
     var matches: any MatchRepository { get }
     var ingestionRuns: any IngestionRunRepository { get }
     var standingRows: any StandingRowRepository { get }

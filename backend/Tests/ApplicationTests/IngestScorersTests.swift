@@ -58,6 +58,17 @@ struct IngestScorersTests {
             }
             return table
         }
+
+        /// `C-B.1`: leer la URL es del adaptador de verdad, y este doble no lo es.
+        ///
+        /// **El puerto lo exige a todos y no trae implementación por defecto**, que es
+        /// lo que hace que el adaptador de la FCF no pueda nacer sin ella ([D-97]).
+        /// Aquí se lanza, con el mismo criterio que las otras operaciones sin preparar:
+        /// un doble que devolviera una coordenada cualquiera dejaría pasar un test
+        /// escrito sobre el doble equivocado (`H-07`).
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            throw NotStubbed(client: "ScorersClient", operation: "coordinate(fromCalendarURL:)")
+        }
     }
 
     struct Fixture: Sendable {
@@ -545,6 +556,9 @@ struct IngestScorersTests {
         // startedAt` se cumple trivialmente y la invariante del `init` no lo
         // delata. Es el defecto que F6 solo encontró mirando la tabla de verdad, y
         // que en F7 sobrevivió a la primera pasada de mutación.
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`: exigirlo aquí es parte de lo
+        // que se afirma — una pasada con éxito tiene fin (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 }

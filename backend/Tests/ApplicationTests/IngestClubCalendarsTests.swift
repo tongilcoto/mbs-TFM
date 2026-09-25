@@ -559,7 +559,11 @@ struct IngestClubCalendarsTests {
         // Con la cadencia fuera del proceso (`D-87`), cuánto tarda una pasada es
         // lo que dice si la federación se ha puesto lenta.
         let run = try #require(await store.ingestionRuns.first)
-        #expect(run.finishedAt > run.startedAt)
+        // `finishedAt` es anulable desde `C-A.5`, y exigirlo aquí es parte de lo
+        // que este test afirma: una pasada con éxito **tiene** fin. El nulo es
+        // exclusivo de `accepted` (`D-96`).
+        let finishedAt = try #require(run.finishedAt)
+        #expect(finishedAt > run.startedAt)
     }
 
     @Test("el motivo del fallo no se queda en la descripción opaca (D-85)")
@@ -664,7 +668,55 @@ struct IngestClubCalendarsTests {
         // Sin esto, el mismo club contesta **501** si se pide una competición y
         // **202** si se pide la temporada — con las dos aceptadas y ninguna hecha.
         await #expect(throws: ApplicationError.federationAdapterMissing(federation: "fcf")) {
-            try await useCase.plannedCompetitions(scope: IngestionScope(), actor: Self.actor)
+            try await useCase.accept(scope: IngestionScope(), actor: Self.actor)
         }
+    }
+
+    // ── F10-bis · B-5 · la otra puerta del 202 también deja fila ────────────
+
+    /// **`H-27`, el deber que el propio código tenía escrito y asignado a F10.**
+    ///
+    /// `runAccepted` lo dice con todas las letras: *"que la pantalla se entere
+    /// —sin push, que es como es— necesita que quede **fila** desde el instante
+    /// en que se acepta"*. Hasta aquí no quedaba: el `202` de
+    /// `POST /ingestion-runs` respondía y **las tres formas de enterarse se caían
+    /// a la vez** —la respuesta ya salió, la fila de la pasada se escribe *en la
+    /// base* (que es lo que falla en el caso malo) y el código de salida de
+    /// `D-86` es del comando, no de un servidor que no termina—.
+    ///
+    /// Que las dos puertas del `202` se comporten igual no es simetría por
+    /// simetría: es el mismo argumento de `H-28` —el `501` que se comprobaba en
+    /// una y no en la otra—. Un mecanismo que solo funciona por una puerta es un
+    /// mecanismo que hay que recordar.
+    ///
+    /// **Y aceptar dos veces no deja dos filas.** Un doble clic, o el cron
+    /// solapándose con el botón, dejaría una fila abierta que **nadie cerraría
+    /// nunca** —la pasada cierra una—, que es exactamente el defecto que esta
+    /// mini-fase existe para quitar de en medio.
+    @Test("aceptar una temporada deja fila por competición, y no duplica (D-96, H-27)")
+    func acceptingLeavesARowPerCompetition() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        let liga = try Self.competition(seasonID: current.id, federationGroupID: "1")
+        let copa = try Self.competition(seasonID: current.id, federationGroupID: "2")
+        await store.seed(seasons: [current], competitions: [liga, copa])
+
+        let useCase = Self.useCase(
+            store: store, federation: SpyFederationClient(returning: Self.calendar))
+
+        let accepted = try await useCase.accept(scope: IngestionScope(), actor: Self.actor)
+
+        #expect(Set(accepted) == Set([liga.id, copa.id]))
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 2, "el 202 respondió sin dejar dónde mirar (H-27)")
+        #expect(runs.allSatisfy { $0.outcome == .accepted })
+        #expect(runs.allSatisfy { $0.finishedAt == nil })
+        #expect(runs.allSatisfy { $0.kind == .calendar })
+        #expect(Set(runs.map(\.competitionID)) == Set([liga.id, copa.id]))
+
+        // El doble clic: se vuelve a aceptar, y sigue habiendo dos.
+        _ = try await useCase.accept(scope: IngestionScope(), actor: Self.actor)
+        #expect(await store.ingestionRuns.count == 2)
     }
 }

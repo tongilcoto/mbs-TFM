@@ -16,13 +16,16 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
 - [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
   bucles (alcance y TDD) y las fases **F0–F10**: andamiaje primero, después la ingesta.
+- [backend/Plan F10-001.md](./backend/Plan%20F10-001.md) — **la fase en curso, troceada en ciclos**:
+  qué está ya decidido y no se rediscute, el «Leer antes» de cada bloque y el estado. Autocontenido:
+  una sesión nueva arranca de ahí sin releer el LLD entero.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
 | **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/Sources/APIContract/openapi.yaml) |
-| **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
+| **Web backoffice** | *(pendiente)* | *(pendiente)* | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
 
@@ -82,6 +85,18 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   **nueva**. Y si el recorrido encuentra un club roto **se para** —correcto por `D-86`: una migración a
   medias *es* estado a medias— diciendo de quién era.
 - **La federación es un catálogo en código, no una tabla** (§3.6): soportar una nueva exige un adaptador.
+  **Y ese adaptador es dueño del universo de datos de su federación de punta a punta** (`D-97`): su URL, su
+  JSON, dónde pega la letra del equipo, cómo codifica la modalidad. Nada de eso es conocimiento del *core*,
+  y la consecuencia es la que hay que proteger: **cada federación nueva se escribe sin tocar la anterior**.
+  Por eso `coordinate(fromCalendarURL:)` va en `FederationClient` y no en un puerto aparte — el criterio para
+  admitir un método nuevo ahí es *"¿es conocimiento del universo de esa federación?"*, no *"lo necesita un
+  caso de uso"*. **Escrito en F10 (Bloque B), y con tres cosas que no se ven en la firma:** va **sin
+  implementación por defecto** —así el adaptador que venga no puede nacer sin leer su propia URL, y el
+  compilador lo dice en vez de la ejecución—; **no es `async`**, porque es la única operación del puerto que
+  no habla con la fuente; y **rechazar la URL que no es suya es también del adaptador**, que es quien conoce
+  su *host* — el llamante llega por club → `Club.federation` → `FederationClientProvider` y **no sabe de qué
+  federación es lo que le han pegado**. Lo que sale del adaptador es un `DomainError`, no su error interno:
+  ver el criterio del 400 abajo.
   Lo que sí es dato es cuál es la del club (`Club.federation`), una por tenant. El catálogo describe también
   **qué sabe hacer** cada proveedor, no solo sus coordenadas (`D-17`, `D-55`).
 - **Los dos proveedores se parecen mucho más de lo que dicen los documentos antiguos, y eso es reciente.**
@@ -176,7 +191,9 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   retirada va por la marca `synced_at` y **dentro del mismo ámbito que la escritura**, para que una caída a
   mitad no pueda dejar la tabla vacía. Al añadir la séptima salida de la ingesta: **si tiene jornada, es
   histórico y no se borra**.
-- **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas** (`D-88`).
+- **El módulo de ingesta asoma exactamente dos endpoints, y el `POST` no crea filas de resultado**
+  (`D-88`, **enmendada por `D-96`**: sí crea una fila `accepted` —sin un solo campo de la pasada— para
+  que el backoffice pueda enterarse leyendo; quien escribe **el dato** sigue siendo el job).
   `GET /v1/ingestion-runs` lee el registro; `POST /v1/ingestion-runs` **pide que el job pase** —el cuerpo no
   lleva ni un campo de la pasada, lleva qué sincronizar, igual que `Competition` como entrada (`D-16`)—, y
   responde **200** con una competición (cabe en la respuesta) o **202** con una temporada (decenas de
@@ -190,6 +207,39 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   temporada, competición)***, que es lo que el backoffice llama *"un equipo"*; hoy costaría N+1 peticiones.
   No es fallo del modelo (la participación se deriva por diseño, `D-27`/`D-28`): es una vista derivada que
   falta.
+- **La cascada del enganche presta la categoría del EQUIPO a la competición que crea, y eso no es una
+  elección entre varias** (F10, Bloque C). La federación **no publica la categoría de edad** —va en el
+  nombre, como el género— y `FederationLinkRequest` no la lleva: el contrato pide `gender` y no la edad. Así
+  que cuando la cascada de `D-67` crea la `Competition`, `ageCategory` sale del equipo que se está
+  enganchando, `modality` de la coordenada (`tipojuego`) y `gender` del cuerpo. La consecuencia hay que
+  leerla entera para no confundirla con un descuido: **en el alta de una competición nueva la edad cuadra
+  por construcción**, y de las tres que `identityMatches` compara (`D-58`, §3.2) las que de verdad muerden
+  son las otras dos. La tercera se cobra cuando **la competición ya existe** —la que dio de alta otro equipo
+  o `seed-competition`—, que es exactamente el caso de `D-58`: el Cadete A enganchado a la juvenil. Por eso
+  el `/preview` enseña **la identidad de la fila** cuando la hay y **los rótulos de la fuente** siempre: los
+  rótulos están para *reconocer* el grupo (`D-16`), la identidad para *decidir* si esto va a dar un 409. Y
+  por eso la negativa vive en el Dominio (`Team.requireIdentityMatches`) y no en el caso de uso: la otra
+  puerta que afirma esta correspondencia a mano —`POST /teams` + `PUT /registrations`, del backoffice—
+  **sigue sin fase**, y tendría que acordarse de escribirla otra vez.
+- **Y la abre el `202`, la cierra la pasada, y el mecanismo es el mismo por las dos puertas** (F10-bis).
+  `IngestionOutcome.accepted` no es un estado que alguien ponga y otro mire: es **una fila que transita**. La
+  escribe quien acepta —el enganche de `D-67` y el `POST /v1/ingestion-runs`, los dos `202`— y la **cierra la
+  propia pasada**, que **adopta** su `id` y su `startedAt` en vez de escribir una fila nueva. Adoptar y no
+  *"escribo la mía y cierro la otra"* tiene un motivo exacto: `closed(as:at:)` arrastra los contadores **del
+  informe sobre el que se llama**, y los de una fila aceptada son ceros — cerrando la otra, el resultado
+  quedaría en una fila y los contadores en ninguna. Consecuencias al tocar esto: `record` es ***upsert* por
+  `id`** y ya no *"solo inserta"* (la excepción está razonada en el puerto), `findAccepted` **filtra por
+  `outcome` y por `kind`** —sin lo primero, la pasada del cron adoptaría la fila cerrada de la semana pasada
+  y la ingesta se caería en la segunda pasada de cada competición, medido con mutación—, y **aceptar dos
+  veces no deja dos filas**, porque la pasada cierra una. De regalo, una propiedad que nadie pidió: si el
+  proceso muere entre el `202` y la pasada, **la siguiente del cron cierra lo que quedó abierto**.
+- **La fila `accepted` de `D-96` va DENTRO del ámbito de su cascada, al revés que la constancia de `D-85`.**
+  No es una incoherencia: son dos cosas distintas con el mismo nombre de tabla. El registro de `D-85` vive
+  en su **propio** ámbito precisamente para que el `rollback` de la pasada fallida no se lleve la constancia
+  **del fallo**; la fila `accepted` es la constancia de que **esto se ha aceptado**, y sin la cascada no hay
+  nada que aceptar — una fila prometiendo una pasada sobre una competición que el `rollback` se llevó es
+  peor que no tener fila. Al tocar cualquiera de las dos: la pregunta no es *"¿dentro o fuera?"* sino
+  *"¿qué deja de ser verdad si la transacción se deshace?"*.
 - **Ojo con el atajo "RFFM = JSON, FCF = *scraping*": ya no vale por partida doble.** La FCF es JSON puro; y
   en la RFFM el **calendario sigue siendo HTML** con el JSON dentro de un `__NEXT_DATA__` embebido
   ([Anexo RFFM §F.7, §F.15]) — solo sus rutas `/api/…` son JSON directo. Evidencia campo a campo en los
@@ -267,8 +317,17 @@ entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`
 salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
 mantiene solo** (Plan §4.10).
 Y **F9**, que **no escribió código y eso es su resultado**: el adaptador de la **FCF** se aplazó al
-revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11).
-**446 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11). Y **F9-bis**, la mini-fase que **le pone voz al
+equipo que la fuente publica sin código**: el motivo número once de `IngestionSkip`, y con él el ensanche
+—decidido, no heredado— de lo que esa lista significa.
+Y **F10**, **en curso**: el enganche del equipo con su federación (`D-67`), troceado en
+[su propio plan](./backend/Plan%20F10-001.md). Entregados de ella los bloques **F** (`seed-team`, la
+herramienta sin la cual la base de trabajo no puede tener un equipo propio), **0** (el contrato: las dos
+operaciones en el `filter` y los cuatro huecos del *spec*), **A** (el Dominio del enganche, con
+`TeamRegistration` y la identidad que tiene que cuadrar **por tres**) y **B**, el **puerto de la
+coordenada**: el adaptador lee su propia URL y **rechaza la que no es suya por ajena**, no por un parámetro
+que falte. Quedan los bloques **C**, **D** y **E**.
+**476 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -324,13 +383,13 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 | Target | Capa (§2.2) | Qué contiene |
 |---|---|---|
 | `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. F8, `LeagueScorer` — con eso la salida de la ingesta está **completa**. **Sin** `import Vapor/Fluent` |
-| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`) |
+| `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`). F10 añade al puerto de federación **la inversa de la coordenada** —leer la URL que el administrador pega—, que es su **única operación que no habla con la fuente** (`D-97`)— y los **dos casos de uso del enganche** (`PreviewFederationLink`, `LinkTeamToFederation`), con `TeamRegistrationRepository` y `TeamRepository.find(_:)` como puertos nuevos |
 | `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
 | `Federation` | Adaptador secundario | Adaptadores de las APIs de federación. **Sin Vapor ni Fluent**: lo que hace es parsear texto ajeno |
 | `Tenancy` | Infraestructura | Plano de control, `SET LOCAL search_path`, middleware |
-| `App` | — | **Raíz de composición**: el único sitio que cablea las capas. Y los `AsyncCommand`: `migrate-tenants`, `provision-tenant` e `ingest` (F6) |
+| `App` | — | **Raíz de composición**: el único sitio que cablea las capas. Y los `AsyncCommand`: `migrate-tenants`, `provision-tenant`, `ingest` (F6) y las dos herramientas de operación, `seed-competition` y `seed-team` (F10, `C-F.1`) |
 
 ```sh
 cd backend
@@ -343,7 +402,7 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son TRECE migraciones por tenant:
+                                          # hoy son DIECISÉIS migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
@@ -351,13 +410,30 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   ingestion_runs -> (+kind, +contadores)
                                           #   -> (+round_id) -> (+contadores de
                                           #   goleadores Y EL CHECK DE kind REHECHO)
-                                          #   Las tres últimas ALTERAN ingestion_runs
-                                          #   y son TRES y no una porque cada una ya
+                                          #   -> (F10-bis: finished_at ANULABLE, el
+                                          #   CHECK de outcome REHECHO y el índice
+                                          #   por started_at) -> (F10: la tabla
+                                          #   team_registrations, con el UNIQUE
+                                          #   NULLS NOT DISTINCT de tres columnas,
+                                          #   la FK COMPUESTA a la temporada de la
+                                          #   competición y, de paso, los dos
+                                          #   índices compuestos de matches que
+                                          #   §4.6 mandaba y no existían —H-36—)
+                                          #   -> (F10: se RETIRA el índice de
+                                          #   ingestion_runs por finished_at, que
+                                          #   desde que la consulta ordena por
+                                          #   started_at no tiene ningún lector)
+                                          #   Las que ALTERAN ingestion_runs son
+                                          #   varias y no una porque cada una ya
                                           #   estaba aplicada cuando llegó la
                                           #   siguiente (`D-90`). Y la de F8 rehace
                                           #   el CHECK de `kind` porque un enumerado
                                           #   derivado NO se mantiene solo: se
-                                          #   deriva al migrar y ahí se congela
+                                          #   deriva al migrar y ahí se congela.
+                                          #   Las dos últimas van SEPARADAS aunque
+                                          #   sean de la misma fase: no son la misma
+                                          #   razón, y una migración que hace dos
+                                          #   cosas no se revierte a medias
                                           #   El orden es el de FK, y cada fase
                                           #   añade la suya AL FINAL DE LA LISTA
                                           #   QUE LE TOQUE, no al final a secas
@@ -375,6 +451,25 @@ swift run Run seed-competition -t atleti -u "<URL del calendario>" \
                                           # (`D-22`), con los rótulos que dice la
                                           # federación y pasando por el Dominio. Valida
                                           # antes de escribir. Hasta que llegue F10 (`D-67`)
+swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
+                                          # LA OTRA MITAD (F10, `C-F.1`): el EQUIPO
+                                          # PROPIO. Nace propio y SIN enganchar —las
+                                          # dos claves nulas—, que es el único estado
+                                          # desde el que `D-67` engancha y el único en
+                                          # que la fila no tiene segundo escritor
+                                          # (`D-66`). `POST /v1/teams` es del
+                                          # backoffice y NO existe: sin esto la base de
+                                          # trabajo no puede tener un equipo propio.
+                                          # Categoría, género y modalidad son IDENTIDAD
+                                          # y no tienen defecto honesto: equivocarlas da
+                                          # un 409, no un rótulo feo. La letra nula ES
+                                          # un valor —«el único equipo»—, no un comodín.
+                                          # NO escribe TeamRegistration, y desde el
+                                          # bloque D de F10 ya no es porque la tabla
+                                          # falte: quien la escribe es LA CASCADA DEL
+                                          # ENGANCHE (`D-68`, `C-C.10`), que es la que
+                                          # sabe en qué competición queda inscrito.
+                                          # Manual: README §6.2
 swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -t <slug[,slug]>  solo esos clubes
                                           #   -c <uuid>         solo esa competición
@@ -414,7 +509,44 @@ docker compose down -v
 - **El `CHECK` de un enumerado se deriva, nunca se teclea** (§4.6, `D-02`): `sqlValueList` es genérico sobre
   `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
   `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
-  que alguien decida su código HTTP.
+  que alguien decida su código HTTP. **Y ese código no se elige a ojo**: el 422 es para el cuerpo que se
+  decodificó y dice algo que la regla no admite; el **400**, *"para lo que ni siquiera se pudo decodificar"*.
+  Por eso la URL de calendario ilegible de F10 (`unreadableFederationURL`) es un **400** y no un 422 — no es
+  un campo del modelo, es **el sobre** del que salen los cuatro parámetros de la coordenada (`D-22`)—, y por
+  eso hay que mirar **qué códigos declara el *spec* en esa ruta** antes de decidir: un 422 que el contrato no
+  declara no lo sabe leer un cliente generado.
+- **`IngestionRun.skipped` ya no es *"lo que la pasada no escribió"*: es *"lo que dejó señalado"*** (F9-bis).
+  Nueve de sus **diez** motivos son filas ausentes; el décimo —`unidentifiedTeam`, el equipo que la fuente
+  publica sin código— es una fila que **sí** se escribió, pero coja. La consecuencia para quien la lee: **se
+  lee por el motivo de cada línea y no se cuenta**, porque su longitud ya no es *"cuántas filas faltan"*. Al
+  añadir el motivo número once: `IngestionSkip.Reason` **cruza la frontera HTTP** —enumerado espejo en el
+  *spec* y traducción a mano en `IngestionHandler.toContract()`—, así que toca **cuatro** *targets* y el
+  `switch` exhaustivo obliga a escribir la línea pero **no** a escribirla bien. *(El recuento decía **once**
+  aquí, en el plan de F10 y en la descripción del propio* spec*; son diez, contados en los dos lados el
+  2026-09-24. Lo vigila ahora `ContractEnumTests`.)*
+- **Un identificador sabe escribirse, y no se escribe a mano** (`F10-ter`). Los **once** —`TeamID`,
+  `SeasonID`, `IngestionRunID`…— conforman `TypedIdentifier`, que decide la forma canónica **una vez**: RFC
+  4122 §3, minúscula. Se interpola el identificador, `"\(teamID)"`, **nunca** `raw.uuidString.lowercased()`
+  ni, mucho menos, `"\(teamID.raw)"` — que era el defecto: 14 puntos de salida se acordaban de bajar la caja
+  y 14 no, y el `detail` de un problema no casaba con el id que el cliente había enviado. `raw` sigue siendo
+  el `UUID` para quien lo necesite de verdad (repositorios, columnas). Al añadir el identificador número doce:
+  conformarlo y ponerle su renglón en `IdentifierTextTests`, que los enumera a mano porque Swift no deja
+  recorrer los tipos que cumplen un protocolo.
+- **Lo que se queda sin arnés no es lo complicado: es lo que ningún montaje llega a ejercer** (medido el
+  2026-09-25, [Plan de desarrollo §4.1](./docs/Plan%20de%20desarrollo-001.md), detalle bajo `F10-ter`). Los
+  cuatro campos que cruzaban la frontera sin una sola aserción eran **un anulable que todas las *fixtures*
+  dejaban en nulo** —el escudo del `/preview`, el del club— y **un camino que la batería no provoca** —el
+  `roundId`, que solo existe en la pasada de clasificación, y ésa no ocurre con un calendario vacío—. Ninguno
+  se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
+  cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
+  que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **17 de 30** códigos `Problem` afirmados
+  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los quince que faltan están listados
+  por su nombre en su fila del plan de auditoría).
+- **Y los valores de un test tienen que ser distintos entre sí cuando lo que se prueba es un mapeo.** Los
+  trece contadores de `IngestionRunResponse` se afirman con 1..13 **a propósito**: con ceros, o con el mismo
+  número repetido, una permutación es **invisible** y el test pasa igual con los campos cruzados. Lo mismo
+  vale para los enumerados espejo (`C-E.9`) y para el UUID del identificador, que lleva letras adrede porque
+  uno de solo dígitos se escribe igual en las dos cajas.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 - **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
@@ -445,8 +577,34 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter**, **F7** y **F8** entregadas y **F9 aplazada sin escribir código**
-([D-95], Plan §4.11), lo inmediato es **F10**: `POST /teams/{id}/federation-link` + `/preview`.
+Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis**, **F10** y **F10-ter**
+entregadas y **F9
+aplazada sin escribir código** ([D-95], Plan §4.11), **la ingesta está completa de punta a punta**: el
+enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
+([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **541 tests**).
+
+**Lo que F10 deja puesto y conviene saber antes de tocar la frontera HTTP:**
+
+- **Las dos puertas de [D-67] existen**: `POST /v1/teams/{id}/federation-link/preview` → **200** sin
+  persistir nada, y `POST /v1/teams/{id}/federation-link` → **202** con la cascada escrita y la primera
+  ingesta encolada. El manual con los `curl` y los ocho códigos de error está en
+  [`backend/README.md` §4.2](./backend/README.md).
+- **La traducción error → HTTP tiene UN sitio y es `ProblemMiddleware`.** F10 midió que los códigos que el
+  contrato declara ya salían correctos por ahí cuando el error se escapa de un *handler*, así que **no se
+  duplicó** en los *handlers*: un segundo sitio decidiendo el mismo código HTTP es lo que acaba divergiendo.
+  Lo que un *handler* sí atrapa es lo que quiera servir como respuesta **tipada** del contrato.
+- **`FederationError` ya se distingue en producción** (`A-6`/H-15): `transportFailure` → **504**, las otras
+  tres → **502**. Ojo a la mitad que no se ve en el `case`: lo que sale de un *handler* llega **envuelto** en
+  un `ServerError`, así que un tipo de error nuevo hay que añadirlo **también** a la lista de desenvoltorio o
+  la traducción no lo alcanza nunca.
+- **El actor sale de un puerto, `ActorResolver`** (`C-E.2`): la guarda de §6.1 dejó de comparar un valor
+  consigo mismo. El adaptador de producción sigue leyéndolo del `Host` —la deuda declarada de F0—, así que
+  **montar la auth es cambiar ese adaptador**, no el middleware ni los *handlers*.
+- **El 409 del enganche tiene TRES causas y la tercera se escribió midiendo contra la base de trabajo**
+  (`C-E.10`): *"ese `federationTeamId` ya pertenece a otro equipo"*. Es el desenlace **normal de enganchar
+  tarde** —la ingesta no crea equipos propios ([D-66]), así que el equipo que nadie enganchó ya existe como
+  rival con su código— y daba un **500 con el SQL en crudo**. Ningún test de la batería podía verlo: en todos
+  los montajes el código estaba libre.
 
 **F9 era el adaptador de la FCF y no se escribió, y conviene saber por qué antes de reabrirlo.** La fase
 abrió, hizo lo primero que [D-74] manda —**revalidar el anexo antes de escribir el adaptador**— y la
@@ -587,6 +745,8 @@ El desarrollo cuenta con un único desarrollador humano, con la ayuda de Claude 
 [D-90]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-94]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-95]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-96]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-97]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-74]: ./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.7, §F.15]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

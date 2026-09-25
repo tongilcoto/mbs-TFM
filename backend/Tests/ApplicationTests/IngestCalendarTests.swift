@@ -263,6 +263,59 @@ struct IngestCalendarTests {
         #expect(report.teamsCreated == 2)
     }
 
+    // ── El equipo que la fuente publica sin código (F9-bis) ─────────────────
+
+    /// **`D-85` con la pregunta que hasta F9-bis no tenía con qué contestarse.**
+    /// La fuente puede publicar un equipo sin su `codequipo`. Entonces el paso 1
+    /// de la cadena **se lo salta sin decir nada** —no tiene con qué buscar
+    /// (`MatchingChain.swift:364`)— y el paso 3 lo crea con la clave **nula**. La
+    /// fila queda escrita y usable, pero su identidad cuelga de un emparejamiento
+    /// **inexacto** mientras la fuente no publique el código, y el administrador
+    /// no tenía por dónde enterarse.
+    ///
+    /// **Es el único de los once motivos que apunta una fila que SÍ se escribió**,
+    /// y es lo que ensancha el significado de `skipped` de *"lo que no escribí"*
+    /// a *"lo que dejé señalado"*. Su hermano es `unidentifiedScorer`: los dos
+    /// significan *"la fuente cambió de forma"* y no *"los datos aún no cuadran"*,
+    /// y como aquél **no hace fallar la pasada** — un equipo sin código sigue
+    /// teniendo sus partidos.
+    @Test("el equipo que la fuente publica sin código se escribe, pero se apunta (D-85, F9-bis)")
+    func aTeamPublishedWithoutItsCodeIsReported() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let calendar = try Self.calendar(matches: [
+            Self.match(
+                home: Self.teamRef(
+                    id: nil, name: "CELTIC CASTILLA C.F.", letter: "A",
+                    club: "0010940034"))
+        ])
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        // La pasada no se rompe por esto: los dos equipos y su partido entran.
+        #expect(report.teamsCreated == 2)
+        #expect(await store.matches.count == 1)
+
+        // Y el que vino sin código está escrito con la clave nula, que es
+        // justamente la fila que hay que poder ir a mirar después.
+        let orphan = try #require(await store.teams.first { $0.federationTeamID == nil })
+        #expect(orphan.letter == "A")
+
+        // La anomalía, apuntada **una sola vez** y con qué encontrarla en la
+        // fuente: el `detail` lo lee una persona días después, no una consulta.
+        // **El `detail` se afirma entero y no por `contains`**: la letra es la
+        // mitad que identifica —el "Infantil A" y el "Infantil B" del mismo club
+        // comparten nombre (`D-77`)— y un `contains` del nombre la deja caer sin
+        // que nada se entere. Lo dijo la comprobación de mutación, no un rojo.
+        #expect(report.skipped == [
+            IngestionSkip(reason: .unidentifiedTeam, detail: "CELTIC CASTILLA C.F. \"A\"")
+        ])
+    }
+
     // ── La jornada y su rango (D-81) ────────────────────────────────────────
 
     /// `D-81` con el reparto real: la jornada 1 del volcado de temporada jugada
@@ -1021,5 +1074,140 @@ struct IngestCalendarTests {
         #expect(await store.ingestionRuns.first?.skipped == [IngestionSkip(
             reason: .missingMatchDate,
             detail: "[5374969] E.F.M.O. BOADILLA - LAS ROZAS C.F.")])
+    }
+
+    // ── F10-bis · B-3 · la pasada ADOPTA la fila aceptada ───────────────────
+
+    /// **[D-96], la otra mitad: quien pidió la pasada tiene que poder verla
+    /// acabar.**
+    ///
+    /// El `202` deja una fila `accepted` y devuelve su `id` (`C-C.11`). Si la
+    /// pasada abriera la suya, habría **dos filas de la misma pasada**: una
+    /// eternamente abierta —la que el cliente está mirando— y otra con el
+    /// resultado, que no sabe que existe. La pantalla diría *"sincronizando…"*
+    /// para siempre aunque hubiera terminado bien hace media hora.
+    ///
+    /// **Adoptar, y no *"escribir la mía y cerrar la otra"*.** La diferencia no
+    /// es de estilo: `closed(as:at:)` arrastra los contadores **del informe sobre
+    /// el que se llama**, y los de una fila aceptada son ceros. Cerrando la otra,
+    /// el resultado quedaría en una fila y los contadores en ninguna. Se adopta
+    /// el `id` y el `startedAt`, se trabaja, y se cierra lo que se ha acumulado.
+    ///
+    /// **`startedAt` es el de la aceptada**, que es cuándo **se pidió** — lo que
+    /// el `202` dejó para consultar (`C-A.6`).
+    @Test("la pasada cierra la fila que el 202 dejó abierta, no abre otra (D-96)")
+    func thePassClosesTheAcceptedRow() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        let accepted = try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competition.id,
+            kind: .calendar, startedAt: Self.date("13-09-2025"),
+            finishedAt: nil, outcome: .accepted)
+        await store.record(accepted)
+
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(), store: store)
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 1, "la pasada dejó \(runs.count) filas: la aceptada sigue abierta")
+        #expect(runs.first?.id == accepted.id)
+        #expect(runs.first?.outcome == .succeeded)
+        #expect(runs.first?.finishedAt != nil)
+        // Cuándo se PIDIÓ, no cuándo arrancó el job.
+        #expect(runs.first?.startedAt == Self.date("13-09-2025"))
+        // Y los contadores son los de la pasada, no los ceros de la aceptada.
+        #expect(runs.first?.matchesCreated == 1)
+    }
+
+    // ── F10-bis · B-4 · el camino de fallo adopta igual ─────────────────────
+
+    /// **[D-96], literal: la pasada la cierra a `succeeded` *o a `failed`*.**
+    ///
+    /// Es la mitad que se olvida, y la peor de olvidar: si sólo adoptara el
+    /// camino de éxito, una pasada que revienta dejaría la fila **abierta para
+    /// siempre** —el defecto que esta mini-fase arregla, escondido en la rama
+    /// que nadie mira— y además escribiría una segunda fila con el motivo. El
+    /// cliente que sigue su `jobId` vería *"sincronizando…"* eternamente
+    /// mientras el fallo está anotado al lado, en una fila que no es la suya.
+    ///
+    /// Y lo que [D-85] decidió **no cambia**: la fila fallida se escribe en su
+    /// propio ámbito, fuera de la transacción que se deshizo. Adoptar cambia con
+    /// qué `id` se escribe, no dónde.
+    @Test("la pasada que falla cierra la aceptada a `failed`, no abre otra (D-96, D-85)")
+    func theFailedPassClosesTheAcceptedRowToo() async throws {
+        let season = try Self.season()
+        // La guarda de `D-84`: el nombre guardado y el que dice la fuente no
+        // coinciden, así que la pasada revienta antes de escribir.
+        let competition = try Self.competition(
+            seasonID: season.id, federationName: "PREFERENTE AFICIONADO")
+        let store = IngestionStore()
+        let accepted = try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competition.id,
+            kind: .calendar, startedAt: Self.date("13-09-2025"),
+            finishedAt: nil, outcome: .accepted)
+        await store.record(accepted)
+
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(
+                competitionName: "PRIMERA DIVISION AUTONOMICA CADETE"),
+            store: store)
+
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 1, "la aceptada sigue abierta y el fallo fue a otra fila")
+        #expect(runs.first?.id == accepted.id)
+        #expect(runs.first?.outcome == .failed)
+        #expect(runs.first?.error?.isEmpty == false)
+        #expect(runs.first?.startedAt == Self.date("13-09-2025"))
+    }
+
+    /// **La otra mitad, y la encontró la mutación** (F10-bis): quitar el filtro
+    /// de `outcome` a `findAccepted` **sobrevivía** a toda la batería, porque en
+    /// todos los tests la única fila que había era la aceptada.
+    ///
+    /// Lo que eso rompe no es un caso raro: es **el caso normal de la segunda
+    /// semana**. Sin el filtro, la pasada del cron encontraría la fila de la
+    /// semana pasada —ya `succeeded`— e intentaría cerrarla, y el Dominio se
+    /// niega con razón: *"solo se cierra una pasada aceptada"* (`C-A.6`). La
+    /// ingesta entera se caería en la segunda pasada de cada competición.
+    ///
+    /// Adoptar es para lo que está **abierto**. Lo cerrado es historia, y la
+    /// historia de una sincronización no se reescribe — que es lo que el puerto
+    /// dice desde F5 y F10-bis solo matiza para el caso que no existía.
+    @Test("la pasada no adopta la fila cerrada de la semana pasada (D-96, F10-bis)")
+    func theClosedRunOfLastWeekIsNotAdopted() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        let lastWeek = try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competition.id,
+            kind: .calendar, startedAt: Self.date("06-09-2025"),
+            finishedAt: Self.date("06-09-2025"), outcome: .succeeded)
+        await store.record(lastWeek)
+
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(), store: store)
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 2, "la pasada de hoy se comió la fila de la semana pasada")
+        #expect(runs.contains { $0.id == lastWeek.id && $0.startedAt == Self.date("06-09-2025") })
+        #expect(runs.contains { $0.id != lastWeek.id && $0.outcome == .succeeded })
     }
 }

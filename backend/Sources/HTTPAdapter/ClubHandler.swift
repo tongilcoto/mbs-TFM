@@ -28,6 +28,12 @@ public struct APIHandler: APIProtocol {
     let ids: any UUIDProvider
     let background: any BackgroundWork
 
+    /// **De dónde sale quién pide** (`C-E.2`, `A-6`/H-42). Se inyecta por lo
+    /// mismo que el reloj: mientras el actor se derive del ambiente dentro de
+    /// este tipo, la guarda de §6.1 compara un valor consigo mismo y **ningún
+    /// test puede hacerla saltar**.
+    let actors: any ActorResolver
+
     /// **La única salida que tiene el trabajo que sobrevive a su respuesta**
     /// (H-27). Lo que corre detrás de un `202` no puede contar nada por la
     /// respuesta —ya salió— ni por `ingestion_runs` cuando la que falla es la
@@ -48,6 +54,10 @@ public struct APIHandler: APIProtocol {
         clock: any Clock = SystemClock(),
         ids: any UUIDProvider = SystemUUIDProvider(),
         background: any BackgroundWork = DetachedBackgroundWork(),
+        // El de producción deriva el actor del tenant ambiental, que es la deuda
+        // declarada de F0: hoy los dos coinciden siempre. Cuando llegue JWKS se
+        // cambia **este valor**, no los *handlers*.
+        actors: any ActorResolver = AmbientTenantActorResolver(),
         logger: Logger = Logger(label: "ingestion")
     ) {
         self.unitOfWork = unitOfWork
@@ -55,25 +65,38 @@ public struct APIHandler: APIProtocol {
         self.clock = clock
         self.ids = ids
         self.background = background
+        self.actors = actors
         self.logger = logger
     }
 
     public func getClub(_ input: Operations.getClub.Input) async throws
         -> Operations.getClub.Output
     {
-        let actor = try Self.currentActor()
+        let actor = try actors.currentActor()
         let club = try await unitOfWork.withRepositories(actor: actor) { repositories in
             try await GetClub(clubs: repositories.clubs).execute(actor: actor)
         }
         return .ok(.init(body: .json(club.toResponse())))
     }
 
-    /// Traduce el tenant ambiental a contexto de actor (§7.4).
-    ///
-    /// Hoy solo lleva el club. Cuando §7 aterrice, es **aquí** donde se cargan
-    /// el `StaffMember` y sus asignaciones vigentes — la firma del caso de uso
-    /// ya no tendrá que cambiar, que es justo lo que esa decisión persigue.
-    static func currentActor() throws -> ActorContext {
+}
+
+/// El actor **derivado del tenant ambiental**, que es lo que había antes de que
+/// existiera el puerto y sigue siendo lo que corre en producción (`C-E.2`).
+///
+/// Es la **deuda declarada de F0** puesta donde se ve: §6.1 quiere el actor del
+/// *claim* firmado, y esto lo saca del `Host` que resolvió el middleware. La
+/// consecuencia, escrita para que nadie la lea como diseño: mientras este sea el
+/// adaptador, `TenancyError.tenantMismatch` **no puede ocurrir en producción**
+/// — los dos lados de la comparación salen de la misma fuente.
+///
+/// Lo que el puerto compra hoy no es la auth: es que **el 403 tenga un test**
+/// sin esperar a JWKS, y que el día que llegue se cambie **esta clase** y nada
+/// más.
+public struct AmbientTenantActorResolver: ActorResolver {
+    public init() {}
+
+    public func currentActor() throws -> ActorContext {
         guard let tenant = TenantContext.current else {
             throw TenancyError.tenantNotResolved
         }
@@ -88,7 +111,7 @@ extension Domain.Club {
             // En minúsculas: `uuidString` de Foundation devuelve mayúsculas, pero
             // la forma canónica de un UUID en JSON (RFC 4122 §3) es minúscula, y es
             // lo que los clientes esperan de un `format: uuid`.
-            id: id.raw.uuidString.lowercased(),
+            id: "\(id)",
             name: name,
             shortName: shortName,
             slug: slug.value,
@@ -159,7 +182,7 @@ extension APIHandler {
     public func updateClub(_ input: Operations.updateClub.Input) async throws
         -> Operations.updateClub.Output
     {
-        let actor = try Self.currentActor()
+        let actor = try actors.currentActor()
         guard case .json(let body) = input.body else {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "BAD_REQUEST",

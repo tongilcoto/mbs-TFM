@@ -37,7 +37,49 @@ public protocol TeamRepository: Sendable {
     /// (`D-67`).
     func list() async throws -> [Team]
 
+    /// **Uno por su id**, que es lo que estrena F10 (`C-D.1`).
+    ///
+    /// Hasta aquí este puerto solo sabía servir la lista entera, y era
+    /// suficiente: la ingesta carga todos los candidatos para emparejar (§3.7) y
+    /// nadie llegaba a un equipo **por su id**. El enganche sí — la ruta es
+    /// `/v1/teams/{id}/federation-link` (`D-67`), así que el equipo llega
+    /// designado desde fuera y lo primero que hay que poder decir es *"ése no
+    /// existe"* (**404**, `C-E.6`).
+    ///
+    /// Filtrar `list()` en el caso de uso habría dado la misma respuesta
+    /// trayéndose el tenant entero para descartarlo, y habría dejado la decisión
+    /// de *"no está"* repartida entre dos capas.
+    func find(_ id: TeamID) async throws -> Team?
+
     func save(_ team: Team) async throws
+}
+
+/// Puerto de salida de `TeamRegistration` (`D-68`, §4.3).
+///
+/// # Por qué la consulta es por la pareja y no por la terna
+///
+/// Porque **la terna es lo que se decide**, no lo que se busca. La cascada del
+/// enganche tiene que distinguir tres situaciones sobre el mismo `(equipo,
+/// temporada)`: que ya esté inscrito **en esta competición** —no hay nada que
+/// hacer—, que exista la fila **con competición nula** —la de junio, que se
+/// *completa*— o que no haya ninguna. Preguntando por la terna entera, los dos
+/// últimos casos llegan indistinguibles como `nil` y el enganche añadiría una
+/// segunda fila al equipo que el club ya había inscrito.
+///
+/// # Y por qué no hay `delete`
+///
+/// Por lo mismo que sus vecinas (`D-75`): lo que se escribió no se destruye. Dar
+/// de baja una inscripción es del backoffice, que no tiene fase.
+public protocol TeamRegistrationRepository: Sendable {
+    /// Las inscripciones de **ese equipo en esa temporada**. Son pocas por
+    /// definición —liga y copa (`D-12`)— y el `UNIQUE` de tres columnas con
+    /// `NULLS NOT DISTINCT` (`C-D.3`) garantiza que no se repitan.
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration]
+
+    /// *Upsert* por `id`, igual que los demás: el id lo pone el caso de uso.
+    /// **Completar la fila de junio es un `save` con el mismo `id`**, no una
+    /// fila nueva.
+    func save(_ registration: TeamRegistration) async throws
 }
 
 /// Puerto de salida de `Match` (§4.3).
@@ -57,14 +99,48 @@ public protocol MatchRepository: Sendable {
 /// pasada que falla, que es la que nadie ve porque no hay usuario delante
 /// (§2.3-b). Se escribe en su propio ámbito, después, gane o pierda (`D-85`).
 public protocol IngestionRunRepository: Sendable {
-    /// Escribe el registro. **Solo inserta**: una pasada ocurrió o no ocurrió, y
-    /// reescribir la historia de una sincronización no significa nada.
+    /// Escribe el registro, **por `id`**.
+    ///
+    /// # Decía "solo inserta", y F10-bis lo enmienda con su argumento
+    ///
+    /// El texto era: *"una pasada ocurrió o no ocurrió, y reescribir la historia
+    /// de una sincronización no significa nada"*. Era bueno **mientras toda fila
+    /// naciera acabada**. [D-96] crea la excepción y la crea entera: una fila
+    /// `accepted` dice *"todavía no ha ocurrido"*, así que cerrarla no reescribe
+    /// ninguna historia — **la termina**.
+    ///
+    /// Escribir el resultado como fila nueva dejaría **dos versiones de la misma
+    /// pasada**, una eternamente abierta y el cliente siguiendo la suya sin
+    /// enterarse de que ya hay resultado: el desenlace que
+    /// `IngestionRun.closed(as:at:)` describe como el peor posible.
+    ///
+    /// Lo que **no** cambia es que una pasada acabada no se retoca: lo impide el
+    /// Dominio, que solo deja cerrar lo que está abierto (`C-A.6`).
     func record(_ run: IngestionRun) async throws
 
     /// Las últimas pasadas de una competición, **de la más reciente a la más
     /// antigua**, que es el orden en el que se leen: la pregunta es *"¿qué pasó
     /// la última vez?"*.
     func list(competitionID: CompetitionID, limit: Int) async throws -> [IngestionRun]
+
+    /// **La pasada que está pedida y todavía no ha corrido**, si la hay
+    /// ([D-96], F10-bis).
+    ///
+    /// Es lo que permite que la pasada **adopte** en vez de abrir otra fila. Va
+    /// por `kind` porque el `202` promete una cosa concreta —el calendario— y las
+    /// de clasificación y goleadores que vengan detrás son suyas, no lo que
+    /// alguien pidió.
+    ///
+    /// # Por qué es su propia consulta y no un filtro sobre `list`
+    ///
+    /// Porque `list` está paginada por definición —*"las últimas N"*— y una fila
+    /// aceptada que se quedó abierta hace tres semanas **no está en las últimas
+    /// N**. Buscarla con un `limit` sería fijar un número que nada justifica y
+    /// fallar en silencio justo en el caso que esto viene a arreglar: el de la
+    /// pasada que nadie cerró.
+    func findAccepted(
+        competitionID: CompetitionID, kind: IngestionKind
+    ) async throws -> IngestionRun?
 }
 
 /// Puerto de salida de `StandingRow` (§4.3, F7).

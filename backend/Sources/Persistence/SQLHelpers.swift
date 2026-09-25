@@ -138,3 +138,138 @@ extension Database {
         ).run()
     }
 }
+
+// ── F10-bis · lo que hace falta para AFLOJAR una columna, no para crearla ────
+//
+// Los cuatro de aquí abajo existen porque [D-90] obliga a corregir con una
+// migración **nueva**, y corregir hacia atrás no es lo mismo que crear: Fluent
+// expresa bien el alta de una tabla y **nada** de lo que hay que deshacerle
+// después a una columna que ya existe. Llevan la misma guarda que sus tres
+// hermanos de arriba, y por el mismo motivo (`A-5`, H-35): un esquema al que le
+// falta un `CHECK` no falla — acepta lo que el Dominio rechaza.
+extension Database {
+    /// `DROP NOT NULL`. Lo pide [D-96]: `finished_at` deja de ser obligatoria
+    /// porque una pasada **aceptada** todavía no ha acabado.
+    func dropNotNull(table: String, column: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "dropNotNull", object: column)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) ALTER COLUMN \(ident: column) DROP NOT NULL"
+        ).run()
+    }
+
+    /// `SET NOT NULL`, que es el camino de vuelta y **solo funciona si no queda
+    /// ningún nulo**: quien lo llame tiene que haberlos resuelto antes.
+    func setNotNull(table: String, column: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "setNotNull", object: column)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) ALTER COLUMN \(ident: column) SET NOT NULL"
+        ).run()
+    }
+
+    /// Tira un `CHECK` sin volver a ponerlo, que es lo que un `revert` necesita
+    /// y `replaceCheckConstraint` no hace.
+    func dropCheckConstraint(table: String, name: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "dropCheckConstraint", object: name)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) DROP CONSTRAINT IF EXISTS \(ident: name)"
+        ).run()
+    }
+
+    /// Tira un índice creado a mano. Los que nacen con una columna se van con
+    /// ella (`deleteField`); éstos no tienen quien se los lleve.
+    ///
+    /// **Sin cualificar con el *schema***, igual que `index(table:name:columns:)`
+    /// al crearlo: la migración corre con el `search_path` del tenant puesto
+    /// (§6.2), así que el nombre resuelve donde tiene que resolver. Cualificarlo
+    /// aquí y no allí sería pedirle al llamante un dato que el ámbito ya sabe.
+    func dropIndex(name: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "dropIndex", object: name)
+        }
+        try await sql.raw("DROP INDEX IF EXISTS \(ident: name)").run()
+    }
+}
+
+// ── F10 · `C-D.3` · lo que hace falta para atar DOS columnas a la vez ────────
+//
+// Fluent expresa `.references(…)` de **una** columna, y la coherencia que
+// [D-61] manda bajar al esquema es de dos: *"esta competición es de esta
+// temporada"*. Sin esto la alternativa sería una guarda en el caso de uso, que
+// es exactamente lo que esa decisión rechaza — la otra puerta a la tabla es el
+// `POST /v1/teams` del backoffice y tendría que acordarse de escribirla otra
+// vez.
+extension Database {
+    /// `UNIQUE` como **restricción**, no como índice suelto.
+    ///
+    /// La diferencia importa aquí y solo aquí: Postgres exige que las columnas
+    /// referenciadas por una FK sean las de una restricción `UNIQUE` o `PRIMARY
+    /// KEY`, así que `competitions(id, season_id)` necesita la restricción para
+    /// que la FK compuesta de abajo pueda apuntarle. Para lo demás, el índice de
+    /// `uniqueIndexNullsNotDistinct` es lo que se quiere.
+    ///
+    /// **Sin `IF NOT EXISTS`**, que `ADD CONSTRAINT` no acepta — igual que
+    /// `checkConstraint`, y por el mismo motivo: una migración corre una vez por
+    /// *schema* ([D-90]).
+    func uniqueConstraint(table: String, name: String, columns: [String]) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "uniqueConstraint", object: name)
+        }
+        let columnList = columns.map { "\"\($0)\"" }.joined(separator: ", ")
+        try await sql.raw(
+            """
+            ALTER TABLE \(ident: table) ADD CONSTRAINT \(ident: name) \
+            UNIQUE (\(unsafeRaw: columnList))
+            """
+        ).run()
+    }
+
+    /// FK **compuesta**, con su `ON DELETE`.
+    ///
+    /// # La sutileza que la hace utilizable con una columna anulable
+    ///
+    /// El comportamiento por defecto de Postgres es `MATCH SIMPLE`: si **alguna**
+    /// de las columnas de la FK es nula, la restricción **no se comprueba**. Eso
+    /// no es un agujero aquí, es justo lo que `TeamRegistration` necesita — la
+    /// fila de junio lleva `competition_id` nulo ([D-68]) y no tiene competición
+    /// que validar. Con `MATCH FULL` esa fila no cabría.
+    func compositeForeignKey(
+        table: String, name: String, columns: [String],
+        references: String, referencedColumns: [String], onDelete: String
+    ) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "compositeForeignKey", object: name)
+        }
+        let from = columns.map { "\"\($0)\"" }.joined(separator: ", ")
+        let to = referencedColumns.map { "\"\($0)\"" }.joined(separator: ", ")
+        try await sql.raw(
+            """
+            ALTER TABLE \(ident: table) ADD CONSTRAINT \(ident: name) \
+            FOREIGN KEY (\(unsafeRaw: from)) \
+            REFERENCES \(ident: references) (\(unsafeRaw: to)) \
+            ON DELETE \(unsafeRaw: onDelete)
+            """
+        ).run()
+    }
+}
+
+extension Database {
+    /// Tira una restricción cualquiera —`UNIQUE`, FK— sin volver a ponerla. Es
+    /// lo que un `revert` necesita de `uniqueConstraint` y de
+    /// `compositeForeignKey`, que crean lo que Fluent no sabe crear y por tanto
+    /// tampoco sabe deshacer.
+    func dropConstraint(table: String, name: String) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "dropConstraint", object: name)
+        }
+        try await sql.raw(
+            "ALTER TABLE \(ident: table) DROP CONSTRAINT IF EXISTS \(ident: name)"
+        ).run()
+    }
+}
