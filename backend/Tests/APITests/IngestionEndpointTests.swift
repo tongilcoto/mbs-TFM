@@ -405,6 +405,77 @@ struct IngestionEndpointTests {
         }
     }
 
+    /// **`roundId` cruza la frontera, y hasta hoy no lo afirmaba nadie**
+    /// (`A-7`·H-46, hueco encontrado el 2026-09-25).
+    ///
+    /// Es el único identificador del `IngestionRunResponse` **anulable**, y eso
+    /// es justo lo que lo dejó sin arnés: los otros dos se afirman de paso en
+    /// cualquier test del registro, y éste solo aparece cuando la pasada es de
+    /// **clasificación** —`(kind = 'standings') = (round_id IS NOT NULL)`, que el
+    /// esquema hace cumplir con un `CHECK`—, y ninguna de las que la *suite*
+    /// provoca lo es: con un calendario vacío no hay jornada jugada, así que el
+    /// plan de `IngestStandings` sale vacío y no escribe fila.
+    ///
+    /// Por eso la pasada se siembra **a mano**, como en el test de F9-bis de
+    /// arriba: lo que se prueba aquí no es el recorrido —eso es nivel 3— sino
+    /// **el borde**, que un `RoundID` salga al JSON como un UUID y con la forma
+    /// canónica.
+    ///
+    /// # Y la mitad que hace el test honesto: el nulo también se afirma
+    ///
+    /// Sin ella, `roundId` podría devolver siempre algo y nadie lo notaría. Una
+    /// pasada de calendario **tiene que traerlo a `null`**, que es lo que
+    /// distingue *"esta pasada no va de una jornada"* de *"va de una que no sé
+    /// cuál es"*.
+    @Test("el `roundId` de una pasada de clasificación cruza la frontera (F7, A-7/H-46)")
+    func theRoundIDCrossesTheBoundary() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+            let roundID = RoundID(raw: UUID())
+
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                // La jornada existe de verdad: `round_id` es una FK con
+                // `ON DELETE CASCADE`, así que una inventada no entra.
+                try await repositories.rounds.save(
+                    try Round(
+                        id: roundID, competitionID: competitionID, number: 7,
+                        startDate: Self.instant("2026-02-28"),
+                        endDate: Self.instant("2026-03-01"),
+                        createdAt: Self.now, updatedAt: Self.now))
+
+                try await repositories.ingestionRuns.record(
+                    try IngestionRun(
+                        id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                        kind: .standings, roundID: roundID,
+                        startedAt: Self.now, finishedAt: Self.now,
+                        outcome: .succeeded))
+
+                // Y su vecina de calendario, que es la que tiene que decir `null`.
+                try await repositories.ingestionRuns.record(
+                    try IngestionRun(
+                        id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                        kind: .calendar,
+                        startedAt: Self.now, finishedAt: Self.now,
+                        outcome: .succeeded))
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID)",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let runs = try Self.decodeRuns(response)
+
+                let standings = try #require(runs.first { $0.kind == .standings })
+                #expect(standings.roundId == "\(roundID)")
+
+                let calendar = try #require(runs.first { $0.kind == .calendar })
+                #expect(calendar.roundId == nil)
+            }
+        }
+    }
+
     @Test("la pasada que falla también se puede leer (D-85)")
     func aFailedPassIsReadable() async throws {
         try await Self.withSeededClub(failingFederation: true) { app, _, competitionID, _ in
