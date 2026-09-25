@@ -476,6 +476,85 @@ struct IngestionEndpointTests {
         }
     }
 
+    /// **Los trece contadores cruzan la frontera cada uno por su sitio**
+    /// (`A-7`·H-46, hueco encontrado el 2026-09-25).
+    ///
+    /// # Qué estaba sin cubrir, y por qué importa justo aquí
+    ///
+    /// Los contadores se afirman en los niveles 1, 2 y 3 —la **entidad** los
+    /// lleva bien—, pero el salto de entidad a DTO **no lo miraba nadie**: son
+    /// trece asignaciones a mano, escritas en columna, con nombres que van por
+    /// parejas (`Created`/`Updated`) y que se repiten en cinco familias. Cambiar
+    /// dos de sitio **compila**, pasa la batería entera y llega al backoffice
+    /// como otra cosa: una pasada que creó 300 partidos diciendo que actualizó
+    /// 300, que es lo contrario de lo que se mira cuando algo va mal.
+    ///
+    /// Es la misma familia que `C-E.9` —lo que el compilador obliga a escribir
+    /// no lo obliga a escribirlo **bien**— y la misma que el `roundId` de aquí
+    /// arriba.
+    ///
+    /// # Los trece valores son DISTINTOS, y es la mitad que hace el test
+    ///
+    /// Con ceros, o con el mismo número repetido, una permutación es
+    /// **invisible**: el test pasaría igual con los trece campos cruzados. Por
+    /// eso van 1..13, y por eso esta fila **no podría existir en producción**
+    /// —una pasada de calendario no escribe goleadores—: lo que está bajo prueba
+    /// es **el mapeo**, no la pasada. La pasada tiene sus propios tests en los
+    /// niveles 2 y 3.
+    @Test("los trece contadores llegan cada uno a su campo (F7, F8, A-7/H-46)")
+    func everyCounterReachesItsOwnField() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                var run = try IngestionRun(
+                    id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                    kind: .calendar, startedAt: Self.now, finishedAt: Self.now,
+                    outcome: .succeeded)
+                run.opponentClubsCreated = 1
+                run.opponentClubsUpdated = 2
+                run.teamsCreated = 3
+                run.teamsUpdated = 4
+                run.roundsCreated = 5
+                run.roundsUpdated = 6
+                run.matchesCreated = 7
+                run.matchesUpdated = 8
+                run.standingRowsCreated = 9
+                run.standingRowsUpdated = 10
+                run.leagueScorersCreated = 11
+                run.leagueScorersUpdated = 12
+                run.leagueScorersRetired = 13
+                try await repositories.ingestionRuns.record(run)
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID)",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let counters = try #require(try Self.decodeRuns(response).first?.counters)
+
+                #expect(counters.opponentClubsCreated == 1)
+                #expect(counters.opponentClubsUpdated == 2)
+                #expect(counters.teamsCreated == 3)
+                #expect(counters.teamsUpdated == 4)
+                #expect(counters.roundsCreated == 5)
+                #expect(counters.roundsUpdated == 6)
+                #expect(counters.matchesCreated == 7)
+                #expect(counters.matchesUpdated == 8)
+                #expect(counters.standingRowsCreated == 9)
+                #expect(counters.standingRowsUpdated == 10)
+                #expect(counters.leagueScorersCreated == 11)
+                #expect(counters.leagueScorersUpdated == 12)
+                // **El que no tiene hermano en ninguna otra entidad**: solo los
+                // goleadores se retiran (`D-94`), y es el número que hay que
+                // poder mirar cuando una pasada vacía la tabla.
+                #expect(counters.leagueScorersRetired == 13)
+            }
+        }
+    }
+
     @Test("la pasada que falla también se puede leer (D-85)")
     func aFailedPassIsReadable() async throws {
         try await Self.withSeededClub(failingFederation: true) { app, _, competitionID, _ in

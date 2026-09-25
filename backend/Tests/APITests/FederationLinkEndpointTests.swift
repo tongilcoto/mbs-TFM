@@ -58,11 +58,25 @@ struct FederationLinkEndpointTests {
         federationGroupID: "24037549",
         modality: .futbol11)
 
-    static func teamRef(_ id: String?, _ name: String) -> FederationTeamRef {
+    /// **El escudo viaja de verdad en uno de ellos, y es deliberado.**
+    ///
+    /// Medido el 2026-09-25: **todos** los montajes del proyecto pasaban
+    /// `crestURL: nil`, así que el campo cruzaba el `/preview` sin que nada lo
+    /// mirara — y es el que hace reconocible la lista de equipos en la pantalla
+    /// donde un humano identifica su club (`D-16`). Contra la RFFM de verdad
+    /// viene siempre: 16 de 16 en el grupo que se probó a mano.
+    static func teamRef(
+        _ id: String?, _ name: String, crest: String? = nil
+    ) -> FederationTeamRef {
         FederationTeamRef(
             federationTeamID: id, name: name, letter: nil,
-            federationClubID: nil, crestURL: nil)
+            federationClubID: nil, crestURL: crest)
     }
+
+    /// El escudo tal y como lo publica la fuente: **absoluto**, porque el *host*
+    /// no es constante nuestra y lo compone el adaptador.
+    static let crest =
+        "https://appweb.rffm.es/pnfg/pimg/Clubes/00100_0010940034_ESC_EJEMPLO.png"
 
     /// Una jornada con un partido: lo mínimo con lo que `teams[]` dice algo.
     ///
@@ -87,7 +101,7 @@ struct FederationLinkEndpointTests {
             FederationRound(number: 1, matches: [
                 FederationMatch(
                     federationMatchID: "1",
-                    home: teamRef("3349086", "C.D. EJEMPLO 'A'"),
+                    home: teamRef("3349086", "C.D. EJEMPLO 'A'", crest: crest),
                     away: teamRef("3349087", "C.D. GALAPAGAR 'B'"),
                     homeScore: nil, awayScore: nil,
                     date: instant("2025-11-15"), kickoff: nil,
@@ -355,6 +369,17 @@ struct FederationLinkEndpointTests {
                 // obligatorio (`D-67`).
                 let unidentified = preview.competition.teams.first { $0.federationTeamId == nil }
                 #expect(unidentified?.rawName == "C.D. SIN CODIGO")
+
+                // **Y el escudo llega entero cuando la fuente lo da**, que es lo
+                // que hace la lista reconocible: es una pantalla donde alguien
+                // busca su club, y un nombre en mayúsculas sin escudo se parece
+                // demasiado al de al lado. Va **en el origen**, sin descargar
+                // (`D-19`): bajarlo a Storage es de la ingesta, no de esto.
+                #expect(preview.competition.teams.first?.crestUrl == Self.crest)
+
+                // Y nulo cuando no lo da — la otra mitad, sin la cual un mapeo
+                // que devolviera siempre la misma URL pasaría por verde.
+                #expect(unidentified?.crestUrl == nil)
 
                 // La identidad: competición nueva ⇒ los tres se proponen y la
                 // edad sale del equipo, así que cuadra por construcción

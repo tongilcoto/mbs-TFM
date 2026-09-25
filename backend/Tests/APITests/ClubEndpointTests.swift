@@ -65,6 +65,15 @@ struct ClubEndpointTests {
                 #expect(club.federation.value1 == .rffm)
                 #expect(club.federationProvidesRoundStandings)
                 #expect(club.federationProvidesScorers)
+
+                // **`crestUrl` es nulo A PROPÓSITO, y por eso se afirma**
+                // (hueco encontrado el 2026-09-25). El club tiene su `crestKey`
+                // en la fila, pero la URL firmada se compone con el adaptador de
+                // Storage, que es de una fase posterior y **no existe**. Sin esta
+                // línea, el día que alguien lo componga mal —o lo deje puesto a
+                // medias— nada lo diría: un campo anulable que siempre viaja
+                // nulo es indistinguible de uno que nadie mira.
+                #expect(club.crestUrl == nil)
             }
 
             // Mismo endpoint, mismo código, otro tenant: D-55 y D-48 en acción.
