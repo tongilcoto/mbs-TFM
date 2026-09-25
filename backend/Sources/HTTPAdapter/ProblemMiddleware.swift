@@ -151,6 +151,28 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "engancharlo a '\(incoming)'",
                                base: typeBaseURI, slug: "already-linked-to-federation")
 
+            case .federationTeamIDTaken(let code, let owner):
+                // **409, y es la tercera causa del mismo 409 que el *spec*
+                // declara** (`C-E.10`): *"ese `federationTeamId` ya pertenece a
+                // otro equipo"*. Sus dos hermanas ya estaban; ésta llegaba a
+                // Postgres y volvía como un `23505` dentro de un **500** con el
+                // SQL en crudo — encontrado ejecutando contra la base de trabajo,
+                // que es lo que §3 del plan manda y lo que ningún test de la
+                // batería veía, porque en los montajes el código estaba libre.
+                //
+                // Mismo criterio que sus dos hermanas: lo que llega es válido, lo
+                // que no encaja es **el estado**, y **tiene salida** — se elige
+                // otro código, o se reclama el equipo que ya lo tiene con
+                // `/ownership` (`D-20`).
+                //
+                // **El `detail` lleva el `id` del dueño** y no solo el código:
+                // sin él, la salida —ir a mirar ese equipo— exige una búsqueda
+                // que la pantalla no puede hacer con lo que se le ha dicho.
+                return Problem(status: .conflict, code: "FEDERATION_TEAM_ID_TAKEN",
+                               title: "Ese código de equipo ya es de otro equipo",
+                               detail: "el código '\(code)' lo tiene el equipo \(owner)",
+                               base: typeBaseURI, slug: "federation-team-id-taken")
+
             case .competitionIdentityMismatch(let team, let competition):
                 // **409, y el mismo argumento que su hermano de arriba**
                 // (`D-67`, F10): los datos que llegan son perfectamente válidos

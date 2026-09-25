@@ -917,3 +917,93 @@ extension FederationLinkEndpointTests {
         }
     }
 }
+
+extension FederationLinkEndpointTests {
+
+    /// `C-E.10`: **ese `federationTeamId` ya es de otro equipo → 409**, no 500.
+    ///
+    /// # Por qué existe este ciclo, que el plan no traía
+    ///
+    /// Lo encontró la verificación **contra la base de trabajo** que §3 manda
+    /// (2026-09-24), y ningún test de la batería podía verlo: en todos los
+    /// montajes el código estaba libre. Contra `club_atleti`, con la ingesta ya
+    /// pasada, los **16** equipos del grupo estaban escritos como rivales, y
+    /// enganchar el equipo propio a cualquiera de sus códigos devolvía
+    /// **`500 INTERNAL`** con el `23505` de Postgres y el `UPDATE` entero en el
+    /// `detail`.
+    ///
+    /// Y no es un caso raro, es **el desenlace normal de enganchar tarde**: por
+    /// [D-66] la ingesta no crea equipos propios, así que el equipo que nadie
+    /// enganchó antes de la primera pasada ya existe **como rival**.
+    ///
+    /// El *spec* lo declara desde siempre como la tercera causa del mismo 409 —
+    /// *"El equipo ya está emparejado con otro grupo, **ese `federationTeamId` ya
+    /// pertenece a otro equipo**, o la identidad no cuadra"*— y era la única de
+    /// las tres que no levantaba nadie. `C-E.5` cubrió las otras dos.
+    ///
+    /// **Lo que este 409 no hace es fundir las dos filas**: eso es §9.5 y está
+    /// sin diseñar. Lo que hace es decir **quién** lo tiene, que es lo que
+    /// permite ir a `/ownership` (`D-20`).
+    @Test("un código que ya es de otro equipo es 409, no un 23505 (D-67 · C-E.10)")
+    func aTakenFederationCodeIsRejected() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            // El vecino que ya tiene el código. En la base de trabajo era un
+            // **rival** creado por la pasada; aquí basta otro equipo del club,
+            // que choca contra el mismo `uq:teams.federation_team_id`.
+            let neighbour = TeamID(raw: UUID())
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) {
+                repositories in
+                try await repositories.teams.save(
+                    try Team(
+                        id: neighbour, opponentClubID: nil,
+                        category: .infantil, letter: "A",
+                        gender: .masculino, modality: .futbol11,
+                        federationTeamID: "3349086",
+                        createdAt: Self.now, updatedAt: Self.now))
+            }
+
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, ownTeamFederationID: "3349086")
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "FEDERATION_TEAM_ID_TAKEN")
+                #expect(problem.detail?.contains("3349086") == true)
+                #expect(problem.detail?.contains(neighbour.raw.uuidString.lowercased()) == true)
+            }
+
+            // Y la cascada **no dejó nada**: la guarda va dentro del ámbito, así
+            // que la temporada y la competición que se habían creado se van con
+            // el `rollback`.
+            #expect(try await Self.rowCount("seasons", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
+        }
+    }
+
+    /// Y la otra mitad de la guarda: **volver a enganchar al mismo código no es
+    /// un choque consigo mismo**.
+    ///
+    /// Sin esto, la mutación obvia —comparar solo el código y no el `id`— pasaría
+    /// por verde, y lo que rompería es lo que hace seguro reintentar el `202`:
+    /// un reenganche idempotente.
+    @Test("pero reenganchar al MISMO código sigue siendo idempotente (C-E.10)")
+    func relinkingToTheSameCodeIsIdempotent() async throws {
+        try await Self.withSeededTeam(federationTeamID: "3349086") { app, teamID in
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, ownTeamFederationID: "3349086")
+                }
+            ) { response async throws in
+                #expect(response.status == .accepted)
+            }
+        }
+    }
+}

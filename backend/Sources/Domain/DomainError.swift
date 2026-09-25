@@ -49,6 +49,29 @@ public enum DomainError: Error, Equatable, Sendable {
     /// equipos.
     case alreadyLinkedToFederation(existing: String, incoming: String)
 
+    /// Ese `codigo_equipo` **ya es de otro equipo** (`D-67`, `C-E.10`).
+    ///
+    /// Es la **tercera** causa del 409 que el *spec* declara para el enganche
+    /// —*"El equipo ya está emparejado con otro grupo, **ese
+    /// `federationTeamId` ya pertenece a otro equipo**, o la identidad no
+    /// cuadra"*— y la que nadie levantaba: hasta `C-E.10` llegaba a Postgres y
+    /// volvía como un `23505` dentro de un **500**, con el SQL en crudo.
+    ///
+    /// # Por qué ocurre, y por qué no es un caso raro
+    ///
+    /// Es el desenlace **normal** de enganchar tarde. Por [D-66] la ingesta no
+    /// crea equipos propios, así que el equipo del club que nadie enganchó antes
+    /// de la primera pasada **ya existe como rival**, con su código. Enganchar
+    /// entonces el equipo propio a ese mismo código choca contra
+    /// `uq:teams.federation_team_id`. Medido contra la base de trabajo el
+    /// 2026-09-24: los **16** equipos del grupo estaban ya escritos como rivales.
+    ///
+    /// **Lo que este error NO hace es fundir las dos filas**: eso es §9.5 y está
+    /// **sin diseñar**. Lo que hace es decirlo con el código que el contrato
+    /// declara y con el `id` del que lo tiene, que es lo que permite ir a
+    /// `/ownership` (`D-20`) o corregir el código elegido.
+    case federationTeamIDTaken(code: String, owner: String)
+
     /// La URL de calendario que han pegado **no es de esta federación, o no se
     /// puede leer** (`D-97`, `D-22`, F10).
     ///

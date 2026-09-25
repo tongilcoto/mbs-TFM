@@ -230,6 +230,34 @@ public struct LinkTeamToFederation: Sendable {
             }
 
             // ── 4. El enganche ──────────────────────────────────────────────
+            //
+            // **`C-E.10`: el código tiene que estar libre, y se pregunta antes de
+            // escribir.** `federation_team_id` es `UNIQUE` (§3.5), así que sin
+            // esto el choque lo daba Postgres — un `23505` que salía por HTTP
+            // como **500 con el SQL en crudo**, donde el *spec* declara **409**.
+            //
+            // No es un caso raro: es el desenlace **normal de enganchar tarde**.
+            // Por [D-66] la ingesta no crea equipos propios, así que el equipo
+            // del club que nadie enganchó antes de la primera pasada **ya existe
+            // como rival** con ese mismo código. Medido contra la base de trabajo
+            // el 2026-09-24: los 16 equipos del grupo ya estaban escritos.
+            //
+            // **Se pregunta por la lista y no por un puerto nuevo**: es lo que la
+            // cadena de emparejamiento hace en cada pasada (§3.7), así que el
+            // coste ya está pagado y el puerto no se ensancha por un caso de
+            // guarda.
+            //
+            // **Y el propio equipo no cuenta**: volver a enganchar al mismo
+            // código es idempotente, que es lo que hace que reintentar el `202`
+            // sea seguro.
+            if let holder = try await repositories.teams.list().first(where: {
+                $0.federationTeamID == request.ownTeamFederationID && $0.id != found.team.id
+            }) {
+                throw DomainError.federationTeamIDTaken(
+                    code: request.ownTeamFederationID,
+                    owner: holder.id.raw.uuidString.lowercased())
+            }
+
             let linked = try found.team.linked(
                 toFederationTeamID: request.ownTeamFederationID)
             try await repositories.teams.save(linked)

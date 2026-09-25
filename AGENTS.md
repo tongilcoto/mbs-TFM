@@ -557,7 +557,7 @@ ingesta; **F2–F10** = la ingesta propiamente dicha).
 Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis** y **F10** entregadas y **F9
 aplazada sin escribir código** ([D-95], Plan §4.11), **la ingesta está completa de punta a punta**: el
 enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
-([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 46 ciclos en siete bloques, **534 tests**).
+([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **536 tests**).
 
 **Lo que F10 deja puesto y conviene saber antes de tocar la frontera HTTP:**
 
@@ -576,6 +576,11 @@ enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
 - **El actor sale de un puerto, `ActorResolver`** (`C-E.2`): la guarda de §6.1 dejó de comparar un valor
   consigo mismo. El adaptador de producción sigue leyéndolo del `Host` —la deuda declarada de F0—, así que
   **montar la auth es cambiar ese adaptador**, no el middleware ni los *handlers*.
+- **El 409 del enganche tiene TRES causas y la tercera se escribió midiendo contra la base de trabajo**
+  (`C-E.10`): *"ese `federationTeamId` ya pertenece a otro equipo"*. Es el desenlace **normal de enganchar
+  tarde** —la ingesta no crea equipos propios ([D-66]), así que el equipo que nadie enganchó ya existe como
+  rival con su código— y daba un **500 con el SQL en crudo**. Ningún test de la batería podía verlo: en todos
+  los montajes el código estaba libre.
 
 **F9 era el adaptador de la FCF y no se escribió, y conviene saber por qué antes de reabrirlo.** La fase
 abrió, hizo lo primero que [D-74] manda —**revalidar el anexo antes de escribir el adaptador**— y la

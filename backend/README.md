@@ -241,10 +241,18 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<el compet
 | Temporada nueva y la fuente no la rotula | **400** | `SEASON_LABEL_UNAVAILABLE` |
 | Equipo inexistente | **404** | `TEAM_NOT_FOUND` |
 | Equipo ya emparejado | **409** | `ALREADY_LINKED_TO_FEDERATION` |
+| Ese código ya es de otro equipo | **409** | `FEDERATION_TEAM_ID_TAKEN` |
 | La competición dice otra edad, género o modalidad | **409** | `COMPETITION_IDENTITY_MISMATCH` |
 | Club de una federación sin adaptador (FCF, `D-95`) | **501** | `FEDERATION_ADAPTER_MISSING` |
 | La federación no responde | **504** | `FEDERATION_UNREACHABLE` |
 | La federación responde mal, con error, o sin calendario | **502** | `FEDERATION_*` |
+
+**El 409 del código ocupado es el que más se ve en una base que ya sincronizó**, y conviene saber por qué: la
+ingesta **no crea equipos propios** (`D-66`), así que el equipo del club que nadie enganchó antes de la
+primera pasada **ya existe como rival, con su código**. Engancharlo entonces choca contra
+`uq:teams.federation_team_id`, y la respuesta dice **qué equipo lo tiene** para poder ir a `/ownership`
+(`D-20`). Fundir las dos filas es §9.5 y está sin diseñar: el camino bueno es **enganchar antes de la primera
+ingesta**.
 
 Los **502/504** existen porque ésta es la única ruta síncrona con latencia de terceros: *"la RFFM está
 caída"* y *"la RFFM cambió de formato"* merecen respuestas distintas, y hasta F10 las cuatro señales caían
