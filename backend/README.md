@@ -195,6 +195,61 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **Una pasada fallida también se lee**: el `POST` da **502** y el `GET` enseña la fila con su `outcome` y su
   motivo — con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
 
+### 4.2 El enganche — las dos puertas de `D-67`
+
+El camino de verdad para dar de alta una competición: **se pega la URL del calendario en la ficha del
+equipo**. Son dos peticiones y entre ellas hay un humano.
+
+```sh
+TEAM=$(swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A | grep -o '[0-9a-f-]\{36\}')
+URL="https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549"
+
+# 1) Verificar: llama a la federación EN LÍNEA y no escribe nada
+curl -s -X POST http://atleti.localhost:8080/v1/teams/$TEAM/federation-link/preview \
+  -H 'Content-Type: application/json' -d "{\"federationCalendarUrl\":\"$URL\"}" | jq
+
+# 2) Confirmar: escribe la cascada y encola la primera ingesta -> 202
+curl -s -i -X POST http://atleti.localhost:8080/v1/teams/$TEAM/federation-link \
+  -H 'Content-Type: application/json' \
+  -d "{\"federationCalendarUrl\":\"$URL\",\"ownTeamFederationId\":\"3349086\",\"gender\":\"masculino\",\"seasonLabel\":\"2025/26\"}"
+```
+
+**Lo que hay que mirar en la respuesta del `/preview`, y por qué existe:**
+
+- **`competition.teams[]`** es la razón de ser del endpoint: de ahí sale el `ownTeamFederationId` que lleva el
+  paso 2. Un dígito mal en la URL **no da error** —devuelve el calendario de otra liga (`D-84`)—, así que
+  quien lo caza es un humano reconociendo su club en esa lista (`D-16`). El equipo que la fuente publica **sin
+  código** viaja igual, con el campo a `null`: se ve y no se puede elegir.
+- **`season.exists: false`** ⇒ al confirmar se **creará** la temporada en cascada. Se ve antes, que es lo que
+  hace aceptable que una URL pegada dé de alta una `Season`.
+- **`identityMatches: false`** ⇒ confirmar devolverá **409**. Los tres valores propuestos van en
+  `competition`, así que se puede decir *"tu equipo es cadete y esta competición es juvenil"* sin preguntar
+  otra vez.
+
+**El `202` deja fila desde que se acepta** (`D-96`): el `jobId` que devuelve es una `ingestion_runs` con
+`outcome: accepted`, y **la pasada que va detrás cierra ESA fila**, no abre otra. Se sigue leyendo:
+
+```sh
+curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<el competitionId del 202>" | jq
+```
+
+**Los códigos que estrena el enganche, y qué significa cada uno:**
+
+| Caso | Código | `code` |
+|---|---|---|
+| URL que no es de la federación **del club** | **400** | `UNREADABLE_FEDERATION_URL` |
+| Temporada nueva y la fuente no la rotula | **400** | `SEASON_LABEL_UNAVAILABLE` |
+| Equipo inexistente | **404** | `TEAM_NOT_FOUND` |
+| Equipo ya emparejado | **409** | `ALREADY_LINKED_TO_FEDERATION` |
+| La competición dice otra edad, género o modalidad | **409** | `COMPETITION_IDENTITY_MISMATCH` |
+| Club de una federación sin adaptador (FCF, `D-95`) | **501** | `FEDERATION_ADAPTER_MISSING` |
+| La federación no responde | **504** | `FEDERATION_UNREACHABLE` |
+| La federación responde mal, con error, o sin calendario | **502** | `FEDERATION_*` |
+
+Los **502/504** existen porque ésta es la única ruta síncrona con latencia de terceros: *"la RFFM está
+caída"* y *"la RFFM cambió de formato"* merecen respuestas distintas, y hasta F10 las cuatro señales caían
+en el mismo 500 (`A-6`/H-15).
+
 ---
 
 ## 5. Los tests
@@ -334,7 +389,8 @@ swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name
 ### 6.1 `seed-competition` — la *entrada* de la ingesta
 
 La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`). El camino de verdad es
-pegar la URL en la ficha del equipo (`D-67`), y eso es **F10**; hasta entonces, esto:
+pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es §4.2. Esto se conserva como vía para
+semillas, *scripts* y tests, que no deberían depender del formato de URL de un tercero:
 
 ```sh
 swift run Run seed-competition -t atleti \
@@ -372,10 +428,11 @@ dice con su UUID en vez de dejar que reviente el `UNIQUE` — un `23505` en crud
 columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La letra nula ES un valor**
 —«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
 
-> **Lo que todavía no hace:** no escribe `TeamRegistration` (`D-68`), porque esa tabla llega en el bloque D de
-> F10. El equipo existe y se puede enganchar, pero **no está inscrito en ninguna temporada** — y ése es
-> justamente el estado que el *spec* evita exigiendo `seasonId` en el alta, porque es **invisible en toda
-> pantalla que filtre por temporada**.
+> **Lo que no hace, y ya no es porque falte la tabla:** no escribe `TeamRegistration` (`D-68`). La tabla
+> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** (§4.2), que es la que
+> sabe en qué competición queda inscrito el equipo. Recién sembrado, el equipo existe y se puede enganchar
+> pero **no está inscrito en ninguna temporada** — el estado que el *spec* evita exigiendo `seasonId` en el
+> alta, porque es **invisible en toda pantalla que filtre por temporada**. Engancharlo lo arregla.
 
 ### 6.3 `ingest` — la pasada de la federación
 

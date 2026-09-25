@@ -40,7 +40,7 @@ extension APIHandler {
         -> Operations.listIngestionRuns.Output
     {
         let actor: ActorContext
-        do { actor = try Self.currentActor() } catch {
+        do { actor = try actors.currentActor() } catch {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
                              title: "La petición no identifica ningún club"))))
@@ -91,7 +91,7 @@ extension APIHandler {
         -> Operations.triggerIngestion.Output
     {
         let actor: ActorContext
-        do { actor = try Self.currentActor() } catch {
+        do { actor = try actors.currentActor() } catch {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
                              title: "La petición no identifica ningún club"))))

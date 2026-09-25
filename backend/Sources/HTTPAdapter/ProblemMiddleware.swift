@@ -312,6 +312,81 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                base: typeBaseURI, slug: "run-not-recorded")
             }
 
+        // ── La fuente ajena (§4.3, §5.4) ─────────────────────────────────────
+        //
+        // **Las cuatro señales dejan de ser el mismo 500** (`A-6`/H-15, `C-E.1`).
+        // `FederationError` nació con la taxonomía cuidada —*"un caso de uso
+        // tiene que poder distinguir «la fuente no contesta» de «la fuente
+        // contesta algo que no entiendo»"*— y hasta aquí **no la distinguía
+        // nadie en producción**: se lanzaba solo dentro de `Sources/Federation/`
+        // y se discriminaba solo en `Tests/`.
+        //
+        // Lo que lo destapa es F10: el `/preview` llama a la federación **dentro
+        // de la petición** (§2.3-c), así que *"la RFFM está caída"* y *"la RFFM
+        // cambió de formato"* llegan a un cliente que tiene que reaccionar
+        // distinto a cada una. El `202` de `D-88` respondía antes de llamar, y
+        // por eso no se notaba.
+        //
+        // **Los códigos los fija el contrato, no el gusto**: las dos puertas del
+        // enganche declaran **504** —*"la federación no respondió dentro del
+        // timeout"*— y **502** —*"respondió con un error o con un cuerpo no
+        // interpretable"*—. Solo se puede devolver lo que el *spec* admite.
+        case let federation as FederationError:
+            switch federation {
+            case .transportFailure(let url, let reason):
+                // **504 y no 502**: no hubo respuesta que interpretar. Es la
+                // única de las cuatro en que no llegamos a hablar con la fuente,
+                // y la distinción no es cosmética — ante un 504 un cliente
+                // reintenta más tarde; ante un 502, avisa.
+                return Problem(status: .gatewayTimeout, code: "FEDERATION_UNREACHABLE",
+                               title: "La federación no respondió",
+                               detail: "\(url): \(reason)",
+                               base: typeBaseURI, slug: "federation-unreachable")
+
+            case .malformedResponse(let field, let reason):
+                // **502**: la respuesta llegó y no tiene la forma documentada en
+                // el anexo. Es *"la fuente cambió de forma"*, que es lo que el
+                // canario de Plan §4.4 existe para ver venir — y el `field` es la
+                // coordenada **dentro del cuerpo ajeno**, no una columna nuestra:
+                // lo que hay que mirar para arreglarlo es el volcado.
+                return Problem(status: .badGateway, code: "FEDERATION_MALFORMED_RESPONSE",
+                               title: "La federación respondió algo que no se entiende",
+                               detail: "\(field): \(reason)",
+                               base: typeBaseURI, slug: "federation-malformed-response")
+
+            case .unexpectedStatus(let status, let url):
+                // **502**, y existe porque [Anexo RFFM §F.7] documenta el fallo
+                // de la app heredada: *"imprime el código HTTP pero no lo
+                // valida"*, así que un 500 ajeno acababa en el parser de JSON y
+                // salía un error engañoso sobre el cuerpo.
+                return Problem(status: .badGateway, code: "FEDERATION_UNEXPECTED_STATUS",
+                               title: "La federación respondió con un error",
+                               detail: "\(status) en \(url)",
+                               base: typeBaseURI, slug: "federation-unexpected-status")
+
+            case .coordinateNotFound(let detail):
+                // **502, y es el que costó decidir.** La lectura alternativa era
+                // un 400 —*"la URL que has pegado no apunta a nada"*—, y la
+                // descarta lo medido, no el gusto:
+                //
+                // 1. Para cuando se pregunta a la fuente, la URL **ya pasó** por
+                //    `coordinate(fromCalendarURL:)`, que rechaza con 400 la que
+                //    no se puede leer (`C-B.2`, `D-97`). Los cuatro parámetros
+                //    están bien formados; lo que falla es la respuesta.
+                // 2. Y por [D-84] **no se puede afirmar que la coordenada no
+                //    exista**: la RFFM devuelve `200` con `calendar: null` igual
+                //    para una coordenada inventada que para lo que hoy no
+                //    publique. Un 400 le diría al administrador *"tu URL está
+                //    mal"* afirmando algo que está medido que no se sabe.
+                //
+                // El `detail` lleva la coordenada entera, que es lo único
+                // accionable: con ella se compara contra la web de la federación.
+                return Problem(status: .badGateway, code: "FEDERATION_COORDINATE_NOT_FOUND",
+                               title: "La coordenada no devuelve calendario",
+                               detail: detail,
+                               base: typeBaseURI, slug: "federation-coordinate-not-found")
+            }
+
         // ── Tenancy (§6.1) ───────────────────────────────────────────────────
         case let tenancy as TenancyError:
             switch tenancy {
@@ -361,7 +436,15 @@ public struct ProblemMiddleware: AsyncMiddleware {
             // nuestro. Sin esto, un `DomainError` que escapara de un handler
             // pasaría de 422 a 500 solo por venir envuelto.
             let inner = server.underlyingError
-            if inner is DomainError || inner is ApplicationError || inner is TenancyError {
+            if inner is DomainError || inner is ApplicationError || inner is TenancyError
+                // **`FederationError` entra en la lista con `C-E.1`, y sin esto
+                // el `switch` de arriba no lo vería nunca**: lo que sale de un
+                // *handler* llega aquí **envuelto**, así que las cuatro señales
+                // seguirían dando 500 aunque tuvieran su caso escrito. Es la
+                // mitad silenciosa de H-15 — la traducción existía y el
+                // desenvoltorio no la alcanzaba.
+                || inner is FederationError
+            {
                 return translate(inner)
             }
             let status = HTTPStatus(statusCode: Int(server.httpStatus.code))

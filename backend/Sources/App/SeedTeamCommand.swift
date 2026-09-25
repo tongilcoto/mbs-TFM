@@ -144,7 +144,7 @@ public struct SeedTeamCommand: AsyncCommand {
 
               curl -s -X POST http://\(slug).localhost:8080/v1/teams/\(id)/federation-link/preview \\
                 -H 'Content-Type: application/json' \\
-                -d '{"calendarUrl":"<URL del calendario>"}' | jq
+                -d '{"federationCalendarUrl":"<URL del calendario>"}' | jq
             """)
     }
 

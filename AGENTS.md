@@ -516,12 +516,14 @@ docker compose down -v
   eso hay que mirar **qué códigos declara el *spec* en esa ruta** antes de decidir: un 422 que el contrato no
   declara no lo sabe leer un cliente generado.
 - **`IngestionRun.skipped` ya no es *"lo que la pasada no escribió"*: es *"lo que dejó señalado"*** (F9-bis).
-  Diez de sus **once** motivos son filas ausentes; el once —`unidentifiedTeam`, el equipo que la fuente publica
-  sin código— es una fila que **sí** se escribió, pero coja. La consecuencia para quien la lee: **se lee por el
-  motivo de cada línea y no se cuenta**, porque su longitud ya no es *"cuántas filas faltan"*. Al añadir el
-  motivo número doce: `IngestionSkip.Reason` **cruza la frontera HTTP** —enumerado espejo en el *spec* y
-  traducción a mano en `IngestionHandler.toContract()`—, así que toca **cuatro** *targets* y el `switch`
-  exhaustivo obliga a escribir la línea pero **no** a escribirla bien.
+  Nueve de sus **diez** motivos son filas ausentes; el décimo —`unidentifiedTeam`, el equipo que la fuente
+  publica sin código— es una fila que **sí** se escribió, pero coja. La consecuencia para quien la lee: **se
+  lee por el motivo de cada línea y no se cuenta**, porque su longitud ya no es *"cuántas filas faltan"*. Al
+  añadir el motivo número once: `IngestionSkip.Reason` **cruza la frontera HTTP** —enumerado espejo en el
+  *spec* y traducción a mano en `IngestionHandler.toContract()`—, así que toca **cuatro** *targets* y el
+  `switch` exhaustivo obliga a escribir la línea pero **no** a escribirla bien. *(El recuento decía **once**
+  aquí, en el plan de F10 y en la descripción del propio* spec*; son diez, contados en los dos lados el
+  2026-09-24. Lo vigila ahora `ContractEnumTests`.)*
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 - **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
@@ -552,9 +554,28 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8** y **F9-bis** entregadas y **F9 aplazada sin escribir
-código** ([D-95], Plan §4.11), lo inmediato es **F10**: `POST /teams/{id}/federation-link` + `/preview`,
-troceada en ciclos en [`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md).
+Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis** y **F10** entregadas y **F9
+aplazada sin escribir código** ([D-95], Plan §4.11), **la ingesta está completa de punta a punta**: el
+enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
+([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 46 ciclos en siete bloques, **534 tests**).
+
+**Lo que F10 deja puesto y conviene saber antes de tocar la frontera HTTP:**
+
+- **Las dos puertas de [D-67] existen**: `POST /v1/teams/{id}/federation-link/preview` → **200** sin
+  persistir nada, y `POST /v1/teams/{id}/federation-link` → **202** con la cascada escrita y la primera
+  ingesta encolada. El manual con los `curl` y los ocho códigos de error está en
+  [`backend/README.md` §4.2](./backend/README.md).
+- **La traducción error → HTTP tiene UN sitio y es `ProblemMiddleware`.** F10 midió que los códigos que el
+  contrato declara ya salían correctos por ahí cuando el error se escapa de un *handler*, así que **no se
+  duplicó** en los *handlers*: un segundo sitio decidiendo el mismo código HTTP es lo que acaba divergiendo.
+  Lo que un *handler* sí atrapa es lo que quiera servir como respuesta **tipada** del contrato.
+- **`FederationError` ya se distingue en producción** (`A-6`/H-15): `transportFailure` → **504**, las otras
+  tres → **502**. Ojo a la mitad que no se ve en el `case`: lo que sale de un *handler* llega **envuelto** en
+  un `ServerError`, así que un tipo de error nuevo hay que añadirlo **también** a la lista de desenvoltorio o
+  la traducción no lo alcanza nunca.
+- **El actor sale de un puerto, `ActorResolver`** (`C-E.2`): la guarda de §6.1 dejó de comparar un valor
+  consigo mismo. El adaptador de producción sigue leyéndolo del `Host` —la deuda declarada de F0—, así que
+  **montar la auth es cambiar ese adaptador**, no el middleware ni los *handlers*.
 
 **F9 era el adaptador de la FCF y no se escribió, y conviene saber por qué antes de reabrirlo.** La fase
 abrió, hizo lo primero que [D-74] manda —**revalidar el anexo antes de escribir el adaptador**— y la

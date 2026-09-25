@@ -16,11 +16,16 @@ public import Vapor
 ///   que lanza `TenancyError.tenantMismatch` si el actor y el tenant ambiental
 ///   discrepan. No es una duplicación que sobre, es un **cinturón** detrás de la
 ///   puerta — con la diferencia de que solo se abrocha cuando alguien abre un
-///   ámbito. Lo que hay que saber al montar la auth es que **hoy la comparación
-///   del camino HTTP es una tautología**: `APIHandler.currentActor()` construye
-///   el actor *desde* `TenantContext.current`, así que compara un valor consigo
-///   mismo y `tenantMismatch` es inalcanzable. Deja de serlo en el momento en
-///   que el actor salga del *claim*, que es una línea en `currentActor()`.
+///   ámbito. Lo que había que saber al montar la auth era que la comparación del
+///   camino HTTP **era una tautología** —`APIHandler.currentActor()` construía el
+///   actor *desde* `TenantContext.current`—, y eso lo arregló `C-E.2`: el actor
+///   sale ahora de un puerto (`ActorResolver`) y la discrepancia es
+///   **representable**, con su test por la ruta HTTP entera (`ActorSeamTests`).
+///   Lo que sigue siendo deuda es **de dónde lo saca el adaptador de
+///   producción** (`AmbientTenantActorResolver`, que lee el `Host`): mientras
+///   sea ése, los dos lados coinciden siempre y `tenantMismatch` no ocurre en
+///   producción. Ponerlo a leer el *claim* firmado es cambiar **ese adaptador**,
+///   no este middleware ni los *handlers*.
 ///
 /// - Important: Se cuelga como **último** middleware de la cadena, por el
 ///   problema conocido entre `@TaskLocal` y la implementación interna de Vapor

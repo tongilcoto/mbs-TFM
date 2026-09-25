@@ -40,7 +40,11 @@ public func configure(
     // temporada del año en curso y **caducaría** el 1 de julio siguiente, con el
     // fallo apareciendo meses después y sin relación con el cambio que lo
     // destapó.
-    clock: any Clock = SystemClock()
+    clock: any Clock = SystemClock(),
+    // `C-E.2`: de dónde sale el actor. En producción, del tenant ambiental —la
+    // deuda declarada de F0—; un test puede poner uno que **discrepe** y hacer
+    // saltar la guarda de §6.1 sin esperar a JWKS.
+    actors: any ActorResolver = AmbientTenantActorResolver()
 ) async throws {
     // ── Datos ────────────────────────────────────────────────────────────────
     // Un solo *pool*, sin `search_path`: es el del plano de control y también
@@ -77,7 +81,8 @@ public func configure(
         unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
         federationClients: federationClients,
         clock: clock,
-        background: background
+        background: background,
+        actors: actors
     )
 
     // El transporte se registra sobre un `RoutesBuilder` ya decorado, que es lo

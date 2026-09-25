@@ -145,6 +145,10 @@ public enum TestEnvironment {
         federationClients: (any FederationClientProvider)? = nil,
         background: (any BackgroundWork)? = nil,
         clock: (any Clock)? = nil,
+        // F10 · `C-E.2`: para poder hacer discrepar al actor del tenant
+        // ambiental, que es lo único que hace caer la guarda de §6.1 antes de
+        // que exista el *claim* firmado.
+        actors: (any ActorResolver)? = nil,
         _ body: (Application) async throws -> Void
     ) async throws {
         try await bootstrap()
@@ -155,7 +159,8 @@ public enum TestEnvironment {
                 app, config: config,
                 federationClients: federationClients ?? CatalogFederationClientProvider(),
                 background: background ?? DetachedBackgroundWork(),
-                clock: clock ?? SystemClock())
+                clock: clock ?? SystemClock(),
+                actors: actors ?? AmbientTenantActorResolver())
             // Sin `autoMigrate()`: el plano de control ya lo migró `bootstrap()`,
             // una sola vez. Llamarlo aquí es lo que producía la carrera.
             try await body(app)
