@@ -123,7 +123,7 @@ public struct IngestCalendar: Sendable {
             try await record(run, actor: actor)
         } catch {
             throw ApplicationError.runNotRecorded(
-                competitionID: "\(competitionID.raw)",
+                competitionID: "\(competitionID)",
                 reason: diagnosticText(for: error))
         }
         return run
@@ -151,11 +151,11 @@ public struct IngestCalendar: Sendable {
         let plan = try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)
             else {
-                throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }
             guard let season = try await repositories.seasons.find(competition.seasonID)
             else {
-                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID)")
             }
             return (
                 coordinate: FederationCoordinate(
@@ -176,7 +176,7 @@ public struct IngestCalendar: Sendable {
         return try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let competition = try await repositories.competitions.find(competitionID)
             else {
-                throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }
             // La temporada se relee **aquí dentro**, y es el mismo intercambio
             // que `D-83` ya asumió con la competición: un `SELECT` por PK a
@@ -185,7 +185,7 @@ public struct IngestCalendar: Sendable {
             // fechas del calendario con la ventana de la temporada.
             guard let season = try await repositories.seasons.find(competition.seasonID)
             else {
-                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID.raw)")
+                throw ApplicationError.seasonNotFound(id: "\(competition.seasonID)")
             }
 
             let pass = try await CalendarPass(

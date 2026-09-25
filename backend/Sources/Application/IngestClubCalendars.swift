@@ -276,7 +276,7 @@ public struct IngestClubCalendars: Sendable {
                 for competitionID in requested {
                     guard let competition = try await repositories.competitions.find(competitionID)
                     else {
-                        throw ApplicationError.competitionNotFound(id: "\(competitionID.raw)")
+                        throw ApplicationError.competitionNotFound(id: "\(competitionID)")
                     }
                     competitions.append(competition)
                 }
@@ -300,7 +300,7 @@ public struct IngestClubCalendars: Sendable {
                 // sería el `D-84` de nuestra propia casa: quien pidió recomponer
                 // la 2024/25 vería una pasada con éxito y los datos de otra.
                 guard let found = seasons.first(where: { $0.id == requested }) else {
-                    throw ApplicationError.unknownSeason(id: "\(requested.raw)")
+                    throw ApplicationError.unknownSeason(id: "\(requested)")
                 }
                 season = found
             } else {

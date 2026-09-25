@@ -74,7 +74,7 @@ extension APIHandler {
                 guard try await repositories.competitions.find(CompetitionID(raw: competitionID))
                     != nil
                 else {
-                    throw ApplicationError.competitionNotFound(id: "\(competitionID)")
+                    throw ApplicationError.competitionNotFound(id: "\(CompetitionID(raw: competitionID))")
                 }
                 return try await repositories.ingestionRuns.list(
                     competitionID: CompetitionID(raw: competitionID), limit: limit)
@@ -184,7 +184,7 @@ extension APIHandler {
                     useCase, scope: scope, actor: actor, planned: planned)
             }
             return .accepted(.init(body: .json(.init(
-                competitionIds: planned.map { $0.raw.uuidString.lowercased() }))))
+                competitionIds: planned.map { "\($0)" }))))
 
         } catch ApplicationError.competitionNotFound(let id) {
             return .notFound(.init(body: .application_problem_plus_json(
@@ -239,7 +239,7 @@ extension APIHandler {
         planned: [CompetitionID]
     ) async {
         let ids: @Sendable ([CompetitionID]) -> String = { list in
-            list.map { $0.raw.uuidString.lowercased() }.joined(separator: ", ")
+            list.map { "\($0)" }.joined(separator: ", ")
         }
         do {
             let report = try await useCase.execute(scope: scope, actor: actor)
@@ -302,10 +302,10 @@ extension Domain.IngestionRun {
     /// que de verdad se leen.
     func toResponse() -> Components.Schemas.IngestionRunResponse {
         .init(
-            id: id.raw.uuidString.lowercased(),
-            competitionId: competitionID.raw.uuidString.lowercased(),
+            id: "\(id)",
+            competitionId: "\(competitionID)",
             kind: kind.toContract(),
-            roundId: roundID?.raw.uuidString.lowercased(),
+            roundId: roundID.map { "\($0)" },
             startedAt: startedAt,
             finishedAt: finishedAt,
             outcome: outcome.toContract(),

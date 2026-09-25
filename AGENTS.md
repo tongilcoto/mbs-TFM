@@ -524,6 +524,14 @@ docker compose down -v
   `switch` exhaustivo obliga a escribir la línea pero **no** a escribirla bien. *(El recuento decía **once**
   aquí, en el plan de F10 y en la descripción del propio* spec*; son diez, contados en los dos lados el
   2026-09-24. Lo vigila ahora `ContractEnumTests`.)*
+- **Un identificador sabe escribirse, y no se escribe a mano** (`F10-ter`). Los **once** —`TeamID`,
+  `SeasonID`, `IngestionRunID`…— conforman `TypedIdentifier`, que decide la forma canónica **una vez**: RFC
+  4122 §3, minúscula. Se interpola el identificador, `"\(teamID)"`, **nunca** `raw.uuidString.lowercased()`
+  ni, mucho menos, `"\(teamID.raw)"` — que era el defecto: 14 puntos de salida se acordaban de bajar la caja
+  y 14 no, y el `detail` de un problema no casaba con el id que el cliente había enviado. `raw` sigue siendo
+  el `UUID` para quien lo necesite de verdad (repositorios, columnas). Al añadir el identificador número doce:
+  conformarlo y ponerle su renglón en `IdentifierTextTests`, que los enumera a mano porque Swift no deja
+  recorrer los tipos que cumplen un protocolo.
 - **Los tests citan el diseño.** Cada `@Test` lleva su `§x` o su `D-nn`: es lo que permite revisar una fase
   leyendo los tests en vez del código (Plan §9). `swift-testing`, no XCTest (`D-70`).
 - **Y se escriben con esqueleto: el rojo tiene que ser de aserción, no de compilación** (Plan §5.1). Escribir
@@ -554,10 +562,11 @@ de tenant, porque es un dato que controla el cliente por completo.
 Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
-Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis** y **F10** entregadas y **F9
+Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis**, **F10** y **F10-ter**
+entregadas y **F9
 aplazada sin escribir código** ([D-95], Plan §4.11), **la ingesta está completa de punta a punta**: el
 enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
-([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **536 tests**).
+([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **537 tests**).
 
 **Lo que F10 deja puesto y conviene saber antes de tocar la frontera HTTP:**
 

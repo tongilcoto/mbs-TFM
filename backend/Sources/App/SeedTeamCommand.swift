@@ -116,7 +116,7 @@ public struct SeedTeamCommand: AsyncCommand {
             }
             if let existing {
                 throw SeedTeamError.duplicate(
-                    id: existing.id.raw.uuidString.lowercased(),
+                    id: "\(existing.id)",
                     linked: existing.federationTeamID)
             }
 
@@ -136,7 +136,7 @@ public struct SeedTeamCommand: AsyncCommand {
             return team.id
         }
 
-        let id = teamID.raw.uuidString.lowercased()
+        let id = "\(teamID)"
         context.console.success("""
             Equipo listo: \(id)
               \(category.rawValue) \(signature.letter ?? "—") · \(gender.rawValue) · \(modality.rawValue)

@@ -38,7 +38,7 @@ public struct LinkTeamToFederation: Sendable {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)
             }
             guard let team = try await repositories.teams.find(request.teamID) else {
-                throw ApplicationError.teamNotFound(id: "\(request.teamID.raw)")
+                throw ApplicationError.teamNotFound(id: "\(request.teamID)")
             }
             return (club: club, team: team)
         }
@@ -255,7 +255,7 @@ public struct LinkTeamToFederation: Sendable {
             }) {
                 throw DomainError.federationTeamIDTaken(
                     code: request.ownTeamFederationID,
-                    owner: holder.id.raw.uuidString.lowercased())
+                    owner: "\(holder.id)")
             }
 
             let linked = try found.team.linked(

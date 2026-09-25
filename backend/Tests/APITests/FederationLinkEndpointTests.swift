@@ -700,13 +700,15 @@ extension FederationLinkEndpointTests {
                     #expect(response.status == .notFound, "\(path)")
                     let problem = try Self.decodeProblem(response)
                     #expect(problem.code == "TEAM_NOT_FOUND", "\(path)")
-                    // **Comparado sin caja, y eso es un hallazgo**: el `detail`
-                    // lleva el UUID en **mayúsculas** —`"\(id.raw)"`, que es lo
-                    // que hace Foundation— mientras que todo identificador de un
-                    // cuerpo viaja en minúsculas (RFC 4122 §3). Es uniforme en
-                    // todo el proyecto y anterior a F10, así que no se corrige
-                    // aquí: queda apuntado en §7 del plan.
-                    #expect(problem.detail?.lowercased() == ghost, "\(path)")
+                    // **Comparado EXACTO, y eso es lo que `F10-ter` compró.**
+                    // Hasta entonces el `detail` llevaba el UUID en mayúsculas
+                    // —`"\(id.raw)"`, que es lo que hace Foundation— mientras que
+                    // todo identificador de un cuerpo viaja en minúsculas
+                    // (RFC 4122 §3), así que esta línea tenía que bajar la caja
+                    // para pasar. Ahora la forma la decide el tipo y esto puede
+                    // exigir lo que un cliente exigiría: que el error diga **el
+                    // mismo id** que él envió.
+                    #expect(problem.detail == ghost, "\(path)")
                 }
             }
         }

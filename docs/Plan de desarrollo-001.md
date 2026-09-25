@@ -156,6 +156,7 @@ dependen de eso.
 | **F9-bis** ✅ | **El equipo que la fuente publica sin código, apuntado en la pasada.** Un `FederationTeamRef` sin `federationTeamID` salta el paso 1 de la cadena en silencio y acaba escrito como rival con la clave nula, sin una línea en el informe. Un `Reason` nuevo en `IngestionSkip`, **sin migración** (medido, y confirmado al ejecutarlo). Está aquí y no dentro de F10 porque es un defecto de lo ya entregado y **añade un caso a una enumeración pública** — regla 2 de §3 del plan de auditoría, que no admite excepciones por tamaño. **Entregada el 2026-09-21**: dos ciclos, 6/6 mutaciones, 448 tests, y la decisión que tenía abierta cerrada en **A** —`skipped` ensancha su significado—. Detalle abajo | unit puro + integración | [D-85], [D-79], [D-90], [D-02] |
 | **F10-bis** ✅ | **El ciclo de vida de la pasada aceptada: quién la abre y quién la cierra.** F10 inventa el desenlace `accepted` ([D-96]) y su Bloque C escribe la primera fila; lo que **no existe** es el otro extremo — `IngestionRun.closed(as:at:)` se escribió en `C-A.6` y **no tiene un solo llamante** fuera de sus tests (medido con `grep` el 2026-09-23). Sin él, la pasada encolada crea **su propia** fila y la aceptada queda abierta para siempre: dos filas de la misma pasada, una eternamente `accepted`, y el cliente que sigue la suya sin enterarse de que ya hay resultado — exactamente lo que la cabecera de `closed` declara inaceptable. Y la **otra** puerta del `202` —`POST /ingestion-runs`— sigue sin dejar fila, que es el deber que `H-27` dejó escrito **en el código** y asignado a F10. Es mini-fase y no un arreglo porque cambia el contrato de un puerto (`IngestionRunRepository.record` dice *"solo inserta"*) y toca cuatro *targets*. **Va antes de cerrar F10**, con la migración de [D-96] dentro: sin ella no hay forma de mirar la tabla, y §3 manda mirarla. **Entregada el 2026-09-23**: cinco ciclos, **14/14** mutaciones, 494 → 502 tests, y verificada contra la base de trabajo y la RFFM de verdad. Detalle abajo | niveles 2 y 3, y la tabla de verdad | [D-96], [D-85], [D-88], `A-4` · H-27 |
 | **F10** | **Troceada en ciclos: [Plan F10-001](../backend/Plan%20F10-001.md).** `POST /teams/{id}/federation-link` **+ `/preview`**, y con ellos el alta en cascada de `Season` y `Competition`. **Y la pasada aceptada tiene que dejar fila**, ya decidido ([D-96]: desenlace `accepted`, `finished_at` anulable y orden por `started_at`). Su migración de `TeamRegistration` lleva además **los dos índices compuestos de `Match`** que §4.6 manda y no existen (`A-5` · H-36). **Y es la fase que hace cruzar la frontera HTTP a los errores de la ingesta** — tres deberes de A-6 y A-7, abajo. Más el **equipo que la fuente publica sin código**, que no viene de la auditoría sino de diseñar el `/preview`: el contrato tiene que admitirlo. La otra mitad —que la pasada lo apunte— es **F9-bis** | E2E de contrato | [D-67], [D-96], §2.3-c, `A-4` · H-27, `A-5` · H-36, `A-6` · H-15, H-40, H-42, `A-7` · H-46 |
+| **F10-ter** ✅ | **El identificador que no sabía escribirse.** Un `UUID` admite las dos cajas, así que la forma hay que elegirla —RFC 4122 §3 elige **minúscula**— y hasta aquí no vivía en ningún sitio: se repetía a mano en cada punto de salida, con **14 sitios que se acordaban y 14 que no** (medido el 2026-09-25). Los que no eran los que meten el id en el texto de un error, así que el `detail` de un problema **no casaba** con el id que el cliente había enviado. Es mini-fase por la regla 2 —dos *targets* y una conformidad nueva en once tipos públicos—, y la regla cobró pieza: los identificadores se habían contado **por fichero** y eran **once**, no diez. Lo encontró F10 (§7 de su plan) y no es suyo. **Entregada el 2026-09-25**: 536 → 537 tests, **4/4** mutaciones. Detalle abajo | unit puro + frontera | RFC 4122 §3, `A-7` · H-46 |
 
 **F0 es la única horizontal, y no entrega funcionalidad**: está en la tabla para que la secuencia se lea
 de un tirón, no porque sea una fase como las demás. Es la excepción de §2 — el andamiaje que el
@@ -626,6 +627,41 @@ anulable, `CHECK` con los tres valores, el par atado, los dos índices), un `POS
 temporada contesta **202** y deja **dos filas `accepted` sin final**, y veinte segundos después **esas mismas
 dos filas** —mismo `id`— están `succeeded` con su `finished_at`, con `started_at` intacto en el instante en
 que se pidió. Antes de esto habrían sido ocho filas en vez de seis, dos de ellas abiertas para siempre.
+
+#### F10-ter · el identificador que no sabía escribirse — **entregada** (2026-09-25)
+
+**Está aquí por la regla 2 de §3 del plan de auditoría, como F6-ter, F9-bis y F10-bis**: toca el Dominio y la
+capa de Aplicación —dos *targets*— y **añade una conformidad a once tipos públicos**. Por tamaño habría sido
+un arreglo de media hora; la regla no admite excepciones por tamaño, y esta vez cobró pieza (abajo).
+
+**El defecto.** Un `UUID` se puede escribir en mayúsculas o en minúsculas sin cambiar de valor, así que la
+forma **hay que elegirla**; RFC 4122 §3 elige minúscula y es la que viaja en todo cuerpo del contrato.
+Foundation entrega mayúsculas, de modo que la conversión hacía falta en cada punto de salida y **se repetía a
+mano**. Medido el 2026-09-25: **14 sitios se acordaban y 14 no**. Los que no, los que meten el id en el texto
+de un error — con la consecuencia de que un cliente que comparase el `detail` de un problema contra el id que
+envió **no casaba**.
+
+**El reparto mitad y mitad es el argumento entero**: no falló la gente, faltaba el sitio. Es la cuarta vez que
+el libro encuentra *"la garantía depende de repetirlo a mano"* (H-17, H-26, H-38 y ésta), y la primera en que
+el remedio no es un test sino **un tipo**: `TypedIdentifier` decide la forma una sola vez, los once
+identificadores la heredan, y los 28 puntos de salida pasan a escribirse igual —`"\(id)"`—, que además es
+**más corto que las dos formas anteriores**. `raw` sigue ahí para quien necesite el `UUID` de verdad.
+
+**Lo encontró F10 y no es suyo**: salió del Bloque E, al afirmar por código el `Problem` del 404
+(`C-E.6`). Quedó apuntado en §7 de su plan con la nota de que tocarlo eran *"siete sitios en tres targets"* —
+**eran catorce en dos**, y contarlos bien fue lo primero que hizo esta mini-fase.
+
+**Y la regla 2 cobró pieza, que es lo que hay que leer de aquí.** Los identificadores eran *"los diez de
+`Identifiers.swift`"* — contados **por fichero**. `IngestionRunID` vive en `IngestionRun.swift`, se quedó sin
+conformar, y el `jobId` del `202` salió como `IngestionRunID(raw: …)` en lugar de como un UUID. **Son once.**
+Lo cazó un test de nivel 4 en el acto, y la lección es la de siempre en este proyecto: *un inventario que se
+hace mirando un fichero no es un inventario*. El test que fija la regla enumera los once a mano —Swift no deja
+recorrer los tipos que cumplen un protocolo— y dice en su propio texto por qué, para que el doce no se caiga
+igual.
+
+**Entregada el 2026-09-25**: **536 → 537 tests**, **4/4 mutaciones**, y el test del 404 de `C-E.6` pasa de
+comparar **sin caja** a comparar **exacto**, que es lo que no podía hacer antes.
+
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 

@@ -157,14 +157,14 @@ extension APIHandler {
         }
 
         return .accepted(.init(body: .json(.init(
-            jobId: result.jobID.raw.uuidString.lowercased(),
+            jobId: "\(result.jobID)",
             // **`encolado` es el único valor honesto aquí**: la respuesta sale
             // antes de que el trabajo empiece. Los otros tres los cuenta el
             // registro de `D-85`, que es lo que se consulta con el `jobId`.
             status: .encolado,
-            teamId: result.teamID.raw.uuidString.lowercased(),
-            competitionId: result.competitionID.raw.uuidString.lowercased(),
-            seasonId: result.seasonID.raw.uuidString.lowercased())))
+            teamId: "\(result.teamID)",
+            competitionId: "\(result.competitionID)",
+            seasonId: "\(result.seasonID)")))
         )
     }
 }

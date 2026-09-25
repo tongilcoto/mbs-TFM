@@ -35,7 +35,7 @@ public struct PreviewFederationLink: Sendable {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)
             }
             guard let team = try await repositories.teams.find(teamID) else {
-                throw ApplicationError.teamNotFound(id: "\(teamID.raw)")
+                throw ApplicationError.teamNotFound(id: "\(teamID)")
             }
             return (club: club, team: team)
         }

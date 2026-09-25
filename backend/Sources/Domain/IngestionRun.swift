@@ -356,7 +356,14 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
 }
 
 /// Identificador de `IngestionRun` (§4.1).
-public struct IngestionRunID: Hashable, Sendable {
+///
+/// **Vive aquí y no en `Identifiers.swift`, y eso ya costó un rojo** (`F10-ter`):
+/// al conformar *"los diez"* al protocolo que decide cómo se escribe un
+/// identificador, éste se quedó fuera por estar en otro fichero, y el `jobId`
+/// del `202` salió como `IngestionRunID(raw: …)` en vez de como un UUID. Lo
+/// cazó un test de nivel 4 en el acto. **Son once**, y contarlos por fichero es
+/// lo que los hizo diez.
+public struct IngestionRunID: TypedIdentifier {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }

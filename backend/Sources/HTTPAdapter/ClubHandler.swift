@@ -111,7 +111,7 @@ extension Domain.Club {
             // En minúsculas: `uuidString` de Foundation devuelve mayúsculas, pero
             // la forma canónica de un UUID en JSON (RFC 4122 §3) es minúscula, y es
             // lo que los clientes esperan de un `format: uuid`.
-            id: id.raw.uuidString.lowercased(),
+            id: "\(id)",
             name: name,
             shortName: shortName,
             slug: slug.value,
