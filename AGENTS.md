@@ -542,8 +542,8 @@ docker compose down -v
   se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
   cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
   que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **17 de 30** códigos `Problem` afirmados
-  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los quince que faltan están listados
-  por su nombre en su fila del plan de auditoría).
+  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los trece que faltan son los quince
+  que su fila del plan de auditoría lista por nombre, menos los dos de federación que cerró `6a837ab`).
 - **Y los valores de un test tienen que ser distintos entre sí cuando lo que se prueba es un mapeo.** Los
   trece contadores de `IngestionRunResponse` se afirman con 1..13 **a propósito**: con ceros, o con el mismo
   número repetido, una permutación es **invisible** y el test pasa igual con los campos cruzados. Lo mismo

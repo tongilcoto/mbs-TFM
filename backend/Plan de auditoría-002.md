@@ -295,6 +295,7 @@ campos sin sitio, opcionalidades al revés y supuestos de la RFFM con nombre gen
 | 2 | `FederationCapabilities` sigue declarando las de la FCF y el proveedor devuelve `nil` (`D-95`). ¿Hay algún camino que lea capacidades **sin** pasar antes por el proveedor? | Si lo hay, una capacidad declarada de una federación sin adaptador decide algo en tiempo de ejecución |
 | 3 | `coordinate(fromCalendarURL:)` devuelve `DomainError` y no su error interno (`D-97`). ¿Lo hacen también `fetchStandings`/`fetchScorers`, o cada método del puerto tiene su propia política de errores? | Un puerto con tres políticas de error es un puerto que el segundo adaptador implementará con una cuarta |
 | 4 | **H-09 no tiene fase** desde el aplazamiento (excepción sobrevenida de 001 §6-bis) | Sigue sin poder hacer daño **mientras no haya adaptador catalán**. Comprobar que es verdad: que ninguna ruta hoy alcance la FCF |
+| 5 | **H-13 remedido** (mapa de caducidad de A-8). H-13 limpió tres campos del puerto que se explicaban por el mecanismo de la RFFM. Desde `db5f5ee`, `FederationClient.swift` suma +397/−3 y sus menciones a la RFFM pasan de **23 a 39** (`grep -c RFFM`) | Nombrar la RFFM en un comentario no es defecto; **justificar con ella un campo o una opcionalidad del puerto** sí (p. ej. `:323`, *"anulable porque es un campo de la RFFM"*). Cada caso así es H-13 otra vez |
 
 **Cómo se decide.** El listón de A-1, con el coste recalculado: hoy cambiar la forma del puerto cuesta **un
 adaptador y los dobles de tres suites**, y **no va a subir** hasta que F9 reabra. Así que un campo que solo se
@@ -336,6 +337,7 @@ el `retire` de `Sources/Persistence/FluentIngestionRepositories.swift` y `Source
 | 3 | La guarda de `D-84` es lo único entre la red y la retirada, y **sus silencios no paran nada a propósito** (H-09) | Si la respuesta vacía trae el nombre vacío o ausente, la guarda **tampoco** dice nada. Las dos protecciones se apagan con la misma entrada |
 | 4 | **`StandingRow`**, la otra salida nueva: dos fuentes para la misma fila (`D-15`). ¿Puede una fila **calculada** pisar una **ingerida** de la misma jornada? | La oficial lleva `puntos_sancion` y la calculada no (Plan §4.9, decisión 1). Si el plan de sincronización cambia de fuente para una jornada ya escrita, se sobrescribe la tabla oficial con una aritméticamente limpia y **falsa** |
 | 5 | ¿Aplica `StandingRow` la política de `D-56` (*"ausente o vacío nunca sobrescribe"*) en el `UPDATE`, **medido contra Postgres**? | Es H-17 —el único S1 de 001— para la entidad que F7 trajo *"con la misma política"*. 001 dejó el test para `Match`; nadie ha dicho que exista para `StandingRow` |
+| 6 | **H-17, H-19 y H-22 remedidos** (mapa de A-8). Los tres tests de nivel 3 de H-17 y los cuatro `…Updated == 0` de H-19 siguen en el árbol —en `Tests/` no se ha borrado un solo `@Test` desde `db5f5ee`—, pero debajo `CalendarPass` suma +43/−3 y `FluentIngestionRepositories` +392/−16, y la pasada **adopta** ahora filas `accepted` | Que el test siga no dice que siga alcanzando la rama: ¿el `UPDATE` de `Match` que H-17 afirma es el mismo camino con la adopción delante? Una mutación de la política dentro de `CalendarPass` lo contesta (regla 7). H-18 sigue en pie: el `guard let date` está en `CalendarPass.swift:159` |
 
 **El método: el de A-2, cobertura diferencial, más provocar las entradas.** Para cada sospecha, primero
 **provocarla** —un doble que devuelva `[]`, una tabla de volcado con el código de jugador renombrado— y mirar
@@ -388,6 +390,7 @@ viejo (`M2`). Y está verificado contra la base de trabajo con dos filas reales.
 | 4 | **H-25 remedido** (mapa de caducidad de A-8): con una violación de restricción real en el ámbito 2, ¿el ámbito 3 —ahora un *upsert*— sigue escribiendo la fila `failed`, y con el `id` adoptado? | El `ON CONFLICT` de un *upsert* es una sentencia distinta de un `INSERT`; lo que A-3 midió no se hereda (regla 8) |
 | 5 | **`D-89` con tres clases de pasada**: F7 y F8 lo dejaron *"sin bloquear nada hasta que el backoffice lea esos campos"* | **La rebanada 1 del backoffice es exactamente eso**: la portada lee `ingestionHealth`. Deja de ser una nota y pasa a ser una decisión de lectura con fecha |
 | 6 | **La pasada desatendida**: con `launchd`, ¿qué señal le queda a alguien de que el disparo del lunes falló? | `exit(1)` lo ve `launchd`, no una persona. A-4 cerró la ceguera del operador **con un log**; el log de un `launchd` sin nadie leyéndolo es la misma ceguera con otro nombre |
+| 7 | **H-23, H-24 y H-26 remedidos** (mapa de A-8). `IngestCalendar` +58/−17, `IngestClubCalendars` +80/−5, `IngestCommand` +75/−24 desde `db5f5ee` | H-24 sacó el `record` del éxito fuera del `do`, y F10-bis rehízo ese camino para adoptar la fila: ¿sigue fuera? H-23 cerró la parada por infraestructura **preguntando** por ella: ¿la pregunta sigue delante de la adopción? Y el test de H-26, con su `23505` real, ¿recorre hoy el camino de fila adoptada o solo el de fila nueva? |
 
 **Cómo se decide.** Provocándolo, como A-3: la carrera de la pregunta 1 con dos procesos reales contra
 `club_atleti` —un `swift run Run ingest --force` mientras un `curl` al `202` está en curso—, y la 2 matando el
@@ -428,6 +431,7 @@ bloque busca los hermanos de ese caso.
 | 4 | **El `/preview` llama a la federación dentro de la petición.** ¿Qué *timeout* manda, el del transporte o el del servidor, y qué recibe el cliente cuando vence el que no es? | `transportFailure` → **504** está medido; que el servidor corte antes y devuelva otra cosa, no |
 | 5 | **El club catalán** (`D-95`): ¿qué ve un administrador de un club FCF en el `/preview`? | Plan §4.11 dejó a F10 *"cómo se lo cuenta el `/preview`"*. Comprobar que es un **501** con `Problem` y no un 500, y que **no escribe nada** |
 | 6 | **H-29 remedido** (mapa de A-8): el `202` de `/federation-link` encola **detrás de una cascada**. ¿El trabajo de fondo ve lo que la cascada escribió, o puede arrancar antes del *commit*? | A-4 midió el `202` de `/ingestion-runs`, que **no escribe nada antes de encolar**. Éste sí |
+| 7 | **H-28 remedido** (mapa de A-8). La guarda de `federationAdapterMissing` pasó a `plannedCompetitions` (`5c045f4`), y `IngestClubCalendars` suma +80/−5 desde entonces | Es la mitad de la pregunta 5 que sí estaba medida: la **otra** puerta, `/ingestion-runs`. Comprobar que sigue dando **501** y no un `202` mudo, con el mismo club catalán |
 
 **Y lo que la rebanada 2 hereda directamente, que se comprueba pero no se arregla aquí:** `POST /v1/teams` +
 `PUT /registrations` es **la otra puerta** del agujero de `C-A.3`. La guarda está en el Dominio para que se
@@ -454,7 +458,7 @@ reutilizabilidad de la guarda de identidad.
 > del `pg_dump` 18, `-f backend/docker-compose.yml`) siguen valiendo.
 
 **Pregunta.** A-5 midió con 9 migraciones que el esquema no depende de cuándo se dio de alta un club, y dejó un
-test que lo guarda (H-38). Con **17**, dos de ellas rehaciendo `CHECK`s de *schemas* viejos, ¿sigue siendo
+test que lo guarda (H-38). Con **16**, dos de ellas rehaciendo `CHECK`s de *schemas* viejos, ¿sigue siendo
 verdad, y lo sigue guardando el test?
 
 **Dónde mirar.** `Sources/App/TenantMigrations.swift`, `Sources/Persistence/SQLHelpers.swift` (**+187 líneas
@@ -477,6 +481,11 @@ desde 001**: ahí vive `replaceCheckConstraint`), las migraciones nuevas de `Ing
   leyendo.
 - **Los dos deberes de operación de §9.3** que A-5 dejó en el Plan: cerrar el *pool* de cada club y poder
   preguntar la versión de cada uno. Solo su **estado**: siguen sin hacer, ¿y `launchd` los cambia de precio?
+- **El mapa de caducidad de A-8**, tres filas además de H-30 y H-38. **H-31** —`TenantMigrations.swift`
+  +52/−3 desde `db5f5ee`—: comprobar con `git log -p db5f5ee..HEAD` que ningún `prepare` que existiera entonces
+  se ha editado. **H-33** —`IngestCommand.swift` +75/−24—: ¿el fallo a mitad de `migrate-tenants` sigue
+  atribuido a su club? **H-35** —`SQLHelpers.swift` +187—: los ayudantes nuevos (`replaceCheckConstraint` y
+  compañía), ¿lanzan sobre una base no SQL como los tres que H-35 arregló, o vuelven a callarse?
 
 **Cómo se decide.** Con `pg_dump` y `diff`, como A-5. Un `diff` con algo más que el nombre del *schema*, **S1**.
 Un `CHECK` derivado sin su gemela, **S2** con dueño *la próxima migración*: es un `23514` esperando a un club
@@ -527,6 +536,7 @@ y `ActorContext.swift`; `Sources/Tenancy/TenantResolutionMiddleware.swift`; y el
 | 3 | **17 de 30** códigos `Problem` afirmados por código; los trece que faltan están listados por nombre en la fila de H-46 | ¿Cuántos de esos trece puede emitir **una operación de lectura**? Son los que la rebanada 1 hereda sin testigo |
 | 4 | Los **13 contadores** de `IngestionRunResponse` se mapean a mano (F10-ter). El backoffice va a mapear DTOs de **veinte** entidades | ¿Es el mapeo a mano el patrón, o hay un sitio donde el compilador pueda obligar? Si es el patrón, la regla *"valores distintos entre sí"* tiene que ir a la plantilla de test, no a la memoria |
 | 5 | **El método de los campos sin afirmar** (AGENTS.md, F10-ter): *"52 campos, 0 sin afirmar"* | Repetirlo es literalmente lo que la nota pide *"cuando el spec crezca"*, y es el último momento barato: después de la rebanada 1 crece |
+| 6 | **H-40, H-42 y H-43 remedidos** (mapa de A-8). Desde `db5f5ee`: `ProblemMiddleware.swift` +211/−1, `IngestionHandler.swift` +49/−10, `ClubHandler.swift` +32/−9, `TenantResolutionMiddleware.swift` +10/−5, `FluentTenantUnitOfWork.swift` +21/−7 | H-43 dejó *"el motivo verdadero en el cuerpo y en el log"* para lo no clasificado: ¿lo cumplen las ramas nuevas de F10 y el desenvoltorio de `ServerError`? H-40 corrigió comentarios que negaban lo medido: ¿dice lo mismo `FederationLinkHandler.swift`? Y H-42 dejó **puerta y cinturón**: ¿siguen los dos? |
 
 **Cómo se decide.** El listón de A-6, con las dos cuentas: si **añadir un endpoint** exige tocar sitios que el
 compilador no exige y **no hay una lista que los nombre**, **S2** con dueño *rebanada 1* — la lista es el
@@ -576,6 +586,11 @@ existir fuera del repositorio—.
 5. **La categoría *"fuera del arnés"*** que H-48 dejó con dos bordes: la `M5` de F6-ter (el cable de
    `stopsTraversal`), `DetachedBackgroundWork`, los códigos de salida. ¿Ha entrado algo nuevo sin decirlo?
    `launchd` entra por construcción; conviene que tenga su renglón.
+6. **El mapa de caducidad de A-8.** **H-45**: el freno de la sonda del ámbito 1 cruza `IngestClubCalendars`
+   (+80/−5) e `IngestCommand` (+75/−24); ¿el test de F6-ter que fija el par sigue cazando su mutación?
+   **H-48**: `TestEnvironment.swift` +6/−1; ¿se mueven los bordes de la categoría? Y **H-01**:
+   `RFFMCanaryTests.swift` +10/−8, y el canario **se omite** en la batería (pide `FEDERATION_LIVE=1`): que
+   compile no dice que siga casando con la RFFM viva.
 
 **Cómo se decide.** Si el guion no existe en ningún sitio versionado, **S2** con dueño *deber de despliegue*
 —va con el CI, porque es la otra mitad de *"qué significa verde"*—; no es S1 porque las mutaciones que se
@@ -594,8 +609,45 @@ aquí incluso cuando el bloque no encuentra nada.**
 
 | # | Bloque | Severidad | Hallazgo | Reproducción | Estado |
 |---|---|---|---|---|---|
-| **H-51** | A-8 | **S3** *documental* | **`AGENTS.md` se contradice sobre F10 dentro del mismo fichero, y no es la única cifra que deriva.** Su lista de documentación clave presenta el Plan F10 como *"la fase en curso"* (línea 19), y la sección *«Estado actual»* dice *"Y **F10, en curso**"*, *"Quedan los bloques **C, D y E**"* y *"**476 tests**"*; unas 250 líneas más abajo el mismo fichero dice que F10 está **entregada**, con **541 tests**, y el Plan de desarrollo la marca ✅ desde el 2026-09-24. El párrafo *«De F0 a F5 no se añadió un solo endpoint»* sigue diciendo que *"las siguientes llegan en F10"*, en futuro. Y el **Plan F10-001 §7** habla de *"los **once** `IngestionSkip.Reason`"* cuando son **diez** —`AGENTS.md` ya lo corrigió para sí mismo el 2026-09-24, pero no en el plan de F10—. Además, *"17 de 30"* códigos `Problem` (`AGENTS.md`) frente a *"15 de 30"* (Plan §4.1, F10-ter): puede ser una cifra que avanzó en `6a837ab` y no dos que no casan, y eso es lo que A-8 tiene que decir | Desde la raíz del repositorio: `grep -n "en curso\|476 tests\|541 tests" AGENTS.md` · `grep -n "los once" "backend/Plan F10-001.md"` (líneas 834 y 839) · `sed -n '/enum Reason/,/^    }/p' backend/Sources/Domain/IngestionRun.swift \| grep -c "^ *case "` → **10** · y `grep -n "de 30\|de 14" AGENTS.md "docs/Plan de desarrollo-001.md"` | **Corregido** el 2026-09-25 (A-8, primera mitad). Los rótulos de F10 en `AGENTS.md`, el README y el Plan F10 dicen ya *entregada*; **541 tests** en los tres; *"los once"* → *diez* en Plan F10 §7. **Y lo que el hallazgo no listaba**: el *"motivo número once"* de F9-bis en `AGENTS.md` (es el décimo); su *"entidad 22"* para `StandingRow`, resto de la errata de Plan §4.10 (es la 9ª de §3.2); el README, parado en F8 —446 tests, *"las otras 79"* (son 77), 6.644 líneas (6.739), diez tablas por club (once) y sin filtros de F10 en §5—; y dos comentarios de código que daban `TeamRegistration` por inexistente (`TenantMigrations.swift`, `CompetitionRecord.swift`). **El 17 contra 15 no es contradicción**: `6a837ab` movió la cifra, y Plan §4.1 lo apunta ahora. Citas `D-nn` y `C-x.n`, limpias (los dos falsos positivos de 001) |
+| **H-51** | A-8 | **S3** *documental* | **`AGENTS.md` se contradice sobre F10 dentro del mismo fichero, y no es la única cifra que deriva.** Su lista de documentación clave presenta el Plan F10 como *"la fase en curso"* (línea 19), y la sección *«Estado actual»* dice *"Y **F10, en curso**"*, *"Quedan los bloques **C, D y E**"* y *"**476 tests**"*; unas 250 líneas más abajo el mismo fichero dice que F10 está **entregada**, con **541 tests**, y el Plan de desarrollo la marca ✅ desde el 2026-09-24. El párrafo *«De F0 a F5 no se añadió un solo endpoint»* sigue diciendo que *"las siguientes llegan en F10"*, en futuro. Y el **Plan F10-001 §7** habla de *"los **once** `IngestionSkip.Reason`"* cuando son **diez** —`AGENTS.md` ya lo corrigió para sí mismo el 2026-09-24, pero no en el plan de F10—. Además, *"17 de 30"* códigos `Problem` (`AGENTS.md`) frente a *"15 de 30"* (Plan §4.1, F10-ter): puede ser una cifra que avanzó en `6a837ab` y no dos que no casan, y eso es lo que A-8 tiene que decir | Desde la raíz del repositorio: `grep -n "en curso\|476 tests\|541 tests" AGENTS.md` · `grep -n "los once" "backend/Plan F10-001.md"` (líneas 834 y 839) · `sed -n '/enum Reason/,/^    }/p' backend/Sources/Domain/IngestionRun.swift \| grep -c "^ *case "` → **10** · y `grep -n "de 30\|de 14" AGENTS.md "docs/Plan de desarrollo-001.md"` | **Corregido** el 2026-09-25 (A-8, primera mitad). Los rótulos de F10 en `AGENTS.md`, el README y el Plan F10 dicen ya *entregada*; **541 tests** en los tres; *"los once"* → *diez* en Plan F10 §7. **Y lo que el hallazgo no listaba**: el *"motivo número once"* de F9-bis en `AGENTS.md` (es el décimo); su *"entidad 22"* para `StandingRow`, resto de la errata de Plan §4.10 (es la 9ª de §3.2); el README, parado en F8 —446 tests, *"las otras 79"* (son 77), 6.644 líneas (6.739), diez tablas por club (once) y sin filtros de F10 en §5—; y dos comentarios de código que daban `TeamRegistration` por inexistente (`TenantMigrations.swift`, `CompetitionRecord.swift`). **El 17 contra 15 no es contradicción**: `6a837ab` movió la cifra, y Plan §4.1 lo apunta ahora. Citas `D-nn` y `C-x.n`, limpias (los dos falsos positivos de 001). **Y en la segunda mitad, dos más**: `AGENTS.md` decía *"los quince que faltan"* junto a *"17 de 30"* (son **trece**, contados con `grep` sobre `Tests/`), y A-13 decía *"con 17"* migraciones |
 | **H-52** | A-15 | *sospecha* — **S2** si se confirma | **El guion de mutación no está versionado, y el proyecto documenta cinco fallos suyos que se leyeron como resultados.** Ver A-15 | `git ls-files \| grep -iE "\.(sh\|py\|pl)$\|mutat"` → vacío | **Pendiente de confirmar** en A-15 |
+
+### Nota de cierre de A-8 · ¿la deriva sigue siendo sistemática, y qué se movió debajo de 001?
+
+**La deriva sigue siendo la de 001, con una variante nueva.** Las citas se sostienen: los 97 `D-nn` de
+`Sources/`, `Tests/` y los documentos resuelven —los dos que no, `D-001` y `D-266`, son los falsos positivos
+que 001 ya documentó—, y los `C-x.n` del código existen todos en el Plan F10. **Las cifras derivan**, como en
+001. Y aparece lo nuevo: **derivan los rótulos de estado**, no solo los números — *"F10 en curso"* cuatro
+secciones por encima de *"F10 entregada"*. El patrón es reconocible: **se deriva lo que el cierre de fase no
+toca**. Cada cierre escribe su detalle en el Plan y su lección al final de `AGENTS.md`; nadie vuelve a la
+cabecera del README (parado en F8: seis cifras), a «Estado actual» ni a los rótulos de los bloques del Plan F10.
+Y el propio plan de auditoría cayó dos veces (*"17"* migraciones, que son 16 por tenant). Todo S3, todo
+corregido: ver H-51.
+
+**El mapa de caducidad.** Se cruzaron las filas de 001 en **S4** o **cerradas** contra
+`git diff --name-only db5f5ee..HEAD` (96 ficheros de `Sources/` y `Tests/`). Ninguna garantía queda sin bloque
+que la reciba, así que **no hay S3 de huérfanos**. En `Tests/` no se ha borrado un solo `@Test` desde
+`db5f5ee` —el único que desaparece del `diff` es un cambio de rótulo (`1aaca55`)—, así que los testigos de
+001 **siguen existiendo**; lo que el mapa pregunta es si siguen **alcanzando** lo que afirmaban.
+
+| Bloque | Remide | Lo que se movió debajo |
+|---|---|---|
+| **A-9** | H-13 (fila 5) | El puerto, 236 → 717 líneas; menciones a la RFFM, 23 → 39 |
+| **A-10** | H-17, H-19, H-22 (fila 6) | `CalendarPass` adopta filas `accepted`; el repositorio de ingesta, +392 |
+| **A-11** | H-25 (fila 4) · H-23, H-24, H-26 (fila 7) | `record` pasa a *upsert*; las dos pasadas y el comando, reescritos en parte |
+| **A-12** | H-29 (fila 6) · H-28 (fila 7) | El segundo `202`, con cascada delante; el recorrido, +80 |
+| **A-13** | H-30, H-38 (ya en el bloque) · H-31, H-33, H-35 (viñeta nueva) | 9 → 16 migraciones por tenant; `SQLHelpers`, +187 |
+| **A-14** | H-44 (sospecha 2) · H-40, H-42, H-43 (fila 6) | `ProblemMiddleware`, +211; un *handler* nuevo |
+| **A-15** | H-45, H-48, H-01 (punto 6) | El recorrido y el comando; `TestEnvironment`; el canario, que no corre |
+
+**Se sostienen sin tocar, porque su código no se ha movido:** H-02, H-12, H-14, H-16, H-20 y H-50. **Y los
+documentales de A-0 se han vuelto a medir aquí mismo**, que es la primera mitad del bloque: H-03 y H-04 habían
+vuelto a derivar (README, corregido); H-05, H-06 y H-11 se sostienen —`"rffm"` y `"fcf"` siguen en un solo
+fichero, los filtros del README casan todos, y la frase contradictoria de `Competition.swift` no ha vuelto—.
+
+**Lo que no es de este mapa**: las filas de 001 que quedaron **abiertas** con fase (H-08, H-09, H-10, H-15,
+H-21, H-27, H-36, H-41, H-46, H-49…). Si su fase las cerró o no lo comprueba el bloque que ya las cita en su
+«Leer antes»; no son garantías que caduquen, son deudas que se cobran.
 
 ---
 
@@ -628,7 +680,7 @@ sin A-7.
 
 | Bloque | Estado | Sesión | Hallazgos |
 |---|---|---|---|
-| **A-8** · La vara de medir y el mapa de caducidad | ◐ **primera mitad hecha** (la vara, H-51 corregido) — falta el mapa de caducidad | 2026-09-25 | H-51 |
+| **A-8** · La vara de medir y el mapa de caducidad | ✅ **cerrado** — la vara al día (H-51 corregido) y el mapa repartido en A-9…A-15; ver su nota de cierre en §6 | 2026-09-25 | H-51 |
 | **A-9** · El puerto sin segunda implementación | ○ pendiente | | |
 | **A-10** · La única regla que borra | ○ pendiente | | |
 | **A-11** · La fila que transita | ○ pendiente | | |
