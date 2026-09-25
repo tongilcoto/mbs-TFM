@@ -539,7 +539,7 @@ docker compose down -v
   `roundId`, que solo existe en la pasada de clasificación, y ésa no ocurre con un calendario vacío—. Ninguno
   se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
   cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
-  que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **15 de 30** códigos `Problem` afirmados
+  que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **17 de 30** códigos `Problem` afirmados
   **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los quince que faltan están listados
   por su nombre en su fila del plan de auditoría).
 - **Y los valores de un test tienen que ser distintos entre sí cuando lo que se prueba es un mapeo.** Los
@@ -581,7 +581,7 @@ Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis**, **
 entregadas y **F9
 aplazada sin escribir código** ([D-95], Plan §4.11), **la ingesta está completa de punta a punta**: el
 enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
-([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **539 tests**).
+([`backend/Plan F10-001.md`](./backend/Plan%20F10-001.md), 47 ciclos en siete bloques, **541 tests**).
 
 **Lo que F10 deja puesto y conviene saber antes de tocar la frontera HTTP:**
 

@@ -130,6 +130,25 @@ struct FederationLinkEndpointTests {
         currentRound: 1,
         rounds: calendar.rounds)
 
+    /// El mismo calendario **doce meses antes**, que es de lo que se trata: la
+    /// coordenada del año pasado sirve un calendario perfectamente parseable, y
+    /// lo único que no puede ser eco son las fechas ([Anexo RFFM §F.16]).
+    static let lastSeasonCalendar = FederationCalendar(
+        seasonLabel: try! SeasonLabel("2025/26"),
+        competitionName: "PRIMERA CADETE",
+        groupLabel: "Grupo 4",
+        currentRound: 1,
+        rounds: [
+            FederationRound(number: 1, matches: calendar.rounds[0].matches.map {
+                FederationMatch(
+                    federationMatchID: $0.federationMatchID,
+                    home: $0.home, away: $0.away,
+                    homeScore: nil, awayScore: nil,
+                    date: $0.date.map { $0.addingTimeInterval(-365 * 24 * 3600) },
+                    kickoff: nil, venue: nil, venueCode: nil)
+            })
+        ])
+
     struct StubProvider: FederationClientProvider {
         let client: StubClient
         func client(for code: FederationCode) -> (any FederationClient)? {
@@ -152,6 +171,18 @@ struct FederationLinkEndpointTests {
         /// primera puerta sin nada honesto que enseñar (`C-C.8`, `C-E.8`).
         var withoutSeasonLabel = false
 
+        /// **La fuente rotula OTRA competición** — la guarda de [D-84]. No es un
+        /// fallo de la federación: una coordenada con un dígito cambiado
+        /// devuelve, con `200` y sin un solo error, el calendario **de otra
+        /// liga**.
+        var sourceName: String?
+
+        /// **El calendario es del año pasado** — la guarda de [D-91]. Es el error
+        /// que ocurre cada verano: se copian los códigos de la temporada
+        /// anterior, y como los rótulos son **idénticos entre temporadas**
+        /// ([Anexo RFFM §F.17]) lo único que lo delata son las fechas.
+        var previousSeason = false
+
         func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
             if unreadableURL {
                 throw DomainError.unreadableFederationURL(
@@ -163,6 +194,10 @@ struct FederationLinkEndpointTests {
         func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
             if let failure { throw failure }
             if withoutSeasonLabel { return FederationLinkEndpointTests.unlabelledCalendar }
+            if previousSeason { return FederationLinkEndpointTests.lastSeasonCalendar }
+            if let sourceName {
+                return FederationLinkEndpointTests.calendar.named(sourceName)
+            }
             return FederationLinkEndpointTests.calendar
         }
 
@@ -212,13 +247,17 @@ struct FederationLinkEndpointTests {
         federationFailure: FederationError? = nil,
         unreadableURL: Bool = false,
         withoutSeasonLabel: Bool = false,
+        sourceName: String? = nil,
+        previousSeason: Bool = false,
         _ body: @escaping @Sendable (Application, TeamID) async throws -> Void
     ) async throws {
         try await TestEnvironment.withApp(
             federationClients: StubProvider(client: StubClient(
                 failure: federationFailure,
                 unreadableURL: unreadableURL,
-                withoutSeasonLabel: withoutSeasonLabel)),
+                withoutSeasonLabel: withoutSeasonLabel,
+                sourceName: sourceName,
+                previousSeason: previousSeason)),
             background: InlineBackgroundWork(),
             clock: FixedClock(instant: now)
         ) { app in
@@ -1031,6 +1070,115 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .accepted)
             }
+        }
+    }
+}
+
+extension FederationCalendar {
+    /// El mismo calendario con **otro rótulo de competición**, que es lo que la
+    /// RFFM devuelve cuando la coordenada apunta a otra liga (`D-84`).
+    func named(_ name: String) -> FederationCalendar {
+        FederationCalendar(
+            seasonLabel: seasonLabel, competitionName: name, groupLabel: groupLabel,
+            currentRound: currentRound, rounds: rounds)
+    }
+}
+
+extension FederationLinkEndpointTests {
+
+    /// **La guarda de [D-84] cruza la frontera como 502** (`C-E.8`, resto de
+    /// `A-7`·H-46 cerrado el 2026-09-25).
+    ///
+    /// # Por qué faltaba, y por qué merecía cerrarse
+    ///
+    /// Es una de las dos guardas que más ha costado descubrir a este proyecto, y
+    /// estaba probada **solo del lado del Dominio** (nivel 2). Que llegue al
+    /// cliente con **su** código y no con otro no lo comprobaba nadie — y la
+    /// única puerta por la que un humano puede dispararla es ésta: la cascada
+    /// del enganche llama a `requireSameSource` **antes de escribir**.
+    ///
+    /// # Qué error es éste, que no es el que parece
+    ///
+    /// **502 y no 409**: una coordenada equivocada **no falla**. La RFFM
+    /// responde `200` con el calendario de otra liga, perfectamente parseable,
+    /// así que nada de lo que el cliente mandó está mal — lo que no cuadra es lo
+    /// que el tercero devuelve en esa coordenada. Un 4xx invitaría a reintentar
+    /// con otro cuerpo, y eso aquí no arregla nada.
+    ///
+    /// **Y solo muerde cuando la competición YA existe**: la que se crea nace
+    /// con el nombre del propio calendario, así que compararla consigo misma no
+    /// diría nada (`D-72`, primera pasada).
+    @Test("la coordenada que apunta a otra competición es 502 (D-84 · C-E.8)")
+    func aCoordinatePointingElsewhereIsRejected() async throws {
+        try await Self.withSeededTeam(sourceName: "PRIMERA INFANTIL") { app, teamID in
+            // La fila ya está, con el nombre que la fuente dijo **la primera
+            // vez** — que es la evidencia que `D-72` manda guardar.
+            _ = try await Self.seedExistingCompetition(ageCategory: .cadete, on: app)
+
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .badGateway)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "FEDERATION_SOURCE_MISMATCH")
+                // **Los dos nombres**: sin ellos, *"apunta a otra competición"*
+                // no dice a cuál, y quien lo lee tiene doce equipos.
+                #expect(problem.detail?.contains("PRIMERA CADETE") == true)
+                #expect(problem.detail?.contains("PRIMERA INFANTIL") == true)
+            }
+
+            // Y no se escribió nada: la guarda va **antes** de tocar la fila.
+            #expect(try await Self.rowCount("team_registrations", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
+        }
+    }
+
+    /// **La guarda de [D-91] cruza la frontera como 502** (`C-E.8`).
+    ///
+    /// Es la hermana de la anterior y **la que caza el error que ocurre cada
+    /// verano**: al llegar la temporada nueva se copian los códigos del año
+    /// pasado y la ingesta sincroniza 2025 en una competición marcada como 2026,
+    /// sin un solo error. La guarda del nombre es **ciega** a eso —los rótulos
+    /// son idénticos entre temporadas ([Anexo RFFM §F.17])— y la etiqueta de
+    /// temporada tampoco sirve, porque es **el eco de nuestro propio parámetro**
+    /// (§F.16).
+    ///
+    /// Lo único que no puede ser eco son **las fechas**, y por eso la evidencia
+    /// es la **mediana** del calendario: ni *"todas dentro"* —un aplazado a julio
+    /// tumbaría la competición para siempre— ni *"que solapen"*, que un solo
+    /// aplazado haría pasar.
+    ///
+    /// Aquí pesa más que en la pasada: allí la temporada ya estaba elegida; éste
+    /// es el momento en que un humano acaba de pegar la URL.
+    @Test("el calendario de otra temporada es 502 (D-91 · C-E.8)")
+    func aCalendarFromAnotherSeasonIsRejected() async throws {
+        try await Self.withSeededTeam(previousSeason: true) { app, teamID in
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .badGateway)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "FEDERATION_SEASON_MISMATCH")
+                // La etiqueta que se esperaba y **la mediana**, en ISO y en UTC:
+                // el Dominio entrega la fecha sin formatear porque no conoce ni
+                // la zona ni el idioma de quien va a leer el problema (§5.4).
+                #expect(problem.detail?.contains("2025/26") == true)
+                #expect(problem.detail?.contains("2024-11") == true)
+            }
+
+            // Y la temporada **no se ha creado**: la guarda va en cuanto hay
+            // temporada y antes de que la cascada escriba nada más.
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }
 }
