@@ -25,14 +25,15 @@ porque los números chocan.
 
 ## 0. Qué hay montado
 
-Entregadas **F0 a F8**, más F6-bis y F6-ter. **446 tests.** Qué trajo cada una:
-[Plan §4](../docs/Plan%20de%20desarrollo-001.md).
+Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
+(`D-95`). **541 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
 
 | Operación HTTP | |
 |---|---|
 | `GET /v1/club` · `PATCH /v1/club` | F0 |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
-| Las otras 79 del *spec* | ⛔ no generadas — [§7](#7-el-spec) |
+| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#42-el-enganche--las-dos-puertas-de-d-67) |
+| Las otras 77 del *spec* | ⛔ no generadas — [§7](#7-el-spec) |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
 y era el plan: el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b). Lo demás
@@ -111,16 +112,16 @@ HTTP_TRACE=1 swift run Run serve --log debug     # cuerpos + SQL
 ```
 tfm
 ├── public          ← plano de control: tenants   (+ su _fluent_migrations)
-├── club_atleti     ← un club: sus DIEZ tablas    (+ su _fluent_migrations)
+├── club_atleti     ← un club: sus ONCE tablas    (+ su _fluent_migrations)
 └── club_celtic     ← otro club: las mismas tablas, datos distintos
 ```
 
-Las diez de hoy, en el orden de FK con que se crean — **no son las 21 entidades de §3.2**, solo las que las
+Las once de hoy, en el orden en que se crean — **no son las 21 entidades de §3.2**, solo las que las
 fases entregadas han necesitado:
 
 ```
 clubs · seasons · opponent_clubs · teams · competitions · rounds · matches
-      · standing_rows · league_scorers · ingestion_runs
+      · standing_rows · league_scorers · ingestion_runs · team_registrations
 ```
 
 **Cada *schema* tiene su propia `_fluent_migrations`**: el progreso se rastrea por club, y revertir uno no
@@ -263,7 +264,7 @@ en el mismo 500 (`A-6`/H-15).
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 446 tests, ~17 s — LA FORMA BUENA
+REQUIRE_DB=1 swift test                 # 541 tests, ~23 s — LA FORMA BUENA
 swift test                              # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -278,7 +279,7 @@ KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests      # conserva los schemas
 
 > ⚠️ **`REQUIRE_DB=1`, no `swift test` a secas** (`A-7`/H-07). Sin la variable, con Docker parado los tests de
 > BD **se omiten** y la salida es **idéntica en texto y en recuento** a la de una pasada de verdad — el total
-> sale de la lista, no de lo ejecutado. Lo único que cambia es la duración: **17 s contra 0,002 s**. Omitir
+> sale de la lista, no de lo ejecutado. Lo único que cambia es la duración: **23 s contra 0,002 s**. Omitir
 > está bien para el bucle rápido y es el diseño; para saber si algo está roto, la variable.
 
 **Para revisar una fase, sus tests** (Plan §9). Las comillas simples **no son decorativas**: sin ellas `zsh`
@@ -301,6 +302,11 @@ se come el `|`.
 | F8 · parser · pasada | `RFFMScorersParser` · `IngestScorersTests` | no |
 | F8 · la tabla, el `UNIQUE` y la retirada | `LeagueScorerPersistence` | **sí** |
 | F8 · que el `CHECK` de un enumerado siga vivo | `MigrationIntegrity` | **sí** |
+| F10 · el Dominio del enganche | `'TeamRegistrationTests\|GenderProposal'` | no |
+| F10 · la cascada y el `/preview`, con dobles | `'FederationLinkTests\|FederationLinkPreview'` | no |
+| F10 · la inscripción y sus invariantes en el esquema | `TeamRegistrationPersistence` | **sí** |
+| F10 · las dos puertas en HTTP · los enumerados espejo | `FederationLinkEndpoint` · `ContractEnum` | **sí** |
+| F10-ter · el identificador en minúscula | `IdentifierText` | no |
 
 > **`--filter` es una expresión regular sobre identificadores de Swift** —el tipo de la *suite* y la función
 > del `@Test`—, y de ahí tres sorpresas. **Arrastra suites que no esperas**: `Standing` trae 75 y `Scorer` 58,
@@ -484,7 +490,7 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **6.644 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **6.739 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh
