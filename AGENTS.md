@@ -25,7 +25,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
 | **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/Sources/APIContract/openapi.yaml) |
-| **Web backoffice** | *(pendiente)* | *(pendiente)* | — |
+| **Web backoffice** | *(pendiente)* | *(pendiente)* | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
 
