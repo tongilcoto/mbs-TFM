@@ -265,6 +265,28 @@ narrativa **"antes pensábamos X, ahora Y"**, o un **volcado JSON**. El LLD enun
 enlaza con `[D-nn]`. Detalle campo a campo de los DTOs: **solo** en el spec OpenAPI, nunca duplicado en el
 LLD (`D-25`).
 
+### Al cerrar una fase (o una mini-fase): los sitios que el cierre no toca solo
+
+Cada cierre escribe su detalle en su plan y su lección al final de este fichero, y **eso no basta**: la auditoría
+002 (`A-8`·H-51) encontró *"F10 en curso"* cuatro secciones por encima de *"F10 entregada"*, y el README parado
+en F8 con seis cifras viejas. La deriva cae siempre en lo que el cierre no tiene delante, así que el cierre no se
+da por hecho sin estos cinco pasos:
+
+1. **El recuento, medido y no copiado**: `REQUIRE_DB=1 swift test --xunit-output /tmp/x.xml`, y el total
+   **leído del XML** (`grep -c '<testcase ' /tmp/x-swift-testing.xml`), no de la línea de resumen (H-07).
+2. **La cabecera del [README](./backend/README.md)**: §0 (fases entregadas, recuento, tabla de operaciones y
+   *"las otras N"*), el recuento y la duración de §5, la tabla de filtros de §5 con los de la fase, y las tablas
+   de §3 si la fase añadió una.
+3. **«Estado actual» de este fichero**, y el rótulo de su plan en «Documentación clave».
+4. **Los rótulos de su plan de fase**: cada `### Bloque` con su ✅, y la cabecera con la fecha de cierre.
+5. **Las cifras que la fase movió**, buscadas por el número viejo en todo el árbol y no solo en los ficheros
+   que se tocaron: `grep -rn "<cifra vieja>" AGENTS.md backend/*.md docs/ backend/Sources backend/Tests`. Sirve para
+   tests, migraciones, operaciones del `filter`, motivos de `IngestionSkip.Reason`, códigos `Problem` afirmados…
+   Una cifra que va acompañada de *"los N que faltan"* se mueve **con** ella.
+
+Las cifras de un registro fechado (*"Hecho el …: 537 → 539 tests"*) **no se tocan**: son historia y son
+correctas. Lo que se actualiza es lo que dice *"hoy"*.
+
 ## Decisiones técnicas (resumen — detalle y razones en el ADR-API_y_BBDD-001)
 
 - **Base de datos:** PostgreSQL gestionado en **Supabase** (BD + Auth + Storage), **región UE** (RGPD; datos de menores).
