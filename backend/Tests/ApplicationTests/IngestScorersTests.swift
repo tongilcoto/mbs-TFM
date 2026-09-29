@@ -541,6 +541,78 @@ struct IngestScorersTests {
         #expect(run.leagueScorersCreated == 0)
     }
 
+    // ── La otra mitad de la de arriba: vacío SOBRE una tabla con filas (H-53) ──
+
+    /// Siembra un ranking de dos con una primera pasada de verdad, y devuelve lo
+    /// que la segunda —una semana después, con `client`— deja en la tabla.
+    static func secondPass(
+        _ fixture: Fixture, client: ScorersClient
+    ) async throws -> (error: (any Error)?, stored: [LeagueScorer]) {
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(
+                Self.table([
+                    Self.row("77", "PRIMERO, ANA", goals: 10),
+                    Self.row("88", "SEGUNDO, LUIS", goals: 9),
+                ], competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")))
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+
+        var caught: (any Error)?
+        do {
+            _ = try await Self.useCase(fixture, client: client, clock: Self.nextWeek())
+                .execute(competitionID: fixture.competition, actor: Self.actor)
+        } catch {
+            caught = error
+        }
+        return (caught, try await Self.stored(fixture))
+    }
+
+    static func isMalformedResponse(_ error: (any Error)?) -> Bool {
+        guard case .malformedResponse? = error as? FederationError else { return false }
+        return true
+    }
+
+    @Test("un ranking vacío sobre una tabla con goleadores NO la vacía: falla y deja constancia (H-53)")
+    func anEmptyRankingOverAPopulatedTableFails() async throws {
+        let fixture = try await Self.seed(
+            competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")
+
+        // **Es lo que la RFFM contesta de verdad a un grupo sin goles**
+        // (`RFFM-scorers-grupo-sin-goles.txt`): `200`, el sobre entero y el nombre
+        // que casa, así que la guarda de `D-84` lo da por bueno. Sobre una
+        // competición que ya tenía goleadores no puede ser cierto —los goles no se
+        // desmarcan— y retirarlo todo es el error caro de `D-75`.
+        let (error, stored) = try await Self.secondPass(
+            fixture, client: ScorersClient(
+                Self.table([], competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")))
+
+        #expect(Self.isMalformedResponse(error), "la pasada no falló: \(String(describing: error))")
+        #expect(stored.count == 2, "la pasada vacía retiró el ranking")
+        #expect(await fixture.store.ingestionRuns.last?.outcome == .failed)
+    }
+
+    @Test("y tampoco si llegan filas pero TODAS se descartan (H-53)")
+    func aRankingWhoseRowsAreAllSkippedFails() async throws {
+        let fixture = try await Self.seed()
+
+        // El día que la fuente renombre `codigo_jugador`, las filas llegan pero
+        // ninguna se puede construir: la lista que se escribe es tan vacía como la
+        // de arriba, y por el mismo camino se llevaría la tabla entera.
+        let (error, stored) = try await Self.secondPass(
+            fixture, client: ScorersClient(
+                Self.table([
+                    FederationScorerRow(
+                        federationPlayerID: nil, fullName: "PRIMERO, ANA",
+                        teamLabel: "EQ", goals: 11),
+                    FederationScorerRow(
+                        federationPlayerID: nil, fullName: "SEGUNDO, LUIS",
+                        teamLabel: "EQ", goals: 9),
+                ])))
+
+        #expect(Self.isMalformedResponse(error), "la pasada no falló: \(String(describing: error))")
+        #expect(stored.count == 2, "los descartes vaciaron el ranking")
+        #expect(await fixture.store.ingestionRuns.last?.outcome == .failed)
+    }
+
     // ── El cronómetro (la lección de F6 y F7) ────────────────────────────────
 
     @Test("la pasada mide su duración de verdad (F6, F7)")

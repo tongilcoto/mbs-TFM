@@ -106,6 +106,8 @@ public struct IngestScorers: Sendable {
                 from: published, competitionID: competitionID,
                 existing: plan.existing, syncedAt: startedAt)
 
+            try requireSomethingToKeep(scorers, existing: plan.existing, skipped: skipped)
+
             // ── Ámbito 2: el ranking entero y la retirada, juntos ────────────
             let counters = try await write(
                 scorers, competitionID: competitionID, syncedAt: startedAt, actor: actor)
@@ -212,6 +214,55 @@ public struct IngestScorers: Sendable {
                 field: "goals", reason: "la fuente no publicó los goles")
         }
         return goals
+    }
+
+    /// **La guarda de la retirada**: una pasada que no deja **nada** que conservar
+    /// no retira lo que había — falla (Auditoría-002, H-53).
+    ///
+    /// La retirada de `D-94` borra lo que no lleva la marca de esta pasada, así
+    /// que con cero filas escritas se lleva el ranking entero, y lo hace **con
+    /// éxito**: la fila del registro diría `succeeded` y nadie se enteraría. Se
+    /// llega por dos caminos, medidos los dos: la fuente contesta `"goles": []`
+    /// —que es lo que la RFFM sirve de verdad a un grupo sin goles, con el nombre
+    /// que casa, así que la guarda de `D-84` no lo para—, o publica las filas y
+    /// **todas** se descartan, que es lo que pasaría el día que renombrase
+    /// `codigo_jugador`.
+    ///
+    /// # Por qué se mira lo que había y no lo que llega
+    ///
+    /// Porque `[]` **no es sospechoso en sí**: es la respuesta normal de una liga
+    /// que no ha empezado, y el test de al lado lo afirma. Lo que no puede ser
+    /// cierto es que una competición **que tenía** goleadores se quede sin
+    /// ninguno: los goles no se desmarcan. Tratar el `[]` como coordenada mala,
+    /// que era la salida que dejaba abierta [Anexo FCF §C.12], rompería la liga
+    /// recién empezada para arreglar esto.
+    ///
+    /// # Y por qué falla en vez de saltarse la retirada en silencio
+    ///
+    /// Es la asimetría de `D-75`: si la fuente vaciase el ranking **a propósito**,
+    /// fallar cuesta una fila `failed` por semana hasta que alguien la mire, y el
+    /// ranking viejo sigue a la vista; retirar cuesta el ranking entero, sin
+    /// forma de pedirlo hacia atrás (`D-55`). Y fallar es **lo que se ve**: una
+    /// pasada que se saltara la retirada diría `succeeded` otra vez.
+    ///
+    /// Sale como `malformedResponse` porque eso es lo que es para quien lo lea:
+    /// *"esta respuesta no se puede creer"*, con el campo y el motivo. Con él, el
+    /// recorrido sigue con las demás competiciones (`D-86`) y la frontera ya sabe
+    /// traducirlo, sin un caso nuevo en ninguna enumeración pública.
+    ///
+    /// > **Lo que esta guarda NO cubre, a sabiendas:** una caída **parcial** —218
+    /// > publicadas, 5 construibles— retira 213. Dónde poner ese umbral es una
+    /// > decisión de negocio con dato que todavía no hay; esto cierra el caso en
+    /// > que la respuesta es, sin discusión, increíble.
+    func requireSomethingToKeep(
+        _ scorers: [LeagueScorer], existing: [String: LeagueScorer], skipped: [IngestionSkip]
+    ) throws {
+        guard scorers.isEmpty, !existing.isEmpty else { return }
+        throw FederationError.malformedResponse(
+            field: "goles",
+            reason: "la respuesta no deja ningún goleador que conservar "
+                + "(\(skipped.count) descartados) y la competición tiene \(existing.count): "
+                + "no se retira nada")
     }
 
     // ── Lo de dentro ─────────────────────────────────────────────────────────
