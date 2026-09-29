@@ -1148,9 +1148,12 @@ sin lector no se transporta**. Están descritos aquí y entran el día que exist
 
 ### Pendiente de observar en este endpoint
 
-- **Un grupo sin goles todavía** (jornada 0). Se espera `"goles": []`, pero **no está medido**, y la diferencia
-  que importaría es si en ese caso el documento entero llega a `null` — que sería indistinguible de una
-  coordenada mala.
+- ~~**Un grupo sin goles todavía** (jornada 0).~~ **Medido el 2026-09-28** (Auditoría-002, A-10): PRIMERA
+  DIVISIÓN AUTONÓMICA ALEVÍN Grupo 1 de 2026-27, sin empezar, contesta **`200` con el sobre entero y
+  `"goles": []`** —nombre de la competición incluido—, **no** `null`. Así que un ranking vacío es una
+  respuesta **legítima** y distinguible de una coordenada mala. Guardado en
+  `RFFM-scorers-grupo-sin-goles.txt`. **Y es exactamente la entrada que vacía la tabla** en H-53: pasa la
+  guarda de [D-84] porque el nombre casa.
 - **Dos jugadores con el mismo nombre en el mismo equipo.** En las 426 filas de los dos volcados **no hay un
   solo nombre repetido**, así que la colisión que [D-93] usa para justificar la clave de *upsert* está
   argumentada pero **no exhibida**.

@@ -1,0 +1,10 @@
+Un grupo SIN goles todavia, medido el 2026-09-28: PRIMERA DIVISION AUTONOMICA
+ALEVIN Grupo 1 de 2026-27, que empieza el 2026-10-10. Es la mitad de §F.19 que
+faltaba: NO llega a `null` (que seria indistinguible de una coordenada mala), sino
+con el sobre entero y la lista vacia. Ver Auditoria-002, A-10 y H-53.
+
+https://www.rffm.es/api/scorers?idGroup=26737846&idCompetition=26737845
+
+{"estado":"1","sesion_ok":"1","competicion":"PRIMERA DIVISIÓN AUTONÓMICA ALEVÍN","grupo":"Grupo 1","goles":[]}
+
+HTTP 200

@@ -389,7 +389,7 @@ viejo (`M2`). Y está verificado contra la base de trabajo con dos filas reales.
 | 3 | Solo `IngestCalendar` e `IngestClubCalendars` llaman a `findAccepted` (medido con `grep` al preparar este plan). Las pasadas de **clasificación y goleadores** escriben fila propia | Correcto si el `202` solo acepta `kind: calendar`. Comprobar **qué** `kind` lleva la fila que escriben las dos puertas, y qué ve `GET /v1/ingestion-runs` tras un `202` de temporada con once pasadas por competición |
 | 4 | **H-25 remedido** (mapa de caducidad de A-8): con una violación de restricción real en el ámbito 2, ¿el ámbito 3 —ahora un *upsert*— sigue escribiendo la fila `failed`, y con el `id` adoptado? | El `ON CONFLICT` de un *upsert* es una sentencia distinta de un `INSERT`; lo que A-3 midió no se hereda (regla 8) |
 | 5 | **`D-89` con tres clases de pasada**: F7 y F8 lo dejaron *"sin bloquear nada hasta que el backoffice lea esos campos"* | **La rebanada 1 del backoffice es exactamente eso**: la portada lee `ingestionHealth`. Deja de ser una nota y pasa a ser una decisión de lectura con fecha |
-| 6 | **La pasada desatendida**: con `launchd`, ¿qué señal le queda a alguien de que el disparo del lunes falló? | `exit(1)` lo ve `launchd`, no una persona. A-4 cerró la ceguera del operador **con un log**; el log de un `launchd` sin nadie leyéndolo es la misma ceguera con otro nombre |
+| 6 | **La pasada desatendida**: con `launchd`, ¿qué señal le queda a alguien de que el disparo del lunes falló? **Y ¿a qué hora dispara?** A-10 encontró la RFFM saturada el primer día de competición (`504` tras 60 s en `/api/scorers`): una cadencia que caiga en día de partido pide a la fuente cuando peor contesta | `exit(1)` lo ve `launchd`, no una persona. A-4 cerró la ceguera del operador **con un log**; el log de un `launchd` sin nadie leyéndolo es la misma ceguera con otro nombre |
 | 7 | **H-23, H-24 y H-26 remedidos** (mapa de A-8). `IngestCalendar` +58/−17, `IngestClubCalendars` +80/−5, `IngestCommand` +75/−24 desde `db5f5ee` | H-24 sacó el `record` del éxito fuera del `do`, y F10-bis rehízo ese camino para adoptar la fila: ¿sigue fuera? H-23 cerró la parada por infraestructura **preguntando** por ella: ¿la pregunta sigue delante de la adopción? Y el test de H-26, con su `23505` real, ¿recorre hoy el camino de fila adoptada o solo el de fila nueva? |
 
 **Cómo se decide.** Provocándolo, como A-3: la carrera de la pregunta 1 con dos procesos reales contra
@@ -611,6 +611,8 @@ aquí incluso cuando el bloque no encuentra nada.**
 |---|---|---|---|---|---|
 | **H-51** | A-8 | **S3** *documental* | **`AGENTS.md` se contradice sobre F10 dentro del mismo fichero, y no es la única cifra que deriva.** Su lista de documentación clave presenta el Plan F10 como *"la fase en curso"* (línea 19), y la sección *«Estado actual»* dice *"Y **F10, en curso**"*, *"Quedan los bloques **C, D y E**"* y *"**476 tests**"*; unas 250 líneas más abajo el mismo fichero dice que F10 está **entregada**, con **541 tests**, y el Plan de desarrollo la marca ✅ desde el 2026-09-24. El párrafo *«De F0 a F5 no se añadió un solo endpoint»* sigue diciendo que *"las siguientes llegan en F10"*, en futuro. Y el **Plan F10-001 §7** habla de *"los **once** `IngestionSkip.Reason`"* cuando son **diez** —`AGENTS.md` ya lo corrigió para sí mismo el 2026-09-24, pero no en el plan de F10—. Además, *"17 de 30"* códigos `Problem` (`AGENTS.md`) frente a *"15 de 30"* (Plan §4.1, F10-ter): puede ser una cifra que avanzó en `6a837ab` y no dos que no casan, y eso es lo que A-8 tiene que decir | Desde la raíz del repositorio: `grep -n "en curso\|476 tests\|541 tests" AGENTS.md` · `grep -n "los once" "backend/Plan F10-001.md"` (líneas 834 y 839) · `sed -n '/enum Reason/,/^    }/p' backend/Sources/Domain/IngestionRun.swift \| grep -c "^ *case "` → **10** · y `grep -n "de 30\|de 14" AGENTS.md "docs/Plan de desarrollo-001.md"` | **Corregido** el 2026-09-25 (A-8, primera mitad). Los rótulos de F10 en `AGENTS.md`, el README y el Plan F10 dicen ya *entregada*; **541 tests** en los tres; *"los once"* → *diez* en Plan F10 §7. **Y lo que el hallazgo no listaba**: el *"motivo número once"* de F9-bis en `AGENTS.md` (es el décimo); su *"entidad 22"* para `StandingRow`, resto de la errata de Plan §4.10 (es la 9ª de §3.2); el README, parado en F8 —446 tests, *"las otras 79"* (son 77), 6.644 líneas (6.739), diez tablas por club (once) y sin filtros de F10 en §5—; y dos comentarios de código que daban `TeamRegistration` por inexistente (`TenantMigrations.swift`, `CompetitionRecord.swift`). **El 17 contra 15 no es contradicción**: `6a837ab` movió la cifra, y Plan §4.1 lo apunta ahora. Citas `D-nn` y `C-x.n`, limpias (los dos falsos positivos de 001). **Y en la segunda mitad, dos más**: `AGENTS.md` decía *"los quince que faltan"* junto a *"17 de 30"* (son **trece**, contados con `grep` sobre `Tests/`), y A-13 decía *"con 17"* migraciones |
 | **H-52** | A-15 | *sospecha* — **S2** si se confirma | **El guion de mutación no está versionado, y el proyecto documenta cinco fallos suyos que se leyeron como resultados.** Ver A-15 | `git ls-files \| grep -iE "\.(sh\|py\|pl)$\|mutat"` → vacío | **Pendiente de confirmar** en A-15 |
+| **H-53** | A-10 | **S1** · **bloquea `launchd`** | **La pasada de goleadores vacía la tabla de una competición con éxito, y lo registra como `succeeded`.** `IngestScorers.write` no tiene ninguna guarda de lista vacía: con cero filas que escribir, `retire(keepingMark:)` se lleva **todas** las de la competición, porque ninguna lleva la marca de esta pasada. Se llega por **tres** entradas, las tres reproducidas: **(1)** la fuente contesta el ranking vacío con su nombre —que la guarda de `D-84` da por bueno, porque el nombre casa—; **(2)** la fuente publica las 218 filas pero renombra `codigo_jugador`, y las 218 caen en `unidentifiedScorer`; **(3)** vacío y **sin** nombre, donde la guarda de `D-84` calla por diseño (`Competition.swift:277`, `guard let … incoming`). Y el único test de lista vacía, `anEmptyRankingIsASuccess` (`IngestScorersTests.swift:530`), **siembra la tabla vacía**: afirma *"vacío ⇒ éxito"* y no mira nunca qué le hace a lo que ya había. No hay un solo test, a ningún nivel, de una segunda pasada que traiga **menos** que la primera. La tabla no vuelve hasta que la fuente republique, y por `D-55` la foto intermedia no se puede pedir hacia atrás | Sonda de nivel 3 **no versionada**: dos pasadas de `IngestScorers` sobre `FluentTenantUnitOfWork` y `RFFMFederationClient` reales, la primera con `RFFM-scorers-group-24037549.txt` y la segunda una semana después con el cuerpo hostil. Resultado: **(1)** `{"competicion":"PRIMERA DIVISION AUTONOMICA CADETE","goles":[]}` → `succeeded retired=218` · filas **218 → 0**; **(2)** el volcado con `"codigo_jugador"`→`"id_jugador"` → `succeeded retired=218 skipped=218` · **218 → 0**; **(3)** `{"goles":[]}` → `succeeded retired=218` · **218 → 0**. Controles: cuerpo `null` → `failed`, **218** intactas; nombre ajeno → `failed`, **218** intactas | **Abierto · decisión del desarrollador, antes de `launchd`.** La forma de la decisión es la que §C.12 dejó abierta para la FCF —*"¿tratar el `[]` como coordenada mala?"*—, ahora con los dos proveedores delante, **y con un segundo caso que aquella pregunta no cubría**: la lista que llega llena y se vacía al descartar. **Y con la mitad ya contestada por la RFFM viva** (2026-09-28): `[]` es la respuesta normal de un grupo sin goles, así que **no** puede tratarse como coordenada mala; la guarda tiene que comparar con lo que había. Lo que **no** decide la auditoría (regla 2) |
+| **H-54** | A-10 | **S3** | **La guarda que hace inaplicable `D-56` a `StandingRow` es correcta y no tiene testigo.** `StandingRow` se refresca **pisándola entera** (`IngestStandings.write`), y es seguro porque el parser **exige** los ocho contadores y tira la tabla con `malformedResponse` si falta uno (`RFFMStandingsParser.swift:80-87`). Ningún test lo provoca: los ocho de `RFFMStandingsParserTests` son del camino bueno, del `null` y del no-JSON. Si esa guarda se relajase —la tentación es la del calendario, *"vacío es `nil`"*—, un `puntos: ""` escribiría **0 sobre los puntos de verdad**, que es exactamente el borrado que `D-56` existe para impedir | Mutante: `return 0` en lugar del `throw` de `number(_:_:)` → **546/546 en verde** con `REQUIRE_DB=1` (los 541 más los 5 de la sonda). Restaurado | **Abierto** — un test de parser con un contador en blanco, y su mutación. Va a la ronda de arreglos de A-10 |
 
 ### Nota de cierre de A-8 · ¿la deriva sigue siendo sistemática, y qué se movió debajo de 001?
 
@@ -649,6 +651,72 @@ fichero, los filtros del README casan todos, y la frase contradictoria de `Compe
 H-21, H-27, H-36, H-41, H-46, H-49…). Si su fase las cerró o no lo comprueba el bloque que ya las cita en su
 «Leer antes»; no son garantías que caduquen, son deudas que se cobran.
 
+
+### Nota de cierre de A-10 · ¿puede vaciar la tabla con éxito?
+
+**Sí, y por tres entradas** (H-53). Es el S1 que el plan anticipaba: lo que `D-94` protege —la atomicidad— está
+bien, y medido; lo que no protege es que una pasada **atómica y correcta** reciba menos de lo que había. La
+sonda lo enseña sin ambigüedad: 218 filas, una semana después cero, y el registro dice `succeeded`. **Nadie se
+entera**, porque lo único que avisaría —una fila `failed`— no se escribe.
+
+**La observación viva, en dos intentos.** El 2026-09-27 `/api/scorers` devolvió **`504` tras 60 s** para el
+grupo sin empezar **y** para el grupo jugado de control, mientras el resto del sitio contestaba. **El
+2026-09-28 contestó**: el grupo sin goles llega con **`200`, el sobre entero y `"goles": []`**, con el nombre
+de la competición —**no** `null`— (`RFFM-scorers-grupo-sin-goles.txt`, Anexo RFFM §F.19 al día). Es
+**la entrada (1) de H-53, servida por la fuente de verdad**, y descarta una de las salidas que §C.12 dejaba
+abierta: **tratar el `[]` como coordenada mala sería falso**, porque es la respuesta normal de todo grupo al
+empezar la temporada. La guarda que haga falta tiene que mirar **lo que había**, no lo que llega.
+
+Lo que sigue es el texto del primer intento, que se conserva porque la fecha límite era real: El
+grupo elegido es **PRIMERA DIVISIÓN AUTONÓMICA ALEVÍN, Grupo 1** (`idCompetition=26737845`,
+`idGroup=26737846`), que **empieza el 2026-10-10**: la observación hay que hacerla **antes** de esa fecha o
+buscar otro. **No cambia la severidad de H-53**: las entradas (2) y (3) no dependen de lo que conteste un grupo
+vacío, y la (1) es justo la que §F.19 dice que se espera (`"goles": []`). Lo que sí decide es **cuál de las
+salidas** es la buena: si un grupo vacío llega a `null`, un `[]` real sería otra cosa que un grupo sin goles.
+
+**Y un `504` es inofensivo**, que es de lo poco bueno que dejó el intento: llega al adaptador como
+`unexpectedStatus`, la pasada falla y la tabla no se toca —el mismo camino que el control `null`—.
+
+**Y el porqué del `504`, que cambia de precio a H-53.** El 2026-09-27 era **el primer día de competición**
+de muchas categorías de la temporada 26-27, y el portal entero iba saturado. Dos consecuencias, ninguna
+medida todavía: **(a)** una pasada programada en día de partido pide a la fuente justo cuando peor contesta
+—y un servidor saturado no solo da `504`: también puede servir un `200` con el cuerpo truncado o vacío, que
+es la entrada (1) de H-53—; **(b)** la cadencia de `launchd` deja de ser un detalle de despliegue y pasa a ser
+una decisión con consecuencia. Va como nota a **A-11**, pregunta 6.
+
+**El mapa rama-a-test de la pasada de goleadores**, que es lo que el bloque tenía que entregar:
+
+| Rama | Nivel 2 | Nivel 3 | Si se rompe |
+|---|---|---|---|
+| Sin capacidad (`D-48`): ni pide ni retira | `IngestScorersTests:383, :407` | — | Se vacía el ranking al apagar la capacidad |
+| `null` → `coordinateNotFound` → `failed` | `:466` | la sonda (control) | — |
+| Nombre ajeno → `D-84` → `failed` | `:434, :449` | la sonda (control) | Ranking de otra competición |
+| Nombre ausente → la guarda **calla** | — | la sonda (3) | **H-53** |
+| Fila sin id o sin goles → `unidentifiedScorer` | `:482, :509` | — | — |
+| **Todas** las filas descartadas → lista vacía | — | la sonda (2) | **H-53** |
+| Lista vacía **sobre tabla con filas** | — | la sonda (1) | **H-53** |
+| Retirada por marca, solo en su competición | `:315, :342, :365` | `LeagueScorerPersistenceTests:207, :233, :268` | — |
+
+**Las sospechas de `StandingRow`, cerradas sin hallazgo propio.** La **4** no se sostiene: una jornada con
+*snapshot* no se vuelve a calcular y la última se refresca siempre **pidiéndola** (`StandingsSyncPlan.steps`),
+con test de las dos cosas (`StandingsSyncPlanTests:67, :86`); una fila calculada no puede pisar una ingerida.
+La **5** no aplica por construcción: los ocho contadores son obligatorios y la tabla entera se rechaza si
+falta uno, así que ningún silencio de la fuente llega al `UPDATE` — **y eso es justo lo que no tiene testigo**
+(H-54). El único anulable, `previousPosition`, lo calculamos nosotros.
+
+**Fila 6 del mapa de caducidad, contestada.** H-17 sigue alcanzando lo que afirmaba: con la política del
+marcador de `Match.merging` cambiada por una sobrescritura ciega, **solo la suite de nivel 3**
+(`CalendarIngestionEndToEndTests`) la caza, en `:532`, con cuatro aserciones —entre ellas el
+`matchesUpdated == 0` de **H-19**—, y pasando por `CalendarPass` con la adopción delante (**H-22**). H-18 sigue
+en pie (`CalendarPass.swift:159`).
+
+**La regla 9, cumplida el 2026-09-28.** La sonda corrió contra `tfm_test`; reproducir H-53 contra la base de
+trabajo **borraría sus 426 goleadores**, así que lo que se ejecutó allí es **una pasada normal**, con la tabla
+respaldada antes (`pg_dump --data-only -t club_atleti.league_scorers`, por si la RFFM servía un `[]` a
+destiempo): `swift run Run ingest -t atleti -c <las dos> --force` → *"2 competición(es) sincronizada(s), 0 con
+fallo"*. Goleadores: **0 creados, 218 y 208 actualizados, 0 retirados**, con duración medida (0,80 s y
+1,46 s); las **426** filas intactas. El camino bueno contra el `UNIQUE` de verdad sigue en pie; el malo es H-53.
+
 ---
 
 ## 6-bis. La puerta: cuándo se puede montar `launchd` y abrir la primera rebanada
@@ -682,7 +750,7 @@ sin A-7.
 |---|---|---|---|
 | **A-8** · La vara de medir y el mapa de caducidad | ✅ **cerrado** — la vara al día (H-51 corregido) y el mapa repartido en A-9…A-15; ver su nota de cierre en §6 | 2026-09-25 | H-51 |
 | **A-9** · El puerto sin segunda implementación | ○ pendiente | | |
-| **A-10** · La única regla que borra | ○ pendiente | | |
+| **A-10** · La única regla que borra | ✅ **cerrado** — **H-53 (S1) abierto: la puerta de `launchd` está cerrada** hasta su arreglo; observación viva y regla 9 hechas el 2026-09-28 | 2026-09-27/28 | H-53, H-54 |
 | **A-11** · La fila que transita | ○ pendiente | | |
 | **A-12** · El enganche fuera del camino feliz | ○ pendiente | | |
 | **A-13** · Las migraciones, con el esquema duplicado | ○ pendiente | | |
