@@ -16,9 +16,12 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
 - [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
   bucles (alcance y TDD) y las fases **F0–F10**: andamiaje primero, después la ingesta.
-- [backend/Plan F10-001.md](./backend/Plan%20F10-001.md) — **la fase en curso, troceada en ciclos**:
-  qué está ya decidido y no se rediscute, el «Leer antes» de cada bloque y el estado. Autocontenido:
-  una sesión nueva arranca de ahí sin releer el LLD entero.
+- [backend/Plan F10-001.md](./backend/Plan%20F10-001.md) — **la última fase, entregada el 2026-09-24,
+  troceada en ciclos**: qué quedó decidido, el «Leer antes» de cada bloque y lo que se midió.
+  Autocontenido: una sesión nueva arranca de ahí sin releer el LLD entero.
+- [backend/Plan de auditoría-002.md](./backend/Plan%20de%20auditor%C3%ADa-002.md) — **la auditoría de lo
+  construido tras la 001** (F6-bis → F10-ter) antes de montar `launchd` y abrir el backoffice: bloques
+  A-8 a A-15, hallazgos desde H-51, y una puerta por cada cosa que desbloquea.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -262,6 +265,28 @@ narrativa **"antes pensábamos X, ahora Y"**, o un **volcado JSON**. El LLD enun
 enlaza con `[D-nn]`. Detalle campo a campo de los DTOs: **solo** en el spec OpenAPI, nunca duplicado en el
 LLD (`D-25`).
 
+### Al cerrar una fase (o una mini-fase): los sitios que el cierre no toca solo
+
+Cada cierre escribe su detalle en su plan y su lección al final de este fichero, y **eso no basta**: la auditoría
+002 (`A-8`·H-51) encontró *"F10 en curso"* cuatro secciones por encima de *"F10 entregada"*, y el README parado
+en F8 con seis cifras viejas. La deriva cae siempre en lo que el cierre no tiene delante, así que el cierre no se
+da por hecho sin estos cinco pasos:
+
+1. **El recuento, medido y no copiado**: `REQUIRE_DB=1 swift test --xunit-output /tmp/x.xml`, y el total
+   **leído del XML** (`grep -c '<testcase ' /tmp/x-swift-testing.xml`), no de la línea de resumen (H-07).
+2. **La cabecera del [README](./backend/README.md)**: §0 (fases entregadas, recuento, tabla de operaciones y
+   *"las otras N"*), el recuento y la duración de §5, la tabla de filtros de §5 con los de la fase, y las tablas
+   de §3 si la fase añadió una.
+3. **«Estado actual» de este fichero**, y el rótulo de su plan en «Documentación clave».
+4. **Los rótulos de su plan de fase**: cada `### Bloque` con su ✅, y la cabecera con la fecha de cierre.
+5. **Las cifras que la fase movió**, buscadas por el número viejo en todo el árbol y no solo en los ficheros
+   que se tocaron: `grep -rn "<cifra vieja>" AGENTS.md backend/*.md docs/ backend/Sources backend/Tests`. Sirve para
+   tests, migraciones, operaciones del `filter`, motivos de `IngestionSkip.Reason`, códigos `Problem` afirmados…
+   Una cifra que va acompañada de *"los N que faltan"* se mueve **con** ella.
+
+Las cifras de un registro fechado (*"Hecho el …: 537 → 539 tests"*) **no se tocan**: son historia y son
+correctas. Lo que se actualiza es lo que dice *"hoy"*.
+
 ## Decisiones técnicas (resumen — detalle y razones en el ADR-API_y_BBDD-001)
 
 - **Base de datos:** PostgreSQL gestionado en **Supabase** (BD + Auth + Storage), **región UE** (RGPD; datos de menores).
@@ -311,23 +336,22 @@ entidades de salida contra Postgres real, el transporte HTTP y el canario (Plan 
 el `AsyncCommand`, el recorrido por tenant, la cadencia y **los dos primeros endpoints desde F0** (Plan §4.8).
 Y las dos que la auditoría añadió: **F6-bis** —el sobre del puerto de federación y la resiliencia del
 recorrido— y **F6-ter**, el segundo freno de `D-86` bajo el arnés. Y **F7**, la **clasificación**: la entidad
-22 del modelo con sus **dos fuentes** —ingerida de la federación o calculada desde `Match` (`D-15`)—, su
+9 de §3.2 con sus **dos fuentes** —ingerida de la federación o calculada desde `Match` (`D-15`)—, su
 puerto, su adaptador contra volcado real, su tabla y su pasada (Plan §4.9). Y **F8**, los **goleadores**: la
 entidad 15 de §3.2, con la clave de *upsert* que esa sección no tenía (`D-93`), la **única retirada de filas de toda la
 salida de la ingesta** (`D-94`) y un hallazgo que nadie buscaba — **un `CHECK` derivado de un enumerado no se
 mantiene solo** (Plan §4.10).
 Y **F9**, que **no escribió código y eso es su resultado**: el adaptador de la **FCF** se aplazó al
 revalidar la fuente antes de escribirlo (`D-95`, Plan §4.11). Y **F9-bis**, la mini-fase que **le pone voz al
-equipo que la fuente publica sin código**: el motivo número once de `IngestionSkip`, y con él el ensanche
+equipo que la fuente publica sin código**: el motivo número diez de `IngestionSkip`, y con él el ensanche
 —decidido, no heredado— de lo que esa lista significa.
-Y **F10**, **en curso**: el enganche del equipo con su federación (`D-67`), troceado en
-[su propio plan](./backend/Plan%20F10-001.md). Entregados de ella los bloques **F** (`seed-team`, la
-herramienta sin la cual la base de trabajo no puede tener un equipo propio), **0** (el contrato: las dos
-operaciones en el `filter` y los cuatro huecos del *spec*), **A** (el Dominio del enganche, con
-`TeamRegistration` y la identidad que tiene que cuadrar **por tres**) y **B**, el **puerto de la
-coordenada**: el adaptador lee su propia URL y **rechaza la que no es suya por ajena**, no por un parámetro
-que falte. Quedan los bloques **C**, **D** y **E**.
-**476 tests.** **Web backoffice, app iOS y app Android siguen sin empezar.**
+Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federación (`D-67`), troceado en
+[su propio plan](./backend/Plan%20F10-001.md) —siete bloques, 47 ciclos—, con las dos puertas
+`POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
+vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
+minúscula y en un solo sitio (`TypedIdentifier`).
+**546 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -341,7 +365,7 @@ delante.
 llamante; y F5, la pasada entera, cuyo adaptador primario es un `AsyncCommand` y **no un Controller**
 (§2.3-b). **F6 es la primera que mueve el `filter`**, con las dos operaciones que el módulo de ingesta sí
 necesita asomar (`D-88`): `GET /v1/ingestion-runs` —el registro de `D-85`, que si no no lo lee nadie— y
-`POST /v1/ingestion-runs`, el disparador manual del job. Las siguientes llegan en **F10**
+`POST /v1/ingestion-runs`, el disparador manual del job. Las siguientes llegaron en **F10**
 (`POST /teams/{id}/federation-link` + `/preview`). El `filter` de `openapi-generator-config.yaml` **es**
 literalmente el alcance entregado (`D-69`): al añadir un endpoint, se añade ahí primero — y el compilador
 para el *build* hasta que el *handler* exista.
@@ -540,8 +564,8 @@ docker compose down -v
   se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
   cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
   que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **17 de 30** códigos `Problem` afirmados
-  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los quince que faltan están listados
-  por su nombre en su fila del plan de auditoría).
+  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los trece que faltan son los quince
+  que su fila del plan de auditoría lista por nombre, menos los dos de federación que cerró `6a837ab`).
 - **Y los valores de un test tienen que ser distintos entre sí cuando lo que se prueba es un mapeo.** Los
   trece contadores de `IngestionRunResponse` se afirman con 1..13 **a propósito**: con ceros, o con el mismo
   número repetido, una permutación es **invisible** y el test pasa igual con los campos cruzados. Lo mismo

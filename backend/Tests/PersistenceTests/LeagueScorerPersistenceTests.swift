@@ -1,4 +1,5 @@
 import Application
+import Federation
 import Domain
 import Fluent
 import Foundation
@@ -289,6 +290,59 @@ struct LeagueScorerPersistenceTests {
             #expect(try await tenant.scope {
                 try await $0.leagueScorers.list(competitionID: seeded.competition)
             }.isEmpty)
+        }
+    }
+
+    // ── Y la pasada entera: lo que la retirada NO puede hacer (H-53) ─────────
+
+    struct ScorersTransport: FederationTransport {
+        let body: String
+        func get(_ url: String) async throws -> String { body }
+    }
+
+    struct FixedClock: Clock {
+        let instant: Date
+        func now() -> Date { instant }
+    }
+
+    @Test("una segunda pasada vacía no se lleva el ranking: falla y lo deja entero (H-53)")
+    func anEmptySecondPassKeepsTheRanking() async throws {
+        // **La prueba de que H-53 no vuelve, contra el `retire` de verdad**, que
+        // solo existe en el esquema: el doble de nivel 2 retira por su cuenta. La
+        // primera pasada escribe las 218 del volcado real; la segunda, una semana
+        // después, recibe lo que la RFFM contesta de verdad a un grupo sin goles
+        // (`docs/Federation APIs examples/RFFM-scorers-grupo-sin-goles.txt`).
+        try await Self.withSeeded("sc-h53") { seeded, tenant in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(tenant.slug))
+            func pass(_ body: String, at instant: Date) async throws -> IngestionRun? {
+                try await IngestScorers(
+                    unitOfWork: unitOfWork,
+                    federation: RFFMFederationClient(transport: ScorersTransport(body: body)),
+                    clock: FixedClock(instant: instant), ids: SystemUUIDProvider()
+                ).execute(competitionID: seeded.competition, actor: actor)
+            }
+
+            let first = try await pass(
+                try StandingIngestionEndToEndTests.scorersBody(), at: Self.now)
+            #expect(first?.leagueScorersCreated == 218)
+
+            await #expect(throws: FederationError.self) {
+                _ = try await pass(
+                    #"{"estado":"1","sesion_ok":"1","competicion":"PRIMERA DIVISION AUTONOMICA CADETE","grupo":"Grupo 1","goles":[]}"#,
+                    at: Self.now.addingTimeInterval(7 * 86_400))
+            }
+
+            #expect(try await tenant.scope {
+                try await $0.leagueScorers.list(competitionID: seeded.competition)
+            }.count == 218, "la pasada vacía retiró el ranking")
+
+            // Y **se ve**: la fila del registro dice `failed`, que es lo único que
+            // avisa a alguien en una ingesta sin usuario delante.
+            let runs = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: seeded.competition, limit: 10)
+            }
+            #expect(runs.map(\.outcome).sorted { "\($0)" < "\($1)" } == [.failed, .succeeded])
         }
     }
 

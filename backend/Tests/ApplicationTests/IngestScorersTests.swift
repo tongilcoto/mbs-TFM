@@ -323,19 +323,27 @@ struct IngestScorersTests {
                 ])))
             .execute(competitionID: fixture.competition, actor: Self.actor)
 
-        // La segunda pasada solo trae a uno. El otro no es un dato viejo
+        // La segunda pasada ya no trae a LUIS. Su fila no es un dato viejo
         // identificable: sería una fila indistinguible de las buenas dentro de
         // una tabla que dice ser la de ahora.
+        //
+        // **Y el total no baja** (10 + 9 → 11 + 8 = 19), que es lo único que la
+        // guarda de H-53 admite: sus goles no se desmarcaron, se los apuntaron a
+        // otro —el caso realista en la RFFM, que publica a **todo** el que ha
+        // marcado (§F.19) y por eso no deja caer a nadie que siga teniendo goles—.
         let run = try #require(
             try await Self.useCase(
                 fixture, client: ScorersClient(
-                    Self.table([Self.row("77", "SIGUE, ANA", goals: 11)])),
+                    Self.table([
+                        Self.row("77", "SIGUE, ANA", goals: 11),
+                        Self.row("99", "LLEGA, MARIO", goals: 8),
+                    ])),
                 clock: Self.nextWeek())
                 .execute(competitionID: fixture.competition, actor: Self.actor))
 
         let stored = try await Self.stored(fixture)
-        #expect(stored.count == 1)
-        #expect(stored.first?.federationPlayerID == "77")
+        #expect(stored.count == 2)
+        #expect(Set(stored.map(\.federationPlayerID)) == ["77", "99"])
         #expect(run.leagueScorersRetired == 1)
     }
 
@@ -539,6 +547,106 @@ struct IngestScorersTests {
         // si la competición aún no se ha sincronizado — no es un error"*.
         #expect(run.outcome == .succeeded)
         #expect(run.leagueScorersCreated == 0)
+    }
+
+    // ── La otra mitad de la de arriba: vacío SOBRE una tabla con filas (H-53) ──
+
+    /// Siembra un ranking de dos con una primera pasada de verdad, y devuelve lo
+    /// que la segunda —una semana después, con `client`— deja en la tabla.
+    static func secondPass(
+        _ fixture: Fixture, client: ScorersClient
+    ) async throws -> (error: (any Error)?, stored: [LeagueScorer]) {
+        _ = try await Self.useCase(
+            fixture, client: ScorersClient(
+                Self.table([
+                    Self.row("77", "PRIMERO, ANA", goals: 10),
+                    Self.row("88", "SEGUNDO, LUIS", goals: 9),
+                ], competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")))
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+
+        var caught: (any Error)?
+        do {
+            _ = try await Self.useCase(fixture, client: client, clock: Self.nextWeek())
+                .execute(competitionID: fixture.competition, actor: Self.actor)
+        } catch {
+            caught = error
+        }
+        return (caught, try await Self.stored(fixture))
+    }
+
+    static func isMalformedResponse(_ error: (any Error)?) -> Bool {
+        guard case .malformedResponse? = error as? FederationError else { return false }
+        return true
+    }
+
+    @Test("un ranking vacío sobre una tabla con goleadores NO la vacía: falla y deja constancia (H-53)")
+    func anEmptyRankingOverAPopulatedTableFails() async throws {
+        let fixture = try await Self.seed(
+            competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")
+
+        // **Es lo que la RFFM contesta de verdad a un grupo sin goles**
+        // (`RFFM-scorers-grupo-sin-goles.txt`): `200`, el sobre entero y el nombre
+        // que casa, así que la guarda de `D-84` lo da por bueno. Sobre una
+        // competición que ya tenía goleadores no puede ser cierto —los goles no se
+        // desmarcan— y retirarlo todo es el error caro de `D-75`.
+        let (error, stored) = try await Self.secondPass(
+            fixture, client: ScorersClient(
+                Self.table([], competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")))
+
+        #expect(Self.isMalformedResponse(error), "la pasada no falló: \(String(describing: error))")
+        #expect(stored.count == 2, "la pasada vacía retiró el ranking")
+        #expect(await fixture.store.ingestionRuns.last?.outcome == .failed)
+    }
+
+    @Test("y tampoco si llegan filas pero TODAS se descartan (H-53)")
+    func aRankingWhoseRowsAreAllSkippedFails() async throws {
+        let fixture = try await Self.seed()
+
+        // El día que la fuente renombre `codigo_jugador`, las filas llegan pero
+        // ninguna se puede construir: la lista que se escribe es tan vacía como la
+        // de arriba, y por el mismo camino se llevaría la tabla entera.
+        let (error, stored) = try await Self.secondPass(
+            fixture, client: ScorersClient(
+                Self.table([
+                    FederationScorerRow(
+                        federationPlayerID: nil, fullName: "PRIMERO, ANA",
+                        teamLabel: "EQ", goals: 11),
+                    FederationScorerRow(
+                        federationPlayerID: nil, fullName: "SEGUNDO, LUIS",
+                        teamLabel: "EQ", goals: 9),
+                ])))
+
+        #expect(Self.isMalformedResponse(error), "la pasada no falló: \(String(describing: error))")
+        #expect(stored.count == 2, "los descartes vaciaron el ranking")
+        #expect(await fixture.store.ingestionRuns.last?.outcome == .failed)
+    }
+
+    @Test("y tampoco si la caída es PARCIAL: el total de goles no puede bajar (H-53)")
+    func aPartialCollapseFails() async throws {
+        let fixture = try await Self.seed()
+
+        // Una fila se lee y la otra no: queda **algo** que conservar, así que una
+        // guarda de *"lista vacía"* la dejaría pasar y la retirada se llevaría al
+        // segundo. Lo que la delata es la cuenta: 10 + 9 = 19 goles la semana
+        // pasada, 10 ahora — y los goles de una temporada no se desmarcan.
+        let (error, stored) = try await Self.secondPass(
+            fixture, client: ScorersClient(
+                Self.table([
+                    Self.row("77", "PRIMERO, ANA", goals: 10),
+                    FederationScorerRow(
+                        federationPlayerID: nil, fullName: "SEGUNDO, LUIS",
+                        teamLabel: "EQ", goals: 9),
+                ])))
+
+        #expect(Self.isMalformedResponse(error), "la pasada no falló: \(String(describing: error))")
+        #expect(stored.count == 2, "la caída parcial retiró a un goleador")
+
+        // **Y se lee en el registro**, con las dos cifras: es lo que alguien va a
+        // mirar para decidir si la fuente se equivocó o corrigió de verdad.
+        let failed = try #require(await fixture.store.ingestionRuns.last)
+        #expect(failed.outcome == .failed)
+        #expect(failed.error?.contains("19") == true && failed.error?.contains("10") == true,
+                "el motivo no dice de cuánto a cuánto: \(failed.error ?? "nil")")
     }
 
     // ── El cronómetro (la lección de F6 y F7) ────────────────────────────────

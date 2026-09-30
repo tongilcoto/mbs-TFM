@@ -41,10 +41,10 @@ public final class CompetitionRecord: Model, @unchecked Sendable {
     public init() {}
 }
 
-/// Va **después de `Season`** por su FK (§4.6). Las entidades que en el orden
-/// completo se intercalan entre las dos —`OpponentClub`, `Team`,
-/// `TeamRegistration`— todavía no existen; `Competition` solo depende de
-/// `Season`, así que el orden es correcto tal cual.
+/// Va **después de `Season`** por su FK (§4.6). Entre las dos se registran
+/// `OpponentClub` y `Team`, que no tienen FK hacia ella ni ella hacia ellas;
+/// `TeamRegistration` va detrás, porque depende de `Competition` (`D-68`).
+/// `Competition` solo depende de `Season`, así que el orden es correcto tal cual.
 public struct CreateCompetition: AsyncMigration {
     public init() {}
 

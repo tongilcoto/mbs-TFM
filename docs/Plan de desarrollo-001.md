@@ -704,6 +704,10 @@ cruzar dos familias, tocar el único sin hermano (`leagueScorersRetired`, el de 
 códigos `Problem` afirmados **por código** pasan de **3 de 14** a **15 de 30**, con los quince que faltan
 listados por su nombre en la fila de H-46.
 
+**Y el mismo día, `6a837ab`**: 539 → **541 tests** y **17 de 30** — `FEDERATION_SOURCE_MISMATCH` ([D-84]) y
+`FEDERATION_SEASON_MISMATCH` ([D-91]), las dos guardas que solo estaban probadas del lado del Dominio, ya
+cruzan la frontera del enganche bajo arnés.
+
 
 ### 4.2 F1 · `Season` y `Competition` — **entregada**
 

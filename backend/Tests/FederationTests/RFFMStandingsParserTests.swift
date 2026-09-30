@@ -189,4 +189,45 @@ struct RFFMStandingsParserTests {
             return
         }
     }
+
+    // ── Un contador que la fuente calla tira la tabla entera (H-54) ──────────
+
+    /// El volcado real de la jornada 30 con **los puntos del líder** estropeados
+    /// de una de las tres formas en que la fuente calla (`D-75`, §F.11). Solo esa
+    /// casilla: todo lo demás es la tabla de verdad.
+    static func round30WithLeaderPoints(_ replacement: String) throws -> String {
+        let body = try round30()
+        let range = try #require(
+            body.range(of: #""puntos"\s*:\s*"73""#, options: .regularExpression),
+            "el volcado ya no trae los 73 puntos del líder")
+        return body.replacingCharacters(in: range, with: replacement)
+    }
+
+    @Test(
+        "un contador en blanco, ausente o con &nbsp; tira la tabla y dice cuál (H-54, D-56)",
+        arguments: [
+            ("en blanco", #""puntos":"""#),
+            ("ausente", #""puntos_retirado":"73""#),
+            ("&nbsp;", #""puntos":"&nbsp;""#),
+        ])
+    func aSilentCounterRejectsTheTable(_ label: String, replacement: String) throws {
+        // **Es lo único que hace seguro pisar `StandingRow` entera.** El
+        // refresco sobrescribe los ocho contadores sin política de *upsert*,
+        // porque una clasificación es un bloque. Si esta guarda aceptara el
+        // silencio —la tentación es la del calendario, *"vacío es `nil`"*—, un
+        // `puntos: ""` escribiría **0 sobre los puntos de verdad**: el borrado
+        // exacto que `D-56` existe para impedir, y sin error que lo cuente.
+        let body = try Self.round30WithLeaderPoints(replacement)
+
+        let error = #expect(throws: FederationError.self, "\(label): la tabla se aceptó") {
+            try RFFMStandingsParser.parse(body)
+        }
+        guard case .malformedResponse(let field, _) = try #require(error) else {
+            Issue.record("\(label): esperaba `malformedResponse`, llegó \(String(describing: error))")
+            return
+        }
+        // Y el error dice **qué casilla y de qué fila**: con 16 filas casi
+        // idénticas, *"un número no es un número"* manda a mirarlas todas.
+        #expect(field == "clasificacion[0].puntos", "\(label): \(field)")
+    }
 }

@@ -106,6 +106,8 @@ public struct IngestScorers: Sendable {
                 from: published, competitionID: competitionID,
                 existing: plan.existing, syncedAt: startedAt)
 
+            try requireGoalsDoNotDecrease(scorers, existing: plan.existing, skipped: skipped)
+
             // ── Ámbito 2: el ranking entero y la retirada, juntos ────────────
             let counters = try await write(
                 scorers, competitionID: competitionID, syncedAt: startedAt, actor: actor)
@@ -212,6 +214,63 @@ public struct IngestScorers: Sendable {
                 field: "goals", reason: "la fuente no publicó los goles")
         }
         return goals
+    }
+
+    /// **La guarda de la retirada: el total de goles de la competición no puede
+    /// bajar** (Auditoría-002, H-53).
+    ///
+    /// La retirada de `D-94` borra lo que no lleva la marca de esta pasada, así
+    /// que todo lo que esta pasada **no** consiga escribir se va de la tabla — y
+    /// con éxito: la fila del registro diría `succeeded` y nadie se enteraría.
+    /// Medidas, tres formas de llegar: la fuente contesta `"goles": []` —que es lo
+    /// que la RFFM sirve de verdad a un grupo sin goles, con el nombre que casa,
+    /// así que la guarda de `D-84` no lo para—; publica las filas y **todas** se
+    /// descartan, que es lo que pasaría el día que renombrase `codigo_jugador`; o
+    /// se descartan **algunas**, y la retirada se lleva a esos.
+    ///
+    /// # Por qué el total, y por qué basta
+    ///
+    /// Porque dentro de una temporada **los goles no se desmarcan**: la suma de lo
+    /// que se va a escribir no puede ser menor que la de lo que ya está. Las tres
+    /// formas de arriba la bajan —a cero, a cero, o a menos—, y las cosas que
+    /// `D-94` sí tiene que dejar pasar no la bajan: un goleador nuevo la sube, y
+    /// uno que sale del ranking porque sus goles se los apuntan a otro la deja
+    /// igual. En la RFFM no hay un tercer caso: publica a **todo** el que ha
+    /// marcado, sin tope (Anexo RFFM §F.19, 218 filas hasta el de 1 gol), así
+    /// que nadie con goles se cae de la lista.
+    ///
+    /// Y no castiga a la liga que empieza: con la tabla vacía el total guardado es
+    /// cero, y `[]` —cero— no es menor. Por eso no se mira lo que llega por sí
+    /// solo: `[]` es la respuesta normal de un grupo sin goles.
+    ///
+    /// # Y por qué falla en vez de saltarse la retirada en silencio
+    ///
+    /// Es la asimetría de `D-75`: si la fuente **corrigiese** de verdad a la baja,
+    /// fallar cuesta una fila `failed` por semana con las dos cifras, que es lo que
+    /// alguien necesita para decidir; retirar cuesta el ranking, sin forma de
+    /// pedirlo hacia atrás (`D-55`). Y fallar es **lo que se ve**: una pasada que
+    /// se saltara la retirada diría `succeeded` otra vez.
+    ///
+    /// Sale como `malformedResponse` —*"esta respuesta no se puede creer"*, con el
+    /// campo y el motivo—: con él el recorrido sigue con las demás competiciones
+    /// (`D-86`), la frontera ya sabe traducirlo, y no hace falta un caso nuevo en
+    /// ninguna enumeración pública.
+    ///
+    /// > **Es una regla de la RFFM, y está escrita a sabiendas.** En la FCF la
+    /// > premisa no se cumple: su lista es un *top*-50 y su propio histórico ha
+    /// > bajado (documentado aparte, y la FCF no tiene adaptador, `D-95`). Quien
+    /// > reabra F9 tiene que revisar esta guarda antes de reutilizarla.
+    func requireGoalsDoNotDecrease(
+        _ scorers: [LeagueScorer], existing: [String: LeagueScorer], skipped: [IngestionSkip]
+    ) throws {
+        let stored = existing.values.reduce(0) { $0 + $1.goals }
+        let incoming = scorers.reduce(0) { $0 + $1.goals }
+        guard incoming < stored else { return }
+        throw FederationError.malformedResponse(
+            field: "goles",
+            reason: "el total de goles de la competición bajaría de \(stored) a \(incoming) "
+                + "(\(scorers.count) goleadores escritos, \(skipped.count) descartados): "
+                + "no se escribe ni se retira nada")
     }
 
     // ── Lo de dentro ─────────────────────────────────────────────────────────
