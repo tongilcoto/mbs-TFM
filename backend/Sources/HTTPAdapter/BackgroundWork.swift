@@ -22,8 +22,10 @@ public protocol BackgroundWork: Sendable {
 ///
 /// **Lo que esto no es: una cola.** Si el proceso muere en mitad del recorrido,
 /// no hay reintento — y no hace falta que lo haya, porque la pasada es atómica
-/// (`D-83`) y la siguiente del cron recoge lo que quedó. El camino fiable es el
-/// comando; éste es el botón.
+/// (`D-83`) y la siguiente pasada de esa competición recoge lo que quedó. **Que
+/// no siempre es la siguiente del cron** (A-11·H-57): el antirrebote la aplaza, y
+/// una competición fuera de la temporada vigente el cron no la recorre nunca. El
+/// camino fiable es el comando; éste es el botón.
 public struct DetachedBackgroundWork: BackgroundWork {
     public init() {}
     public func enqueue(_ work: @escaping @Sendable () async -> Void) async {

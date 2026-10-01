@@ -235,7 +235,11 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   `outcome` y por `kind`** —sin lo primero, la pasada del cron adoptaría la fila cerrada de la semana pasada
   y la ingesta se caería en la segunda pasada de cada competición, medido con mutación—, y **aceptar dos
   veces no deja dos filas**, porque la pasada cierra una. De regalo, una propiedad que nadie pidió: si el
-  proceso muere entre el `202` y la pasada, **la siguiente del cron cierra lo que quedó abierto**.
+  proceso muere entre el `202` y la pasada, **la siguiente pasada *de esa competición* cierra lo que quedó
+  abierto** — que no es lo mismo que *"la siguiente del cron"* (A-11·H-57, medido): el antirrebote la aplaza
+  hasta 6 h después del último éxito, y **una competición fuera de la temporada vigente no la recorre el cron
+  nunca**, así que su fila se queda `accepted` hasta que alguien la pida por `-c`. Y *"aceptar dos veces no
+  deja dos filas"*, pero **sí deja dos trabajos**, y los dos escriben en la misma (A-11·H-55).
 - **La fila `accepted` de `D-96` va DENTRO del ámbito de su cascada, al revés que la constancia de `D-85`.**
   No es una incoherencia: son dos cosas distintas con el mismo nombre de tabla. El registro de `D-85` vive
   en su **propio** ámbito precisamente para que el `rollback` de la pasada fallida no se lleve la constancia
