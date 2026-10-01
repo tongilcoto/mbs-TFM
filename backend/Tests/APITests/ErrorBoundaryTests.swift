@@ -336,4 +336,62 @@ struct ActorSeamTests {
             try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
         }
     }
+
+    /// El resolutor que **no puede** dar actor. Lo que lance es lo que un
+    /// adaptador de *claim* lanzará el día que lo haya: credencial ausente,
+    /// discrepancia… Aquí, la discrepancia, porque ya tiene código propio.
+    struct ThrowingActorResolver: ActorResolver {
+        func currentActor() throws -> ActorContext {
+            throw TenancyError.tenantMismatch(host: "e2tira", claim: "otro")
+        }
+    }
+
+    /// **El error del resolutor sale igual por todas las puertas** (`A-14`·H-64).
+    ///
+    /// Los dos *handlers* de ingesta lo envolvían en un `do/catch` que servía
+    /// **cualquier** fallo como `400 TENANT_NOT_RESOLVED`, sin log. Hoy no se
+    /// notaba —sin club, el middleware corta antes—, pero con la auth un 401 o
+    /// un 403 habría salido por esas dos como *"no identifica ningún club"*.
+    /// Parametrizado sobre las seis operaciones del `filter` para que la séptima
+    /// que copie la forma equivocada caiga aquí al añadirla.
+    @Test("el error del resolutor de actor sale igual por las seis puertas (§6.1 · A-14/H-64)",
+          arguments: [
+            (HTTPMethod.GET, "/v1/club", nil as String?),
+            (.PATCH, "/v1/club", #"{"name":"x"}"#),
+            (.GET, "/v1/ingestion-runs?competitionId=00000000-0000-4000-8000-0000000000ab", nil),
+            (.POST, "/v1/ingestion-runs", "{}"),
+            (.POST, "/v1/teams/00000000-0000-4000-8000-0000000000ab/federation-link/preview",
+             #"{"federationCalendarUrl":"https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549"}"#),
+            (.POST, "/v1/teams/00000000-0000-4000-8000-0000000000ab/federation-link",
+             #"{"federationCalendarUrl":"https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549","ownTeamFederationId":"1","gender":"masculino"}"#),
+          ])
+    func theResolverErrorIsTheSameThroughEveryDoor(
+        method: HTTPMethod, path: String, body: String?
+    ) async throws {
+        let slug = "e2tira"
+        try await TestEnvironment.withApp(actors: ThrowingActorResolver()) { app in
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+            try await TestEnvironment.provisionClub(
+                slug, federation: .rffm, schemaPrefix: Self.prefix, on: app)
+
+            try await app.testing().test(
+                method, path,
+                beforeRequest: { request async throws in
+                    request.headers.add(name: "X-Club", value: slug)
+                    if let body {
+                        request.headers.contentType = .json
+                        request.body = .init(string: body)
+                    }
+                }
+            ) { response async throws in
+                #expect(response.status == .forbidden)
+                let problem = try JSONDecoder().decode(
+                    Components.Schemas.Problem.self,
+                    from: Data(response.body.readableBytesView))
+                #expect(problem.code == "TENANT_MISMATCH")
+            }
+
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+        }
+    }
 }

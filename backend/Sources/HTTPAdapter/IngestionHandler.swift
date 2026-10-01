@@ -39,12 +39,11 @@ extension APIHandler {
     public func listIngestionRuns(_ input: Operations.listIngestionRuns.Input) async throws
         -> Operations.listIngestionRuns.Output
     {
-        let actor: ActorContext
-        do { actor = try actors.currentActor() } catch {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
-                             title: "La petición no identifica ningún club"))))
-        }
+        // **Sin `do/catch`** (`A-14`·H-64): aquí se servía cualquier error del
+        // resolutor como `400 TENANT_NOT_RESOLVED`, y con la auth eso convierte
+        // un 401 en *"no identifica ningún club"*. Lo traduce el middleware,
+        // igual que en las otras cuatro puertas.
+        let actor = try actors.currentActor()
 
         guard let competitionID = UUID(uuidString: input.query.competitionId) else {
             return .badRequest(.init(body: .application_problem_plus_json(
@@ -90,12 +89,8 @@ extension APIHandler {
     public func triggerIngestion(_ input: Operations.triggerIngestion.Input) async throws
         -> Operations.triggerIngestion.Output
     {
-        let actor: ActorContext
-        do { actor = try actors.currentActor() } catch {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
-                             title: "La petición no identifica ningún club"))))
-        }
+        // Sin `do/catch`, por lo mismo que `listIngestionRuns` (H-64).
+        let actor = try actors.currentActor()
 
         var seasonID: SeasonID?
         var competitionIDs: [CompetitionID]?
