@@ -929,3 +929,93 @@ struct NotStubbed: Error, CustomStringConvertible {
         "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
 }
+
+// ── A-11 · H-55 · el doble clic no lanza dos pasadas ────────────────────────
+
+extension IngestionEndpointTests {
+    /// Un trabajo de fondo que **se queda en la cola** hasta que el test lo suelta:
+    /// es la forma de tener *"el primero sigue corriendo"* sin arbitrar relojes.
+    actor HeldBackgroundWork: BackgroundWork {
+        private var queue: [@Sendable () async -> Void] = []
+        var pending: Int { queue.count }
+        func enqueue(_ work: @escaping @Sendable () async -> Void) async { queue.append(work) }
+        func runAll() async {
+            let jobs = queue
+            queue = []
+            for job in jobs { await job() }
+        }
+    }
+
+    static func handler(background: any BackgroundWork, app: Application) -> APIHandler {
+        APIHandler(
+            unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+            federationClients: StubProvider(failing: false),
+            clock: FixedClock(instant: Self.syncInstant),
+            background: background)
+    }
+
+    static func trigger(
+        _ handler: APIHandler, seasonID: SeasonID, app: Application
+    ) async throws -> Operations.triggerIngestion.Output {
+        let tenant = try await TenantResolver(database: app.db(.control)).resolve(slug: Self.slug)
+        return try await TenantContext.$current.withValue(tenant) {
+            try await handler.triggerIngestion(
+                .init(body: .json(.init(seasonId: seasonID.raw.uuidString.lowercased()))))
+        }
+    }
+
+    /// **Dos pulsaciones, una pasada** (A-11·H-55). Medido antes: `accept`
+    /// deduplicaba la fila pero el `202` encolaba el trabajo otra vez, y las dos
+    /// pasadas escribían sobre la misma fila `accepted`. La segunda pulsación
+    /// sigue recibiendo su `202` con todo lo aceptado —lo está—, pero no lanza
+    /// nada mientras la primera corre; cuando termina, la siguiente sí.
+    @Test("un segundo 202 con el primero en marcha no lanza otra pasada (A-11·H-55)")
+    func aSecondClickWhileTheFirstRunsEnqueuesNothing() async throws {
+        try await Self.withSeededClub { app, seasonID, _, _ in
+            let held = HeldBackgroundWork()
+            let handler = Self.handler(background: held, app: app)
+
+            let first = try await Self.trigger(handler, seasonID: seasonID, app: app)
+            let second = try await Self.trigger(handler, seasonID: seasonID, app: app)
+            guard case .accepted(let one) = first, case .accepted(let two) = second else {
+                Issue.record("se esperaban dos 202: \(first) · \(second)")
+                return
+            }
+            #expect(try one.body.json.competitionIds.count == 2)
+            #expect(try two.body.json.competitionIds.count == 2)
+            #expect(await held.pending == 1, "el doble clic lanzó dos pasadas")
+
+            // Termina la primera: la pulsación siguiente vuelve a lanzar.
+            await held.runAll()
+            _ = try await Self.trigger(handler, seasonID: seasonID, app: app)
+            #expect(await held.pending == 1)
+        }
+    }
+
+    /// **Y una huérfana se puede reintentar** (A-11·H-55, H-57). Si el proceso
+    /// muere detrás del `202`, la fila se queda `accepted`; un proceso nuevo no
+    /// tiene nada en marcha, así que el botón vuelve a lanzar y la pasada la
+    /// adopta. Negarse por *"ya hay fila abierta"* la habría dejado así para
+    /// siempre desde la pantalla.
+    @Test("tras un reinicio, el 202 vuelve a lanzar lo que quedó aceptado (A-11·H-55)")
+    func afterARestartTheOrphanIsRunAgain() async throws {
+        try await Self.withSeededClub { app, seasonID, competitionID, _ in
+            // El proceso que muere: acepta, y su trabajo no llega a correr.
+            _ = try await Self.trigger(
+                Self.handler(background: HeldBackgroundWork(), app: app),
+                seasonID: seasonID, app: app)
+
+            let restarted = HeldBackgroundWork()
+            _ = try await Self.trigger(
+                Self.handler(background: restarted, app: app), seasonID: seasonID, app: app)
+            #expect(await restarted.pending == 1, "la huérfana no se puede reintentar")
+
+            await restarted.runAll()
+            let runs = try await FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+                .withRepositories(actor: ActorContext(clubSlug: try Slug(Self.slug))) {
+                    try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
+                }
+            #expect(runs.filter { $0.kind == .calendar }.allSatisfy { $0.outcome == .succeeded })
+        }
+    }
+}

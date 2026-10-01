@@ -1210,4 +1210,143 @@ struct IngestCalendarTests {
         #expect(runs.contains { $0.id == lastWeek.id && $0.startedAt == Self.date("06-09-2025") })
         #expect(runs.contains { $0.id != lastWeek.id && $0.outcome == .succeeded })
     }
+
+    // ── A-11 · H-55 · dos pasadas adoptan la misma fila ─────────────────────
+
+    /// **La que llega tarde no pisa a la primera: escribe la suya** (A-11·H-55).
+    ///
+    /// Dos pasadas adoptan la misma aceptada —el doble clic, el cron encima del
+    /// botón— porque las dos la leen abierta en su ámbito 1. Medido antes del
+    /// arreglo: la segunda escribía **encima**, y una fila `succeeded` con su
+    /// partido escrito acababa `failed` con los contadores a cero. Ahora la
+    /// primera en cerrar se queda la fila, y la otra deja constancia **propia**,
+    /// con su `startedAt` —que es cuándo arrancó ella, no cuándo se pidió lo que
+    /// no le tocó cerrar—.
+    @Test("la pasada que llega tarde a una fila ya cerrada escribe la suya (A-11·H-55)")
+    func aPassOvertakenByAnotherWritesItsOwnRow() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        let accepted = try Self.accepted(competition.id)
+        await store.record(accepted)
+        await store.seed(seasons: [season], competitions: [competition])
+
+        let useCase = Self.overtaken(
+            store: store, calendar: try Self.calendar(), closing: accepted, matchesCreated: 7)
+        let run = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 2, "la que llegó tarde no dejó fila propia")
+        let first = try #require(runs.first { $0.id == accepted.id })
+        #expect(first.outcome == .succeeded)
+        #expect(first.matchesCreated == 7, "la que llegó tarde pisó a la primera")
+        let own = try #require(runs.first { $0.id != accepted.id })
+        #expect(own.id == run.id)
+        #expect(own.outcome == .succeeded)
+        #expect(own.startedAt == Self.syncInstant)
+        #expect(own.matchesCreated == 1)
+    }
+
+    /// **Y si la que llega tarde es la que falla, tampoco pisa** — que es el caso
+    /// medido de H-55, el que dejaba una fila `failed` sobre datos escritos.
+    @Test("la pasada que falla tarde no convierte en fallida la que ya cerró bien (A-11·H-55)")
+    func aLateFailureDoesNotOverwriteASuccess() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(
+            seasonID: season.id, federationName: "PREFERENTE AFICIONADO")
+        let store = IngestionStore()
+        let accepted = try Self.accepted(competition.id)
+        await store.record(accepted)
+        await store.seed(seasons: [season], competitions: [competition])
+
+        let useCase = Self.overtaken(
+            store: store,
+            calendar: try Self.calendar(competitionName: "PRIMERA DIVISION AUTONOMICA CADETE"),
+            closing: accepted, matchesCreated: 7)
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 2)
+        #expect(runs.first { $0.id == accepted.id }?.outcome == .succeeded,
+                "una pasada fallida pisó a la que ya había cerrado bien")
+        let own = try #require(runs.first { $0.id != accepted.id })
+        #expect(own.outcome == .failed)
+        #expect(own.error?.isEmpty == false)
+        #expect(own.startedAt == Self.syncInstant)
+    }
+
+    /// **El ámbito que escribe empieza bloqueando la competición** (A-11·H-55).
+    ///
+    /// Es lo que pone en fila a dos pasadas de la misma competición: medido sin
+    /// él, dos primeras sincronizaciones a la vez insertaban las mismas jornadas
+    /// y una caía en `23505`, que no era un fallo de los datos. Que el bloqueo
+    /// serialice lo afirma el nivel 3; aquí, que se pide.
+    @Test("el ámbito que escribe bloquea la competición (A-11·H-55)")
+    func theWriteScopeLocksTheCompetition() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.calendar())
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        #expect(await store.competitionLocks == [competition.id])
+    }
+
+    static func accepted(_ competitionID: CompetitionID) throws -> IngestionRun {
+        try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+            kind: .calendar, startedAt: Self.date("13-09-2025"),
+            finishedAt: nil, outcome: .accepted)
+    }
+
+    /// Una pasada a la que **otra se le adelanta**: mientras ésta espera a la red,
+    /// la otra cierra la aceptada que las dos adoptaron.
+    static func overtaken(
+        store: IngestionStore, calendar: FederationCalendar,
+        closing accepted: IngestionRun, matchesCreated: Int
+    ) -> IngestCalendar {
+        IngestCalendar(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federation: OvertakenFederationClient(
+                inner: SpyFederationClient(returning: calendar),
+                overtake: {
+                    var other = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
+                    other.matchesCreated = matchesCreated
+                    await store.record(other)
+                }),
+            clock: FixedClock(instant: syncInstant),
+            ids: SequentialUUIDProvider())
+    }
+}
+
+/// El cliente de una pasada **adelantada**: antes de devolver el calendario deja
+/// que otra haga lo suyo, que es cerrar la fila que las dos adoptaron (H-55).
+struct OvertakenFederationClient: FederationClient {
+    let inner: SpyFederationClient
+    let overtake: @Sendable () async throws -> Void
+
+    func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+        try await overtake()
+        return try await inner.fetchCalendar(coordinate)
+    }
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        try await inner.fetchStandings(coordinate, round: round)
+    }
+    func fetchScorers(_ coordinate: FederationCoordinate) async throws -> FederationScorerTable {
+        try await inner.fetchScorers(coordinate)
+    }
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        try inner.coordinate(fromCalendarURL: url)
+    }
 }

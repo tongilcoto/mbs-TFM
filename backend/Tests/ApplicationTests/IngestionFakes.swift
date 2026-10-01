@@ -62,6 +62,10 @@ actor IngestionStore {
 
     func openScope() { scopesOpened += 1 }
 
+    /// Las competiciones que una pasada bloqueó para escribir (A-11·H-55).
+    var competitionLocks: [CompetitionID] = []
+    func noteLock(_ id: CompetitionID) { competitionLocks.append(id) }
+
     func seed(teamRegistrations rows: [TeamRegistration]) { self.teamRegistrations += rows }
 
     func save(_ value: Season) { upsert(&seasons, value) { $0.id == value.id } }
@@ -78,6 +82,18 @@ actor IngestionStore {
     /// que siguiera añadiendo dejaría al nivel 2 incapaz de ver el defecto que
     /// esta mini-fase existe para arreglar.
     func record(_ value: IngestionRun) { upsert(&ingestionRuns, value) { $0.id == value.id } }
+
+    /// Lo que hace el repositorio: escribe salvo que la fila exista **y ya esté
+    /// cerrada** (A-11·H-55). `record(_:)` se queda como está para sembrar.
+    func record(ifStillOpen value: IngestionRun) -> IngestionRunWrite {
+        if let existing = ingestionRuns.first(where: { $0.id == value.id }),
+           existing.outcome != .accepted
+        {
+            return .alreadyClosed
+        }
+        record(value)
+        return .recorded
+    }
     func save(standingRow value: StandingRow) {
         upsert(&standingRows, value) { $0.id == value.id }
     }
@@ -123,6 +139,13 @@ struct FakeCompetitionRepository: CompetitionRepository {
     let store: IngestionStore
     func find(_ id: CompetitionID) async throws -> Competition? {
         await store.competitions.first { $0.id == id }
+    }
+    /// Sin transacción no hay nada que bloquear: el doble **apunta** que se pidió,
+    /// que es lo que el nivel 2 puede afirmar (A-11·H-55). Que el bloqueo
+    /// serialice de verdad lo afirma el nivel 3.
+    func lock(_ id: CompetitionID) async throws -> Competition? {
+        await store.noteLock(id)
+        return try await find(id)
     }
     func findByFederationGroup(
         seasonID: SeasonID, federationGroupID: String
@@ -195,7 +218,12 @@ struct FakeClubRepository: ClubRepository {
 
 struct FakeIngestionRunRepository: IngestionRunRepository {
     let store: IngestionStore
-    func record(_ run: IngestionRun) async throws { await store.record(run) }
+    /// **Y no pisa lo que otra pasada cerró**, como el de verdad (A-11·H-55): si
+    /// el doble siguiera haciendo *upsert* ciego, el nivel 2 no podría ver nunca
+    /// que la pasada que llega tarde escribe su propia fila.
+    func record(_ run: IngestionRun) async throws -> IngestionRunWrite {
+        await store.record(ifStillOpen: run)
+    }
 
     /// **La más antigua de las abiertas**, igual que el adaptador de verdad: si
     /// el doble devolviera otra, el nivel 2 mediría un orden distinto que el 3

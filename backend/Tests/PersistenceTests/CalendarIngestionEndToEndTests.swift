@@ -423,6 +423,159 @@ struct CalendarIngestionEndToEndTests {
         }
     }
 
+    // ── A-11 · H-55 · dos pasadas de la misma competición a la vez ─────────
+
+    /// **Dos pasadas que adoptan la misma fila: la primera la cierra, la segunda
+    /// escribe la suya** (A-11·H-55), con Postgres y concurrencia de verdad.
+    ///
+    /// Es la reproducción del hallazgo convertida en test. Una compuerta en el
+    /// cliente retiene a las dos hasta que las dos han pasado el ámbito 1 —las dos
+    /// han adoptado—; después termina la buena y, tras ella, la que falla. Antes
+    /// del arreglo, la segunda escribía **encima**: la fila pasaba de `succeeded`
+    /// con su partido a `failed` con los contadores a cero.
+    @Test("la que falla tarde no pisa la fila que otra ya cerró (A-11·H-55)")
+    func aLateFailureDoesNotOverwriteTheAdoptedRow() async throws {
+        try await Self.withTenant("e2e-h55-late") { tenant in
+            let (competitionID, _) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-h55-late"), isSystem: true)
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.syncInstant.addingTimeInterval(-60),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+
+            let good = Gate(), bad = Gate()
+            let first = Self.gated(tenant, good, Self.calendar(federationMatchID: "M1"))
+            let late = Self.gated(tenant, bad, nil)
+            let firstPass = Task { try await first.execute(competitionID: competitionID, actor: actor) }
+            let latePass = Task { try await late.execute(competitionID: competitionID, actor: actor) }
+            await Gate.waitUntilArrived(good, bad)
+
+            await good.open()
+            _ = try await firstPass.value
+            await bad.open()
+            await #expect(throws: GatedFederationClient.Failure.self) { try await latePass.value }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(competitionID: competitionID, limit: 10),
+                 matches: try await repositories.matches.list(competitionID: competitionID))
+            }
+            #expect(after.matches.count == 1)
+            #expect(after.runs.count == 2, "la que llegó tarde no dejó fila propia")
+            let adopted = try #require(after.runs.first { $0.id == accepted.id })
+            #expect(adopted.outcome == .succeeded, "la pasada fallida pisó a la que cerró bien")
+            #expect(adopted.matchesCreated == 1)
+            let own = try #require(after.runs.first { $0.id != accepted.id })
+            #expect(own.outcome == .failed)
+        }
+    }
+
+    /// **Dos primeras sincronizaciones a la vez escriben una detrás de otra**
+    /// (A-11·H-55). Sin el bloqueo de la competición, las dos insertaban la misma
+    /// jornada y una caía en `23505` sobre `uq:rounds.competition_id+rounds.number`:
+    /// un fallo que no era de los datos, sino de la coincidencia, y una fila
+    /// `failed` sobre una competición bien sincronizada.
+    @Test("dos primeras sincronizaciones a la vez no chocan entre sí (A-11·H-55)")
+    func twoFirstSyncsAtOnceDoNotCollide() async throws {
+        try await Self.withTenant("e2e-h55-both") { tenant in
+            let (competitionID, _) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-h55-both"), isSystem: true)
+            let calendar = Self.calendar(homeScore: 2, awayScore: 1, federationMatchID: "M1")
+            let one = Gate(), two = Gate()
+            let a = Self.gated(tenant, one, calendar)
+            let b = Self.gated(tenant, two, calendar)
+            let passA = Task { try await a.execute(competitionID: competitionID, actor: actor) }
+            let passB = Task { try await b.execute(competitionID: competitionID, actor: actor) }
+            await Gate.waitUntilArrived(one, two)
+
+            await one.open(); await two.open()
+            // El resultado de cada una, **sin dejar que el fallo escape**: lo que
+            // se afirma es que ninguna falla, y un `try` aquí lo convertiría en un
+            // error de montaje en vez de en una aserción.
+            var failures: [String] = []
+            for pass in [passA, passB] {
+                do { _ = try await pass.value } catch { failures.append(String(reflecting: error)) }
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(competitionID: competitionID, limit: 10),
+                 rounds: try await repositories.rounds.list(competitionID: competitionID),
+                 matches: try await repositories.matches.list(competitionID: competitionID))
+            }
+            #expect(failures.isEmpty, "una de las dos chocó con la otra: \(failures)")
+            #expect(after.runs.allSatisfy { $0.outcome == .succeeded })
+            #expect(after.rounds.count == 1)
+            #expect(after.matches.count == 1)
+        }
+    }
+
+    static func gated(
+        _ tenant: TenantFixture, _ gate: Gate, _ calendar: FederationCalendar?
+    ) -> IngestCalendar {
+        IngestCalendar(
+            unitOfWork: FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control)),
+            federation: GatedFederationClient(gate: gate, calendar: calendar),
+            clock: FixedInstantClock(instant: syncInstant),
+            ids: SystemUUIDProvider())
+    }
+
+    /// **Y lo mismo con la fila adoptada** (A-11·H-60): H-25 heredado por la rama
+    /// que F10-bis añadió.
+    ///
+    /// El test de arriba siembra la competición **sin** fila aceptada, así que su
+    /// constancia sale por la rama que **crea**. Desde F10-bis el `202` deja la
+    /// fila antes, y entonces el fallo se escribe por la que **actualiza** —otra
+    /// sentencia, con el bloqueo de H-55 delante—. A-11 lo midió a mano y
+    /// aguantaba; lo que no había era quien lo dijera: un `record` que dejara sin
+    /// cerrar la adoptada **cuando falla** pasaba la batería entera, con la fila
+    /// `accepted` para siempre y el `23505` sin apuntar en ningún sitio.
+    @Test("una restricción violada de verdad cierra a `failed` la fila adoptada (D-85, A-11·H-60)")
+    func aRealConstraintViolationClosesTheAdoptedRow() async throws {
+        try await Self.withTenant("e2e-23505-adopted") { tenant in
+            let (first, second) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-23505-adopted"), isSystem: true)
+
+            // La primera deja el acta escrita.
+            _ = try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                .execute(competitionID: first, actor: actor)
+
+            // La segunda tiene su fila aceptada —la del `202`—, y su pasada trae la
+            // misma acta.
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: second,
+                kind: .calendar, startedAt: Self.syncInstant.addingTimeInterval(-60),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+
+            await #expect(throws: (any Error).self) {
+                try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                    .execute(competitionID: second, actor: actor)
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(
+                    competitionID: second, limit: 10),
+                 matches: try await repositories.matches.list(competitionID: second),
+                 competition: try await repositories.competitions.find(second))
+            }
+
+            // **Una** fila, la adoptada, y cerrada: ni abierta para siempre ni una
+            // segunda con el fallo al lado.
+            #expect(after.runs.count == 1)
+            #expect(after.runs.first?.id == accepted.id)
+            #expect(after.runs.first?.outcome == .failed, "la adoptada se quedó sin cerrar")
+            #expect(after.runs.first?.startedAt == accepted.startedAt)
+            // Con el motivo **verdadero**, como en H-25.
+            let reason = try #require(after.runs.first?.error)
+            #expect(reason.contains("federation_match_id"))
+            #expect(reason.contains("23505"))
+
+            // Y `D-83` aguanta igual: lo de esta pasada, deshecho entero.
+            #expect(after.matches.isEmpty)
+            #expect(after.competition?.lastSyncedAt == nil)
+        }
+    }
+
     /// Dos competiciones en la misma temporada. Existe para que una pueda chocar
     /// contra una restricción que la otra ya ocupó.
     static func seedTwoEntries(_ tenant: TenantFixture) async throws
@@ -898,4 +1051,59 @@ struct StubFederationClient: FederationClient {
 struct FixedInstantClock: Clock {
     let instant: Date
     func now() -> Date { instant }
+}
+
+/// Una compuerta: retiene la llamada a la federación hasta que el test la abre.
+/// Es lo que permite tener **dos pasadas a la vez en el mismo punto** —las dos
+/// pasado el ámbito 1— sin arbitrar la carrera con relojes (A-11·H-55).
+actor Gate {
+    private(set) var arrived = false
+    private var opened = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func pass() async {
+        arrived = true
+        if opened { return }
+        await withCheckedContinuation { waiter = $0 }
+    }
+
+    func open() {
+        opened = true
+        waiter?.resume()
+        waiter = nil
+    }
+
+    static func waitUntilArrived(_ gates: Gate...) async {
+        while true {
+            var all = true
+            for gate in gates where !(await gate.arrived) { all = false }
+            if all { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+}
+
+/// El cliente de una pasada retenida en su compuerta. Con calendario lo
+/// devuelve; sin él, **lanza**, que es la pasada que falla (A-11·H-55).
+struct GatedFederationClient: FederationClient {
+    struct Failure: Error {}
+    let gate: Gate
+    let calendar: FederationCalendar?
+
+    func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+        await gate.pass()
+        guard let calendar else { throw Failure() }
+        return calendar
+    }
+    func fetchStandings(
+        _ coordinate: FederationCoordinate, round: Int
+    ) async throws -> FederationStanding {
+        throw NotStubbed(client: "GatedFederationClient", operation: "fetchStandings")
+    }
+    func fetchScorers(_ coordinate: FederationCoordinate) async throws -> FederationScorerTable {
+        FederationScorerTable(competitionName: nil, rows: [])
+    }
+    func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+        throw NotStubbed(client: "GatedFederationClient", operation: "coordinate(fromCalendarURL:)")
+    }
 }

@@ -328,6 +328,25 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         return closed
     }
 
+    /// **La misma pasada, con su propia identidad** (A-11·H-55).
+    ///
+    /// Para la pasada que adoptó una fila y **otra se le adelantó a cerrarla**.
+    /// Su resultado no se tira —es una pasada que ocurrió— ni se escribe encima
+    /// del de la otra: va a una fila nueva. Con **su** `startedAt`, porque el que
+    /// traía era el de la petición que cerró la otra, y dos filas con el mismo
+    /// instante de petición dirían que se pidieron dos cosas a la vez.
+    ///
+    /// Revalida por el `init`, como `closed(as:)`: un `startedAt` posterior al
+    /// final no pasa.
+    public func reidentified(as id: IngestionRunID, startedAt: Date) throws -> IngestionRun {
+        var own = try IngestionRun(
+            id: id, competitionID: competitionID, kind: kind, roundID: roundID,
+            startedAt: startedAt, finishedAt: finishedAt,
+            outcome: outcome, error: error)
+        own.carryCounters(from: self)
+        return own
+    }
+
     /// Arrastra lo que el `init` no recibe: los trece contadores y la lista de
     /// descartes.
     ///

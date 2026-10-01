@@ -579,7 +579,10 @@ Tres consecuencias que conviene ver escritas:
   con el que se escribe.
 - **Y sale gratis una propiedad que nadie pidió**: si el proceso muere entre el `202` y la pasada, la fila
   queda abierta y **la siguiente pasada del cron la cierra**. Es autocurativo por construcción, no por una
-  rutina de limpieza.
+  rutina de limpieza. *(Enmienda del 2026-09-30, A-11·H-57: lo cierra la siguiente pasada **de esa
+  competición**, que no siempre es la siguiente del cron — el antirrebote la aplaza hasta 6 h después del
+  último éxito, y una competición fuera de la temporada vigente no la recorre el cron nunca. Medido contra
+  `club_atleti`.)*
 
 **La migración de [D-96] se trae aquí desde `C-D.5`**, y no es una licencia: §3 del plan de F10 manda
 *"al tocar `IngestionRun`, ejecutarlo contra la base de trabajo y mirar la tabla"*, y hoy **ninguna fila

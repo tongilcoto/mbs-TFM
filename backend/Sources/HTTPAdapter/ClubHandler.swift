@@ -48,6 +48,11 @@ public struct APIHandler: APIProtocol {
     /// etiqueta propia es para poder filtrarlo.
     let logger: Logger
 
+    /// Las competiciones que este proceso tiene sincronizando (A-11·H-55). **No se
+    /// inyecta**: es estado del proceso, y un *handler* nuevo es un proceso nuevo
+    /// —que es justo lo que un test necesita para imitar un reinicio—.
+    let inFlight = IngestionsInFlight()
+
     public init(
         unitOfWork: any TenantUnitOfWork,
         federationClients: any FederationClientProvider,

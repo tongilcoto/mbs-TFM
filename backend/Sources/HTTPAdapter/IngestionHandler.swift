@@ -179,9 +179,18 @@ extension APIHandler {
             // competición, que es lo único que el backoffice puede consultar
             // mientras el trabajo ocurre.
             let planned = try await useCase.accept(scope: scope, actor: actor)
-            await background.enqueue {
-                await self.runAccepted(
-                    useCase, scope: scope, actor: actor, planned: planned)
+            // **Solo se lanza lo que no está ya en marcha** (A-11·H-55). La fila
+            // ya la deduplica `accept`; esto deduplica el trabajo, que es lo que
+            // un doble clic multiplicaba. La respuesta sigue diciendo todo lo
+            // aceptado: lo que ya corría, también lo está.
+            let toRun = await inFlight.reserve(planned, club: actor.clubSlug)
+            if !toRun.isEmpty {
+                let runScope = IngestionScope(competitionIDs: toRun, minInterval: nil)
+                await background.enqueue {
+                    await self.runAccepted(
+                        useCase, scope: runScope, actor: actor, planned: toRun)
+                    await self.inFlight.release(toRun, club: actor.clubSlug)
+                }
             }
             return .accepted(.init(body: .json(.init(
                 competitionIds: planned.map { "\($0)" }))))

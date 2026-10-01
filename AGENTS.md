@@ -235,7 +235,18 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   `outcome` y por `kind`** —sin lo primero, la pasada del cron adoptaría la fila cerrada de la semana pasada
   y la ingesta se caería en la segunda pasada de cada competición, medido con mutación—, y **aceptar dos
   veces no deja dos filas**, porque la pasada cierra una. De regalo, una propiedad que nadie pidió: si el
-  proceso muere entre el `202` y la pasada, **la siguiente del cron cierra lo que quedó abierto**.
+  proceso muere entre el `202` y la pasada, **la siguiente pasada *de esa competición* cierra lo que quedó
+  abierto** — que no es lo mismo que *"la siguiente del cron"* (A-11·H-57, medido): el antirrebote la aplaza
+  hasta 6 h después del último éxito, y **una competición fuera de la temporada vigente no la recorre el cron
+  nunca**, así que su fila se queda `accepted` hasta que alguien la pida por `-c`. **Y dos pasadas pueden
+  adoptar la misma fila** —el cron encima del botón—, así que desde el arreglo de A-11·H-55 hay tres piezas y
+  ninguna sobra: `record` **no pisa una fila ya cerrada** (la bloquea con `FOR UPDATE` y devuelve
+  `.alreadyClosed`, y la pasada que llegó tarde escribe **la suya**); el ámbito que escribe de las tres
+  pasadas **empieza bloqueando la competición** (`CompetitionRepository.lock`), para que dos pasadas
+  escriban una detrás de otra; y el `202` **no encola lo que este proceso ya tiene en marcha**
+  (`IngestionsInFlight`). La tercera es memoria del proceso **a propósito**: una fila `accepted` no dice si
+  alguien trabaja en ella —puede ser huérfana—, y negarse por *"ya hay fila abierta"* dejaría una huérfana
+  sin poder reintentarse desde el botón.
 - **La fila `accepted` de `D-96` va DENTRO del ámbito de su cascada, al revés que la constancia de `D-85`.**
   No es una incoherencia: son dos cosas distintas con el mismo nombre de tabla. El registro de `D-85` vive
   en su **propio** ámbito precisamente para que el `rollback` de la pasada fallida no se lleve la constancia
@@ -350,7 +361,7 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**546 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+**562 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
 montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
