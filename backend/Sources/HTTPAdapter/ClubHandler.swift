@@ -113,9 +113,8 @@ extension Domain.Club {
     /// Mapeo `Entidad → DTO`, trabajo del adaptador primario (§2.2).
     func toResponse() -> Components.Schemas.ClubResponse {
         .init(
-            // En minúsculas: `uuidString` de Foundation devuelve mayúsculas, pero
-            // la forma canónica de un UUID en JSON (RFC 4122 §3) es minúscula, y es
-            // lo que los clientes esperan de un `format: uuid`.
+            // Se interpola, y la minúscula de RFC 4122 §3 la pone `TypedIdentifier`
+            // (F10-ter): nunca `raw.uuidString`, que sale en mayúsculas.
             id: "\(id)",
             name: name,
             shortName: shortName,

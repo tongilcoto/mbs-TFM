@@ -236,11 +236,10 @@ extension APIHandler {
     /// **Y lo que esto no arregla, para que nadie lo confunda con la solución:**
     /// un log lo lee el operador, no el backoffice. Que la pantalla se entere
     /// —sin *push*, que es como es— necesita que quede **fila** desde el instante
-    /// en que se acepta; hoy `IngestionOutcome` solo tiene `succeeded` y `failed`,
-    /// así que el `202` no deja ni un hueco donde mirar y `ingestionHealth`
-    /// (`D-89`) sigue diciendo `ok`. Eso es modelo, contrato y una enmienda a
-    /// `D-88` —que hoy dice *"el `POST` no crea la fila"*—: va a **F10**, con el
-    /// `202` de `D-67`.
+    /// en que se acepta, y eso ya lo hace `D-96`: la fila `accepted` que deja
+    /// `accept` y que la pasada adopta. Lo que sigue sin decidir es cómo la lee
+    /// `ingestionHealth` (`D-89`), que hoy no tiene caso para una aceptada
+    /// huérfana (A-11·H-58, dueño: la rebanada 1).
     func runAccepted(
         _ useCase: IngestClubCalendars,
         scope: IngestionScope,

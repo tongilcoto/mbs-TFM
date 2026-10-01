@@ -231,11 +231,13 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "El schema del club '\(slug)' no tiene datos.",
                                base: typeBaseURI, slug: "tenant-not-provisioned")
 
-            // Los dos siguientes los levanta la pasada de ingesta, que **no
-            // pasa por HTTP** (§2.3-b). Se traducen igual porque el `switch` es
-            // exhaustivo a propósito, y porque F10 sí los va a hacer cruzar la
-            // frontera: el enganche de `D-67` encola una ingesta y su `/preview`
-            // la ejecuta en línea.
+            // Los dos siguientes los levanta la pasada de ingesta, y **sí cruzan
+            // la frontera**: `triggerIngestion` con una competición ejecuta la
+            // pasada dentro de la petición (§2.3-c), y `listIngestionRuns` lanza
+            // `competitionNotFound` por su cuenta. (Decía aquí que la pasada no
+            // pasaba por HTTP y que el `/preview` la ejecutaba en línea; lo
+            // primero dejó de ser verdad en F6 y lo segundo no lo fue nunca —
+            // `A-14`·H-70.)
             case .competitionNotFound(let id):
                 // 404 literal: para esta petición la competición no está.
                 return Problem(status: .notFound, code: "COMPETITION_NOT_FOUND",

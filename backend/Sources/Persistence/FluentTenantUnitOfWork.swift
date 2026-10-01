@@ -63,10 +63,12 @@ extension FluentTenantUnitOfWork {
             // el actor sale de un puerto (`ActorResolver`), y lo que queda
             // tautológico es solo **el adaptador de producción**, que lo lee del
             // `Host` — la deuda declarada de F0, no esta guarda. Lo afirman dos
-            // tests: `ErrorBoundaryTests` con el actor construido a mano (el
-            // cinturón) y `ActorSeamTests` por la ruta HTTP entera, con un
-            // resolutor que discrepa (la puerta). El día que el actor salga del
-            // *claim* firmado, los dos siguen valiendo sin tocarlos.
+            // tests, **y los dos afirman este cinturón**: `ErrorBoundaryTests`
+            // con el actor construido a mano y `ActorSeamTests` por la ruta HTTP
+            // entera, con un resolutor que discrepa. Anular esta guarda tumba los
+            // dos (`A-14`·H-69). **La puerta todavía no existe**: llega con el
+            // *claim*, en `TenantResolutionMiddleware`. El día que el actor salga
+            // del *claim* firmado, los dos tests siguen valiendo sin tocarlos.
             guard ambient.slug == actor.clubSlug.value else {
                 throw TenancyError.tenantMismatch(
                     host: ambient.slug, claim: actor.clubSlug.value)
