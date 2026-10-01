@@ -519,6 +519,63 @@ struct CalendarIngestionEndToEndTests {
             ids: SystemUUIDProvider())
     }
 
+    /// **Y lo mismo con la fila adoptada** (A-11·H-60): H-25 heredado por la rama
+    /// que F10-bis añadió.
+    ///
+    /// El test de arriba siembra la competición **sin** fila aceptada, así que su
+    /// constancia sale por la rama que **crea**. Desde F10-bis el `202` deja la
+    /// fila antes, y entonces el fallo se escribe por la que **actualiza** —otra
+    /// sentencia, con el bloqueo de H-55 delante—. A-11 lo midió a mano y
+    /// aguantaba; lo que no había era quien lo dijera: un `record` que dejara sin
+    /// cerrar la adoptada **cuando falla** pasaba la batería entera, con la fila
+    /// `accepted` para siempre y el `23505` sin apuntar en ningún sitio.
+    @Test("una restricción violada de verdad cierra a `failed` la fila adoptada (D-85, A-11·H-60)")
+    func aRealConstraintViolationClosesTheAdoptedRow() async throws {
+        try await Self.withTenant("e2e-23505-adopted") { tenant in
+            let (first, second) = try await Self.seedTwoEntries(tenant)
+            let actor = ActorContext(clubSlug: try Slug("e2e-23505-adopted"), isSystem: true)
+
+            // La primera deja el acta escrita.
+            _ = try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                .execute(competitionID: first, actor: actor)
+
+            // La segunda tiene su fila aceptada —la del `202`—, y su pasada trae la
+            // misma acta.
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: second,
+                kind: .calendar, startedAt: Self.syncInstant.addingTimeInterval(-60),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+
+            await #expect(throws: (any Error).self) {
+                try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))
+                    .execute(competitionID: second, actor: actor)
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(
+                    competitionID: second, limit: 10),
+                 matches: try await repositories.matches.list(competitionID: second),
+                 competition: try await repositories.competitions.find(second))
+            }
+
+            // **Una** fila, la adoptada, y cerrada: ni abierta para siempre ni una
+            // segunda con el fallo al lado.
+            #expect(after.runs.count == 1)
+            #expect(after.runs.first?.id == accepted.id)
+            #expect(after.runs.first?.outcome == .failed, "la adoptada se quedó sin cerrar")
+            #expect(after.runs.first?.startedAt == accepted.startedAt)
+            // Con el motivo **verdadero**, como en H-25.
+            let reason = try #require(after.runs.first?.error)
+            #expect(reason.contains("federation_match_id"))
+            #expect(reason.contains("23505"))
+
+            // Y `D-83` aguanta igual: lo de esta pasada, deshecho entero.
+            #expect(after.matches.isEmpty)
+            #expect(after.competition?.lastSyncedAt == nil)
+        }
+    }
+
     /// Dos competiciones en la misma temporada. Existe para que una pueda chocar
     /// contra una restricción que la otra ya ocupó.
     static func seedTwoEntries(_ tenant: TenantFixture) async throws
