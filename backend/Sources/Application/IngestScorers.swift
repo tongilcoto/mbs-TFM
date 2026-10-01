@@ -91,6 +91,7 @@ public struct IngestScorers: Sendable {
         guard plan.providesScorers else { return nil }
 
         let startedAt = clock.now()
+        let run: IngestionRun
         do {
             // ── Fuera de todo ámbito: la red ────────────────────────────────
             let published = try await federation.fetchScorers(plan.coordinate)
@@ -112,18 +113,15 @@ public struct IngestScorers: Sendable {
             let counters = try await write(
                 scorers, competitionID: competitionID, syncedAt: startedAt, actor: actor)
 
-            var run = try IngestionRun(
+            var done = try IngestionRun(
                 id: IngestionRunID(raw: ids.next()),
                 competitionID: competitionID, kind: .scorers,
                 startedAt: startedAt, finishedAt: clock.now())
-            run.leagueScorersCreated = counters.created
-            run.leagueScorersUpdated = counters.updated
-            run.leagueScorersRetired = counters.retired
-            run.skipped = skipped
-
-            // ── Ámbito 3: el registro, aparte (`D-85`) ──────────────────────
-            try await record(run, actor: actor)
-            return run
+            done.leagueScorersCreated = counters.created
+            done.leagueScorersUpdated = counters.updated
+            done.leagueScorersRetired = counters.retired
+            done.skipped = skipped
+            run = done
         } catch {
             // La constancia de la que falla es la única que nadie ve, porque la
             // ingesta no tiene usuario delante (§2.3-b). Se escribe fuera de la
@@ -133,9 +131,30 @@ public struct IngestScorers: Sendable {
                 competitionID: competitionID, kind: .scorers,
                 startedAt: startedAt, finishedAt: clock.now(),
                 outcome: .failed, error: diagnosticText(for: error))
-            try await record(failed, actor: actor)
+            // Si el registro tampoco se puede escribir, **manda el error
+            // original** (`D-85`). Era un `try` a secas, y tapaba el fallo de la
+            // pasada con el del apunte (A-11·H-56).
+            do { try await record(failed, actor: actor) } catch {}
             throw error
         }
+
+        // ── Ámbito 3: el registro, aparte (`D-85`) ──────────────────────────
+        //
+        // **Fuera del `do` de arriba, y es H-24 llegando por fin a esta pasada**
+        // (A-11·H-56). F8 copió la forma del calendario de antes de `4d66aa0`, y
+        // aquí costaba más que en ningún otro sitio: un fallo **solo al
+        // apuntar** dejaba una fila `failed, retired=0` de una pasada cuyo
+        // ámbito 2 **ya había retirado** goleadores (`D-94`) — el único registro
+        // de un borrado, diciendo lo contrario. Se dice lo que pasó: el ranking
+        // está, el registro no.
+        do {
+            try await record(run, actor: actor)
+        } catch {
+            throw ApplicationError.runNotRecorded(
+                competitionID: "\(competitionID)",
+                reason: diagnosticText(for: error))
+        }
+        return run
     }
 
     /// Las filas publicadas, convertidas en entidades.

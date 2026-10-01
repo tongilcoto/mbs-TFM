@@ -441,4 +441,53 @@ struct IngestStandingsTests {
 
         #expect(await fixture.store.competitionLocks == [fixture.competition, fixture.competition])
     }
+
+    // ── A-11 · H-56 · H-24, que no llegó a esta pasada ──────────────────────
+
+    /// **Una jornada que se escribió no se registra como fallida** (A-11·H-56).
+    ///
+    /// H-24 en la pasada que F7 copió de antes de su arreglo: con una jornada,
+    /// los ámbitos son el plan, la escritura y el apunte, y aquí falla solo el
+    /// tercero. Medido antes: la tabla quedaba escrita y el registro decía
+    /// `failed` con el motivo del apunte.
+    @Test("una jornada que sí se escribió no se registra como fallida (A-11·H-56)")
+    func aWrittenRoundIsNotRecordedAsFailed() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        let client = StandingsClient([1: Self.table(["111", "222"])])
+        let useCase = IngestStandings(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: fixture.store), failOn: 3),
+            federation: client, clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        await #expect {
+            try await useCase.execute(
+                competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+        } throws: { error in
+            guard case ApplicationError.runNotRecorded = error else { return false }
+            return true
+        }
+        #expect(await fixture.store.standingRows.count == 2)
+        #expect(await fixture.store.ingestionRuns.isEmpty,
+                "quedó una fila diciendo que falló una jornada que se escribió")
+    }
+
+    /// **Y si apuntar el fallo también falla, manda el error original**
+    /// (A-11·H-56, `D-85`).
+    @Test("si apuntar el fallo también falla, manda el error original (A-11·H-56, D-85)")
+    func theOriginalErrorSurvivesAFailedRecord() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        let client = StandingsClient([:], failingWith: FederationError.unexpectedStatus(
+            status: 500, url: "https://www.rffm.es/api/standings"))
+        // Ámbito 1, el plan; la red revienta antes de escribir, así que el 2 es
+        // el del apunte del fallo.
+        let useCase = IngestStandings(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: fixture.store), failOn: 2),
+            federation: client, clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        await #expect(throws: FederationError.self) {
+            try await useCase.execute(
+                competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+        }
+    }
 }

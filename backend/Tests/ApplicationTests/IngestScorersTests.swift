@@ -683,4 +683,58 @@ struct IngestScorersTests {
 
         #expect(await fixture.store.competitionLocks == [fixture.competition])
     }
+
+    // ── A-11 · H-56 · H-24, que no llegó a esta pasada ──────────────────────
+
+    /// **Un ranking que se escribió no se registra como fallido** (A-11·H-56).
+    ///
+    /// Es H-24 en la pasada que F8 copió **de antes** de su arreglo. Los ámbitos
+    /// son leer, escribir y apuntar; si falla solo el tercero, el segundo **ya
+    /// comprometió** —el ranking está, y la retirada de `D-94` también—. Medido
+    /// antes del arreglo: quedaba una fila `failed` con el motivo **del apunte**,
+    /// diciendo *"0 retirados"* de una pasada que pudo retirar. Lo correcto es lo
+    /// que hace el calendario desde `4d66aa0`: decir que la pasada está y el
+    /// registro no.
+    @Test("un ranking que sí se escribió no se registra como fallido (A-11·H-56)")
+    func aWrittenRankingIsNotRecordedAsFailed() async throws {
+        let fixture = try await Self.seed()
+        let client = ScorersClient(Self.table([
+            Self.row("11322891", "GEA IRISARRI, LUIS", goals: 31),
+            Self.row("4945003", "BRUZZI, DIEGO", goals: 22),
+        ]))
+        let useCase = IngestScorers(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: fixture.store), failOn: 3),
+            federation: client, clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        await #expect {
+            try await useCase.execute(competitionID: fixture.competition, actor: Self.actor)
+        } throws: { error in
+            guard case ApplicationError.runNotRecorded = error else { return false }
+            return true
+        }
+        #expect(try await Self.stored(fixture).count == 2)
+        #expect(await fixture.store.ingestionRuns.isEmpty,
+                "quedó una fila diciendo que falló una pasada que se escribió")
+    }
+
+    /// **Y si apuntar el fallo también falla, manda el error original**
+    /// (A-11·H-56, `D-85`). Es el que explica lo que pasó; taparlo con *"no pude
+    /// apuntarlo"* manda a depurar al sitio equivocado.
+    @Test("si apuntar el fallo también falla, manda el error original (A-11·H-56, D-85)")
+    func theOriginalErrorSurvivesAFailedRecord() async throws {
+        let fixture = try await Self.seed(competitionName: "PRIMERA DIVISION AUTONOMICA CADETE")
+        let client = ScorersClient(
+            Self.table([Self.row("1", "A", goals: 3)], competitionName: "OTRA COMPETICION"))
+        // Ámbito 1, el plan; la guarda de `D-84` revienta antes del 2, así que el
+        // 2 es el del apunte del fallo.
+        let useCase = IngestScorers(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: fixture.store), failOn: 2),
+            federation: client, clock: FixedClock(instant: Self.now),
+            ids: SequentialUUIDProvider())
+
+        await #expect(throws: DomainError.self) {
+            try await useCase.execute(competitionID: fixture.competition, actor: Self.actor)
+        }
+    }
 }

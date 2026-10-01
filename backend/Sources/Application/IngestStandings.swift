@@ -75,6 +75,8 @@ public struct IngestStandings: Sendable {
 
         for step in plan.steps {
             let startedAt = clock.now()
+            let run: IngestionRun
+            let written: [StandingTable.Line]
             do {
                 // ── Fuera de todo ámbito: la red ────────────────────────────
                 let lines: [StandingTable.Line]
@@ -96,22 +98,16 @@ public struct IngestStandings: Sendable {
                 let counters = try await write(
                     resolved, step: step, competitionID: competitionID, actor: actor)
 
-                var run = try IngestionRun(
+                var done = try IngestionRun(
                     id: IngestionRunID(raw: ids.next()),
                     competitionID: competitionID, kind: .standings,
                     roundID: step.round.id,
                     startedAt: startedAt, finishedAt: clock.now())
-                run.standingRowsCreated = counters.created
-                run.standingRowsUpdated = counters.updated
-                run.skipped = skipped
-
-                // ── Ámbito 3: el registro, aparte (`D-85`) ──────────────────
-                try await record(run, actor: actor)
-                runs.append(run)
-
-                // **Y solo después se avanza la PREV.** Si la jornada falló, la
-                // siguiente no debe compararse con una tabla que no se escribió.
-                previous = lines
+                done.standingRowsCreated = counters.created
+                done.standingRowsUpdated = counters.updated
+                done.skipped = skipped
+                run = done
+                written = lines
             } catch {
                 // La constancia de la que falla es la única que nadie ve, porque
                 // la ingesta no tiene usuario delante (§2.3-b). Se escribe fuera
@@ -122,9 +118,34 @@ public struct IngestStandings: Sendable {
                     roundID: step.round.id,
                     startedAt: startedAt, finishedAt: clock.now(),
                     outcome: .failed, error: diagnosticText(for: error))
-                try await record(failed, actor: actor)
+                // Si el registro tampoco se puede escribir, **manda el error
+                // original** (`D-85`): es el que explica lo que pasó. Era un `try`
+                // a secas, y tapaba el fallo de la jornada con el del apunte
+                // (A-11·H-56).
+                do { try await record(failed, actor: actor) } catch {}
                 throw error
             }
+
+            // ── Ámbito 3: el registro, aparte (`D-85`) ──────────────────────
+            //
+            // **Fuera del `do` de arriba, y es H-24 llegando por fin a esta
+            // pasada** (A-11·H-56). F7 copió la forma del calendario de antes de
+            // `4d66aa0`: con el apunte dentro, un fallo **solo al apuntar** caía
+            // en el `catch` y dejaba una fila `failed` de una jornada que el
+            // ámbito 2 ya había confirmado. Lo que pasó es otra cosa, y se dice:
+            // la jornada está, el registro no.
+            do {
+                try await record(run, actor: actor)
+            } catch {
+                throw ApplicationError.runNotRecorded(
+                    competitionID: "\(competitionID)",
+                    reason: diagnosticText(for: error))
+            }
+            runs.append(run)
+
+            // **Y solo después se avanza la PREV.** Si la jornada falló, la
+            // siguiente no debe compararse con una tabla que no se escribió.
+            previous = written
         }
         return runs
     }
