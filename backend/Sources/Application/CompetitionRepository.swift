@@ -8,6 +8,20 @@ public import Domain
 public protocol CompetitionRepository: Sendable {
     func find(_ id: CompetitionID) async throws -> Competition?
 
+    /// Como `find`, y **deja la fila bloqueada hasta que cierre el ámbito**, que
+    /// es una transacción (§6.2) (A-11·H-55).
+    ///
+    /// Es lo primero que hace el ámbito que **escribe** de cada pasada de la
+    /// ingesta —calendario, clasificación, goleadores—, y lo que hace que dos
+    /// pasadas de la misma competición escriban **una detrás de otra**. Sin ello,
+    /// dos primeras sincronizaciones a la vez insertaban las mismas jornadas y una
+    /// caía en un `23505` que no era de los datos, sino de la coincidencia.
+    ///
+    /// Solo dentro del ámbito de escritura: el bloqueo dura lo que la transacción,
+    /// y en ninguna de las tres hay red dentro (`D-83`), así que nadie espera a un
+    /// tercero con la fila cogida.
+    func lock(_ id: CompetitionID) async throws -> Competition?
+
     /// Por la **clave única** de la entidad (§3.5).
     ///
     /// Es la consulta con la que la cascada de `D-67` decide crear o **reutilizar**:

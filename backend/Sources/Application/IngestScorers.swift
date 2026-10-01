@@ -333,6 +333,10 @@ public struct IngestScorers: Sendable {
         actor: ActorContext
     ) async throws -> (created: Int, updated: Int, retired: Int) {
         try await unitOfWork.withRepositories(actor: actor) { repositories in
+            // **La competición bloqueada antes de leer lo que hay** (A-11·H-55):
+            // la escritura y la retirada de `D-94` van por marca, y dos pasadas a
+            // la vez no deben mezclar las suyas.
+            _ = try await repositories.competitions.lock(competitionID)
             let existing = Set(
                 try await repositories.leagueScorers.list(competitionID: competitionID)
                     .map(\.id))

@@ -425,4 +425,20 @@ struct IngestStandingsTests {
         #expect(client.asked.isEmpty)
         #expect(await fixture.store.ingestionRuns.isEmpty)
     }
+
+    /// **Cada jornada se escribe con la competición bloqueada** (A-11·H-55), por
+    /// lo mismo que el calendario: dos pasadas a la vez no pueden insertar la misma
+    /// fila de `(jornada, equipo)` y chocar contra su `UNIQUE`.
+    @Test("cada jornada se escribe con la competición bloqueada (A-11·H-55)")
+    func eachRoundIsWrittenWithTheCompetitionLocked() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1, 2], played: [1, 2])
+        let client = StandingsClient([
+            1: Self.table(["111", "222"]), 2: Self.table(["111", "222"]),
+        ])
+
+        _ = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+
+        #expect(await fixture.store.competitionLocks == [fixture.competition, fixture.competition])
+    }
 }

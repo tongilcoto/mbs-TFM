@@ -116,7 +116,24 @@ public protocol IngestionRunRepository: Sendable {
     ///
     /// Lo que **no** cambia es que una pasada acabada no se retoca: lo impide el
     /// Dominio, que solo deja cerrar lo que está abierto (`C-A.6`).
-    func record(_ run: IngestionRun) async throws
+    ///
+    /// # Y lo hace cumplir también aquí, porque el Dominio no puede (A-11·H-55)
+    ///
+    /// `closed(as:)` comprueba que la pasada esté abierta **en la copia que leyó
+    /// quien la cierra**. Dos pasadas que adoptan la misma fila —un doble clic, el
+    /// cron encima del botón— leen las dos una copia abierta, y con un *upsert*
+    /// ciego la segunda pisaba lo que cerró la primera: una fila `failed` de una
+    /// pasada cuyos datos estaban escritos. Así que una fila que **ya existe y ya
+    /// no está `accepted`** no se toca, y se devuelve `.alreadyClosed` para que
+    /// quien llegó tarde escriba **la suya**. La comprobación y la escritura van
+    /// en el mismo ámbito, con la fila bloqueada: si no, la carrera se muda de
+    /// sitio en vez de desaparecer.
+    ///
+    /// Solo importa a quien escribe con un `id` que puede existir ya —la pasada
+    /// que adopta—; quien estrena `id` recibe siempre `.recorded`, y por eso el
+    /// resultado se puede descartar.
+    @discardableResult
+    func record(_ run: IngestionRun) async throws -> IngestionRunWrite
 
     /// Las últimas pasadas de una competición, **de la más reciente a la más
     /// antigua**, que es el orden en el que se leen: la pregunta es *"¿qué pasó
@@ -141,6 +158,15 @@ public protocol IngestionRunRepository: Sendable {
     func findAccepted(
         competitionID: CompetitionID, kind: IngestionKind
     ) async throws -> IngestionRun?
+}
+
+/// Qué hizo `IngestionRunRepository.record` con la fila (A-11·H-55).
+public enum IngestionRunWrite: Sendable, Equatable {
+    /// Escrita: era nueva, o estaba `accepted` y se ha cerrado.
+    case recorded
+    /// **No escrita**: esa fila ya la había cerrado otra pasada. Quien llama no
+    /// pierde su resultado — lo escribe con un `id` propio.
+    case alreadyClosed
 }
 
 /// Puerto de salida de `StandingRow` (§4.3, F7).

@@ -103,7 +103,7 @@ public struct IngestCalendar: Sendable {
             // Si el registro tampoco se puede escribir, **manda el error
             // original**: es el que explica lo que pasó, y taparlo con "no pude
             // apuntarlo" dejaría al que depura mirando al sitio equivocado.
-            do { try await record(failed, actor: actor) } catch {}
+            do { _ = try await record(failed, ownStart: startedAt, actor: actor) } catch {}
 
             throw error
         }
@@ -120,20 +120,34 @@ public struct IngestCalendar: Sendable {
         // Lo que se hace en su lugar es decir exactamente lo que ocurrió. Quien lo
         // reciba tiene que saber que **la ingesta sí se hizo**, o la repetirá.
         do {
-            try await record(run, actor: actor)
+            return try await record(run, ownStart: startedAt, actor: actor)
         } catch {
             throw ApplicationError.runNotRecorded(
                 competitionID: "\(competitionID)",
                 reason: diagnosticText(for: error))
         }
-        return run
     }
 
     /// El registro va en **su propio ámbito**, fuera de la transacción de la
     /// pasada (`D-83`, `D-85`). Es lo que hace que sobreviva al `rollback`.
-    private func record(_ run: IngestionRun, actor: ActorContext) async throws {
-        try await unitOfWork.withRepositories(actor: actor) { repositories in
-            try await repositories.ingestionRuns.record(run)
+    ///
+    /// **Y si la fila adoptada ya la cerró otra pasada, escribe la suya**
+    /// (A-11·H-55). Dos pasadas adoptan la misma aceptada cuando las dos la leen
+    /// abierta —un doble clic, el cron encima del botón—, y la que cierra
+    /// segunda no puede ni pisar a la primera ni callarse: pasó, y su resultado
+    /// es tan verdad como el otro. Va en el mismo ámbito, porque es la misma
+    /// constancia. Devuelve la fila que quedó escrita, que es la que el llamante
+    /// tiene que ver.
+    private func record(
+        _ run: IngestionRun, ownStart: Date, actor: ActorContext
+    ) async throws -> IngestionRun {
+        try await unitOfWork.withRepositories(actor: actor) { [ids] repositories in
+            guard try await repositories.ingestionRuns.record(run) == .alreadyClosed
+            else { return run }
+            let own = try run.reidentified(
+                as: IngestionRunID(raw: ids.next()), startedAt: ownStart)
+            try await repositories.ingestionRuns.record(own)
+            return own
         }
     }
 
@@ -173,8 +187,14 @@ public struct IngestCalendar: Sendable {
         let calendar = try await federation.fetchCalendar(coordinate)
 
         // ── Ámbito 2: **todo** lo que se escribe ────────────────────────
+        //
+        // **Y empieza bloqueando la competición** (A-11·H-55): dos pasadas de la
+        // misma competición —el cron encima del botón— escriben así una detrás de
+        // otra, y la segunda ve lo que la primera confirmó. Sin el bloqueo, dos
+        // primeras sincronizaciones insertaban la misma jornada a la vez y una
+        // caía en un `23505` que no era de los datos.
         return try await unitOfWork.withRepositories(actor: actor) { repositories in
-            guard let competition = try await repositories.competitions.find(competitionID)
+            guard let competition = try await repositories.competitions.lock(competitionID)
             else {
                 throw ApplicationError.competitionNotFound(id: "\(competitionID)")
             }

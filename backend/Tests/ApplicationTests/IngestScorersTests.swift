@@ -669,4 +669,18 @@ struct IngestScorersTests {
         let finishedAt = try #require(run.finishedAt)
         #expect(finishedAt > run.startedAt)
     }
+
+    /// **El ranking se escribe con la competición bloqueada** (A-11·H-55): la
+    /// escritura y la retirada de `D-94` van juntas, y dos pasadas a la vez no
+    /// deben mezclar sus marcas.
+    @Test("el ranking se escribe con la competición bloqueada (A-11·H-55)")
+    func theRankingIsWrittenWithTheCompetitionLocked() async throws {
+        let fixture = try await Self.seed()
+        let client = ScorersClient(Self.table([Self.row("11322891", "GEA IRISARRI, LUIS", goals: 31)]))
+
+        _ = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: Self.actor)
+
+        #expect(await fixture.store.competitionLocks == [fixture.competition])
+    }
 }

@@ -1,4 +1,5 @@
 import Fluent
+import SQLKit
 import Foundation
 public import Application
 public import Domain
@@ -13,6 +14,25 @@ public struct FluentCompetitionRepository: CompetitionRepository {
 
     public func find(_ id: CompetitionID) async throws -> Competition? {
         try await CompetitionRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    /// `SELECT … FOR UPDATE` en SQL, porque Fluent no expresa el bloqueo; la fila
+    /// se lee después por Fluent, con el bloqueo ya cogido. Lanza sobre una base
+    /// que no hable SQL por lo mismo que `SQLHelpers` (H-35): sin el bloqueo esto
+    /// no falla, deja pasar la carrera.
+    public func lock(_ id: CompetitionID) async throws -> Competition? {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "lock", object: CompetitionRecord.schema)
+        }
+        guard try await sql.select()
+            .column("id")
+            .from(CompetitionRecord.schema)
+            .where("id", .equal, id.raw)
+            .for(.update)
+            .first() != nil
+        else { return nil }
+        return try await find(id)
     }
 
     public func findByFederationGroup(

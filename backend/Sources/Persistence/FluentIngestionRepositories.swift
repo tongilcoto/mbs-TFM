@@ -1,4 +1,5 @@
 import Fluent
+import SQLKit
 import Foundation
 public import Application
 public import Domain
@@ -311,16 +312,47 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
     /// La identidad es el `id`, como en todos sus hermanos, y por lo mismo: lo
     /// pone el caso de uso, así que la fila recién escrita se puede volver a
     /// tocar en la misma pasada sin releerla.
-    public func record(_ run: IngestionRun) async throws {
-        if let existing = try await IngestionRunRecord.find(run.id.raw, on: database) {
+    ///
+    /// **Y solo cierra lo que sigue abierto** (A-11·H-55): una fila que ya no está
+    /// `accepted` la cerró otra pasada, y pisarla era dejar escrito el resultado
+    /// de la que llegó tarde —medido: `failed` sobre una pasada que sí escribió—.
+    /// La pregunta se hace con la fila **bloqueada** (`FOR UPDATE`), así que la
+    /// segunda espera a que la primera confirme y entonces la ve cerrada. Sin el
+    /// bloqueo, las dos leerían `accepted` a la vez y la carrera seguiría ahí.
+    public func record(_ run: IngestionRun) async throws -> IngestionRunWrite {
+        if let outcome = try await lockedOutcome(of: run.id) {
+            guard outcome == IngestionOutcome.accepted.rawValue else { return .alreadyClosed }
+            guard let existing = try await IngestionRunRecord.find(run.id.raw, on: database)
+            else { throw PersistenceError.notFound(table: IngestionRunRecord.schema) }
             existing.apply(run)
             try await existing.update(on: database)
-            return
+            return .recorded
         }
         let record = IngestionRunRecord()
         record.id = run.id.raw
         record.apply(run)
         try await record.create(on: database)
+        return .recorded
+    }
+
+    /// El `outcome` de la fila, **bloqueándola hasta que cierre el ámbito**, que
+    /// es una transacción (§6.2). `nil` si la fila no existe.
+    ///
+    /// SQL y no Fluent porque Fluent no expresa `FOR UPDATE`. Lanza sobre una base
+    /// que no hable SQL, por lo mismo que los ayudantes de `SQLHelpers` (H-35):
+    /// sin el bloqueo esto no falla, deja pasar la carrera.
+    private func lockedOutcome(of id: IngestionRunID) async throws -> String? {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "record", object: IngestionRunRecord.schema)
+        }
+        return try await sql.select()
+            .column("outcome")
+            .from(IngestionRunRecord.schema)
+            .where("id", .equal, id.raw)
+            .for(.update)
+            .first()?
+            .decode(column: "outcome", as: String.self)
     }
 
     /// **Ordenada por `started_at`** (`C-D.6`, [D-96]), y el eje importa desde

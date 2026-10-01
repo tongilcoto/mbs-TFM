@@ -26,7 +26,7 @@ porque los números chocan.
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **546 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
+(`D-95`). **557 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
 
 | Operación HTTP | |
 |---|---|
@@ -264,7 +264,7 @@ en el mismo 500 (`A-6`/H-15).
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 546 tests, ~23 s — LA FORMA BUENA
+REQUIRE_DB=1 swift test                 # 557 tests, ~23 s — LA FORMA BUENA
 swift test                              # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

@@ -264,6 +264,11 @@ public struct IngestStandings: Sendable {
         actor: ActorContext
     ) async throws -> (created: Int, updated: Int) {
         try await unitOfWork.withRepositories(actor: actor) { repositories in
+            // **La competición bloqueada antes de leer lo que hay** (A-11·H-55),
+            // igual que el calendario: si no, dos pasadas a la vez leerían la
+            // jornada vacía las dos e insertarían la misma fila contra el
+            // `UNIQUE(round_id, team_id)`.
+            _ = try await repositories.competitions.lock(competitionID)
             let existing = try await repositories.standingRows.list(roundID: step.round.id)
             let byTeam = Dictionary(
                 existing.map { ($0.teamID, $0) }, uniquingKeysWith: { first, _ in first })

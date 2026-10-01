@@ -290,6 +290,82 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// **Lo que otra pasada ya cerró no se pisa** (A-11·H-55).
+    ///
+    /// Dos pasadas que adoptan la misma fila la leen **abierta** las dos, y
+    /// `closed(as:)` no puede saber que la otra se le adelantó. Con el *upsert*
+    /// ciego, la segunda escribía encima: medido, una fila `succeeded` con su
+    /// partido escrito pasaba a `failed` con los contadores a cero. La segunda
+    /// escritura del mismo `id` sobre una fila **ya cerrada** no toca nada y lo
+    /// dice, para que quien llegó tarde escriba la suya.
+    @Test("lo que otra pasada ya cerró no se pisa, y se dice (A-11·H-55)")
+    func aClosedRowIsNotOverwritten() async throws {
+        try await Self.withCompetition("run-closed") { competitionID, tenant in
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("13-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+
+            // Las dos pasadas cierran **su copia** de la misma aceptada.
+            var winner = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
+            winner.matchesCreated = 240
+            let first = winner
+            let late = try accepted.closed(
+                as: .failed, at: Self.date("15-09-2025"), error: "la federación no contestó")
+
+            let firstWrite = try await tenant.scope { try await $0.ingestionRuns.record(first) }
+            let lateWrite = try await tenant.scope { try await $0.ingestionRuns.record(late) }
+
+            let stored = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
+            }
+            #expect(firstWrite == .recorded)
+            #expect(lateWrite == .alreadyClosed)
+            #expect(stored.count == 1)
+            #expect(stored.first?.outcome == .succeeded, "la que llegó tarde pisó la cerrada")
+            #expect(stored.first?.matchesCreated == 240)
+            #expect(stored.first?.error == nil)
+        }
+    }
+
+    /// **Y la pregunta se hace con la fila bloqueada**, o la carrera solo cambia de
+    /// sitio (A-11·H-55).
+    ///
+    /// La primera en cerrar retiene su transacción abierta un momento; la segunda
+    /// intenta cerrar la misma fila mientras tanto. Sin `FOR UPDATE`, la segunda
+    /// **lee `accepted`** —lo de la primera aún no está confirmado—, su `UPDATE`
+    /// espera a la primera y después **escribe encima**. Con el bloqueo, la lectura
+    /// misma espera, y cuando llega ve la fila cerrada.
+    @Test("dos cierres a la vez: el segundo espera y ve la fila cerrada (A-11·H-55)")
+    func concurrentClosesAreSerialized() async throws {
+        try await Self.withCompetition("run-lock") { competitionID, tenant in
+            let accepted = try IngestionRun(
+                id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                kind: .calendar, startedAt: Self.date("13-09-2025"),
+                finishedAt: nil, outcome: .accepted)
+            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            let first = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
+            let late = try accepted.closed(
+                as: .failed, at: Self.date("15-09-2025"), error: "llegó tarde")
+
+            let lateWrite = try await tenant.scope { repositories in
+                _ = try await repositories.ingestionRuns.record(first)
+                // **Con la primera todavía sin confirmar**, arranca la segunda en
+                // su propio ámbito y se le da tiempo a lanzar su consulta.
+                let contender = Task { try await tenant.scope { try await $0.ingestionRuns.record(late) } }
+                try await Task.sleep(for: .milliseconds(300))
+                return contender
+            }.value
+
+            let stored = try await tenant.scope {
+                try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
+            }
+            #expect(lateWrite == .alreadyClosed)
+            #expect(stored.first?.outcome == .succeeded, "el segundo cierre pisó al primero")
+        }
+    }
+
     /// **`C-D.6`: el registro se ordena por `started_at`, no por `finished_at`.**
     ///
     /// Es la otra mitad de [D-96], y no es cosmética. La consulta contesta *"¿qué
