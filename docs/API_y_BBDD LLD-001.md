@@ -1950,6 +1950,10 @@ struct SeasonResponse: Content {
   códigos HTTP.
 - **Códigos:** `400` validación (formato), `401`/`403` auth (§7), `404` no encontrado, `409` **conflicto**
   (duplicado en POST; o DELETE de temporada **con dependientes** sin `cascade`), `422` regla de negocio.
+- **Lo que no es de la ruta sino de todas va en el `default`.** Cada operación declara **sus** códigos y,
+  además, `default: DefaultProblem`, que cubre los que el middleware emite en cualquiera: club desconocido,
+  petición sin club, discrepancia de tenant, *schema* sin aprovisionar, base caída. El cliente distingue esos
+  casos por `code` ([D-99]).
 - **Dos códigos exclusivos de la subida de foto** (§5.1, la única operación no-JSON): `413` *Payload Too
   Large* si la imagen supera el tope, y `415` *Unsupported Media Type* si el `Content-Type` no es
   `image/jpeg` ni `image/png`. Un fichero **del tipo declarado pero corrupto o falseado** (una extensión
@@ -2771,6 +2775,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

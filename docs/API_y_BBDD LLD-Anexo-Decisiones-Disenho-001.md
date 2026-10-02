@@ -4225,6 +4225,34 @@ entrada.
 tenancy, que es también donde va la comparación *claim* contra subdominio (§6.1, `A-6`·H-42). Esto vale con
 A y con B: no las distingue.
 
+---
+
+### D-99 · Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`
+
+**Lo que lo obligó a decidirse** (`A-14`·H-67, 2026-10-02). `ProblemMiddleware` decide el código HTTP por el
+**tipo** del error, no por la ruta, y nada compara lo que emite con lo que la ruta declara. Así que hay códigos
+que pueden salir por **cualquier** operación aunque ninguna los declare: 400 `TENANT_NOT_RESOLVED`, 404
+`UNKNOWN_TENANT`, 403 `TENANT_MISMATCH`, 500 `TENANT_NOT_PROVISIONED`/`INTERNAL` y 503 `DATABASE_UNAVAILABLE`.
+Medido: `getClub` declara 200 y 401 y emite los tres primeros, y **0 de 83** operaciones declaraban 500 o 503.
+Un cliente generado del *spec* recibe esos casos como *"no documentado"*, sin el `Problem` tipado. La regla
+del proyecto —*"un código que el contrato no declara no lo sabe leer un cliente generado"*— la cumplían los
+*handlers*, no el middleware.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Declarar los transversales en cada operación** | Unas 300 líneas repetidas, y la operación nueva tiene que acordarse de cinco | Descartada |
+| **B — `default: DefaultProblem` en cada operación** | Una línea por operación; cubre también el código transversal que llegue mañana | **Elegida** |
+| **C — Dejarlo y escribirlo** | No cuesta nada; cada cliente lo resuelve a su manera | Descartada |
+
+**Decisión: B.** Encaja con lo que §5.4 ya decía: **todo** error es un `Problem`, y **el `code` es para
+ramificar**. Para un error que no es de la ruta, el tipo de la respuesta no tiene nada que distinguir, y el
+`code` lo distingue todo. Un código que **sí** es de la ruta —el 409 del enganche, el 422 de una invariante—
+se sigue declarando en ella, para que el cliente lo tenga con nombre.
+
+**Lo que se hace cumplir y cómo.** El generador solo traduce las operaciones del `filter` ([D-69]), así que el
+*build* no vigila las otras 77. Lo vigila `SpecConventionTests`, que lee el YAML y exige el `default` en
+**cada** bloque de respuestas.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4360,3 +4388,4 @@ A y con B: no las distingue.
 [D-96]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-97]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
