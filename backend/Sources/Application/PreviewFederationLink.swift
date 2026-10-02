@@ -30,6 +30,17 @@ public struct PreviewFederationLink: Sendable {
     public func execute(
         teamID: TeamID, calendarURL: String, actor: ActorContext
     ) async throws -> FederationLinkPreview {
+        // TODO(§7): aquí va la comprobación de **rol elevado** que el *spec*
+        // promete en esta operación —*"Requiere rol elevado (§7.3)"*, con su
+        // `403` declarado— y que hoy no tiene dónde caer (`A-14`·H-66, la
+        // herencia sin decidir de `A-6`·H-41).
+        //
+        // **Antes de leer el equipo**, no después: con la comprobación detrás, un
+        // actor sin permiso distinguiría *"no existe"* (404) de *"existe y no
+        // puedes"* (403). Dentro del club eso no filtra nada —las lecturas son
+        // abiertas (`D-64`)—, pero el orden decide qué código recibe, y el
+        // `/preview` llama a la federación **en línea**: sin permiso, no debería
+        // gastarle una petición a un tercero.
         let found = try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let club = try await repositories.clubs.current() else {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)
