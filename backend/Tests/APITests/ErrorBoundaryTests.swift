@@ -17,10 +17,11 @@ import TestSupport
 ///
 /// # Qué se prueba aquí y no en otro sitio
 ///
-/// Los cuatro *handlers* traducen a mano los errores que esperan —`updateClub`
-/// atrapa `DomainError.invalidValue`, los dos de ingesta enumeran casos de
-/// `ApplicationError`— y el `switch` exhaustivo de `ProblemMiddleware` traduce
-/// **lo que se les escapa**. Esa segunda mitad es la que no tenía test, y la
+/// Los *handlers* solo construyen a mano lo que **ellos** decodifican —un UUID
+/// ilegible, un `PATCH` vacío—, y el `switch` exhaustivo de `ProblemMiddleware`
+/// traduce **todo lo que se lanza**. *(Hasta `A-14`·H-63, `updateClub` y los dos
+/// de ingesta reconstruían además casos que el middleware ya traducía igual.)*
+/// Esa segunda mitad es la que no tenía test, y la
 /// consecuencia fue un hallazgo: los dos ficheros de *handlers* llegaron a
 /// **afirmar lo contrario** —que el transporte generado convierte en 500
 /// cualquier cosa que se lance, antes de que ningún middleware la vea— y nadie
