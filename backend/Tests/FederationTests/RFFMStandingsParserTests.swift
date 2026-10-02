@@ -184,7 +184,10 @@ struct RFFMStandingsParserTests {
         let error = #expect(throws: FederationError.self) {
             try RFFMStandingsParser.parse("<html>vaya</html>")
         }
-        guard case .malformedResponse = try? #require(error) else {
+        // Sin `#require`: con el Swift de Xcode 27 `#expect(throws:)` ya devuelve
+        // el error sin opcional, y el patrón de caso casa igual con un opcional
+        // en la 6.3 de la CLI.
+        guard case .malformedResponse = error else {
             Issue.record("esperaba `malformedResponse`, llegó \(String(describing: error))")
             return
         }

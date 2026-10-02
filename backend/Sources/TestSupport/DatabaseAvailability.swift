@@ -1,5 +1,5 @@
 import App
-public import Foundation
+import Foundation
 import Synchronization
 
 /// ¿Hay un Postgres escuchando donde los tests lo esperan?

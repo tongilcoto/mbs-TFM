@@ -954,17 +954,16 @@ struct CapturingLogHandler: LogHandler {
         set { metadata[key] = newValue }
     }
 
-    func log(
-        level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?,
-        source: String, file: String, function: String, line: UInt
-    ) {
+    // `log(event:)` y no la firma de siete parámetros, que swift-log marca como
+    // obsoleta para quien implementa un `LogHandler`.
+    func log(event: LogEvent) {
         // El mensaje y los metadatos se aplanan juntos: lo que se afirma es
         // *qué se dijo*, y los ids de competición viajan en los metadatos.
-        let flattened = ((metadata ?? [:]).merging(self.metadata) { a, _ in a })
+        let flattened = ((event.metadata ?? [:]).merging(self.metadata) { a, _ in a })
             .map { "\($0.key)=\($0.value)" }
             .sorted()
             .joined(separator: " ")
-        spy.record(level, "\(message) \(flattened)")
+        spy.record(event.level, "\(event.message) \(flattened)")
     }
 }
 

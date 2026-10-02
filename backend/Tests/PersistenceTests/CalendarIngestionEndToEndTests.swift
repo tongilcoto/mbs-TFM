@@ -442,7 +442,7 @@ struct CalendarIngestionEndToEndTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.syncInstant.addingTimeInterval(-60),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
 
             let good = Gate(), bad = Gate()
             let first = Self.gated(tenant, good, Self.calendar(federationMatchID: "M1"))
@@ -545,7 +545,7 @@ struct CalendarIngestionEndToEndTests {
                 id: IngestionRunID(raw: UUID()), competitionID: second,
                 kind: .calendar, startedAt: Self.syncInstant.addingTimeInterval(-60),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
 
             await #expect(throws: (any Error).self) {
                 try await Self.useCase(tenant, Self.calendar(federationMatchID: "SHARED"))

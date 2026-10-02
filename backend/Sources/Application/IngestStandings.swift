@@ -323,7 +323,11 @@ public struct IngestStandings: Sendable {
     }
 
     private func record(_ run: IngestionRun, actor: ActorContext) async throws {
-        try await unitOfWork.withRepositories(actor: actor) { repositories in
+        // **El resultado se descarta con razón**: esta pasada no adopta filas
+        // `accepted` —estrena siempre `id`—, así que `record` solo puede
+        // devolver `.recorded` (lo dice el puerto). `.alreadyClosed` es cosa del
+        // calendario, que sí adopta (A-11·H-55).
+        _ = try await unitOfWork.withRepositories(actor: actor) { repositories in
             try await repositories.ingestionRuns.record(run)
         }
     }
