@@ -113,9 +113,8 @@ extension Domain.Club {
     /// Mapeo `Entidad → DTO`, trabajo del adaptador primario (§2.2).
     func toResponse() -> Components.Schemas.ClubResponse {
         .init(
-            // En minúsculas: `uuidString` de Foundation devuelve mayúsculas, pero
-            // la forma canónica de un UUID en JSON (RFC 4122 §3) es minúscula, y es
-            // lo que los clientes esperan de un `format: uuid`.
+            // Se interpola, y la minúscula de RFC 4122 §3 la pone `TypedIdentifier`
+            // (F10-ter): nunca `raw.uuidString`, que sale en mayúsculas.
             id: "\(id)",
             name: name,
             shortName: shortName,
@@ -164,8 +163,10 @@ extension APIHandler {
     /// - **Devolver** un caso del `Output` generado es la única forma de emitir
     ///   una respuesta **que el *spec* declara**, porque los casos son
     ///   literalmente los códigos declarados (D-65). Un cliente generado del
-    ///   contrato la decodifica como valor tipado. Lo de aquí abajo —el 400 de
-    ///   `minProperties`, el 422 de la invariante— es eso.
+    ///   contrato la decodifica como valor tipado. Lo de aquí abajo —los dos 400
+    ///   que el *handler* decide porque no hay error de Dominio detrás— es eso.
+    ///   **El 422 de la invariante, no**: ese lo lanza el Dominio y lo traduce el
+    ///   middleware, que sirve exactamente el mismo cuerpo (`A-14`·H-63).
     /// - **Lanzar** vale para todo lo demás, y hay red: el transporte generado
     ///   envuelve el error en un `ServerError` y lo **propaga**, así que
     ///   `ProblemMiddleware` lo ve y lo traduce con su `switch` exhaustivo,
@@ -206,21 +207,13 @@ extension APIHandler {
                              detail: "minProperties: 1"))))
         }
 
-        do {
-            let updated = try await unitOfWork.withRepositories(actor: actor) { repositories in
-                try await UpdateClub(clubs: repositories.clubs)
-                    .execute(actor: actor, command: command)
-            }
-            return .ok(.init(body: .json(updated.toResponse())))
-        } catch let error as DomainError {
-            // 422: bien formado y bien tipado, pero rompe una invariante (§5.4).
-            // La regla la puso el Dominio; aquí solo se traduce a HTTP.
-            guard case .invalidValue(let field, let reason) = error else { throw error }
-            return .unprocessableContent(.init(body: .application_problem_plus_json(
-                Self.problem(status: 422, code: "INVALID_VALUE",
-                             title: "Valor no válido",
-                             detail: "\(field): \(reason)"))))
+        // El 422 de la invariante rota **lo traduce el middleware** (§5.4): aquí
+        // había un `catch` que lo reconstruía igual, campo a campo (`A-14`·H-63).
+        let updated = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await UpdateClub(clubs: repositories.clubs)
+                .execute(actor: actor, command: command)
         }
+        return .ok(.init(body: .json(updated.toResponse())))
     }
 
     /// Construye el cuerpo RFC 7807 con el **tipo generado del spec**, no con un

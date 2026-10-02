@@ -281,6 +281,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ClubResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Club]
@@ -329,6 +330,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ──────────────────────────── Seasons (§5.1) ────────────────────────────
   /seasons:
@@ -357,6 +359,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/SeasonResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Seasons]
@@ -390,6 +393,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /seasons/{seasonId}:
     parameters:
@@ -408,6 +412,7 @@ paths:
                 $ref: '#/components/schemas/SeasonResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Seasons]
@@ -438,6 +443,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Seasons]
@@ -508,6 +514,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /seasons/{seasonId}/purge-preview:
     parameters:
@@ -536,6 +543,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /seasons/{seasonId}/archive:
     parameters:
@@ -554,6 +562,7 @@ paths:
           description: Temporada archivada.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Seasons]
@@ -567,6 +576,7 @@ paths:
           description: Temporada restaurada.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────── Competitions (§5.1) ───────────────────────
   /competitions/preview:
@@ -623,6 +633,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /competitions:
     get:
@@ -662,6 +673,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/CompetitionResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Competitions]
@@ -703,6 +715,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /competitions/{competitionId}:
     parameters:
@@ -721,6 +734,7 @@ paths:
                 $ref: '#/components/schemas/CompetitionResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Competitions]
@@ -766,6 +780,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Competitions]
@@ -791,6 +806,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────── OpponentClubs (§5.1) ───────────────────────
   /opponent-clubs:
@@ -826,6 +842,7 @@ paths:
                         items:
                           $ref: '#/components/schemas/OpponentClubResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST: un alta manual nace sin `federationClubId` y la ingesta la duplicaría (D-21).
 
@@ -846,6 +863,7 @@ paths:
                 $ref: '#/components/schemas/OpponentClubResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [OpponentClubs]
@@ -883,6 +901,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin DELETE: reaparecería en la siguiente sincronización. Para duplicados, la fusión (§3.7).
 
@@ -953,6 +972,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/TeamResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Teams]
@@ -1001,6 +1021,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}:
     parameters:
@@ -1019,6 +1040,7 @@ paths:
                 $ref: '#/components/schemas/TeamResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Teams]
@@ -1057,6 +1079,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Teams]
@@ -1082,6 +1105,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}/federation-link/preview:
     parameters:
@@ -1146,6 +1170,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}/federation-link:
     parameters:
@@ -1243,6 +1268,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}/ownership:
     parameters:
@@ -1277,6 +1303,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Teams]
@@ -1293,6 +1320,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}/registrations/{seasonId}:
     parameters:
@@ -1357,6 +1385,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Teams]
@@ -1377,6 +1406,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ───────────────────────────── Rounds (§5.1) ─────────────────────────────
   /rounds:
@@ -1418,6 +1448,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST: las crea la ingesta desde el calendario de la federación (§3.7).
 
@@ -1438,6 +1469,7 @@ paths:
                 $ref: '#/components/schemas/RoundResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin PATCH ni DELETE: número y fechas SON el calendario, no hay nada deducido que corregir. Es la
     # forma más pura de D-21.
@@ -1534,6 +1566,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST: los crea la ingesta (§3.7). Consecuencia asumida: no hay amistosos (D-21).
 
@@ -1554,6 +1587,7 @@ paths:
                 $ref: '#/components/schemas/MatchResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin PATCH ni DELETE: lo que aporta el club son los HIJOS del partido, no sus campos (D-21).
 
@@ -1604,6 +1638,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST, PATCH ni DELETE: la escribe la ingesta, ingerida o calculada (D-15).
 
@@ -1669,6 +1704,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Players]
@@ -1723,6 +1759,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /players/{playerId}:
     parameters:
@@ -1741,6 +1778,7 @@ paths:
                 $ref: '#/components/schemas/PlayerResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Players]
@@ -1779,6 +1817,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Players]
@@ -1806,6 +1845,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /players/{playerId}/photo:
     parameters:
@@ -1874,6 +1914,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Players]
@@ -1895,6 +1936,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ──────────────────────────── Absences (§5.1) ────────────────────────────
   /absences:
@@ -1975,6 +2017,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Absences]
@@ -2031,6 +2074,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /absences/{absenceId}:
     parameters:
@@ -2049,6 +2093,7 @@ paths:
                 $ref: '#/components/schemas/AbsenceResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Absences]
@@ -2102,6 +2147,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Absences]
@@ -2123,6 +2169,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────────── Appearances (§5.1) ───────────────────────────
   /appearances:
@@ -2206,6 +2253,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Appearances]
@@ -2257,6 +2305,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /appearances/{appearanceId}:
     parameters:
@@ -2275,6 +2324,7 @@ paths:
                 $ref: '#/components/schemas/AppearanceResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Appearances]
@@ -2319,6 +2369,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Appearances]
@@ -2341,6 +2392,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────────────── Cards (§5.1) ───────────────────────────────
   /cards:
@@ -2405,6 +2457,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Cards]
@@ -2452,6 +2505,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /cards/{cardId}:
     parameters:
@@ -2470,6 +2524,7 @@ paths:
                 $ref: '#/components/schemas/CardResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Cards]
@@ -2512,6 +2567,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Cards]
@@ -2530,6 +2586,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────────── LeagueScorers (§5.1) ───────────────────────────
   /league-scorers:
@@ -2592,6 +2649,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # Sin ruta por {id} (D-34, modelo de lectura) y sin escritura (D-21, salida de la ingesta). Sin PATCH
   # de corrección como en `Round`: el nombre y el equipo son texto del proveedor sobre jugadores ajenos
@@ -2708,6 +2766,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Goals]
@@ -2765,6 +2824,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /goals/{goalId}:
     parameters:
@@ -2783,6 +2843,7 @@ paths:
                 $ref: '#/components/schemas/GoalResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [Goals]
@@ -2830,6 +2891,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [Goals]
@@ -2850,6 +2912,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ────────────────────────── SanctionBrackets (§5.1) ──────────────────────────
   /sanction-brackets:
@@ -2899,6 +2962,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     put:
       tags: [SanctionBrackets]
@@ -2959,6 +3023,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # Sin POST/PATCH/DELETE ni ruta por {id}. No es restricción de propiedad —lo escribe el administrador—
   # sino de unidad de consistencia: el conjunto tiene sentido, la fila no (D-50).
@@ -2996,6 +3061,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/StaffMemberResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [StaffMembers]
@@ -3026,6 +3092,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-members/{staffMemberId}:
     parameters:
@@ -3044,6 +3111,7 @@ paths:
                 $ref: '#/components/schemas/StaffMemberResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
       tags: [StaffMembers]
@@ -3074,6 +3142,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [StaffMembers]
@@ -3088,6 +3157,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-members/{staffMemberId}/invite:
     parameters:
@@ -3115,6 +3185,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-positions:
     get:
@@ -3134,6 +3205,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/StaffPositionResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [StaffPositions]
@@ -3164,6 +3236,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-positions/{staffPositionId}:
     parameters:
@@ -3200,6 +3273,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     delete:
       tags: [StaffPositions]
@@ -3220,6 +3294,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-positions/{staffPositionId}/permissions:
     parameters:
@@ -3261,6 +3336,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /permissions/verbs:
     get:
@@ -3297,6 +3373,7 @@ paths:
                 items:
                   $ref: '#/components/schemas/VerbResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-assignments:
     get:
@@ -3347,6 +3424,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [StaffAssignments]
@@ -3401,6 +3479,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /staff-assignments/{staffAssignmentId}:
     parameters:
@@ -3418,6 +3497,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   # Sin PATCH. Puesto, ámbito y temporada son **identidad**: cambiarlos es otra asignación, no una
   # edición — el mismo criterio que `Player` con `teamId`/`seasonId` (D-37, D-62).
@@ -3474,6 +3554,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
     post:
       tags: [Ingestion]
@@ -3556,6 +3637,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
   /me:
     get:
@@ -3595,6 +3677,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
 
 components:
 
@@ -3763,6 +3846,21 @@ components:
             $ref: '#/components/schemas/Problem'
     NotFound:
       description: El recurso no existe en este club.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    DefaultProblem:
+      description: |
+        **Cualquier otro error, con su cuerpo RFC 7807** (§5.4, D-99). Cubre los códigos que **no son de la
+        ruta sino de todas**: los decide el middleware por el tipo de error, no la operación, así que
+        cualquiera puede emitirlos. Son 400 `TENANT_NOT_RESOLVED` (la petición no dice de qué club es),
+        404 `UNKNOWN_TENANT` (el club no existe), 403 `TENANT_MISMATCH` (el club del token no es el del
+        dominio), 500 `TENANT_NOT_PROVISIONED` o `INTERNAL`, y 503 `DATABASE_UNAVAILABLE`.
+
+        **Se ramifica por `code`, no por el tipo de la respuesta**: un cliente generado recibe aquí un
+        `Problem` tipado con su `status`, y lo que distingue un caso de otro es su `code`. Un código que
+        **sí** es de la ruta —un 409 del enganche, un 422 de una invariante— se sigue declarando en la ruta.
       content:
         application/problem+json:
           schema:

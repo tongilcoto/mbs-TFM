@@ -125,7 +125,7 @@ struct IngestStandingsTests {
                 try Match(
                     id: MatchID(raw: UUID()), competitionID: competition.id,
                     roundID: round.id,
-                    kickoff: try Kickoff(date: now),
+                    kickoff: Kickoff(date: now),
                     homeTeamID: try #require(teams["111"]),
                     awayTeamID: try #require(teams["222"]),
                     result: played.contains(number)

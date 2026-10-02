@@ -3689,6 +3689,11 @@ puede vivir en otro sitio. Es la misma decisión vista desde el otro lado.
 de uso recibe un **contexto de actor** —tenant, `StaffMember` y sus asignaciones vigentes— y consulta una
 política; el repositorio se queda tonto.
 
+> **Enmienda (2026-10-02, [D-98]).** El actor lleva **lo que dice el token** (tenant y usuario), y el
+> `StaffMember` con sus asignaciones lo **carga el caso de uso dentro de su ámbito**. La decisión de esta
+> entrada no cambia, porque la comprobación sigue en la frontera del caso de uso. Lo que cambia es quién lee
+> las asignaciones.
+
 **RLS queda como refuerzo posterior, no descartado.** Ganaría peso si algún día un cliente hablase
 directamente con **PostgREST** usando su JWT, sin pasar por esta API: ahí sería la única defensa. La costura
 está construida y es la de §6.2, lo que hace la decisión reversible sin rediseño.
@@ -4188,6 +4193,66 @@ admite un método nuevo es el de esta entrada —*¿es conocimiento del universo
 no *"lo necesita un caso de uso"*. Comprobar el *host* contra `Club.federation` cae dentro; decidir qué hacer
 cuando no cuadra, no: eso es del caso de uso.
 
+---
+
+### D-98 · El actor lleva lo que dice el token; la plantilla y sus asignaciones se cargan dentro del caso de uso
+
+**Lo que lo obligó a decidirse** (`A-14`·H-65, 2026-10-02). `ActorResolver.currentActor()` es **síncrono y sin
+argumentos**, y su documentación prometía que, al llegar §7, *"es el adaptador de este puerto quien carga
+además el `StaffMember` y sus asignaciones vigentes"*. Cargar eso es leer tablas del *schema* del club, y una
+función síncrona no puede esperar a la base. Lo prometido no cabía en la firma. Había que cambiar la firma o
+cambiar la promesa, y hacerlo antes de que la rebanada 1 copie la llamada en cada *handler*.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — `currentActor()` pasa a `async`** y el adaptador carga plantilla y asignaciones | Hoy, 6 llamadas en 3 ficheros de *handler*, mecánicas y enumeradas por el compilador. Pero el adaptador tendría que abrir **su propio** acceso al *schema* del club **antes** del ámbito del caso de uso: otra conexión y otra transacción por petición, solo para eso | Descartada |
+| **B — el actor lleva solo lo que dice el token** (club; y, con la auth, el usuario) **y la carga va dentro del ámbito del caso de uso** | El puerto no cambia y ningún *handler* se toca. La consulta usa la transacción que el caso de uso ya abre con `withRepositories(actor:)`, contra el *schema* que el `search_path` ya fijó (§6.2) | **Elegida** |
+
+**Decisión: B.** El motivo de fondo es §7.4: **la autorización se decide en el caso de uso** ([D-63]), y es
+ahí donde ya están abiertos la transacción y el *schema* del club. Cargar las asignaciones en el adaptador
+sería hacer la mitad del trabajo de la política fuera de la política, y con un acceso a la base que nadie más
+necesita. Y el actor queda **inmutable y barato**: lo que sale del token se lee sin E/S, igual que hoy el club
+sale del `Host`.
+
+**Lo que se asume a cambio.** Cada caso de uso protegido carga las asignaciones vigentes del usuario **antes**
+de consultar la política. Para que no se escriba treinta veces, irá en una sola función de Aplicación,
+llamada desde el mismo sitio donde hoy están los `TODO(§7)`. Esa función y la política son §7, no esta
+entrada.
+
+**Lo que no cambia.** El *claim* sigue llegando al adaptador **por el ambiente**, no por parámetro.
+`swift-openapi-vapor` pide que el middleware que fija un `@TaskLocal` vaya el último, y ese sitio es de
+`TenantResolutionMiddleware`. Así que el middleware de auth deja el *claim* en la petición y lo levanta el de
+tenancy, que es también donde va la comparación *claim* contra subdominio (§6.1, `A-6`·H-42). Esto vale con
+A y con B: no las distingue.
+
+---
+
+### D-99 · Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`
+
+**Lo que lo obligó a decidirse** (`A-14`·H-67, 2026-10-02). `ProblemMiddleware` decide el código HTTP por el
+**tipo** del error, no por la ruta, y nada compara lo que emite con lo que la ruta declara. Así que hay códigos
+que pueden salir por **cualquier** operación aunque ninguna los declare: 400 `TENANT_NOT_RESOLVED`, 404
+`UNKNOWN_TENANT`, 403 `TENANT_MISMATCH`, 500 `TENANT_NOT_PROVISIONED`/`INTERNAL` y 503 `DATABASE_UNAVAILABLE`.
+Medido: `getClub` declara 200 y 401 y emite los tres primeros, y **0 de 83** operaciones declaraban 500 o 503.
+Un cliente generado del *spec* recibe esos casos como *"no documentado"*, sin el `Problem` tipado. La regla
+del proyecto —*"un código que el contrato no declara no lo sabe leer un cliente generado"*— la cumplían los
+*handlers*, no el middleware.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Declarar los transversales en cada operación** | Unas 300 líneas repetidas, y la operación nueva tiene que acordarse de cinco | Descartada |
+| **B — `default: DefaultProblem` en cada operación** | Una línea por operación; cubre también el código transversal que llegue mañana | **Elegida** |
+| **C — Dejarlo y escribirlo** | No cuesta nada; cada cliente lo resuelve a su manera | Descartada |
+
+**Decisión: B.** Encaja con lo que §5.4 ya decía: **todo** error es un `Problem`, y **el `code` es para
+ramificar**. Para un error que no es de la ruta, el tipo de la respuesta no tiene nada que distinguir, y el
+`code` lo distingue todo. Un código que **sí** es de la ruta —el 409 del enganche, el 422 de una invariante—
+se sigue declarando en ella, para que el cliente lo tenga con nombre.
+
+**Lo que se hace cumplir y cómo.** El generador solo traduce las operaciones del `filter` ([D-69]), así que el
+*build* no vigila las otras 77. Lo vigila `SpecConventionTests`, que lee el YAML y exige el `default` en
+**cada** bloque de respuestas.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4322,3 +4387,5 @@ cuando no cuadra, no: eso es del caso de uso.
 [D-95]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-96]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-97]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

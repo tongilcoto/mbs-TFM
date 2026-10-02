@@ -122,6 +122,16 @@ public func configure(
                 .allowsDevelopmentHeader(in: app.environment)
         )
     )
+    // **Y lo que no casa con ninguna ruta, también en RFC 7807** (§5.4,
+    // `A-14`·H-68). El middleware de un grupo solo corre cuando la ruta casa, así
+    // que una ruta fuera del `filter` —la que el backoffice pedirá antes de
+    // tiempo— o una errata las servía el `ErrorMiddleware` de Vapor con su
+    // `{"error":true,"reason":"Not Found"}`. Se añade **al final** de la cadena
+    // global, o sea **por dentro** de ese `ErrorMiddleware`, que se queda como
+    // red de último recurso. Es el mismo tipo y la misma traducción: no es un
+    // segundo sitio que decida códigos, es el mismo sitio colgado más arriba.
+    app.middleware.use(ProblemMiddleware(exposesInternalDetail: app.environment != .production))
+
     try handler.registerHandlers(
         on: VaporTransport(routesBuilder: routes),
         // El prefijo `/v1` del contrato (§5.1). Sale del segundo `server` del

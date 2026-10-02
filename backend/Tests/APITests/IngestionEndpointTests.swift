@@ -51,8 +51,10 @@ struct IngestionEndpointTests {
     /// canario aparte—.
     struct StubProvider: FederationClientProvider {
         let failing: Bool
+        // `nil` para la FCF, como el catálogo de producción (`D-95`): es lo que
+        // hace que un club catalán pueda recibir su 501 aquí (H-28).
         func client(for code: FederationCode) -> (any FederationClient)? {
-            StubClient(failing: failing)
+            code == .fcf ? nil : StubClient(failing: failing)
         }
     }
 
@@ -106,6 +108,7 @@ struct IngestionEndpointTests {
     /// El *schema* del club, con la **entrada** de la ingesta sembrada (`D-16`).
     static func withSeededClub(
         failingFederation: Bool = false,
+        federation: FederationCode = .rffm,
         _ body: @escaping @Sendable (Application, SeasonID, CompetitionID, CompetitionID) async throws -> Void
     ) async throws {
         try await TestEnvironment.withApp(
@@ -115,7 +118,7 @@ struct IngestionEndpointTests {
         ) { app in
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
             try await TestEnvironment.provisionClub(
-                slug, federation: .rffm, schemaPrefix: prefix, on: app)
+                slug, federation: federation, schemaPrefix: prefix, on: app)
 
             let seasonID = SeasonID(raw: UUID())
             let competitionID = CompetitionID(raw: UUID())
@@ -624,10 +627,34 @@ struct IngestionEndpointTests {
             try await app.testing().test(
                 .GET, "/v1/ingestion-runs?competitionId=\(alien)",
                 beforeRequest: { request async throws in Self.header(&request) }
-            ) { response async in
+            ) { response async throws in
                 // 404 **literal**, no el defensivo de §7.5: el `search_path` no
                 // alcanza la fila, así que para esta consulta no existe.
                 #expect(response.status == .notFound)
+                // **Por código, no solo por status** (H-46): desde `A-14`·H-63
+                // este 404 lo decide un solo sitio, el middleware.
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "COMPETITION_NOT_FOUND")
+                #expect(problem.detail == alien)
+            }
+        }
+    }
+
+    @Test("una competición que no existe, pedida sola, es 404 y no 502 (D-88 · A-14/H-63)")
+    func anUnknownSingleCompetitionIsNotFound() async throws {
+        try await Self.withSeededClub { app, _, _, _ in
+            let alien = UUID().uuidString.lowercased()
+            try await app.testing().test(
+                .POST, "/v1/ingestion-runs",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.body(&request, competitionIds: [alien])
+                }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "COMPETITION_NOT_FOUND")
+                #expect(problem.detail == alien)
             }
         }
     }
@@ -635,16 +662,50 @@ struct IngestionEndpointTests {
     @Test("una temporada que no existe no cae a la vigente: 404 (D-84)")
     func anUnknownSeasonIsNotFound() async throws {
         try await Self.withSeededClub { app, _, _, _ in
+            let alien = UUID().uuidString.lowercased()
             try await app.testing().test(
                 .POST, "/v1/ingestion-runs",
                 beforeRequest: { request async throws in
                     Self.header(&request)
-                    try Self.body(&request, seasonId: UUID().uuidString.lowercased())
+                    try Self.body(&request, seasonId: alien)
                 }
-            ) { response async in
+            ) { response async throws in
                 #expect(response.status == .notFound)
+                // `SEASON_NOT_FOUND` es también el código del **500** de
+                // `seasonNotFound` (el *schema* roto); aquí tiene que salir el 404
+                // de `unknownSeason`, que es lo que el `status` de arriba fija.
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "SEASON_NOT_FOUND")
+                #expect(problem.detail == alien)
             }
         }
+    }
+
+    /// **La otra puerta del club catalán** (`H-28`, remedido en A-12): el
+    /// enganche ya tenía su 501 bajo arnés (`C-E.7`); `/ingestion-runs`, no.
+    @Test("un club sin adaptador de federación recibe 501 al disparar (H-28 · A-14/H-63)")
+    func aClubWithoutAdapterGets501() async throws {
+        try await Self.withSeededClub(federation: .fcf) { app, _, _, _ in
+            try await app.testing().test(
+                .POST, "/v1/ingestion-runs",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.body(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .notImplemented)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "FEDERATION_ADAPTER_MISSING")
+                #expect(problem.detail?.contains("fcf") == true)
+            }
+        }
+    }
+
+    static func decodeProblem(_ response: TestingHTTPResponse) throws
+        -> Components.Schemas.Problem
+    {
+        try JSONDecoder().decode(
+            Components.Schemas.Problem.self, from: Data(response.body.readableBytesView))
     }
 
     @Test("lo que el 202 aceptó y no llegó a hacerse se dice por el log (H-27)")
@@ -893,17 +954,16 @@ struct CapturingLogHandler: LogHandler {
         set { metadata[key] = newValue }
     }
 
-    func log(
-        level: Logger.Level, message: Logger.Message, metadata: Logger.Metadata?,
-        source: String, file: String, function: String, line: UInt
-    ) {
+    // `log(event:)` y no la firma de siete parámetros, que swift-log marca como
+    // obsoleta para quien implementa un `LogHandler`.
+    func log(event: LogEvent) {
         // El mensaje y los metadatos se aplanan juntos: lo que se afirma es
         // *qué se dijo*, y los ids de competición viajan en los metadatos.
-        let flattened = ((metadata ?? [:]).merging(self.metadata) { a, _ in a })
+        let flattened = ((event.metadata ?? [:]).merging(self.metadata) { a, _ in a })
             .map { "\($0.key)=\($0.value)" }
             .sorted()
             .joined(separator: " ")
-        spy.record(level, "\(message) \(flattened)")
+        spy.record(event.level, "\(event.message) \(flattened)")
     }
 }
 

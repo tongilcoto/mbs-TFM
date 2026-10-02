@@ -221,7 +221,7 @@ struct IngestionPersistenceTests {
                 kind: .calendar, startedAt: Self.date("13-09-2025"),
                 finishedAt: nil, outcome: .accepted)
 
-            try await tenant.scope { try await $0.ingestionRuns.record(run) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(run) }
 
             let stored = try await tenant.scope {
                 try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
@@ -267,12 +267,12 @@ struct IngestionPersistenceTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.date("13-09-2025"),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
 
             var pass = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
             pass.matchesCreated = 240
             let closed = pass
-            try await tenant.scope { try await $0.ingestionRuns.record(closed) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(closed) }
 
             let stored = try await tenant.scope {
                 try await $0.ingestionRuns.list(competitionID: competitionID, limit: 10)
@@ -305,7 +305,7 @@ struct IngestionPersistenceTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.date("13-09-2025"),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
 
             // Las dos pasadas cierran **su copia** de la misma aceptada.
             var winner = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
@@ -344,7 +344,7 @@ struct IngestionPersistenceTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.date("13-09-2025"),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(accepted) }
             let first = try accepted.closed(as: .succeeded, at: Self.date("14-09-2025"))
             let late = try accepted.closed(
                 as: .failed, at: Self.date("15-09-2025"), error: "llegó tarde")
@@ -428,7 +428,7 @@ struct IngestionPersistenceTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.date("06-09-2025"),
                 finishedAt: Self.date("06-09-2025"), outcome: .succeeded)
-            try await tenant.scope { try await $0.ingestionRuns.record(lastWeek) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(lastWeek) }
 
             let onlyClosed = try await tenant.scope {
                 try await $0.ingestionRuns.findAccepted(
@@ -440,7 +440,7 @@ struct IngestionPersistenceTests {
                 id: IngestionRunID(raw: UUID()), competitionID: competitionID,
                 kind: .calendar, startedAt: Self.date("13-09-2025"),
                 finishedAt: nil, outcome: .accepted)
-            try await tenant.scope { try await $0.ingestionRuns.record(open) }
+            _ = try await tenant.scope { try await $0.ingestionRuns.record(open) }
 
             let found = try await tenant.scope {
                 try await $0.ingestionRuns.findAccepted(

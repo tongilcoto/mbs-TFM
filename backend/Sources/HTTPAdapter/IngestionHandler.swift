@@ -39,18 +39,15 @@ extension APIHandler {
     public func listIngestionRuns(_ input: Operations.listIngestionRuns.Input) async throws
         -> Operations.listIngestionRuns.Output
     {
-        let actor: ActorContext
-        do { actor = try actors.currentActor() } catch {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
-                             title: "La petición no identifica ningún club"))))
-        }
+        // **Sin `do/catch`** (`A-14`·H-64): aquí se servía cualquier error del
+        // resolutor como `400 TENANT_NOT_RESOLVED`, y con la auth eso convierte
+        // un 401 en *"no identifica ningún club"*. Lo traduce el middleware,
+        // igual que en las otras cuatro puertas.
+        let actor = try actors.currentActor()
 
         guard let competitionID = UUID(uuidString: input.query.competitionId) else {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "INVALID_UUID",
-                             title: "`competitionId` no es un UUID",
-                             detail: input.query.competitionId))))
+            return .badRequest(Self.invalidUUID(
+                InvalidUUID(field: "competitionId", value: input.query.competitionId)))
         }
 
         // **El rango del `limit` lo comprueba aquí el adaptador**, porque el
@@ -65,37 +62,31 @@ extension APIHandler {
                              detail: "1..\(Self.maxRunLimit), recibido \(limit)"))))
         }
 
-        do {
-            let runs = try await unitOfWork.withRepositories(actor: actor) { repositories in
-                // **El 404 es del ámbito**, no de la lista: una competición sin
-                // pasadas devuelve 200 con array vacío, que es distinto de una
-                // competición que no existe. Sin esta comprobación, pedir la de
-                // otro club daría un 200 mintiendo.
-                guard try await repositories.competitions.find(CompetitionID(raw: competitionID))
-                    != nil
-                else {
-                    throw ApplicationError.competitionNotFound(id: "\(CompetitionID(raw: competitionID))")
-                }
-                return try await repositories.ingestionRuns.list(
-                    competitionID: CompetitionID(raw: competitionID), limit: limit)
+        let runs = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            // **El 404 es del ámbito**, no de la lista: una competición sin
+            // pasadas devuelve 200 con array vacío, que es distinto de una
+            // competición que no existe. Sin esta comprobación, pedir la de
+            // otro club daría un 200 mintiendo.
+            //
+            // **Se lanza y lo traduce el middleware** (`A-14`·H-63): aquí había
+            // un `catch` que reconstruía el mismo 404, byte a byte — un segundo
+            // sitio decidiendo el mismo código.
+            guard try await repositories.competitions.find(CompetitionID(raw: competitionID))
+                != nil
+            else {
+                throw ApplicationError.competitionNotFound(id: "\(CompetitionID(raw: competitionID))")
             }
-            return .ok(.init(body: .json(runs.map { $0.toResponse() })))
-        } catch ApplicationError.competitionNotFound(let id) {
-            return .notFound(.init(body: .application_problem_plus_json(
-                Self.problem(status: 404, code: "COMPETITION_NOT_FOUND",
-                             title: "Competición desconocida", detail: id))))
+            return try await repositories.ingestionRuns.list(
+                competitionID: CompetitionID(raw: competitionID), limit: limit)
         }
+        return .ok(.init(body: .json(runs.map { $0.toResponse() })))
     }
 
     public func triggerIngestion(_ input: Operations.triggerIngestion.Input) async throws
         -> Operations.triggerIngestion.Output
     {
-        let actor: ActorContext
-        do { actor = try actors.currentActor() } catch {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "TENANT_NOT_RESOLVED",
-                             title: "La petición no identifica ningún club"))))
-        }
+        // Sin `do/catch`, por lo mismo que `listIngestionRuns` (H-64).
+        let actor = try actors.currentActor()
 
         var seasonID: SeasonID?
         var competitionIDs: [CompetitionID]?
@@ -108,10 +99,7 @@ extension APIHandler {
                     try list.map { CompetitionID(raw: try Self.uuid($0, field: "competitionIds")) }
                 }
             } catch let error as InvalidUUID {
-                return .badRequest(.init(body: .application_problem_plus_json(
-                    Self.problem(status: 400, code: "INVALID_UUID",
-                                 title: "`\(error.field)` no es un UUID",
-                                 detail: error.value))))
+                return .badRequest(Self.invalidUUID(error))
             }
         }
 
@@ -136,81 +124,65 @@ extension APIHandler {
             unitOfWork: unitOfWork, federationClients: federationClients,
             clock: clock, ids: ids)
 
-        do {
-            // ── Una sola competición: se hace aquí y se devuelve (§2.3-c) ────
-            //
-            // **Lo decide la petición, no los datos.** Con `{}` sobre un club que
-            // solo tiene una competición la respuesta sigue siendo 202: que un
-            // cliente reciba 200 o 202 según cuántos equipos tenga el club sería
-            // una forma de respuesta imposible de programar.
-            if competitionIDs?.count == 1 {
-                let report = try await useCase.execute(scope: scope, actor: actor)
-                switch report.entries.first?.outcome {
-                case .synced(let run):
-                    return .ok(.init(body: .json(run.toResponse())))
-                case .failed(let reason):
-                    // **502**: el fallo es del tercero, no del cliente. Mismo
-                    // criterio que `D-84` en `ProblemMiddleware` — un 4xx
-                    // invitaría a reintentar con otro cuerpo, y eso aquí no
-                    // arregla nada. La constancia ya está en `ingestion_runs`.
-                    return .badGateway(.init(body: .application_problem_plus_json(
-                        Self.problem(status: 502, code: "INGESTION_FAILED",
-                                     title: "La pasada no terminó",
-                                     detail: reason))))
-                case nil:
-                    // Inalcanzable por construcción —el plan de una competición
-                    // encontrada tiene exactamente un elemento—, pero el tipo de
-                    // retorno exige un valor y un `fatalError` aquí tumbaría el
-                    // servidor por una rama que no debería existir.
-                    return .badGateway(.init(body: .application_problem_plus_json(
-                        Self.problem(status: 502, code: "INGESTION_FAILED",
-                                     title: "La pasada no llegó a ejecutarse"))))
-                }
-            }
+        // **Sin `do/catch`** (`A-14`·H-63): los 404 de la competición y de la
+        // temporada y el 501 del club sin adaptador los traduce el middleware.
+        // Aquí se reconstruían idénticos, y quitarlos no cambiaba ni un byte de
+        // la respuesta: eran un segundo sitio decidiendo el mismo código.
 
-            // ── Una temporada entera: se acepta y se hace después (D-67) ─────
-            //
-            // El plan se calcula **antes** de responder, y no solo para poder
-            // decir qué entra: es lo que hace que una `seasonId` inexistente dé
-            // 404 aquí y no un `202` seguido de un fallo que nadie ve.
-            // **Aceptar, no solo planificar** (F10-bis, `H-27`): además de decidir
-            // qué entra —lo que hace que una `seasonId` inexistente dé 404 y no un
-            // `202` con un fallo invisible detrás—, deja una fila `accepted` por
-            // competición, que es lo único que el backoffice puede consultar
-            // mientras el trabajo ocurre.
-            let planned = try await useCase.accept(scope: scope, actor: actor)
-            // **Solo se lanza lo que no está ya en marcha** (A-11·H-55). La fila
-            // ya la deduplica `accept`; esto deduplica el trabajo, que es lo que
-            // un doble clic multiplicaba. La respuesta sigue diciendo todo lo
-            // aceptado: lo que ya corría, también lo está.
-            let toRun = await inFlight.reserve(planned, club: actor.clubSlug)
-            if !toRun.isEmpty {
-                let runScope = IngestionScope(competitionIDs: toRun, minInterval: nil)
-                await background.enqueue {
-                    await self.runAccepted(
-                        useCase, scope: runScope, actor: actor, planned: toRun)
-                    await self.inFlight.release(toRun, club: actor.clubSlug)
-                }
+        // ── Una sola competición: se hace aquí y se devuelve (§2.3-c) ────
+        //
+        // **Lo decide la petición, no los datos.** Con `{}` sobre un club que
+        // solo tiene una competición la respuesta sigue siendo 202: que un
+        // cliente reciba 200 o 202 según cuántos equipos tenga el club sería
+        // una forma de respuesta imposible de programar.
+        if competitionIDs?.count == 1 {
+            let report = try await useCase.execute(scope: scope, actor: actor)
+            switch report.entries.first?.outcome {
+            case .synced(let run):
+                return .ok(.init(body: .json(run.toResponse())))
+            case .failed(let reason):
+                // **502**: el fallo es del tercero, no del cliente. Mismo
+                // criterio que `D-84` en `ProblemMiddleware` — un 4xx
+                // invitaría a reintentar con otro cuerpo, y eso aquí no
+                // arregla nada. La constancia ya está en `ingestion_runs`.
+                return .badGateway(.init(body: .application_problem_plus_json(
+                    Self.problem(status: 502, code: "INGESTION_FAILED",
+                                 title: "La pasada no terminó",
+                                 detail: reason))))
+            case nil:
+                // Inalcanzable por construcción —el plan de una competición
+                // encontrada tiene exactamente un elemento—, pero el tipo de
+                // retorno exige un valor y un `fatalError` aquí tumbaría el
+                // servidor por una rama que no debería existir.
+                return .badGateway(.init(body: .application_problem_plus_json(
+                    Self.problem(status: 502, code: "INGESTION_FAILED",
+                                 title: "La pasada no llegó a ejecutarse"))))
             }
-            return .accepted(.init(body: .json(.init(
-                competitionIds: planned.map { "\($0)" }))))
-
-        } catch ApplicationError.competitionNotFound(let id) {
-            return .notFound(.init(body: .application_problem_plus_json(
-                Self.problem(status: 404, code: "COMPETITION_NOT_FOUND",
-                             title: "Competición desconocida", detail: id))))
-        } catch ApplicationError.unknownSeason(let id) {
-            return .notFound(.init(body: .application_problem_plus_json(
-                Self.problem(status: 404, code: "SEASON_NOT_FOUND",
-                             title: "Temporada desconocida", detail: id))))
-        } catch ApplicationError.federationAdapterMissing(let federation) {
-            // **501, no 500**: no se ha roto nada. La federación está en el
-            // catálogo y su adaptador todavía no se ha escrito (F9).
-            return .notImplemented(.init(body: .application_problem_plus_json(
-                Self.problem(status: 501, code: "FEDERATION_ADAPTER_MISSING",
-                             title: "Federación todavía sin adaptador",
-                             detail: "No hay adaptador de ingesta para '\(federation)'."))))
         }
+
+        // ── Una temporada entera: se acepta y se hace después (D-67) ─────
+        //
+        // **Aceptar, no solo planificar** (F10-bis, `H-27`): además de decidir
+        // qué entra —lo que hace que una `seasonId` inexistente dé 404 y no un
+        // `202` con un fallo invisible detrás—, deja una fila `accepted` por
+        // competición, que es lo único que el backoffice puede consultar
+        // mientras el trabajo ocurre.
+        let planned = try await useCase.accept(scope: scope, actor: actor)
+        // **Solo se lanza lo que no está ya en marcha** (A-11·H-55). La fila
+        // ya la deduplica `accept`; esto deduplica el trabajo, que es lo que
+        // un doble clic multiplicaba. La respuesta sigue diciendo todo lo
+        // aceptado: lo que ya corría, también lo está.
+        let toRun = await inFlight.reserve(planned, club: actor.clubSlug)
+        if !toRun.isEmpty {
+            let runScope = IngestionScope(competitionIDs: toRun, minInterval: nil)
+            await background.enqueue {
+                await self.runAccepted(
+                    useCase, scope: runScope, actor: actor, planned: toRun)
+                await self.inFlight.release(toRun, club: actor.clubSlug)
+            }
+        }
+        return .accepted(.init(body: .json(.init(
+            competitionIds: planned.map { "\($0)" }))))
     }
 
     /// El trabajo que el `202` prometió, con la **única salida que le queda**
@@ -236,11 +208,10 @@ extension APIHandler {
     /// **Y lo que esto no arregla, para que nadie lo confunda con la solución:**
     /// un log lo lee el operador, no el backoffice. Que la pantalla se entere
     /// —sin *push*, que es como es— necesita que quede **fila** desde el instante
-    /// en que se acepta; hoy `IngestionOutcome` solo tiene `succeeded` y `failed`,
-    /// así que el `202` no deja ni un hueco donde mirar y `ingestionHealth`
-    /// (`D-89`) sigue diciendo `ok`. Eso es modelo, contrato y una enmienda a
-    /// `D-88` —que hoy dice *"el `POST` no crea la fila"*—: va a **F10**, con el
-    /// `202` de `D-67`.
+    /// en que se acepta, y eso ya lo hace `D-96`: la fila `accepted` que deja
+    /// `accept` y que la pasada adopta. Lo que sigue sin decidir es cómo la lee
+    /// `ingestionHealth` (`D-89`), que hoy no tiene caso para una aceptada
+    /// huérfana (A-11·H-58, dueño: la rebanada 1).
     func runAccepted(
         _ useCase: IngestClubCalendars,
         scope: IngestionScope,
@@ -299,6 +270,20 @@ extension APIHandler {
             throw InvalidUUID(field: field, value: raw)
         }
         return value
+    }
+
+    /// El 400 de un identificador que no se pudo decodificar, **en un solo
+    /// sitio** (`A-14`·H-63): estaba copiado cuatro veces en tres ficheros, y
+    /// cada *handler* con un `{id}` en la ruta lo habría copiado otra vez.
+    ///
+    /// Es un 400 del *handler* y no del middleware porque no hay error de
+    /// Dominio detrás: es la decodificación de un parámetro, que el generador
+    /// entrega como `String` (`D-65`).
+    static func invalidUUID(_ error: InvalidUUID) -> Components.Responses.BadRequest {
+        .init(body: .application_problem_plus_json(
+            problem(status: 400, code: "INVALID_UUID",
+                    title: "`\(error.field)` no es un UUID",
+                    detail: error.value)))
     }
 }
 

@@ -1950,6 +1950,10 @@ struct SeasonResponse: Content {
   códigos HTTP.
 - **Códigos:** `400` validación (formato), `401`/`403` auth (§7), `404` no encontrado, `409` **conflicto**
   (duplicado en POST; o DELETE de temporada **con dependientes** sin `cascade`), `422` regla de negocio.
+- **Lo que no es de la ruta sino de todas va en el `default`.** Cada operación declara **sus** códigos y,
+  además, `default: DefaultProblem`, que cubre los que el middleware emite en cualquiera: club desconocido,
+  petición sin club, discrepancia de tenant, *schema* sin aprovisionar, base caída. El cliente distingue esos
+  casos por `code` ([D-99]).
 - **Dos códigos exclusivos de la subida de foto** (§5.1, la única operación no-JSON): `413` *Payload Too
   Large* si la imagen supera el tope, y `415` *Unsupported Media Type* si el `Content-Type` no es
   `image/jpeg` ni `image/png`. Un fichero **del tipo declarado pero corrupto o falseado** (una extensión
@@ -2400,8 +2404,9 @@ propiedad de §5.1 ya reparte el resto:
 > **La autorización se comprueba en la frontera del caso de uso** (capa de Aplicación, §2.2/§4), no en el
 > controlador ni en la base de datos ([D-63]).
 
-El caso de uso recibe un **contexto de actor** —tenant, `StaffMember` y sus asignaciones vigentes— y consulta
-una política; el repositorio se queda tonto.
+El caso de uso recibe un **contexto de actor** —lo que dice el token: el tenant y, con la auth, el usuario—,
+**carga dentro de su propio ámbito** el `StaffMember` y sus asignaciones vigentes, y consulta una política; el
+repositorio se queda tonto. El actor no hace E/S: se construye sin tocar la base ([D-98]).
 
 > **Consecuencia para el arranque del backend:** ese contexto debe **atravesar la frontera de los casos de
 > uso desde el primer día**, aunque al principio solo lleve el club. Añadir después un parámetro a todas las
@@ -2769,6 +2774,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-61]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-62]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

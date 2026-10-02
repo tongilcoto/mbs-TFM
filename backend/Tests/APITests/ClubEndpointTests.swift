@@ -99,16 +99,27 @@ struct ClubEndpointTests {
     @Test("petición sin club → 400; club desconocido → 404 (§6.1)")
     func tenantResolutionClosesFromAbove() async throws {
         try await Self.withApp { app in
-            try await app.testing().test(.GET, "/v1/club") { response async in
+            // **Por código y como `Problem` del contrato** (H-46, `D-99`): estos dos
+            // los emite el middleware en **cualquier** ruta, y `getClub` no los
+            // declara uno a uno — los cubre su `default`. Lo que un cliente usa
+            // para distinguirlos es el `code`, así que es lo que se afirma.
+            try await app.testing().test(.GET, "/v1/club") { response async throws in
                 #expect(response.status == .badRequest, "sin club identificable")
+                let problem = try JSONDecoder().decode(
+                    Components.Schemas.Problem.self, from: Data(response.body.readableBytesView))
+                #expect(problem.code == "TENANT_NOT_RESOLVED")
             }
             try await app.testing().test(
                 .GET, "/v1/club",
                 beforeRequest: { $0.headers.add(name: "X-Club", value: "no-existe") }
-            ) { response async in
+            ) { response async throws in
                 // 404 **literal**: para esta consulta el club no existe. No es el
                 // 404 defensivo de §7.5, que ahí sería mentira (D-64).
                 #expect(response.status == .notFound)
+                let problem = try JSONDecoder().decode(
+                    Components.Schemas.Problem.self, from: Data(response.body.readableBytesView))
+                #expect(problem.code == "UNKNOWN_TENANT")
+                #expect(problem.detail == "no-existe")
             }
         }
     }

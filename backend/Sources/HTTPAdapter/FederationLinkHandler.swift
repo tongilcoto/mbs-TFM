@@ -53,10 +53,7 @@ extension APIHandler {
         do {
             teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: "teamId"))
         } catch let error as InvalidUUID {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "INVALID_UUID",
-                             title: "`\(error.field)` no es un UUID",
-                             detail: error.value))))
+            return .badRequest(Self.invalidUUID(error))
         }
 
         let payload: Components.Schemas.FederationLinkPreviewRequest
@@ -89,10 +86,7 @@ extension APIHandler {
         do {
             teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: "teamId"))
         } catch let error as InvalidUUID {
-            return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "INVALID_UUID",
-                             title: "`\(error.field)` no es un UUID",
-                             detail: error.value))))
+            return .badRequest(Self.invalidUUID(error))
         }
 
         let payload: Components.Schemas.FederationLinkRequest
@@ -107,14 +101,18 @@ extension APIHandler {
         // admite: un código sin declarar no lo sabe leer un cliente generado.
         // Es el mismo razonamiento con el que `C-B.2` puso en 400 la URL
         // ilegible.
+        //
+        // **El `detail` es `campo: motivo`**, la forma de todo `INVALID_VALUE`
+        // (`A-14`·H-63). Interpolar el error entero servía el volcado del
+        // enumerado, que no es texto para una pantalla.
         let seasonLabel: SeasonLabel?
         do {
             seasonLabel = try payload.seasonLabel.map { try SeasonLabel($0) }
-        } catch let error as DomainError {
+        } catch DomainError.invalidValue(_, let reason) {
             return .badRequest(.init(body: .application_problem_plus_json(
                 Self.problem(status: 400, code: "INVALID_VALUE",
                              title: "Valor no válido",
-                             detail: "seasonLabel: \(error)"))))
+                             detail: "seasonLabel: \(reason)"))))
         }
 
         let result = try await LinkTeamToFederation(

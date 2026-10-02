@@ -361,7 +361,7 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**562 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+**568 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
 montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -574,9 +574,18 @@ docker compose down -v
   `roundId`, que solo existe en la pasada de clasificación, y ésa no ocurre con un calendario vacío—. Ninguno
   se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
   cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
-  que tienen cero aciertos. Hoy: **52 campos, 0 sin afirmar**, y **17 de 30** códigos `Problem` afirmados
-  **por código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; los trece que faltan son los quince
-  que su fila del plan de auditoría lista por nombre, menos los dos de federación que cerró `6a837ab`).
+  que tienen cero aciertos. Hoy: **61 campos, 0 sin afirmar** (recontado en `A-14`·H-72 contando los
+  anidados; F10-ter había contado 52 sin decir cómo), y **22 de 31** códigos `Problem` afirmados **por
+  código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; F10-ter, en 17 de 30; la ronda de A-14
+  sumó cinco y el `NOT_FOUND` que H-68 hizo alcanzable). Los nueve que faltan: `BAD_REQUEST`,
+  `DATABASE_UNAVAILABLE`, `EMPTY_PATCH`, `EMPTY_SELECTION`, `INGESTION_FAILED`, `INVALID_LIMIT`,
+  `INVALID_UUID`, `NOT_EDITABLE_AFTER_SYNC` y `RUN_NOT_RECORDED`.
+- **Los errores que no son de la ruta sino de todas los cubre el `default` de cada operación** (`D-99`,
+  `A-14`·H-67). El middleware decide el código por el **tipo** de error, no por la ruta, así que el club
+  desconocido, la petición sin club o la base caída pueden salir por cualquiera. Las 83 operaciones del
+  *spec* declaran `default: DefaultProblem`, y `SpecConventionTests` lo exige **sobre el YAML**, porque el
+  compilador solo ve las del `filter`. Al añadir una operación al *spec*: su `default`, y en la ruta solo los
+  códigos **propios** de ella.
 - **Y los valores de un test tienen que ser distintos entre sí cuando lo que se prueba es un mapeo.** Los
   trece contadores de `IngestionRunResponse` se afirman con 1..13 **a propósito**: con ceros, o con el mismo
   número repetido, una permutación es **invisible** y el test pasa igual con los campos cruzados. Lo mismo

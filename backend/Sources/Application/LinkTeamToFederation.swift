@@ -33,6 +33,17 @@ public struct LinkTeamToFederation: Sendable {
     public func execute(
         _ request: FederationLinkRequest, actor: ActorContext
     ) async throws -> FederationLinkResult {
+        // TODO(§7): aquí va la comprobación de **rol elevado** que el *spec*
+        // promete —con su `403`— y que hoy no tiene dónde caer (`A-14`·H-66).
+        //
+        // **Y no es solo la de `UpdateClub`, es la de `IngestClubCalendars`
+        // también** (`A-6`·H-41): esto escribe `Season`, `Competition` y
+        // `TeamRegistration` —administración del club, §7.3— y **encola una
+        // ingesta con el actor de la persona** (`FederationLinkHandler`), que
+        // escribe `Team` y `Match`, y §7.3 se los atribuye al actor de sistema.
+        // Cómo se expresa *"una persona pide una escritura de la ingesta"* es la
+        // decisión que H-41 dejó a F10 y F10 no tomó. Tomarla aquí y en
+        // `IngestClubCalendars` a la vez, que es el mismo caso.
         let found = try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let club = try await repositories.clubs.current() else {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)

@@ -40,13 +40,12 @@ public struct FluentClubRepository: ClubRepository {
         // `updated_at` va explícito porque `@Timestamp(on: .update)` solo actúa
         // al guardar un modelo, no en un `update` de constructor de consulta.
         // TODO(§4.3): cuando exista el puerto `Clock`, ese `Date()` sale de él.
-        let updated = try await ClubRecord.query(on: database)
+        try await ClubRecord.query(on: database)
             .filter(\.$id == club.id.raw)
             .set(\.$name, to: club.name)
             .set(\.$shortName, to: club.shortName)
             .set(\.$updatedAt, to: Date())
             .update()
-        _ = updated
     }
 }
 

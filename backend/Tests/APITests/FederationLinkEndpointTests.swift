@@ -744,6 +744,30 @@ extension FederationLinkEndpointTests {
     /// suelo desde `C-D.1`: `find` devuelve `nil` cuando no hay fila, y sin esa
     /// mitad la ruta no podría distinguir *"ese equipo no existe"* de *"existe y
     /// no lo encuentro"*.
+    /// **400 y no 422** (`C-0.5`: la ruta no declara 422), **y el `detail` con
+    /// la forma de todo `INVALID_VALUE`**: `campo: motivo`, el mismo que sirve
+    /// el middleware (`A-14`·H-63). Salía el volcado del enumerado
+    /// —`seasonLabel: invalidValue(field: "label", reason: …)`—, que no es un
+    /// texto para la UI.
+    @Test("una etiqueta de temporada ilegible es 400, con su motivo legible (C-0.5 · A-14/H-63)")
+    func anUnreadableSeasonLabelIsABadRequest() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, seasonLabel: "zz")
+                }
+            ) { response async throws in
+                #expect(response.status == .badRequest)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "INVALID_VALUE")
+                #expect(problem.detail?.hasPrefix("seasonLabel: debe ser AAAA/AB") == true,
+                        "\(problem.detail ?? "nil")")
+            }
+        }
+    }
+
     @Test("un equipo inexistente es 404 en las dos puertas (C-E.6)")
     func unknownTeamIsNotFound() async throws {
         try await Self.withSeededTeam { app, _ in

@@ -17,10 +17,11 @@ import TestSupport
 ///
 /// # Qué se prueba aquí y no en otro sitio
 ///
-/// Los cuatro *handlers* traducen a mano los errores que esperan —`updateClub`
-/// atrapa `DomainError.invalidValue`, los dos de ingesta enumeran casos de
-/// `ApplicationError`— y el `switch` exhaustivo de `ProblemMiddleware` traduce
-/// **lo que se les escapa**. Esa segunda mitad es la que no tenía test, y la
+/// Los *handlers* solo construyen a mano lo que **ellos** decodifican —un UUID
+/// ilegible, un `PATCH` vacío—, y el `switch` exhaustivo de `ProblemMiddleware`
+/// traduce **todo lo que se lanza**. *(Hasta `A-14`·H-63, `updateClub` y los dos
+/// de ingesta reconstruían además casos que el middleware ya traducía igual.)*
+/// Esa segunda mitad es la que no tenía test, y la
 /// consecuencia fue un hallazgo: los dos ficheros de *handlers* llegaron a
 /// **afirmar lo contrario** —que el transporte generado convierte en 500
 /// cualquier cosa que se lance, antes de que ningún middleware la vea— y nadie
@@ -51,6 +52,35 @@ struct ErrorBoundaryTests {
 
     static func sql(_ app: Application) throws -> any SQLDatabase {
         try #require(app.db(.control) as? any SQLDatabase)
+    }
+
+    /// **La ruta que no existe también es RFC 7807** (§5.4, `A-14`·H-68).
+    ///
+    /// `ProblemMiddleware` cuelga del grupo de rutas, y el middleware de un grupo
+    /// solo corre cuando la ruta casa: lo que no casa lo servía Vapor con su
+    /// `{"error":true,"reason":"Not Found"}`, que es justo el cuerpo que el
+    /// middleware existe para evitar. Dos casos porque son dos caminos: una ruta
+    /// que el *spec* tiene pero el `filter` no (la que el backoffice va a pedir
+    /// antes de tiempo) y una que no existe en ningún sitio. Con `X-Club` y sin
+    /// él, porque fuera del grupo la tenancy no interviene.
+    @Test("una ruta que no existe responde problem+json, no el JSON de Vapor (§5.4 · A-14/H-68)",
+          arguments: ["/v1/teams", "/v1/nada"], [true, false])
+    func anUnknownRouteIsAProblem(path: String, withClub: Bool) async throws {
+        try await TestEnvironment.withApp { app in
+            try await app.testing().test(
+                .GET, path,
+                beforeRequest: { request async throws in
+                    if withClub { request.headers.add(name: "X-Club", value: "atleti") }
+                }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                #expect(response.headers.contentType
+                        == HTTPMediaType(type: "application", subType: "problem+json"))
+                let problem = try Self.problem(response)
+                #expect(problem["code"] as? String == "NOT_FOUND")
+                #expect(problem["status"] as? Int == 404)
+            }
+        }
     }
 
     /// **Un `ApplicationError` que se escapa del *handler* sale traducido**, y no
@@ -331,6 +361,64 @@ struct ActorSeamTests {
                 }
             ) { response async throws in
                 #expect(response.status == .ok)
+            }
+
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+        }
+    }
+
+    /// El resolutor que **no puede** dar actor. Lo que lance es lo que un
+    /// adaptador de *claim* lanzará el día que lo haya: credencial ausente,
+    /// discrepancia… Aquí, la discrepancia, porque ya tiene código propio.
+    struct ThrowingActorResolver: ActorResolver {
+        func currentActor() throws -> ActorContext {
+            throw TenancyError.tenantMismatch(host: "e2tira", claim: "otro")
+        }
+    }
+
+    /// **El error del resolutor sale igual por todas las puertas** (`A-14`·H-64).
+    ///
+    /// Los dos *handlers* de ingesta lo envolvían en un `do/catch` que servía
+    /// **cualquier** fallo como `400 TENANT_NOT_RESOLVED`, sin log. Hoy no se
+    /// notaba —sin club, el middleware corta antes—, pero con la auth un 401 o
+    /// un 403 habría salido por esas dos como *"no identifica ningún club"*.
+    /// Parametrizado sobre las seis operaciones del `filter` para que la séptima
+    /// que copie la forma equivocada caiga aquí al añadirla.
+    @Test("el error del resolutor de actor sale igual por las seis puertas (§6.1 · A-14/H-64)",
+          arguments: [
+            (HTTPMethod.GET, "/v1/club", nil as String?),
+            (.PATCH, "/v1/club", #"{"name":"x"}"#),
+            (.GET, "/v1/ingestion-runs?competitionId=00000000-0000-4000-8000-0000000000ab", nil),
+            (.POST, "/v1/ingestion-runs", "{}"),
+            (.POST, "/v1/teams/00000000-0000-4000-8000-0000000000ab/federation-link/preview",
+             #"{"federationCalendarUrl":"https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549"}"#),
+            (.POST, "/v1/teams/00000000-0000-4000-8000-0000000000ab/federation-link",
+             #"{"federationCalendarUrl":"https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549","ownTeamFederationId":"1","gender":"masculino"}"#),
+          ])
+    func theResolverErrorIsTheSameThroughEveryDoor(
+        method: HTTPMethod, path: String, body: String?
+    ) async throws {
+        let slug = "e2tira"
+        try await TestEnvironment.withApp(actors: ThrowingActorResolver()) { app in
+            try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
+            try await TestEnvironment.provisionClub(
+                slug, federation: .rffm, schemaPrefix: Self.prefix, on: app)
+
+            try await app.testing().test(
+                method, path,
+                beforeRequest: { request async throws in
+                    request.headers.add(name: "X-Club", value: slug)
+                    if let body {
+                        request.headers.contentType = .json
+                        request.body = .init(string: body)
+                    }
+                }
+            ) { response async throws in
+                #expect(response.status == .forbidden)
+                let problem = try JSONDecoder().decode(
+                    Components.Schemas.Problem.self,
+                    from: Data(response.body.readableBytesView))
+                #expect(problem.code == "TENANT_MISMATCH")
             }
 
             try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)
