@@ -23,10 +23,18 @@
 /// cambiando **el adaptador**, no el middleware ni los *handlers*, y el 403 que
 /// hoy solo ve un test pasa a poder ocurrir de verdad.
 ///
-/// Hoy `ActorContext` solo lleva el club. Cuando §7 aterrice, es el adaptador de
-/// este puerto quien carga además el `StaffMember` y sus asignaciones vigentes
-/// — y la firma de los casos de uso **no cambia**, que es justo lo que esa
-/// decisión persigue.
+/// # Por qué es síncrono, y qué NO hace por eso
+///
+/// Hoy `ActorContext` solo lleva el club. Cuando §7 aterrice, el adaptador
+/// añadirá **lo que dice el token**, el usuario, y nada más: **no** carga el
+/// `StaffMember` ni sus asignaciones (`D-98`). Eso es leer el *schema* del club,
+/// y lo hace el caso de uso **dentro de su propio ámbito**, que es donde vive la
+/// decisión (§7.4) y donde la transacción ya está abierta.
+///
+/// Decía lo contrario —que el adaptador las cargaba—, y con esta firma no podía
+/// ser: una función síncrona no espera a la base (`A-14`·H-65). Se cambió la
+/// promesa y no la firma, así que **ningún *handler* se toca** al encender la
+/// auth.
 public protocol ActorResolver: Sendable {
     /// El actor de la petición en curso, o el error de tenancy que impide
     /// construirlo.
