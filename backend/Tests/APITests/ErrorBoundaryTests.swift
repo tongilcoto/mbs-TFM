@@ -54,6 +54,35 @@ struct ErrorBoundaryTests {
         try #require(app.db(.control) as? any SQLDatabase)
     }
 
+    /// **La ruta que no existe también es RFC 7807** (§5.4, `A-14`·H-68).
+    ///
+    /// `ProblemMiddleware` cuelga del grupo de rutas, y el middleware de un grupo
+    /// solo corre cuando la ruta casa: lo que no casa lo servía Vapor con su
+    /// `{"error":true,"reason":"Not Found"}`, que es justo el cuerpo que el
+    /// middleware existe para evitar. Dos casos porque son dos caminos: una ruta
+    /// que el *spec* tiene pero el `filter` no (la que el backoffice va a pedir
+    /// antes de tiempo) y una que no existe en ningún sitio. Con `X-Club` y sin
+    /// él, porque fuera del grupo la tenancy no interviene.
+    @Test("una ruta que no existe responde problem+json, no el JSON de Vapor (§5.4 · A-14/H-68)",
+          arguments: ["/v1/teams", "/v1/nada"], [true, false])
+    func anUnknownRouteIsAProblem(path: String, withClub: Bool) async throws {
+        try await TestEnvironment.withApp { app in
+            try await app.testing().test(
+                .GET, path,
+                beforeRequest: { request async throws in
+                    if withClub { request.headers.add(name: "X-Club", value: "atleti") }
+                }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                #expect(response.headers.contentType
+                        == HTTPMediaType(type: "application", subType: "problem+json"))
+                let problem = try Self.problem(response)
+                #expect(problem["code"] as? String == "NOT_FOUND")
+                #expect(problem["status"] as? Int == 404)
+            }
+        }
+    }
+
     /// **Un `ApplicationError` que se escapa del *handler* sale traducido**, y no
     /// como el 500 genérico que los comentarios de `ClubHandler` prometían.
     ///
