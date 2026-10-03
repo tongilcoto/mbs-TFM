@@ -173,6 +173,19 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "el código '\(code)' lo tiene el equipo \(owner)",
                                base: typeBaseURI, slug: "federation-team-id-taken")
 
+            case .ownTeamNotInCalendar(let code, let group):
+                // **409, la cuarta causa del mismo 409** (A-12·H-74), y con el
+                // argumento de sus hermanas: el código llega bien formado; lo que
+                // no encaja es lo que la fuente publica en ese grupo, y **tiene
+                // salida** — se elige uno de los de `teams[]`. No es 422 porque
+                // la ruta no lo declara (`C-0.5`), ni 400, que es para lo que ni
+                // siquiera se pudo decodificar.
+                return Problem(status: .conflict, code: "OWN_TEAM_NOT_IN_CALENDAR",
+                               title: "Ese código no es de ningún equipo del calendario",
+                               detail: "el código '\(code)' no aparece en el calendario del "
+                                   + "grupo \(group): elige uno de los equipos del preview",
+                               base: typeBaseURI, slug: "own-team-not-in-calendar")
+
             case .competitionIdentityMismatch(let team, let competition):
                 // **409, y el mismo argumento que su hermano de arriba**
                 // (`D-67`, F10): los datos que llegan son perfectamente válidos

@@ -26,7 +26,7 @@ porque los números chocan.
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **573 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
+(`D-95`). **575 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
 
 | Operación HTTP | |
 |---|---|
@@ -243,6 +243,7 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<el compet
 | Equipo inexistente | **404** | `TEAM_NOT_FOUND` |
 | Equipo ya emparejado | **409** | `ALREADY_LINKED_TO_FEDERATION` |
 | Ese código ya es de otro equipo | **409** | `FEDERATION_TEAM_ID_TAKEN` |
+| Ese código no es de ningún equipo del calendario | **409** | `OWN_TEAM_NOT_IN_CALENDAR` |
 | La competición dice otra edad, género o modalidad | **409** | `COMPETITION_IDENTITY_MISMATCH` |
 | Club de una federación sin adaptador (FCF, `D-95`) | **501** | `FEDERATION_ADAPTER_MISSING` |
 | La federación no responde | **504** | `FEDERATION_UNREACHABLE` |
@@ -264,7 +265,7 @@ en el mismo 500 (`A-6`/H-15).
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 573 tests, ~23 s — LA FORMA BUENA
+REQUIRE_DB=1 swift test                 # 575 tests, ~23 s — LA FORMA BUENA
 swift test                              # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

@@ -1230,10 +1230,11 @@ paths:
         '409':
           description: |
             El equipo ya está emparejado con otro grupo, ese `federationTeamId` ya pertenece a otro
-            equipo, o la identidad no cuadra: la competición dice una `ageCategory`, un `gender` o una
-            `modality` distintos de los que el equipo tiene congelados desde su alta (D-66, D-58, §3.2).
-            A diferencia del 409 de D-21, **este tiene salida**: se engancha otro equipo, o se corrige
-            antes de confirmar.
+            equipo, **ese `ownTeamFederationId` no es de ninguno de los equipos del calendario** (el
+            `code` es `OWN_TEAM_NOT_IN_CALENDAR`), o la identidad no cuadra: la competición dice una
+            `ageCategory`, un `gender` o una `modality` distintos de los que el equipo tiene congelados
+            desde su alta (D-66, D-58, §3.2). A diferencia del 409 de D-21, **este tiene salida**: se
+            engancha otro equipo, se elige uno de los de `teams[]`, o se corrige antes de confirmar.
 
             **La edad cuenta igual que las otras dos.** Enganchar un cadete a una competición juvenil
             no da un rótulo feo: la ingesta hereda la categoría a cada equipo que cree desde esa
@@ -4938,6 +4939,11 @@ components:
             omitirlo tenía camino de vuelta —todo nacía rival y se reclamaba con `/ownership`—, pero con
             D-66 ese camino ya no repara sino que **fusiona** (§9.5, sin diseñar). Exigirlo aquí hace que
             el caso no llegue a existir.
+
+            **Y tiene que ser uno de los de `teams[]`** (A-12·H-74): el enganche lo compara con el
+            calendario que descarga, y un código que no aparece en él es **409**. Sin esa comprobación, un
+            dígito mal daba 202 y la primera ingesta creaba como rivales a todos los equipos del grupo,
+            el propio incluido.
           examples: ['3349086']
         gender:
           allOf:

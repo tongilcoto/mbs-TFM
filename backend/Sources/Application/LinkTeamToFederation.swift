@@ -76,6 +76,29 @@ public struct LinkTeamToFederation: Sendable {
         let calendar = try await client.fetchCalendar(coordinate)
         let now = clock.now()
 
+        // **El código propio tiene que ser de un equipo de este calendario**
+        // (A-12·H-74), y se mira aquí, antes de abrir el ámbito que escribe.
+        //
+        // La web enseñará nombres, pero el contrato es el *endpoint*. `D-67` hizo
+        // el campo obligatorio para que el equipo propio no naciera rival, y con
+        // un código que no está en el grupo nace exactamente así: la primera
+        // pasada no lo encuentra en ningún partido y da de alta a los dieciséis
+        // como rivales, el propio incluido. Medido contra la RFFM real antes de
+        // esto: **202** con un código inventado, 240 partidos y ninguno del
+        // equipo del club.
+        //
+        // El equipo que la fuente publica **sin** código no cuenta: su
+        // `federationTeamID` es `nil`, y no hay valor que lo designe (`C-C.5`).
+        let codes = Set(
+            calendar.rounds.flatMap(\.matches)
+                .flatMap { [$0.home, $0.away] }
+                .compactMap(\.federationTeamID))
+        guard codes.contains(request.ownTeamFederationID) else {
+            throw DomainError.ownTeamNotInCalendar(
+                code: request.ownTeamFederationID,
+                federationGroupID: coordinate.federationGroupID)
+        }
+
         // ── El ámbito 2 de `D-83`: la cascada entera, o nada (`C-C.9`) ──────
         //
         // Un enganche a medias no es un dato incompleto: es un equipo

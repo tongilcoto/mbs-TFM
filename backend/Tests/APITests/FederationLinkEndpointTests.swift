@@ -1154,6 +1154,34 @@ extension FederationLinkEndpointTests {
         }
     }
 
+    /// **La cuarta causa del 409: un código que no es de ningún equipo del
+    /// calendario** (A-12·H-74), afirmada **por código** (`A-7`·H-46).
+    ///
+    /// Medido contra la RFFM real antes del arreglo: `"ownTeamFederationId":"55555"`
+    /// daba **202**, y la primera pasada creaba como rivales a los dieciséis
+    /// equipos del grupo, con el propio sin un solo partido.
+    @Test("un código que no está en el calendario es 409, no un 202 (A-12·H-74)")
+    func aCodeOutsideTheCalendarIsAConflict() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, ownTeamFederationID: "55555")
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "OWN_TEAM_NOT_IN_CALENDAR")
+                #expect(problem.detail?.contains("55555") == true)
+                #expect(problem.detail?.contains("24037549") == true)
+            }
+            #expect(try await Self.rowCount("seasons", on: app) == 0)
+            #expect(try await Self.rowCount("team_registrations", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
+        }
+    }
+
     /// Y la otra mitad de la guarda: **volver a enganchar al mismo código no es
     /// un choque consigo mismo**.
     ///

@@ -329,6 +329,48 @@ struct FederationLinkTests {
         #expect(await store.ingestionRuns.map(\.id) == [open.id])
     }
 
+    // ── A-12·H-74 · el código propio tiene que estar en el calendario ────────
+
+    /// **Un `ownTeamFederationId` que no es de ningún equipo del calendario se
+    /// rechaza, y antes de escribir nada** (A-12·H-74).
+    ///
+    /// La web enseñará nombres y no códigos, pero el contrato es el *endpoint*:
+    /// medido contra la RFFM real, un código inventado daba **202** y la primera
+    /// pasada creaba como rivales a los dieciséis equipos del grupo, el propio
+    /// incluido — justo lo que `D-67` hizo obligatorio el campo para evitar. El
+    /// calendario ya está en la mano, porque el enganche lo descarga para las
+    /// guardas de `D-84` y `D-91`.
+    ///
+    /// **Y el equipo que la fuente publica sin código no abre la puerta**: su
+    /// `federationTeamID` es `nil`, así que no hay valor que lo designe.
+    @Test("un código que no es de ningún equipo del calendario se rechaza (A-12·H-74)")
+    func aCodeOutsideTheCalendarIsRejected() async throws {
+        let team = try Fixture.team()
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(teams: [team])
+
+        await #expect(throws: DomainError.ownTeamNotInCalendar(
+            code: "9999999", federationGroupID: Fixture.coordinate.federationGroupID)) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(
+                    try Self.request(teamID: team.id, ownTeamFederationID: "9999999"),
+                    actor: Self.actor)
+        }
+        #expect(await store.writes == 0)
+        #expect(await store.teams.first?.federationTeamID == nil)
+
+        // **La otra mitad**: cualquiera de los del calendario vale, juegue en casa
+        // o fuera. `3349087` solo aparece como visitante en el *fixture*, y una
+        // guarda que mirara solo `home` lo rechazaría.
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(
+                try Self.request(teamID: team.id, ownTeamFederationID: "3349087"),
+                actor: Self.actor)
+        #expect(result.teamID == team.id)
+        #expect(await store.teams.first?.federationTeamID == "3349087")
+    }
+
     // ── A-12·H-73 · el equipo se decide con lo que hay DESPUÉS de la red ─────
 
     /// Un cliente que, **mientras la petición está en la red**, deja que otra
