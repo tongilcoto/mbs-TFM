@@ -325,6 +325,11 @@ acabar; `swift test` **barre al arrancar** lo que dejara una pasada que murió l
 en TablePlus sobre `tfm_test`: es la alternativa barata al *breakpoint*, que dentro de un test de integración
 te deja mirando **una transacción sin confirmar**.
 
+> ⚠️ **`KEEP_TEST_DATA=1` es para un test, o para una *suite* que no repita *slug*** (`A-15`·H-88). Lo que se
+> conserva se conserva también **entre los tests de la misma pasada**, y las *suites* que reutilizan su club
+> de un test a otro chocan con lo que dejó el anterior (`23505 … uq:seasons.label`). Con la batería entera
+> salen **42 rojos que no son del código**. Para mirar un fallo, filtra hasta ese test.
+
 ```sh
 docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
 ```
