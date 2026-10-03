@@ -103,15 +103,15 @@ public struct IngestScorers: Sendable {
             // esta respuesta no trae ni una fecha. La hace el calendario.
             try plan.competition.requireSameSource(as: published.competitionName)
 
-            let (scorers, skipped) = rows(
-                from: published, competitionID: competitionID,
-                existing: plan.existing, syncedAt: startedAt)
-
-            try requireGoalsDoNotDecrease(scorers, existing: plan.existing, skipped: skipped)
-
             // ── Ámbito 2: el ranking entero y la retirada, juntos ────────────
+            //
+            // **Las filas se construyen dentro**, contra lo que hay con la
+            // competición ya bloqueada (A-12·H-76): los `id` que se reutilizan y
+            // el total que la guarda de H-53 no deja bajar son los de **ahora**,
+            // no los del ámbito 1, que otra pasada puede haber dejado atrás.
             let counters = try await write(
-                scorers, competitionID: competitionID, syncedAt: startedAt, actor: actor)
+                published, competitionID: competitionID, syncedAt: startedAt, actor: actor)
+            let skipped = counters.skipped
 
             var done = try IngestionRun(
                 id: IngestionRunID(raw: ids.next()),
@@ -298,9 +298,9 @@ public struct IngestScorers: Sendable {
         let coordinate: FederationCoordinate
         let competition: Competition
         let providesScorers: Bool
-        /// Lo que ya hay, **indexado por la clave de `D-93`**, para reutilizar los
-        /// `id` sin releer dentro del ámbito de escritura.
-        let existing: [String: LeagueScorer]
+        // **Sin lo que ya hay** (A-12·H-76): lo leía este ámbito, sin bloqueo, y
+        // dos primeras pasadas a la vez veían las dos *"no hay ninguno"*. Lo lee
+        // ahora `write`, con la competición bloqueada.
     }
 
     private func plan(
@@ -326,11 +326,7 @@ public struct IngestScorers: Sendable {
                     federationGroupID: competition.federationGroupID,
                     modality: competition.modality),
                 competition: competition,
-                providesScorers: capabilities(club.federation).providesScorers,
-                existing: Dictionary(
-                    try await repositories.leagueScorers.list(competitionID: competitionID)
-                        .map { ($0.federationPlayerID, $0) },
-                    uniquingKeysWith: { first, _ in first }))
+                providesScorers: capabilities(club.federation).providesScorers)
         }
     }
 
@@ -345,31 +341,53 @@ public struct IngestScorers: Sendable {
     /// fila: lo que lleva esta marca se queda y lo demás cae. **Distinto de**, no
     /// *anterior a* — un `<` haría depender la regla de la resolución del reloj, y
     /// dos pasadas en el mismo instante no retirarían nada.
+    ///
+    /// **Y construye las filas aquí dentro, no antes** (A-12·H-76). El bloqueo de
+    /// A-11·H-55 pone en fila a dos pasadas de la misma competición, pero solo
+    /// protege lo que se lee **detrás** de él: con los `id` sacados del ámbito 1,
+    /// dos primeras pasadas a la vez veían las dos una tabla vacía, inventaban
+    /// `id` las dos, y la segunda chocaba con la clave de `D-93` (`23505`). Es la
+    /// forma que la clasificación ya tenía (`IngestStandings.write`).
     private func write(
-        _ scorers: [LeagueScorer],
+        _ published: FederationScorerTable,
         competitionID: CompetitionID,
         syncedAt: Date,
         actor: ActorContext
-    ) async throws -> (created: Int, updated: Int, retired: Int) {
+    ) async throws -> (created: Int, updated: Int, retired: Int, skipped: [IngestionSkip]) {
         try await unitOfWork.withRepositories(actor: actor) { repositories in
             // **La competición bloqueada antes de leer lo que hay** (A-11·H-55):
             // la escritura y la retirada de `D-94` van por marca, y dos pasadas a
             // la vez no deben mezclar las suyas.
+            //
+            // **Y el orden importa aunque hoy no se vea**: con el *pool* de tenant
+            // de una conexión (A-12·H-77) leer antes del `lock` daría lo mismo, y
+            // la mutación que lo hace sobrevive. Deja de dar lo mismo el día que
+            // el *pool* crezca.
             _ = try await repositories.competitions.lock(competitionID)
-            let existing = Set(
+            let stored = Dictionary(
                 try await repositories.leagueScorers.list(competitionID: competitionID)
-                    .map(\.id))
+                    .map { ($0.federationPlayerID, $0) },
+                uniquingKeysWith: { first, _ in first })
 
+            let (scorers, skipped) = rows(
+                from: published, competitionID: competitionID,
+                existing: stored, syncedAt: syncedAt)
+
+            // La guarda de H-53, contra el total de **ahora**. Lanza antes de
+            // escribir nada, y el `rollback` del ámbito no tiene qué deshacer.
+            try requireGoalsDoNotDecrease(scorers, existing: stored, skipped: skipped)
+
+            let storedIDs = Set(stored.values.map(\.id))
             var created = 0
             var updated = 0
             for scorer in scorers {
                 try await repositories.leagueScorers.save(scorer)
-                if existing.contains(scorer.id) { updated += 1 } else { created += 1 }
+                if storedIDs.contains(scorer.id) { updated += 1 } else { created += 1 }
             }
 
             let retired = try await repositories.leagueScorers.retire(
                 competitionID: competitionID, keepingMark: syncedAt)
-            return (created, updated, retired)
+            return (created, updated, retired, skipped)
         }
     }
 
