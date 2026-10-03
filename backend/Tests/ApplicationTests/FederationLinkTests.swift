@@ -298,6 +298,37 @@ struct FederationLinkTests {
         #expect(run.kind == .calendar)
     }
 
+    /// **Con una fila `accepted` ya abierta en esa competición, el `jobId` es
+    /// ésa** (A-12·H-62).
+    ///
+    /// La pasada cierra **una** fila, la más antigua (`findAccepted`). Abrir otra
+    /// dejaba la del `jobId` recién devuelto abierta hasta la pasada siguiente
+    /// —que por H-57 puede no llegar—, y bastaba el caso canónico de `D-67`: el A
+    /// y el B del mismo grupo, enganchados a la vez. Es lo que `accept` ya hacía en
+    /// la otra puerta del `202` (`IngestClubCalendars`): **aceptar dos veces no
+    /// deja dos filas**.
+    @Test("con una aceptada ya abierta en la competición, el jobId es ésa (A-12·H-62)")
+    func anOpenAcceptedRunIsTheJob() async throws {
+        let team = try Fixture.team()
+        let season = try Fixture.season(federationSeasonID: "21")
+        let competition = try Fixture.competition(
+            seasonID: season.id, federationGroupID: "24037549")
+        let open = try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competition.id,
+            kind: .calendar, startedAt: Fixture.now.addingTimeInterval(-30),
+            finishedAt: nil, outcome: .accepted)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [season], competitions: [competition], teams: [team])
+        await store.record(open)
+
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        #expect(result.jobID == open.id)
+        #expect(await store.ingestionRuns.map(\.id) == [open.id])
+    }
+
     // ── C-C.12 · sin adaptador se para ANTES del 202 ─────────────────────────
 
     /// **`H-28` en la segunda puerta, y la que `D-95` anunció.**

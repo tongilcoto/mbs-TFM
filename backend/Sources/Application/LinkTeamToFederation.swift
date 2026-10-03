@@ -289,13 +289,28 @@ public struct LinkTeamToFederation: Sendable {
             // consultar, y la clave por la que el registro ordena (`C-D.6`)—, y
             // no hay `finishedAt` porque una pasada aceptada todavía no ha
             // acabado (`C-A.5`). Quien la cierra es la pasada (`C-A.6`).
-            let accepted = try IngestionRun(
-                id: IngestionRunID(raw: ids.next()),
-                competitionID: competition.id,
-                kind: .calendar,
-                startedAt: now, finishedAt: nil,
-                outcome: .accepted)
-            try await repositories.ingestionRuns.record(accepted)
+            //
+            // **Y si ya hay una abierta en esa competición, el `jobId` es ésa**
+            // (A-12·H-62). La pasada cierra **una**, la más antigua
+            // (`findAccepted`), así que abrir otra dejaba la del `jobId` recién
+            // devuelto abierta hasta la pasada siguiente —que por H-57 puede no
+            // llegar—. Bastaba el A y el B del mismo grupo enganchados a la vez.
+            // Es lo que `IngestClubCalendars.accept` hace en la otra puerta del
+            // `202`: aceptar dos veces no deja dos filas.
+            let accepted: IngestionRun
+            if let open = try await repositories.ingestionRuns.findAccepted(
+                competitionID: competition.id, kind: .calendar)
+            {
+                accepted = open
+            } else {
+                accepted = try IngestionRun(
+                    id: IngestionRunID(raw: ids.next()),
+                    competitionID: competition.id,
+                    kind: .calendar,
+                    startedAt: now, finishedAt: nil,
+                    outcome: .accepted)
+                try await repositories.ingestionRuns.record(accepted)
+            }
 
             return FederationLinkResult(
                 jobID: accepted.id, teamID: linked.id,
