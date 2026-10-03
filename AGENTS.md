@@ -361,7 +361,7 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**568 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+**583 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
 montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -540,7 +540,11 @@ docker compose down -v
   escriba dentro de un `withRepositories` **no lo ve otra conexión** hasta que cierra, así que un `SELECT` en
   crudo para comprobar una columna no encuentra nada; y una violación de restricción **aborta la transacción
   entera** (`25P02`), de modo que dos intentos que deban fallar en el mismo ámbito hacen que el segundo pase
-  por el motivo equivocado. `TenantFixture` (nivel 3) obliga a declarar cada ámbito justo por eso.
+  por el motivo equivocado. `TenantFixture` (nivel 3) obliga a declarar cada ámbito justo por eso. **Y el
+  acceso de tenant tiene una sola conexión, a propósito** (`D-100`): se construye **una vez**
+  (`app.tenantUnitOfWork`) y lo comparten servidor y comandos, así que dos ámbitos nunca están abiertos a la
+  vez. No se construye otro con `db(.control)` ni se sube `maxConnectionsPerEventLoop` sin hacer antes seguras
+  las tres carreras de `INSERT` del enganche; `TenantUnitOfWorkTests` se pone en rojo si pasa.
 - **El `CHECK` de un enumerado se deriva, nunca se teclea** (§4.6, `D-02`): `sqlValueList` es genérico sobre
   `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
   `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
@@ -575,9 +579,10 @@ docker compose down -v
   se habría encontrado leyendo el código. **El método que los encontró cuesta dos minutos y conviene repetirlo
   cuando el *spec* crezca**: cruzar los campos que el contrato declara contra el árbol de tests y mirar los
   que tienen cero aciertos. Hoy: **61 campos, 0 sin afirmar** (recontado en `A-14`·H-72 contando los
-  anidados; F10-ter había contado 52 sin decir cómo), y **22 de 31** códigos `Problem` afirmados **por
+  anidados; F10-ter había contado 52 sin decir cómo), y **23 de 32** códigos `Problem` afirmados **por
   código** y no solo por *status* (`A-7`·H-46 lo dejó en 3 de 14; F10-ter, en 17 de 30; la ronda de A-14
-  sumó cinco y el `NOT_FOUND` que H-68 hizo alcanzable). Los nueve que faltan: `BAD_REQUEST`,
+  sumó cinco y el `NOT_FOUND` que H-68 hizo alcanzable; la de A-12, `OWN_TEAM_NOT_IN_CALENDAR`, que nace
+  con su test). Los nueve que faltan: `BAD_REQUEST`,
   `DATABASE_UNAVAILABLE`, `EMPTY_PATCH`, `EMPTY_SELECTION`, `INGESTION_FAILED`, `INVALID_LIMIT`,
   `INVALID_UUID`, `NOT_EDITABLE_AFTER_SYNC` y `RUN_NOT_RECORDED`.
 - **Los errores que no son de la ruta sino de todas los cubre el `default` de cada operación** (`D-99`,

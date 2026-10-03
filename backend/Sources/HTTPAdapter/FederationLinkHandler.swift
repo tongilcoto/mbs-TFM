@@ -188,7 +188,7 @@ extension FederationLinkPreview {
             competition: .init(
                 modality: competition.modality.toContract(),
                 gender: .init(value1: competition.gender.toContract()),
-                ageCategory: competition.ageCategory.toContract(),
+                ageCategory: .init(value1: competition.ageCategory.toContract()),
                 divisionLabel: competition.divisionLabel,
                 groupLabel: competition.groupLabel,
                 federationCompetitionId: competition.federationCompetitionID,
@@ -205,7 +205,8 @@ extension FederationLinkPreview {
                         crestUrl: $0.crestURL)
                 },
                 alreadyRegistered: competition.alreadyRegistered),
-            identityMatches: identityMatches)
+            identityMatches: identityMatches,
+            ageCategoryChecked: ageCategoryChecked)
     }
 }
 

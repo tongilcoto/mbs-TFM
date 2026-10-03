@@ -298,6 +298,177 @@ struct FederationLinkTests {
         #expect(run.kind == .calendar)
     }
 
+    /// **Con una fila `accepted` ya abierta en esa competición, el `jobId` es
+    /// ésa** (A-12·H-62).
+    ///
+    /// La pasada cierra **una** fila, la más antigua (`findAccepted`). Abrir otra
+    /// dejaba la del `jobId` recién devuelto abierta hasta la pasada siguiente
+    /// —que por H-57 puede no llegar—, y bastaba el caso canónico de `D-67`: el A
+    /// y el B del mismo grupo, enganchados a la vez. Es lo que `accept` ya hacía en
+    /// la otra puerta del `202` (`IngestClubCalendars`): **aceptar dos veces no
+    /// deja dos filas**.
+    @Test("con una aceptada ya abierta en la competición, el jobId es ésa (A-12·H-62)")
+    func anOpenAcceptedRunIsTheJob() async throws {
+        let team = try Fixture.team()
+        let season = try Fixture.season(federationSeasonID: "21")
+        let competition = try Fixture.competition(
+            seasonID: season.id, federationGroupID: "24037549")
+        let open = try IngestionRun(
+            id: IngestionRunID(raw: UUID()), competitionID: competition.id,
+            kind: .calendar, startedAt: Fixture.now.addingTimeInterval(-30),
+            finishedAt: nil, outcome: .accepted)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [season], competitions: [competition], teams: [team])
+        await store.record(open)
+
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        #expect(result.jobID == open.id)
+        #expect(await store.ingestionRuns.map(\.id) == [open.id])
+    }
+
+    // ── A-12·H-75 · la edad de la competición NUEVA sale de su nombre ────────
+
+    /// **Una competición nueva nace con la edad que dice su nombre, y si no es la
+    /// del equipo, el enganche se niega** (A-12·H-75).
+    ///
+    /// Antes nacía con la del equipo, y la guarda de `C-C.15` comparaba el equipo
+    /// consigo mismo. Medido contra la RFFM real: el Infantil A enganchado a
+    /// *"PRIMERA CADETE"* daba **202**, la competición quedaba `infantil` y la
+    /// ingesta creaba dieciséis rivales "infantil" de una liga cadete (`D-07`).
+    @Test("una competición nueva nace con la edad de su nombre, y la guarda la ve (H-75)")
+    func aNewCompetitionIsBornWithTheAgeOfItsName() async throws {
+        let infantil = try Fixture.team(category: .infantil)
+        func link(_ name: String) async throws -> (LinkTeamToFederation, IngestionStore) {
+            let store = IngestionStore()
+            await store.seed(club: try Fixture.club())
+            await store.seed(teams: [infantil])
+            return (Self.useCase(store: store,
+                                 federation: Self.client(Fixture.calendar(competitionName: name))),
+                    store)
+        }
+
+        let (toCadete, _) = try await link("PRIMERA CADETE")
+        await #expect(throws: DomainError.competitionIdentityMismatch(
+            team: "infantil/masculino/futbol_11", competition: "cadete/masculino/futbol_11")) {
+            try await toCadete.execute(try Self.request(teamID: infantil.id), actor: Self.actor)
+        }
+
+        // **Y si el nombre no dice ninguna, se toma la del equipo**: es lo que el
+        // `/preview` avisa con `ageCategoryChecked: false`, no una negativa.
+        let (toSilent, store) = try await link("TERCERA FEDERACIÓN RFEF")
+        let result = try await toSilent.execute(
+            try Self.request(teamID: infantil.id), actor: Self.actor)
+        let created = await store.competitions.first { $0.id == result.competitionID }
+        #expect(created?.ageCategory == .infantil)
+    }
+
+    // ── A-12·H-74 · el código propio tiene que estar en el calendario ────────
+
+    /// **Un `ownTeamFederationId` que no es de ningún equipo del calendario se
+    /// rechaza, y antes de escribir nada** (A-12·H-74).
+    ///
+    /// La web enseñará nombres y no códigos, pero el contrato es el *endpoint*:
+    /// medido contra la RFFM real, un código inventado daba **202** y la primera
+    /// pasada creaba como rivales a los dieciséis equipos del grupo, el propio
+    /// incluido — justo lo que `D-67` hizo obligatorio el campo para evitar. El
+    /// calendario ya está en la mano, porque el enganche lo descarga para las
+    /// guardas de `D-84` y `D-91`.
+    ///
+    /// **Y el equipo que la fuente publica sin código no abre la puerta**: su
+    /// `federationTeamID` es `nil`, así que no hay valor que lo designe.
+    @Test("un código que no es de ningún equipo del calendario se rechaza (A-12·H-74)")
+    func aCodeOutsideTheCalendarIsRejected() async throws {
+        let team = try Fixture.team()
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(teams: [team])
+
+        await #expect(throws: DomainError.ownTeamNotInCalendar(
+            code: "9999999", federationGroupID: Fixture.coordinate.federationGroupID)) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(
+                    try Self.request(teamID: team.id, ownTeamFederationID: "9999999"),
+                    actor: Self.actor)
+        }
+        #expect(await store.writes == 0)
+        #expect(await store.teams.first?.federationTeamID == nil)
+
+        // **La otra mitad**: cualquiera de los del calendario vale, juegue en casa
+        // o fuera. `3349087` solo aparece como visitante en el *fixture*, y una
+        // guarda que mirara solo `home` lo rechazaría.
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(
+                try Self.request(teamID: team.id, ownTeamFederationID: "3349087"),
+                actor: Self.actor)
+        #expect(result.teamID == team.id)
+        #expect(await store.teams.first?.federationTeamID == "3349087")
+    }
+
+    // ── A-12·H-73 · el equipo se decide con lo que hay DESPUÉS de la red ─────
+
+    /// Un cliente que, **mientras la petición está en la red**, deja que otra
+    /// escriba: es lo que hace una segunda petición que confirma antes que ésta.
+    struct InterleavingClient: FederationClient {
+        let calendar: FederationCalendar
+        let meanwhile: @Sendable () async -> Void
+
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            Fixture.coordinate
+        }
+        func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+            await meanwhile()
+            return calendar
+        }
+        func fetchStandings(
+            _ coordinate: FederationCoordinate, round: Int
+        ) async throws -> FederationStanding {
+            throw NotStubbed(client: "InterleavingClient", operation: "fetchStandings")
+        }
+        func fetchScorers(_ coordinate: FederationCoordinate) async throws -> FederationScorerTable {
+            throw NotStubbed(client: "InterleavingClient", operation: "fetchScorers")
+        }
+    }
+
+    /// **Lo que otro enganche escribió mientras éste esperaba a la federación,
+    /// manda** (A-12·H-73).
+    ///
+    /// El equipo se leía en el ámbito 1, antes de la red, y el ámbito 2 decidía
+    /// con **esa copia**: `linked(…)` no veía el código que otra petición acababa
+    /// de escribir, y `save` lo pisaba. Medido contra la RFFM real: el mismo
+    /// equipo enganchado a dos grupos a la vez → **dos 202 y dos cascadas**, con
+    /// la ventana entera de la llamada a la federación para que ocurra. Ahora el
+    /// ámbito que escribe empieza **bloqueando y releyendo** el equipo, y el
+    /// segundo recibe el 409 que habría recibido de llegar después.
+    @Test("lo que otro enganche escribió mientras éste estaba en la red, manda (A-12·H-73)")
+    func aLinkWrittenMeanwhileWins() async throws {
+        let team = try Fixture.team()
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(teams: [team])
+        let elsewhere = try team.linked(toFederationTeamID: "3349087")
+        let client = InterleavingClient(calendar: Fixture.calendar()) {
+            await store.save(elsewhere)
+        }
+
+        await #expect(throws: DomainError.alreadyLinkedToFederation(
+            existing: "3349087", incoming: "3349086")) {
+            try await Self.useCase(store: store, federation: client)
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+        // Se para **antes** de escribir nada de la cascada, y el equipo queda con
+        // lo que escribió el otro.
+        #expect(await store.seasons.isEmpty)
+        #expect(await store.teamRegistrations.isEmpty)
+        #expect(await store.ingestionRuns.isEmpty)
+        #expect(await store.teams.first?.federationTeamID == "3349087")
+        // Y lo releyó **bloqueándolo**, que es lo que lo mantiene cierto el día
+        // que dos ámbitos puedan estar abiertos a la vez (`D-100`, opción B de H-77).
+        #expect(await store.teamLocks == [team.id])
+    }
+
     // ── C-C.12 · sin adaptador se para ANTES del 202 ─────────────────────────
 
     /// **`H-28` en la segunda puerta, y la que `D-95` anunció.**

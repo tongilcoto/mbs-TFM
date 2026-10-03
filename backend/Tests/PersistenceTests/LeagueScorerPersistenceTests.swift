@@ -346,6 +346,86 @@ struct LeagueScorerPersistenceTests {
         }
     }
 
+    // ── Dos primeras pasadas a la vez (A-12·H-76) ────────────────────────────
+
+    /// El cliente de una pasada de goleadores **retenida en su compuerta**, ya
+    /// pasado el ámbito 1. Es la `Gate` de A-11·H-55, la misma que retiene al
+    /// calendario en `CalendarIngestionEndToEndTests`.
+    struct GatedScorersClient: FederationClient {
+        let gate: Gate
+        let table: FederationScorerTable
+
+        func fetchScorers(_ coordinate: FederationCoordinate) async throws -> FederationScorerTable {
+            await gate.pass()
+            return table
+        }
+        func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+            throw NotStubbed(client: "GatedScorersClient", operation: "fetchCalendar")
+        }
+        func fetchStandings(
+            _ coordinate: FederationCoordinate, round: Int
+        ) async throws -> FederationStanding {
+            throw NotStubbed(client: "GatedScorersClient", operation: "fetchStandings")
+        }
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            throw NotStubbed(client: "GatedScorersClient", operation: "coordinate(fromCalendarURL:)")
+        }
+    }
+
+    /// **Dos primeras pasadas a la vez no chocan entre sí** (A-12·H-76).
+    ///
+    /// El bloqueo de A-11·H-55 ponía las dos escrituras en fila, pero los `id`
+    /// salían del plan, leído **antes** del bloqueo: las dos veían *"no hay
+    /// ninguno"*, las dos inventaban `id`, y la segunda insertaba otra fila con
+    /// la misma clave de `D-93`. Medido en la base de trabajo con el caso
+    /// canónico del enganche —el A y el B del mismo grupo, dos trabajos—: una
+    /// pasada `failed` con `23505` en `uq:league_scorers…`.
+    @Test("dos primeras pasadas a la vez no chocan entre sí (A-12·H-76)")
+    func twoFirstPassesAtOnceDoNotCollide() async throws {
+        try await Self.withSeeded("sc-h76") { seeded, tenant in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: tenant.app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(tenant.slug), isSystem: true)
+            let table = FederationScorerTable(competitionName: nil, rows: [
+                FederationScorerRow(federationPlayerID: "11322891", fullName: "GEA IRISARRI, LUIS",
+                                    teamLabel: "ARAVACA C.F. - CEIBA A", goals: 31),
+                FederationScorerRow(federationPlayerID: "11322892", fullName: "OTRO, PEPE",
+                                    teamLabel: "LAS ROZAS C.F. B", goals: 12),
+            ])
+            func pass(_ gate: Gate) -> IngestScorers {
+                IngestScorers(
+                    unitOfWork: unitOfWork,
+                    federation: GatedScorersClient(gate: gate, table: table),
+                    clock: FixedClock(instant: Self.now), ids: SystemUUIDProvider())
+            }
+
+            let one = Gate(), two = Gate()
+            let a = pass(one), b = pass(two)
+            let passA = Task { try await a.execute(competitionID: seeded.competition, actor: actor) }
+            let passB = Task { try await b.execute(competitionID: seeded.competition, actor: actor) }
+            // Las dos han leído el plan —vacío— antes de que ninguna escriba.
+            await Gate.waitUntilArrived(one, two)
+            await one.open(); await two.open()
+
+            // Sin dejar que el fallo escape: lo que se afirma es que ninguna falla.
+            var failures: [String] = []
+            for pass in [passA, passB] {
+                do { _ = try await pass.value } catch { failures.append(String(reflecting: error)) }
+            }
+
+            let after = try await tenant.scope { repositories in
+                (runs: try await repositories.ingestionRuns.list(
+                    competitionID: seeded.competition, limit: 10),
+                 scorers: try await repositories.leagueScorers.list(
+                    competitionID: seeded.competition))
+            }
+            #expect(failures.isEmpty, "una de las dos chocó con la otra: \(failures)")
+            #expect(after.runs.count == 2)
+            #expect(after.runs.allSatisfy { $0.outcome == .succeeded },
+                    "\(after.runs.map { "\($0.outcome): \($0.error ?? "")" })")
+            #expect(after.scorers.map(\.federationPlayerID).sorted() == ["11322891", "11322892"])
+        }
+    }
+
     // ── El orden, que ES el dato (D-49, §5.1) ────────────────────────────────
 
     @Test("el ranking viene ordenado por goles descendente (D-49, §5.1)")

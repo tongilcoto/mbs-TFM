@@ -420,13 +420,57 @@ struct FederationLinkEndpointTests {
                 // que devolviera siempre la misma URL pasaría por verde.
                 #expect(unidentified?.crestUrl == nil)
 
-                // La identidad: competición nueva ⇒ los tres se proponen y la
-                // edad sale del equipo, así que cuadra por construcción
-                // (`C-C.4`, Bloque C).
-                #expect(preview.competition.ageCategory == .cadete)
+                // La identidad: competición nueva ⇒ los tres se proponen, y la
+                // edad sale **del nombre**, *"PRIMERA CADETE"* (A-12·H-75).
+                #expect(preview.competition.ageCategory.value1 == .cadete)
                 #expect(preview.competition.modality == .futbol_11)
                 #expect(preview.identityMatches == true)
+                #expect(preview.ageCategoryChecked == true)
             }
+        }
+    }
+
+    /// **La edad que el nombre no dice se avisa, y la que dice otra cosa es 409**
+    /// (A-12·H-75), las dos por la ruta HTTP.
+    ///
+    /// La primera mitad es lo que el campo `ageCategoryChecked` existe para
+    /// decir: la competición no existe, su nombre no lleva edad y la que viaja es
+    /// la del equipo. La segunda es el caso medido contra la RFFM real antes del
+    /// arreglo: el Infantil A contra *"PRIMERA CADETE"* daba 202.
+    @Test("la edad sin comprobar se avisa en el preview, y la que no cuadra es 409 (A-12·H-75)")
+    func theAgeIsCheckedOrSaidSo() async throws {
+        try await Self.withSeededTeam(sourceName: "TERCERA FEDERACIÓN RFEF") { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link/preview",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.previewBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let preview = try Self.decodePreview(response)
+                #expect(preview.ageCategoryChecked == false)
+                #expect(preview.competition.ageCategory.value1 == .cadete)
+                #expect(preview.identityMatches == true)
+            }
+        }
+
+        try await Self.withSeededTeam(category: .infantil) { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "COMPETITION_IDENTITY_MISMATCH")
+                #expect(problem.detail?.contains("infantil") == true)
+                #expect(problem.detail?.contains("cadete") == true)
+            }
+            #expect(try await Self.rowCount("competitions", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }
 
@@ -616,6 +660,85 @@ extension FederationLinkEndpointTests {
                 #expect(try await repositories.matches.list(
                     competitionID: competition.id).count == 2)
             }
+        }
+    }
+
+    /// El trabajo de fondo **retenido** hasta que el test lo suelta: es lo que
+    /// deja dos `202` respondidos antes de que corra ninguna pasada, que es el
+    /// orden real cuando dos personas enganchan a la vez.
+    actor HeldBackgroundWork: BackgroundWork {
+        private var held: [@Sendable () async -> Void] = []
+        func enqueue(_ work: @escaping @Sendable () async -> Void) async { held.append(work) }
+        func runAll() async {
+            let works = held
+            held = []
+            for work in works { await work() }
+        }
+    }
+
+    /// **El caso canónico de `D-67`, de punta a punta: el A y el B del mismo
+    /// grupo, y los dos `jobId` cierran** (A-12·H-62).
+    ///
+    /// Medido en la base de trabajo antes del arreglo: dos `202` dejaban dos
+    /// filas `accepted`, las dos pasadas adoptaban **la más antigua**, y el
+    /// `jobId` del segundo se quedaba `accepted` hasta la pasada siguiente de esa
+    /// competición. Ahora el segundo enganche devuelve **la misma** fila abierta,
+    /// y la cierra la primera pasada que llega.
+    @Test("dos equipos del mismo grupo enganchados a la vez: los dos jobId cierran (A-12·H-62)")
+    func twoLinksToTheSameGroupBothClose() async throws {
+        let background = HeldBackgroundWork()
+        try await TestEnvironment.withApp(
+            federationClients: StubProvider(client: StubClient()),
+            background: background,
+            clock: FixedClock(instant: Self.now)
+        ) { app in
+            try await TestEnvironment.dropClubs([Self.slug], schemaPrefix: Self.prefix, on: app)
+            try await TestEnvironment.provisionClub(
+                Self.slug, federation: .rffm, schemaPrefix: Self.prefix, on: app)
+            let teams = try ["A", "B"].map {
+                try Team(id: TeamID(raw: UUID()), category: .cadete, letter: $0,
+                         gender: .masculino, modality: .futbol11,
+                         createdAt: Self.now, updatedAt: Self.now)
+            }
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) { repositories in
+                for team in teams { try await repositories.teams.save(team) }
+            }
+
+            var jobIDs: [String] = []
+            for (team, code) in zip(teams, ["3349086", "3349087"]) {
+                try await app.testing().test(
+                    .POST, "/v1/teams/\(team.id)/federation-link",
+                    beforeRequest: { request async throws in
+                        Self.header(&request)
+                        try Self.linkBody(&request, ownTeamFederationID: code)
+                    }
+                ) { response async throws in
+                    #expect(response.status == .accepted)
+                    jobIDs.append(try Self.decodeJob(response).jobId)
+                }
+            }
+            #expect(jobIDs.count == 2)
+            #expect(Set(jobIDs).count == 1, "el segundo enganche abrió otra fila: \(jobIDs)")
+
+            await background.runAll()
+
+            let returned = jobIDs
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) { repositories in
+                let seasons = try await repositories.seasons.list(includingArchived: true)
+                let seasonID = try #require(seasons.first?.id)
+                let competition = try #require(
+                    try await repositories.competitions.list(seasonID: seasonID).first)
+                let calendarRuns = try await repositories.ingestionRuns.list(
+                    competitionID: competition.id, limit: 10
+                ).filter { $0.kind == .calendar }
+                // Ningún `jobId` devuelto se queda `accepted`.
+                for jobID in returned {
+                    let run = try #require(calendarRuns.first { "\($0.id)" == jobID })
+                    #expect(run.outcome == .succeeded, "el jobId \(jobID) quedó \(run.outcome)")
+                }
+                #expect(calendarRuns.allSatisfy { $0.outcome != .accepted })
+            }
+            try await TestEnvironment.dropClubs([Self.slug], schemaPrefix: Self.prefix, on: app)
         }
     }
 }
@@ -1071,6 +1194,34 @@ extension FederationLinkEndpointTests {
             // que la temporada y la competición que se habían creado se van con
             // el `rollback`.
             #expect(try await Self.rowCount("seasons", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
+        }
+    }
+
+    /// **La cuarta causa del 409: un código que no es de ningún equipo del
+    /// calendario** (A-12·H-74), afirmada **por código** (`A-7`·H-46).
+    ///
+    /// Medido contra la RFFM real antes del arreglo: `"ownTeamFederationId":"55555"`
+    /// daba **202**, y la primera pasada creaba como rivales a los dieciséis
+    /// equipos del grupo, con el propio sin un solo partido.
+    @Test("un código que no está en el calendario es 409, no un 202 (A-12·H-74)")
+    func aCodeOutsideTheCalendarIsAConflict() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, ownTeamFederationID: "55555")
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "OWN_TEAM_NOT_IN_CALENDAR")
+                #expect(problem.detail?.contains("55555") == true)
+                #expect(problem.detail?.contains("24037549") == true)
+            }
+            #expect(try await Self.rowCount("seasons", on: app) == 0)
+            #expect(try await Self.rowCount("team_registrations", on: app) == 0)
             #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }

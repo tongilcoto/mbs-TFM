@@ -61,6 +61,24 @@ public struct FluentTeamRepository: TeamRepository {
         try await TeamRecord.find(id.raw, on: database)?.toDomain()
     }
 
+    /// SQL y no Fluent porque Fluent no expresa `FOR UPDATE`, igual que
+    /// `FluentCompetitionRepository.lock`. Lanza sobre una base que no hable SQL
+    /// (H-35): sin el bloqueo esto no falla, deja pasar la carrera.
+    public func lock(_ id: TeamID) async throws -> Team? {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "lock", object: TeamRecord.schema)
+        }
+        guard try await sql.select()
+            .column("id")
+            .from(TeamRecord.schema)
+            .where("id", .equal, id.raw)
+            .for(.update)
+            .first() != nil
+        else { return nil }
+        return try await find(id)
+    }
+
     public func save(_ team: Team) async throws {
         if let existing = try await TeamRecord.find(team.id.raw, on: database) {
             existing.apply(team)

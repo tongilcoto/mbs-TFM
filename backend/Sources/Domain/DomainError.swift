@@ -72,6 +72,22 @@ public enum DomainError: Error, Equatable, Sendable {
     /// `/ownership` (`D-20`) o corregir el código elegido.
     case federationTeamIDTaken(code: String, owner: String)
 
+    /// El `ownTeamFederationId` del enganche **no es de ninguno de los equipos
+    /// del calendario** que se acaba de descargar (A-12·H-74).
+    ///
+    /// # Por qué hace falta, si la web no deja elegir otra cosa
+    ///
+    /// Porque la web es una puerta y el contrato es el *endpoint*. `D-67` hizo el
+    /// código obligatorio para que el equipo propio **no naciera rival**, y con un
+    /// código que no está en el grupo nace exactamente así: la primera pasada no
+    /// lo encuentra en ningún partido y da de alta a los dieciséis como rivales,
+    /// el propio incluido. Deshacerlo es `/ownership` **más una fusión** (§9.5,
+    /// sin diseñar). Medido contra la RFFM real: un código inventado daba **202**,
+    /// 240 partidos escritos y ninguno del equipo propio.
+    ///
+    /// Lleva el código y el grupo, que es lo que hay que mirar para corregirlo.
+    case ownTeamNotInCalendar(code: String, federationGroupID: String)
+
     /// La URL de calendario que han pegado **no es de esta federación, o no se
     /// puede leer** (`D-97`, `D-22`, F10).
     ///

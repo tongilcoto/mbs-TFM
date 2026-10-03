@@ -20,6 +20,30 @@ extension Application {
         }
         set { storage[TenantPoolsKey.self] = newValue }
     }
+
+    private struct TenantUnitOfWorkKey: StorageKey { typealias Value = FluentTenantUnitOfWork }
+
+    /// **El único acceso a los datos de tenant del proceso, y tiene una sola
+    /// conexión a propósito** (`D-100`, A-12·H-77).
+    ///
+    /// Se construye **una vez**, en `configure`, y lo comparten el servidor y los
+    /// comandos. No es un detalle: `db(.control)` ata cada objeto que devuelve a
+    /// un *event loop* elegido por turno, y el *pool* es de una conexión por *loop*
+    /// (`maxConnectionsPerEventLoop: 1`, abajo). Un objeto, un *loop*, una
+    /// conexión: **dos ámbitos de tenant nunca están abiertos a la vez**. Volver a
+    /// pedir `db(.control)` en cada sitio rompería eso sin que nada lo dijera.
+    ///
+    /// Lo vigila `TenantUnitOfWorkTests` (nivel 3): un segundo ámbito no se abre
+    /// mientras el primero vive.
+    var tenantUnitOfWork: FluentTenantUnitOfWork {
+        get {
+            guard let unitOfWork = storage[TenantUnitOfWorkKey.self] else {
+                fatalError("El acceso de tenant no está configurado; llama antes a configure(_:).")
+            }
+            return unitOfWork
+        }
+        set { storage[TenantUnitOfWorkKey.self] = newValue }
+    }
 }
 
 /// **Raíz de composición**: el único sitio del backend donde se cablean las
@@ -50,14 +74,24 @@ public func configure(
     // Un solo *pool*, sin `search_path`: es el del plano de control y también
     // sobre el que la estrategia A abre las transacciones de petición. Su tamaño
     // no crece con el número de clubes, que es la primera razón de §6.4.
+    //
+    // **Una conexión por *event loop*, escrito y no heredado** (`D-100`,
+    // A-12·H-77). Era el valor por defecto de `fluent-postgres-driver`, y junto
+    // con el acceso de tenant construido una sola vez (abajo) hace que **todas**
+    // las transacciones de tenant del proceso vayan en fila. Es lo que impide
+    // hoy tres carreras de `INSERT` —temporada, competición e inscripción del
+    // enganche— que con dos conexiones darían un `23505` en un 500. **No se sube
+    // sin hacer antes seguras esas tres** (la opción B de H-77). Medido: con la
+    // ingesta escribiendo, una petición espera como mucho ~0,5 s.
     app.databases.use(
-        .postgres(configuration: config.sqlConfiguration()),
+        .postgres(configuration: config.sqlConfiguration(), maxConnectionsPerEventLoop: 1),
         as: .control,
         isDefault: true
     )
     app.tenantPools = TenantPools(databases: app.databases) { searchPath in
         config.sqlConfiguration(searchPath: searchPath)
     }
+    app.tenantUnitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
 
     // La migración del plano de control se aplica **contra `public`** y NO forma
     // parte del juego que recorre los tenants (§4.7).
@@ -78,7 +112,7 @@ public func configure(
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     let handler = APIHandler(
-        unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+        unitOfWork: app.tenantUnitOfWork,
         federationClients: federationClients,
         clock: clock,
         background: background,

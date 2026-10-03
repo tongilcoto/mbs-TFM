@@ -195,6 +195,43 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// **`TeamRepository.lock(_:)`** (A-12·H-73): lo mismo que `find`, contra el
+    /// `SELECT … FOR UPDATE` de verdad, que el doble del nivel 2 no tiene.
+    ///
+    /// **Lo que este test no puede afirmar, dicho**: que el bloqueo *espere*. Con
+    /// el acceso de tenant de una conexión (`D-100`) una segunda transacción no
+    /// llega a abrirse mientras la primera vive, así que no hay con quién
+    /// competir. Quitar el `FOR UPDATE` deja este test en verde, y lo seguirá
+    /// dejando mientras rija `D-100` — que lo vigila `TenantUnitOfWorkTests`.
+    @Test("lock trae ese equipo y no otro, y nil si no está (A-12·H-73)")
+    func lockBringsTheDesignatedTeam() async throws {
+        try await Self.withTenant("team-lock") { tenant in
+            let cadeteA = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: nil,
+                category: .cadete, letter: "A", gender: .masculino,
+                modality: .futbol11, createdAt: Date(), updatedAt: Date())
+            let cadeteB = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: nil,
+                category: .cadete, letter: "B", gender: .masculino,
+                modality: .futbol11, federationTeamID: "3349087",
+                createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.teams.save(cadeteA)
+                try await $0.teams.save(cadeteB)
+            }
+
+            let bloqueado = try #require(
+                try await tenant.scope { try await $0.teams.lock(cadeteB.id) })
+            #expect(bloqueado.id == cadeteB.id)
+            #expect(bloqueado.federationTeamID == "3349087")
+
+            let ninguno = try await tenant.scope {
+                try await $0.teams.lock(TeamID(raw: UUID()))
+            }
+            #expect(ninguno == nil)
+        }
+    }
+
     // ── Ida y vuelta de las cuatro entidades (§4.4) ─────────────────────────
 
     // ── F10-bis · B-1 · la fila aceptada cabe en la tabla ───────────────────

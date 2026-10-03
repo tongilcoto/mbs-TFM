@@ -100,23 +100,26 @@ public struct PreviewFederationLink: Sendable {
         //
         // Si la fila **ya existe**, son los suyos: es la que la cascada va a
         // reutilizar (`C-C.7`), así que es la que decide el 409. Si **no
-        // existe**, la cascada la va a crear y los tres se proponen: la edad
-        // desde el **equipo** —es el único sitio del que puede salir, porque la
-        // federación no la publica y el cuerpo del enganche no la lleva—, la
-        // modalidad desde la coordenada (`tipojuego`) y el género desde la
-        // inferencia sobre el nombre (`C-A.7`, `D-58`).
+        // existe**, la cascada la va a crear y los tres se proponen: la
+        // modalidad desde la coordenada (`tipojuego`), y el género y la edad
+        // desde **el nombre** (`C-A.7`, `D-58`, A-12·H-75).
         //
-        // La consecuencia, escrita para que nadie la lea como un descuido: en el
-        // alta nueva **la edad cuadra por construcción** y las dos que de verdad
-        // se comprueban son las otras. La tercera se cobra cuando la competición
-        // ya está, que es justo el caso que `D-58` describe.
+        // **La edad, del nombre y no del equipo** (A-12·H-75). Tomarla del equipo
+        // hacía que cuadrara por construcción: el Infantil A contra *"PRIMERA
+        // CADETE"* daba `true`, el enganche lo confirmaba y la ingesta creaba
+        // dieciséis rivales "infantil" de una liga cadete. Solo cuando el nombre
+        // no dice ninguna se sigue tomando del equipo, y entonces
+        // `ageCategoryChecked` lo avisa.
+        let proposedAge = TeamCategory.proposed(
+            fromFederationName: calendar.competitionName ?? "")
         let scope = existing.competition.map {
             CompetitionScope(
                 ageCategory: $0.ageCategory, gender: $0.gender, modality: $0.modality)
         } ?? CompetitionScope(
-            ageCategory: found.team.category,
+            ageCategory: proposedAge ?? found.team.category,
             gender: Gender.proposed(fromFederationName: calendar.competitionName ?? ""),
             modality: coordinate.modality)
+        let ageCategoryChecked = existing.competition != nil || proposedAge != nil
 
         return FederationLinkPreview(
             season: .init(
@@ -154,7 +157,8 @@ public struct PreviewFederationLink: Sendable {
             // **`C-C.4`**: el veredicto de `C-A.3` cruzando la puerta. En
             // `false`, confirmar devuelve **409**; enseñarlo aquí es lo que
             // convierte un choque en una corrección.
-            identityMatches: found.team.identityMatches(scope))
+            identityMatches: found.team.identityMatches(scope),
+            ageCategoryChecked: ageCategoryChecked)
     }
 
     /// Los equipos del grupo, **sacados del calendario** y desduplicados
@@ -208,11 +212,20 @@ public struct FederationLinkPreview: Equatable, Sendable {
     public let season: Season
     public let competition: Competition
     public let identityMatches: Bool
+    /// `false` si la edad **no se ha podido comprobar** (A-12·H-75): la
+    /// competición no existe y su nombre no dice ninguna, así que la de
+    /// `competition` es la del propio equipo y `identityMatches` la da por buena
+    /// sin poder saberlo.
+    public let ageCategoryChecked: Bool
 
-    public init(season: Season, competition: Competition, identityMatches: Bool) {
+    public init(
+        season: Season, competition: Competition, identityMatches: Bool,
+        ageCategoryChecked: Bool
+    ) {
         self.season = season
         self.competition = competition
         self.identityMatches = identityMatches
+        self.ageCategoryChecked = ageCategoryChecked
     }
 
     /// La temporada leída de `seasons[]`, que va **incrustado en la propia

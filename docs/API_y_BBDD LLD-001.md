@@ -2267,6 +2267,12 @@ Hay **dos** formas de que una conexión acabe apuntando al *schema* de un club, 
 (§6.2); el número de conexiones no crece con el número de clubes, y el límite de conexiones de Supabase es un
 recurso escaso y compartido; y es la única compatible con el *pooling* en modo transacción.
 
+**Y de ese *pool*, el acceso a los datos de tenant usa una sola conexión, a propósito** ([D-100]). Se construye
+una vez (`app.tenantUnitOfWork`) sobre un `Database` atado a un *event loop*, con
+`maxConnectionsPerEventLoop: 1`, así que las transacciones de tenant del proceso van **en fila**. Es lo que
+hoy impide tres carreras de `INSERT` en el enganche, y no se sube sin haberlas hecho seguras antes. Medido: con
+una ingesta escribiendo, una petición espera como mucho ~0,5 s. Lo vigila `TenantUnitOfWorkTests`.
+
 **El *pooling* en modo transacción no es opcional: es como Supabase sirve las conexiones de aplicación.** En
 ese modo la conexión de servidor se devuelve al *pool* al cerrar **cada transacción**, y la siguiente puede
 atenderla otra. Consecuencias, ya medidas y no inferidas:
@@ -2776,6 +2782,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-63]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

@@ -76,6 +76,29 @@ public struct LinkTeamToFederation: Sendable {
         let calendar = try await client.fetchCalendar(coordinate)
         let now = clock.now()
 
+        // **El código propio tiene que ser de un equipo de este calendario**
+        // (A-12·H-74), y se mira aquí, antes de abrir el ámbito que escribe.
+        //
+        // La web enseñará nombres, pero el contrato es el *endpoint*. `D-67` hizo
+        // el campo obligatorio para que el equipo propio no naciera rival, y con
+        // un código que no está en el grupo nace exactamente así: la primera
+        // pasada no lo encuentra en ningún partido y da de alta a los dieciséis
+        // como rivales, el propio incluido. Medido contra la RFFM real antes de
+        // esto: **202** con un código inventado, 240 partidos y ninguno del
+        // equipo del club.
+        //
+        // El equipo que la fuente publica **sin** código no cuenta: su
+        // `federationTeamID` es `nil`, y no hay valor que lo designe (`C-C.5`).
+        let codes = Set(
+            calendar.rounds.flatMap(\.matches)
+                .flatMap { [$0.home, $0.away] }
+                .compactMap(\.federationTeamID))
+        guard codes.contains(request.ownTeamFederationID) else {
+            throw DomainError.ownTeamNotInCalendar(
+                code: request.ownTeamFederationID,
+                federationGroupID: coordinate.federationGroupID)
+        }
+
         // ── El ámbito 2 de `D-83`: la cascada entera, o nada (`C-C.9`) ──────
         //
         // Un enganche a medias no es un dato incompleto: es un equipo
@@ -84,6 +107,29 @@ public struct LinkTeamToFederation: Sendable {
         // llevó. El `202` promete **algo que consultar** (`D-96`), y esa promesa
         // solo se sostiene si lo que se consulta se escribió con lo demás.
         return try await unitOfWork.withRepositories(actor: actor) { repositories in
+            // ── 0. El equipo, otra vez y bloqueado (A-12·H-73) ──────────────
+            //
+            // **Lo que se decide aquí se decide con lo que hay AHORA**, no con lo
+            // que leyó el ámbito 1. Entre los dos está la llamada a la federación
+            // —de 0,4 a 20 s—, y en ese rato otro enganche del mismo equipo puede
+            // haber escrito su código. Con la copia de antes, `linked(…)` no lo
+            // veía y `save` lo pisaba: medido contra la RFFM real, el mismo equipo
+            // enganchado a dos grupos a la vez daba **dos 202 y dos cascadas**.
+            //
+            // **Bloqueado, y no solo releído**: hoy dos ámbitos de tenant no
+            // pueden estar abiertos a la vez (`D-100`) y releer bastaría, pero esa
+            // regla se reabre el día que el rendimiento pida más conexiones (la
+            // opción B de H-77), y entonces es el bloqueo lo que hace que el
+            // segundo espere al primero y vea su código.
+            //
+            // **Y la transición se comprueba antes de escribir nada**: el
+            // `alreadyLinkedToFederation` no depende de la temporada ni de la
+            // competición, así que no hay motivo para dejarlo detrás de ellas.
+            guard let team = try await repositories.teams.lock(request.teamID) else {
+                throw ApplicationError.teamNotFound(id: "\(request.teamID)")
+            }
+            let linked = try team.linked(toFederationTeamID: request.ownTeamFederationID)
+
             // ── 1. La temporada ─────────────────────────────────────────────
             //
             // **`C-C.6`: se reutiliza por su código.** No es una optimización —
@@ -144,11 +190,17 @@ public struct LinkTeamToFederation: Sendable {
             // la unicidad de §3.5; por el código de **competición**, el Grupo 5
             // reutilizaría la fila del Grupo 4, que es otra liga.
             //
-            // **Los tres campos de identidad, cuando se crea**: la edad sale del
-            // equipo —único sitio del que puede salir, la fuente no la publica y
-            // el cuerpo no la lleva—, la modalidad de la coordenada
-            // (`tipojuego`) y el género **del cuerpo**, que es la confirmación
-            // de lo que el `/preview` propuso (`D-58`).
+            // **Los tres campos de identidad, cuando se crea**: la edad **del
+            // nombre** de la competición (A-12·H-75), la modalidad de la
+            // coordenada (`tipojuego`) y el género **del cuerpo**, que es la
+            // confirmación de lo que el `/preview` propuso (`D-58`).
+            //
+            // La edad se tomaba del equipo, y entonces la guarda de identidad de
+            // abajo comparaba el equipo consigo mismo: el Infantil A enganchado a
+            // *"PRIMERA CADETE"* daba 202 y la ingesta creaba dieciséis rivales
+            // "infantil" de una liga cadete (`D-07`). Del equipo solo se toma
+            // cuando el nombre no dice ninguna, que es lo que el `/preview` avisa
+            // con `ageCategoryChecked: false`.
             let competition: Competition
             if let existing = try await repositories.competitions.findByFederationGroup(
                 seasonID: season.id, federationGroupID: coordinate.federationGroupID)
@@ -179,7 +231,9 @@ public struct LinkTeamToFederation: Sendable {
                     gender: request.gender,
                     federationCompetitionID: coordinate.federationCompetitionID,
                     federationGroupID: coordinate.federationGroupID,
-                    ageCategory: found.team.category,
+                    ageCategory: TeamCategory.proposed(
+                        fromFederationName: calendar.competitionName ?? "")
+                        ?? team.category,
                     divisionLabel: calendar.competitionName ?? "Sin división",
                     groupLabel: calendar.groupLabel ?? "Grupo Único",
                     // **La evidencia se guarda ya** (`D-72`): sin este valor, la
@@ -201,7 +255,7 @@ public struct LinkTeamToFederation: Sendable {
             // Va con la competición ya resuelta y **antes de escribir**: la
             // terna que decide es la de la fila que se va a reutilizar o crear,
             // que es la misma que `C-C.4` enseñó.
-            try found.team.requireIdentityMatches(
+            try team.requireIdentityMatches(
                 CompetitionScope(
                     ageCategory: competition.ageCategory,
                     gender: competition.gender,
@@ -227,13 +281,13 @@ public struct LinkTeamToFederation: Sendable {
             // la fila de **otra** competición no se toca — se enganchan una por
             // una y cada una deja la suya.
             let registrations = try await repositories.teamRegistrations.list(
-                teamID: found.team.id, seasonID: season.id)
+                teamID: team.id, seasonID: season.id)
             if !registrations.contains(where: { $0.competitionID == competition.id }) {
                 let open = registrations.first { $0.competitionID == nil }
                 try await repositories.teamRegistrations.save(
                     try TeamRegistration(
                         id: open?.id ?? TeamRegistrationID(raw: ids.next()),
-                        team: found.team,
+                        team: team,
                         seasonID: season.id,
                         competitionID: competition.id,
                         createdAt: open?.createdAt ?? now,
@@ -262,15 +316,15 @@ public struct LinkTeamToFederation: Sendable {
             // código es idempotente, que es lo que hace que reintentar el `202`
             // sea seguro.
             if let holder = try await repositories.teams.list().first(where: {
-                $0.federationTeamID == request.ownTeamFederationID && $0.id != found.team.id
+                $0.federationTeamID == request.ownTeamFederationID && $0.id != team.id
             }) {
                 throw DomainError.federationTeamIDTaken(
                     code: request.ownTeamFederationID,
                     owner: "\(holder.id)")
             }
 
-            let linked = try found.team.linked(
-                toFederationTeamID: request.ownTeamFederationID)
+            // La transición ya se comprobó al empezar el ámbito, con el equipo
+            // bloqueado (paso 0).
             try await repositories.teams.save(linked)
 
             // ── 5. La constancia, ANTES de responder (`C-C.11`, `D-96`) ─────
@@ -289,13 +343,28 @@ public struct LinkTeamToFederation: Sendable {
             // consultar, y la clave por la que el registro ordena (`C-D.6`)—, y
             // no hay `finishedAt` porque una pasada aceptada todavía no ha
             // acabado (`C-A.5`). Quien la cierra es la pasada (`C-A.6`).
-            let accepted = try IngestionRun(
-                id: IngestionRunID(raw: ids.next()),
-                competitionID: competition.id,
-                kind: .calendar,
-                startedAt: now, finishedAt: nil,
-                outcome: .accepted)
-            try await repositories.ingestionRuns.record(accepted)
+            //
+            // **Y si ya hay una abierta en esa competición, el `jobId` es ésa**
+            // (A-12·H-62). La pasada cierra **una**, la más antigua
+            // (`findAccepted`), así que abrir otra dejaba la del `jobId` recién
+            // devuelto abierta hasta la pasada siguiente —que por H-57 puede no
+            // llegar—. Bastaba el A y el B del mismo grupo enganchados a la vez.
+            // Es lo que `IngestClubCalendars.accept` hace en la otra puerta del
+            // `202`: aceptar dos veces no deja dos filas.
+            let accepted: IngestionRun
+            if let open = try await repositories.ingestionRuns.findAccepted(
+                competitionID: competition.id, kind: .calendar)
+            {
+                accepted = open
+            } else {
+                accepted = try IngestionRun(
+                    id: IngestionRunID(raw: ids.next()),
+                    competitionID: competition.id,
+                    kind: .calendar,
+                    startedAt: now, finishedAt: nil,
+                    outcome: .accepted)
+                try await repositories.ingestionRuns.record(accepted)
+            }
 
             return FederationLinkResult(
                 jobID: accepted.id, teamID: linked.id,
