@@ -1,0 +1,69 @@
+{
+  "title": "A-15·H-86 · el canario de clasificación y goleadores: cada invariante, con su «han cambiado ellos» simulado en el parser",
+  "filter": "RFFMCanaryTests",
+  "mutations": [
+    {
+      "id": "C1-position",
+      "description": "la posición se lee de otra clave (las posiciones dejan de ir de 1 a N)",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "position: try number(raw.posicion, \"posicion\")",
+      "replace": "position: try number(raw.jugados, \"posicion\")"
+    },
+    {
+      "id": "C2-balance",
+      "description": "los empates se leen de la clave de los ganados (G + E + P deja de dar J)",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "drawn: try number(raw.empatados, \"empatados\")",
+      "replace": "drawn: try number(raw.ganados, \"empatados\")"
+    },
+    {
+      "id": "C3-team",
+      "description": "el `codequipo` deja de identificar (todas las filas con el mismo)",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "federationTeamID: nonEmpty(raw.codequipo)",
+      "replace": "federationTeamID: nonEmpty(\"1\")"
+    },
+    {
+      "id": "C4-competition",
+      "description": "el código de competición se lee de otra clave (deja de casar con el pedido)",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "federationCompetitionID: nonEmpty(payload.codigoCompeticion)",
+      "replace": "federationCompetitionID: nonEmpty(payload.competicion)"
+    },
+    {
+      "id": "C5-rows",
+      "description": "la lista de filas llega vacía (la clave del array ha cambiado)",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "rows: try payload.clasificacion.enumerated().map",
+      "replace": "rows: try payload.clasificacion.prefix(0).enumerated().map"
+    },
+    {
+      "id": "G1-order",
+      "description": "la fuente deja de ordenar por goles",
+      "file": "Sources/Federation/RFFMScorersParser.swift",
+      "find": "rows: payload.goles.map(Self.row))",
+      "replace": "rows: payload.goles.reversed().map(Self.row))"
+    },
+    {
+      "id": "G2-player",
+      "description": "el `codigo_jugador` deja de identificar (se lee de los goles)",
+      "file": "Sources/Federation/RFFMScorersParser.swift",
+      "find": "federationPlayerID: nonEmpty(raw.codigoJugador)",
+      "replace": "federationPlayerID: nonEmpty(raw.goles)"
+    },
+    {
+      "id": "G3-goals",
+      "description": "los goles se leen de una clave que no es un número (no llega ninguno)",
+      "file": "Sources/Federation/RFFMScorersParser.swift",
+      "find": "goals: raw.goles.flatMap {",
+      "replace": "goals: raw.jugador.flatMap {"
+    },
+    {
+      "id": "G4-name",
+      "description": "el nombre de la competición del ranking deja de ser el esperado",
+      "file": "Sources/Federation/RFFMScorersParser.swift",
+      "find": "competitionName: nonEmpty(payload.competicion),",
+      "replace": "competitionName: nonEmpty(payload.competicion.map { $0 + \" (OTRA)\" }),"
+    }
+  ]
+}
