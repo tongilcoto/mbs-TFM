@@ -117,6 +117,54 @@ public enum TeamCategory: String, CaseIterable, Sendable {
 }
 
 extension TeamCategory {
+    /// **La edad que propone el nombre de la competición, o `nil` si el nombre
+    /// no la dice** (A-12·H-75, `D-58`).
+    ///
+    /// # Por qué hace falta
+    ///
+    /// La fuente no publica la edad como campo, igual que el género (§F.14). Sin
+    /// esto, una competición **nueva** tomaba la edad del equipo que la enganchaba,
+    /// y la comprobación de identidad comparaba el equipo consigo mismo: el
+    /// Infantil A enganchado a *"PRIMERA CADETE"* daba 202, la competición quedaba
+    /// `infantil` y la ingesta creaba dieciséis rivales "infantil" de una liga
+    /// cadete (`D-07`). Es el caso para el que `Team.requireIdentityMatches`
+    /// existe, colándose por la puerta en que la competición todavía no está.
+    ///
+    /// # Por qué devuelve `nil` y no un valor por defecto, al revés que el género
+    ///
+    /// El género tiene uno honesto: sin marcador, la fuente es masculina (§F.14).
+    /// La edad no lo tiene: *"TERCERA FEDERACIÓN RFEF"* o *"COPA RFEF FASE
+    /// AUTONÓMICA"* no dicen ninguna, y elegir una sería inventarla. En ese caso
+    /// quien llama sigue tomándola del equipo, y el `/preview` **avisa** de que no
+    /// se ha podido comprobar. Del volcado de las 30 competiciones, 24 la dicen.
+    ///
+    /// # Cómo se lee
+    ///
+    /// Sobre el nombre plegado de `NormalizedName` —sin acentos, mayúsculas ni
+    /// espacios—, buscando la palabra de cada edad; `AFICIONADO` es la de los
+    /// mayores. **Dos edades distintas no proponen ninguna**: adivinar una sería
+    /// afirmar algo que la fuente no ha dicho. Y `PREBENJAMÍN` contiene
+    /// `BENJAMÍN`, así que se quita antes de mirar.
+    public static func proposed(fromFederationName name: String) -> TeamCategory? {
+        var folded = NormalizedName(name).value
+        var found: Set<TeamCategory> = []
+        if folded.contains("prebenjamin") {
+            found.insert(.prebenjamin)
+            folded = folded.replacing("prebenjamin", with: "")
+        }
+        let markers: [(String, TeamCategory)] = [
+            ("benjamin", .benjamin), ("alevin", .alevin), ("infantil", .infantil),
+            ("cadete", .cadete), ("juvenil", .juvenil),
+            ("aficionado", .senior), ("senior", .senior),
+        ]
+        for (marker, category) in markers where folded.contains(marker) {
+            found.insert(category)
+        }
+        return found.count == 1 ? found.first : nil
+    }
+}
+
+extension TeamCategory {
     /// Rótulo legible, con los acentos que el *raw value* no lleva.
     ///
     /// Vive en el Dominio porque de él se compone `Competition.displayName`

@@ -329,6 +329,42 @@ struct FederationLinkTests {
         #expect(await store.ingestionRuns.map(\.id) == [open.id])
     }
 
+    // ── A-12·H-75 · la edad de la competición NUEVA sale de su nombre ────────
+
+    /// **Una competición nueva nace con la edad que dice su nombre, y si no es la
+    /// del equipo, el enganche se niega** (A-12·H-75).
+    ///
+    /// Antes nacía con la del equipo, y la guarda de `C-C.15` comparaba el equipo
+    /// consigo mismo. Medido contra la RFFM real: el Infantil A enganchado a
+    /// *"PRIMERA CADETE"* daba **202**, la competición quedaba `infantil` y la
+    /// ingesta creaba dieciséis rivales "infantil" de una liga cadete (`D-07`).
+    @Test("una competición nueva nace con la edad de su nombre, y la guarda la ve (H-75)")
+    func aNewCompetitionIsBornWithTheAgeOfItsName() async throws {
+        let infantil = try Fixture.team(category: .infantil)
+        func link(_ name: String) async throws -> (LinkTeamToFederation, IngestionStore) {
+            let store = IngestionStore()
+            await store.seed(club: try Fixture.club())
+            await store.seed(teams: [infantil])
+            return (Self.useCase(store: store,
+                                 federation: Self.client(Fixture.calendar(competitionName: name))),
+                    store)
+        }
+
+        let (toCadete, _) = try await link("PRIMERA CADETE")
+        await #expect(throws: DomainError.competitionIdentityMismatch(
+            team: "infantil/masculino/futbol_11", competition: "cadete/masculino/futbol_11")) {
+            try await toCadete.execute(try Self.request(teamID: infantil.id), actor: Self.actor)
+        }
+
+        // **Y si el nombre no dice ninguna, se toma la del equipo**: es lo que el
+        // `/preview` avisa con `ageCategoryChecked: false`, no una negativa.
+        let (toSilent, store) = try await link("TERCERA FEDERACIÓN RFEF")
+        let result = try await toSilent.execute(
+            try Self.request(teamID: infantil.id), actor: Self.actor)
+        let created = await store.competitions.first { $0.id == result.competitionID }
+        #expect(created?.ageCategory == .infantil)
+    }
+
     // ── A-12·H-74 · el código propio tiene que estar en el calendario ────────
 
     /// **Un `ownTeamFederationId` que no es de ningún equipo del calendario se

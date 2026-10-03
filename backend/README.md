@@ -26,7 +26,7 @@ porque los números chocan.
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **575 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
+(`D-95`). **582 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
 
 | Operación HTTP | |
 |---|---|
@@ -226,6 +226,10 @@ curl -s -i -X POST http://atleti.localhost:8080/v1/teams/$TEAM/federation-link \
 - **`identityMatches: false`** ⇒ confirmar devolverá **409**. Los tres valores propuestos van en
   `competition`, así que se puede decir *"tu equipo es cadete y esta competición es juvenil"* sin preguntar
   otra vez.
+- **`ageCategoryChecked: false`** ⇒ la edad **no se ha podido comprobar**: la competición es nueva y su
+  nombre no la dice (*"TERCERA FEDERACIÓN RFEF"*), así que la que viaja es la del equipo. Cuando el nombre
+  sí la dice (*"PRIMERA CADETE"*), es la del nombre, y si no cuadra con el equipo, `identityMatches` es
+  `false` (A-12·H-75).
 
 **El `202` deja fila desde que se acepta** (`D-96`): el `jobId` que devuelve es una `ingestion_runs` con
 `outcome: accepted`, y **la pasada que va detrás cierra ESA fila**, no abre otra. Se sigue leyendo:
@@ -265,7 +269,7 @@ en el mismo 500 (`A-6`/H-15).
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 575 tests, ~23 s — LA FORMA BUENA
+REQUIRE_DB=1 swift test                 # 582 tests, ~23 s — LA FORMA BUENA
 swift test                              # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

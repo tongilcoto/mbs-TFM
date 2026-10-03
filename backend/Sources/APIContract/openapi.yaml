@@ -4375,7 +4375,13 @@ components:
             confirmar, y a veces **debe**: `mixto` no es expresable en la fuente y el rótulo puede llegar
             truncado.
         ageCategory:
-          $ref: '#/components/schemas/TeamCategory'
+          allOf:
+            - $ref: '#/components/schemas/TeamCategory'
+          description: |
+            Si la competición ya existe, la suya. Si no, **la que dice su nombre** (*"PRIMERA CADETE"*),
+            igual que `gender` (A-12·H-75). Cuando el nombre no dice ninguna (*"TERCERA FEDERACIÓN
+            RFEF"*), el enganche la toma del equipo, y `FederationLinkPreviewResponse.ageCategoryChecked`
+            lo avisa.
         divisionLabel:
           type: string
           examples: ['Primera']
@@ -4870,7 +4876,7 @@ components:
       description: |
         Lo que hay en la coordenada, **sin persistir nada**. Es un dato de pantalla para que un humano
         reconozca su club en `competition.teams[]` antes de confirmar.
-      required: [season, competition, identityMatches]
+      required: [season, competition, identityMatches, ageCategoryChecked]
       properties:
         season:
           $ref: '#/components/schemas/PreviewSeason'
@@ -4896,6 +4902,17 @@ components:
 
             `letter` **no** entra: no se hereda de la competición — es lo que el administrador elige al
             reconocer su equipo en `competition.teams[]`.
+        ageCategoryChecked:
+          type: boolean
+          description: |
+            `false` si **la edad no se ha podido comprobar** (A-12·H-75): la competición todavía no
+            existe y su nombre no dice ninguna (*"TERCERA FEDERACIÓN RFEF"*, *"COPA RFEF FASE
+            AUTONÓMICA"*), así que `competition.ageCategory` es la del propio equipo y `identityMatches`
+            la da por buena sin poder saberlo. La pantalla debería decirlo: si el equipo no juega en esa
+            edad, confirmar creará una competición con la edad equivocada, y la ingesta la heredará a
+            cada rival (D-07).
+
+            `true` cuando la edad sale de la competición, ya sea la guardada o la que dice su nombre.
 
     PreviewSeason:
       type: object

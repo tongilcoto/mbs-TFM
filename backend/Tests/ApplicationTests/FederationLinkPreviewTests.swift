@@ -331,6 +331,69 @@ struct FederationLinkPreviewTests {
         #expect(onMatch.identityMatches)
     }
 
+    // ── A-12·H-75 · la edad de la competición NUEVA sale de su nombre ────────
+
+    /// **Con la competición todavía sin crear, la edad la propone su nombre, y
+    /// si el nombre no dice ninguna, se avisa** (A-12·H-75).
+    ///
+    /// Antes se copiaba del equipo, así que `identityMatches` comparaba el
+    /// equipo consigo mismo: el Infantil A contra *"PRIMERA CADETE"* daba `true`.
+    /// Medido contra la RFFM real, y el enganche lo confirmaba con 202.
+    @Test("la edad de una competición nueva sale de su nombre, y si no lo dice se avisa (H-75)")
+    func aNewCompetitionTakesItsAgeFromItsName() async throws {
+        let infantil = try Self.team(category: .infantil)
+        func preview(_ name: String) async throws -> FederationLinkPreview {
+            let store = IngestionStore()
+            await store.seed(club: try Self.club())
+            await store.seed(teams: [infantil])
+            return try await Self.useCase(
+                store: store,
+                federation: SpyFederationClient(
+                    returning: Self.calendar(competitionName: name), readingURLAs: Self.coordinate))
+                .execute(teamID: infantil.id, calendarURL: Self.url, actor: Self.actor)
+        }
+
+        // **A**: el nombre dice cadete, el equipo es infantil → no cuadra.
+        let cadete = try await preview("PRIMERA CADETE")
+        #expect(cadete.competition.ageCategory == .cadete)
+        #expect(cadete.identityMatches == false)
+        #expect(cadete.ageCategoryChecked)
+
+        // Y cuando el nombre dice la del equipo, cuadra.
+        let same = try await preview("PRIMERA INFANTIL")
+        #expect(same.identityMatches)
+        #expect(same.ageCategoryChecked)
+
+        // **B**: el nombre no dice ninguna → la del equipo, y **se avisa**.
+        let silent = try await preview("TERCERA FEDERACIÓN RFEF")
+        #expect(silent.competition.ageCategory == .infantil)
+        #expect(silent.identityMatches)
+        #expect(silent.ageCategoryChecked == false)
+    }
+
+    /// **Con la competición ya creada, la edad es la suya y está comprobada**,
+    /// diga lo que diga el nombre: es la fila que la cascada va a reutilizar.
+    @Test("con la competición ya creada, la edad es la suya y está comprobada (H-75)")
+    func anExistingCompetitionIsChecked() async throws {
+        let infantil = try Self.team(category: .infantil)
+        let season = try Self.season(federationSeasonID: "21")
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(
+            seasons: [season],
+            competitions: [try Self.competition(seasonID: season.id, ageCategory: .infantil)],
+            teams: [infantil])
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(
+                returning: Self.calendar(competitionName: "TERCERA FEDERACIÓN RFEF"),
+                readingURLAs: Self.coordinate))
+            .execute(teamID: infantil.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(preview.competition.ageCategory == .infantil)
+        #expect(preview.ageCategoryChecked)
+    }
+
     // ── C-C.5 · el equipo sin código no desaparece de `teams[]` ──────────────
 
     /// **`teams[]` es la razón de ser de este endpoint** (`D-16`): el

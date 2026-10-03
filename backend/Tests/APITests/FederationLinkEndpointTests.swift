@@ -420,13 +420,57 @@ struct FederationLinkEndpointTests {
                 // que devolviera siempre la misma URL pasaría por verde.
                 #expect(unidentified?.crestUrl == nil)
 
-                // La identidad: competición nueva ⇒ los tres se proponen y la
-                // edad sale del equipo, así que cuadra por construcción
-                // (`C-C.4`, Bloque C).
-                #expect(preview.competition.ageCategory == .cadete)
+                // La identidad: competición nueva ⇒ los tres se proponen, y la
+                // edad sale **del nombre**, *"PRIMERA CADETE"* (A-12·H-75).
+                #expect(preview.competition.ageCategory.value1 == .cadete)
                 #expect(preview.competition.modality == .futbol_11)
                 #expect(preview.identityMatches == true)
+                #expect(preview.ageCategoryChecked == true)
             }
+        }
+    }
+
+    /// **La edad que el nombre no dice se avisa, y la que dice otra cosa es 409**
+    /// (A-12·H-75), las dos por la ruta HTTP.
+    ///
+    /// La primera mitad es lo que el campo `ageCategoryChecked` existe para
+    /// decir: la competición no existe, su nombre no lleva edad y la que viaja es
+    /// la del equipo. La segunda es el caso medido contra la RFFM real antes del
+    /// arreglo: el Infantil A contra *"PRIMERA CADETE"* daba 202.
+    @Test("la edad sin comprobar se avisa en el preview, y la que no cuadra es 409 (A-12·H-75)")
+    func theAgeIsCheckedOrSaidSo() async throws {
+        try await Self.withSeededTeam(sourceName: "TERCERA FEDERACIÓN RFEF") { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link/preview",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.previewBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let preview = try Self.decodePreview(response)
+                #expect(preview.ageCategoryChecked == false)
+                #expect(preview.competition.ageCategory.value1 == .cadete)
+                #expect(preview.identityMatches == true)
+            }
+        }
+
+        try await Self.withSeededTeam(category: .infantil) { app, teamID in
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID)/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == "COMPETITION_IDENTITY_MISMATCH")
+                #expect(problem.detail?.contains("infantil") == true)
+                #expect(problem.detail?.contains("cadete") == true)
+            }
+            #expect(try await Self.rowCount("competitions", on: app) == 0)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }
 

@@ -189,11 +189,17 @@ public struct LinkTeamToFederation: Sendable {
             // la unicidad de §3.5; por el código de **competición**, el Grupo 5
             // reutilizaría la fila del Grupo 4, que es otra liga.
             //
-            // **Los tres campos de identidad, cuando se crea**: la edad sale del
-            // equipo —único sitio del que puede salir, la fuente no la publica y
-            // el cuerpo no la lleva—, la modalidad de la coordenada
-            // (`tipojuego`) y el género **del cuerpo**, que es la confirmación
-            // de lo que el `/preview` propuso (`D-58`).
+            // **Los tres campos de identidad, cuando se crea**: la edad **del
+            // nombre** de la competición (A-12·H-75), la modalidad de la
+            // coordenada (`tipojuego`) y el género **del cuerpo**, que es la
+            // confirmación de lo que el `/preview` propuso (`D-58`).
+            //
+            // La edad se tomaba del equipo, y entonces la guarda de identidad de
+            // abajo comparaba el equipo consigo mismo: el Infantil A enganchado a
+            // *"PRIMERA CADETE"* daba 202 y la ingesta creaba dieciséis rivales
+            // "infantil" de una liga cadete (`D-07`). Del equipo solo se toma
+            // cuando el nombre no dice ninguna, que es lo que el `/preview` avisa
+            // con `ageCategoryChecked: false`.
             let competition: Competition
             if let existing = try await repositories.competitions.findByFederationGroup(
                 seasonID: season.id, federationGroupID: coordinate.federationGroupID)
@@ -224,7 +230,9 @@ public struct LinkTeamToFederation: Sendable {
                     gender: request.gender,
                     federationCompetitionID: coordinate.federationCompetitionID,
                     federationGroupID: coordinate.federationGroupID,
-                    ageCategory: team.category,
+                    ageCategory: TeamCategory.proposed(
+                        fromFederationName: calendar.competitionName ?? "")
+                        ?? team.category,
                     divisionLabel: calendar.competitionName ?? "Sin división",
                     groupLabel: calendar.groupLabel ?? "Grupo Único",
                     // **La evidencia se guarda ya** (`D-72`): sin este valor, la
