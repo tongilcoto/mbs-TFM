@@ -65,6 +65,8 @@ actor IngestionStore {
     /// Las competiciones que una pasada bloqueó para escribir (A-11·H-55).
     var competitionLocks: [CompetitionID] = []
     func noteLock(_ id: CompetitionID) { competitionLocks.append(id) }
+    var teamLocks: [TeamID] = []
+    func noteLock(_ id: TeamID) { teamLocks.append(id) }
 
     func seed(teamRegistrations rows: [TeamRegistration]) { self.teamRegistrations += rows }
 
@@ -179,6 +181,12 @@ struct FakeTeamRepository: TeamRepository {
     func list() async throws -> [Team] { await store.teams }
     func find(_ id: TeamID) async throws -> Team? {
         await store.teams.first { $0.id == id }
+    }
+    /// Sin transacción no hay nada que bloquear: el doble **apunta** que se pidió
+    /// y lee lo que hay **ahora**, como el de la competición (A-12·H-73).
+    func lock(_ id: TeamID) async throws -> Team? {
+        await store.noteLock(id)
+        return try await find(id)
     }
     func save(_ team: Team) async throws { await store.save(team) }
 }

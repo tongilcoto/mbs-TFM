@@ -51,6 +51,16 @@ public protocol TeamRepository: Sendable {
     /// de *"no está"* repartida entre dos capas.
     func find(_ id: TeamID) async throws -> Team?
 
+    /// Como `find`, y **deja la fila bloqueada hasta que cierre el ámbito**, que
+    /// es una transacción (§6.2) (A-12·H-73).
+    ///
+    /// Es lo primero que hace el ámbito que **escribe** del enganche. El equipo
+    /// se lee también antes de la red —para el 404—, pero lo que se decide con él
+    /// se decide con **esta** copia: otro enganche puede haber escrito su código
+    /// mientras éste esperaba a la federación, y con la de antes se pisaba. Es
+    /// `CompetitionRepository.lock` (A-11·H-55) aplicado a `Team`.
+    func lock(_ id: TeamID) async throws -> Team?
+
     func save(_ team: Team) async throws
 }
 

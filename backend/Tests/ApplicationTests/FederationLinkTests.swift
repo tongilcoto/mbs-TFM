@@ -329,6 +329,68 @@ struct FederationLinkTests {
         #expect(await store.ingestionRuns.map(\.id) == [open.id])
     }
 
+    // ── A-12·H-73 · el equipo se decide con lo que hay DESPUÉS de la red ─────
+
+    /// Un cliente que, **mientras la petición está en la red**, deja que otra
+    /// escriba: es lo que hace una segunda petición que confirma antes que ésta.
+    struct InterleavingClient: FederationClient {
+        let calendar: FederationCalendar
+        let meanwhile: @Sendable () async -> Void
+
+        func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate {
+            Fixture.coordinate
+        }
+        func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
+            await meanwhile()
+            return calendar
+        }
+        func fetchStandings(
+            _ coordinate: FederationCoordinate, round: Int
+        ) async throws -> FederationStanding {
+            throw NotStubbed(client: "InterleavingClient", operation: "fetchStandings")
+        }
+        func fetchScorers(_ coordinate: FederationCoordinate) async throws -> FederationScorerTable {
+            throw NotStubbed(client: "InterleavingClient", operation: "fetchScorers")
+        }
+    }
+
+    /// **Lo que otro enganche escribió mientras éste esperaba a la federación,
+    /// manda** (A-12·H-73).
+    ///
+    /// El equipo se leía en el ámbito 1, antes de la red, y el ámbito 2 decidía
+    /// con **esa copia**: `linked(…)` no veía el código que otra petición acababa
+    /// de escribir, y `save` lo pisaba. Medido contra la RFFM real: el mismo
+    /// equipo enganchado a dos grupos a la vez → **dos 202 y dos cascadas**, con
+    /// la ventana entera de la llamada a la federación para que ocurra. Ahora el
+    /// ámbito que escribe empieza **bloqueando y releyendo** el equipo, y el
+    /// segundo recibe el 409 que habría recibido de llegar después.
+    @Test("lo que otro enganche escribió mientras éste estaba en la red, manda (A-12·H-73)")
+    func aLinkWrittenMeanwhileWins() async throws {
+        let team = try Fixture.team()
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(teams: [team])
+        let elsewhere = try team.linked(toFederationTeamID: "3349087")
+        let client = InterleavingClient(calendar: Fixture.calendar()) {
+            await store.save(elsewhere)
+        }
+
+        await #expect(throws: DomainError.alreadyLinkedToFederation(
+            existing: "3349087", incoming: "3349086")) {
+            try await Self.useCase(store: store, federation: client)
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+        // Se para **antes** de escribir nada de la cascada, y el equipo queda con
+        // lo que escribió el otro.
+        #expect(await store.seasons.isEmpty)
+        #expect(await store.teamRegistrations.isEmpty)
+        #expect(await store.ingestionRuns.isEmpty)
+        #expect(await store.teams.first?.federationTeamID == "3349087")
+        // Y lo releyó **bloqueándolo**, que es lo que lo mantiene cierto el día
+        // que dos ámbitos puedan estar abiertos a la vez (H-77).
+        #expect(await store.teamLocks == [team.id])
+    }
+
     // ── C-C.12 · sin adaptador se para ANTES del 202 ─────────────────────────
 
     /// **`H-28` en la segunda puerta, y la que `D-95` anunció.**
