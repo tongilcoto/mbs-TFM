@@ -3,3 +3,4 @@
 .swiftpm/
 # El fichero que `Tools/Mutate` deja mientras uno está mutado (A-15·H-52)
 .mutate-in-flight.json
+.mutate.lock

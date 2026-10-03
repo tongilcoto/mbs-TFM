@@ -94,6 +94,45 @@ struct InFlight: Codable {
     }
 }
 
+/// El candado del paquete: un fichero con el pid de la pasada que lo tiene
+/// (ver `lockDecision`). Se crea con `O_EXCL`, así que dos que arrancan a la
+/// vez no lo toman los dos.
+enum RunLock {
+    static func url(in package: URL) -> URL {
+        package.appendingPathComponent(".mutate.lock")
+    }
+
+    static func acquire(in package: URL) throws {
+        let path = url(in: package).path
+        let ownPID = getpid()
+        for _ in 0..<2 {
+            let fd = open(path, O_CREAT | O_EXCL | O_WRONLY, 0o644)
+            if fd >= 0 {
+                _ = "\(ownPID)".withCString { write(fd, $0, strlen($0)) }
+                close(fd)
+                return
+            }
+            let holder = (try? String(contentsOfFile: path, encoding: .utf8))
+                .flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            let decision = lockDecision(holder: holder, ownPID: ownPID) { pid in
+                kill(pid, 0) == 0 || errno == EPERM
+            }
+            switch decision {
+            case .refuse(let pid):
+                throw Failure("otra pasada de mutate (pid \(pid)) está en curso sobre "
+                              + "\(package.path); no se toca nada hasta que acabe")
+            case .acquire, .takeOverStale:
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
+        throw Failure("no se pudo tomar el candado \(path)")
+    }
+
+    static func release(in package: URL) {
+        try? FileManager.default.removeItem(at: url(in: package))
+    }
+}
+
 func installInterruptHandler(package: URL) -> [any DispatchSourceSignal] {
     [SIGINT, SIGTERM].map { number in
         signal(number, SIG_IGN)
@@ -102,6 +141,7 @@ func installInterruptHandler(package: URL) -> [any DispatchSourceSignal] {
             if let path = try? InFlight.recover(in: package) {
                 progress("\ninterrumpido: \(path) restaurado")
             }
+            RunLock.release(in: package)
             exit(130)
         }
         source.resume()
@@ -182,6 +222,12 @@ func main() throws -> Int32 {
     let package = options.packagePath
     guard FileManager.default.fileExists(atPath: package.appendingPathComponent("Package.swift").path)
     else { throw Failure("no hay Package.swift en \(package.path)") }
+
+    // El candado **antes** que el diario: solo es de una ejecución muerta si
+    // nadie vivo tiene el candado. También en `--dry-run`, que lee los ficheros
+    // y con una pasada en curso los leería mutados.
+    try RunLock.acquire(in: package)
+    defer { RunLock.release(in: package) }
 
     if let path = try InFlight.recover(in: package) {
         progress("⚠️ una ejecución anterior dejó \(path) mutado: restaurado")

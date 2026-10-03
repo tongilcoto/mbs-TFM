@@ -106,6 +106,13 @@
           "replace": "case \"testcase\":\n                break"
         }
       ]
+    },
+    {
+      "id": "S15",
+      "description": "A-15·H-89: el candado de un proceso vivo se pisa, y su diario se restaura a mitad de una mutación",
+      "file": "Sources/MutateCore/RunLock.swift",
+      "find": "    if holder != ownPID, isAlive(holder) { return .refuse(pid: holder) }\n",
+      "replace": ""
     }
   ]
 }

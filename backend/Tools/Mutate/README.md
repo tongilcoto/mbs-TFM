@@ -27,8 +27,9 @@ Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json --only H80-a,
 
 ## Qué hace, en orden
 
-1. **Restaura** lo que una ejecución anterior dejara mutado (`.mutate-in-flight.json`). Ctrl-C restaura en el
-   acto.
+1. **Toma el candado del paquete** (`.mutate.lock`): si otra pasada viva lo tiene, se niega a arrancar,
+   también en `--dry-run`. Después **restaura** lo que una ejecución **muerta** dejara mutado
+   (`.mutate-in-flight.json`). Ctrl-C restaura en el acto.
 2. **La batería sin mutar, en verde**, por cada filtro del catálogo. Sin un verde de partida no hay nada que
    medir, y así un filtro que no casa con nada se descubre antes de empezar.
 3. Por cada mutación: **aplica** → **compila** (`swift build --build-tests`) → **prueba**
@@ -40,7 +41,7 @@ Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json --only H80-a,
 ## Las reglas, y el fallo del que sale cada una
 
 Cada una tiene su test en `Tests/MutateCoreTests/`, y `Catalogs/self.json` mete cada fallo de vuelta en el
-guion para comprobar que esos tests lo cazan (**14/14**).
+guion para comprobar que esos tests lo cazan (**15/15**).
 
 | Regla | De dónde sale |
 |---|---|
@@ -52,7 +53,12 @@ guion para comprobar que esos tests lo cazan (**14/14**).
 | ***"No hay `✘`"* solo es sobrevivir si la batería salió con `0` y corrió algo** | F10-bis; y README §5.1: un filtro que no casa sale con `0` |
 | **Los omitidos no cuentan como ejecutados**, y siempre `REQUIRE_DB=1` | `A-7`·H-07: sin la variable, con Docker parado, la salida es idéntica a un verde |
 | **Los tests se cuentan por `<testcase>`, no por el atributo `tests`** | El estreno de este guion: en swift-testing `tests` ya excluye los omitidos, y restarlos otra vez contaba de menos |
+| **Una pasada por paquete**: el candado va antes que el diario de vuelo | `A-15`·H-89: un `--dry-run` en paralelo tomó el diario de la pasada en curso por el de una muerta, y restauró el fichero a mitad de una mutación |
 | **El resumen va a un fichero**, y el progreso por otro canal | F5: el resumen se perdió detrás de un `tail` |
+
+> **Y lo que el candado no cubre:** un `swift test` lanzado a mano mientras corre una pasada usa la misma
+> `tfm_test`, y cada batería **barre al arrancar** los *schemas* de la otra. No lances nada contra el backend
+> hasta que la pasada acabe. Y si `launchd` dispara `.build/debug/Run`, ejecutará el binario mutado (H-85).
 
 ## Cuatro desenlaces, no dos
 
