@@ -101,7 +101,7 @@ public struct SeedTeamCommand: AsyncCommand {
         }
 
         let actor = ActorContext(clubSlug: try Slug(slug), isSystem: true)
-        let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+        let unitOfWork = app.tenantUnitOfWork
         let now = Date()
 
         let teamID = try await unitOfWork.withRepositories(actor: actor) { repositories in

@@ -465,7 +465,7 @@ struct FederationLinkTests {
         #expect(await store.ingestionRuns.isEmpty)
         #expect(await store.teams.first?.federationTeamID == "3349087")
         // Y lo releyó **bloqueándolo**, que es lo que lo mantiene cierto el día
-        // que dos ámbitos puedan estar abiertos a la vez (H-77).
+        // que dos ámbitos puedan estar abiertos a la vez (`D-100`, opción B de H-77).
         #expect(await store.teamLocks == [team.id])
     }
 

@@ -199,10 +199,10 @@ struct IngestionPersistenceTests {
     /// `SELECT … FOR UPDATE` de verdad, que el doble del nivel 2 no tiene.
     ///
     /// **Lo que este test no puede afirmar, dicho**: que el bloqueo *espere*. Con
-    /// el *pool* de tenant de una conexión (A-12·H-77) una segunda transacción no
+    /// el acceso de tenant de una conexión (`D-100`) una segunda transacción no
     /// llega a abrirse mientras la primera vive, así que no hay con quién
     /// competir. Quitar el `FOR UPDATE` deja este test en verde, y lo seguirá
-    /// dejando hasta que el *pool* crezca.
+    /// dejando mientras rija `D-100` — que lo vigila `TenantUnitOfWorkTests`.
     @Test("lock trae ese equipo y no otro, y nil si no está (A-12·H-73)")
     func lockBringsTheDesignatedTeam() async throws {
         try await Self.withTenant("team-lock") { tenant in

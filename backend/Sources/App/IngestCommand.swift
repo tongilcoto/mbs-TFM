@@ -116,7 +116,7 @@ public struct IngestCommand: AsyncCommand {
         let tenants = try await Self.tenants(on: app, slugs: tenantSlugs)
 
         let useCase = IngestClubCalendars(
-            unitOfWork: FluentTenantUnitOfWork(controlDatabase: app.db(.control)),
+            unitOfWork: app.tenantUnitOfWork,
             federationClients: federationClients,
             clock: clock,
             ids: ids)

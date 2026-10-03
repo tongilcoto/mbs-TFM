@@ -359,10 +359,10 @@ public struct IngestScorers: Sendable {
             // la escritura y la retirada de `D-94` van por marca, y dos pasadas a
             // la vez no deben mezclar las suyas.
             //
-            // **Y el orden importa aunque hoy no se vea**: con el *pool* de tenant
-            // de una conexión (A-12·H-77) leer antes del `lock` daría lo mismo, y
-            // la mutación que lo hace sobrevive. Deja de dar lo mismo el día que
-            // el *pool* crezca.
+            // **Y el orden importa aunque hoy no se vea**: con el acceso de tenant
+            // de una conexión (`D-100`) leer antes del `lock` daría lo mismo, y la
+            // mutación que lo hace sobrevive. Deja de dar lo mismo el día que esa
+            // regla se reabra (la opción B de A-12·H-77).
             _ = try await repositories.competitions.lock(competitionID)
             let stored = Dictionary(
                 try await repositories.leagueScorers.list(competitionID: competitionID)

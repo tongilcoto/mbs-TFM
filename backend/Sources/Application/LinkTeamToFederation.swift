@@ -117,9 +117,10 @@ public struct LinkTeamToFederation: Sendable {
             // enganchado a dos grupos a la vez daba **dos 202 y dos cascadas**.
             //
             // **Bloqueado, y no solo releído**: hoy dos ámbitos de tenant no
-            // pueden estar abiertos a la vez (H-77) y releer bastaría, pero eso es
-            // una cifra del *pool*, no un diseño. Con el bloqueo, el segundo
-            // espera al primero y ve su código.
+            // pueden estar abiertos a la vez (`D-100`) y releer bastaría, pero esa
+            // regla se reabre el día que el rendimiento pida más conexiones (la
+            // opción B de H-77), y entonces es el bloqueo lo que hace que el
+            // segundo espere al primero y vea su código.
             //
             // **Y la transición se comprueba antes de escribir nada**: el
             // `alreadyLinkedToFederation` no depende de la temporada ni de la

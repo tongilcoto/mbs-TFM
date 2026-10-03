@@ -4261,6 +4261,48 @@ se sigue declarando en ella, para que el cliente lo tenga con nombre.
 *build* no vigila las otras 77. Lo vigila `SpecConventionTests`, que lee el YAML y exige el `default` en
 **cada** bloque de respuestas.
 
+### D-100 · El acceso a los datos de tenant tiene una sola conexión, a propósito
+
+**Lo que lo obligó a decidirse** (`A-12`·H-77, 2026-10-03). La auditoría buscaba carreras en el enganche y no
+conseguía provocarlas: con dos ámbitos de tenant forzados a estar abiertos a la vez, **el segundo no llegaba a
+abrirse nunca**. La causa eran dos valores por defecto sumados, que nadie había decidido: la raíz de
+composición construía el acceso de tenant sobre **un** `app.db(.control)` —que Fluent ata a **un** *event
+loop*— y `fluent-postgres-driver` abre **una** conexión por *loop*. Todas las transacciones de tenant del
+proceso, de todos los clubes y también la ingesta encolada por un `202`, iban en fila por una conexión.
+
+**Esa fila sostiene hoy tres garantías que no estaban escritas.** El enganche hace *"¿existe? si no, créalo"*
+con la temporada, la competición y la inscripción. Con dos conexiones, dos enganches del mismo grupo a la vez
+chocarían en el `INSERT` y uno recibiría un `23505` dentro de un **500**. Con una, el segundo espera, ve lo
+que el primero confirmó y lo reutiliza. Y dos mutaciones de la ronda de arreglos de `A-12` (leer antes del
+`lock` en H-76, quitar el `FOR UPDATE` en H-73) **no las puede cazar ningún test** mientras sea así.
+
+**Y lo que cuesta, medido** (2026-10-03, servidor local, `club_atleti`). Tres `/preview` a la vez tardan lo
+mismo que uno (0,4–1,1 s, que es la RFFM): la llamada a la federación va **fuera** de todo ámbito ([D-83]) y
+no retiene la conexión. Con una ingesta escribiendo en segundo plano, un `GET /v1/club` tarda 12 ms de mediana
+y **529 ms en el peor caso**: lo que dura la escritura de un calendario de 240 partidos. El `ingest` del cron
+es **otro proceso**, con su propia conexión, y no hace esperar al servidor.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — Escribirlo como regla** | Una conexión **a propósito**, declarada en el código y vigilada por un test | **Elegida** |
+| B — Hacer seguras las tres carreras y subir el *pool* | Bloqueo o `ON CONFLICT` en cada una, sus tests, y después la cifra | Aplazada: cuando el rendimiento lo pida |
+| C — Dejarlo apuntado | Depende de que quien despliegue lea el libro de la auditoría | Descartada |
+
+**Decisión: A.** Con un club y pocos usuarios, una conexión no se nota y protege contra los choques. Lo que se
+compra es que **deje de ser casual**:
+
+- `maxConnectionsPerEventLoop: 1` **escrito** en `configure`, con el porqué al lado.
+- El acceso de tenant se construye **una sola vez** (`app.tenantUnitOfWork`) y lo comparten el servidor y los
+  tres comandos. Volver a pedir `db(.control)` en cada sitio rompería la garantía sin avisar: cada objeto
+  cae en otro *loop* y trae su propia conexión. Medido con la mutación.
+- `TenantUnitOfWorkTests` (nivel 3) se pone en **rojo** si un segundo ámbito se abre mientras el primero vive:
+  caza subir la cifra y caza el acceso por llamada.
+
+**Cuándo se reabre.** Cuando haya muchos clubes pulsando "actualizar" a la vez, que es lo que encadena
+escrituras dentro del servidor: con diez, una petición podría esperar varios segundos. Se reabre **con un
+número**, como [D-67] pidió para su `202`, y por la opción B: primero las tres carreras seguras, después la
+cifra, y este test cambiado con ello.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4397,3 +4439,4 @@ se sigue declarando en ella, para que el cliente lo tenga con nombre.
 [D-97]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

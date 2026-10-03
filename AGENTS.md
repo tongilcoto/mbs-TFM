@@ -361,7 +361,7 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**582 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+**583 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
 montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -540,7 +540,11 @@ docker compose down -v
   escriba dentro de un `withRepositories` **no lo ve otra conexión** hasta que cierra, así que un `SELECT` en
   crudo para comprobar una columna no encuentra nada; y una violación de restricción **aborta la transacción
   entera** (`25P02`), de modo que dos intentos que deban fallar en el mismo ámbito hacen que el segundo pase
-  por el motivo equivocado. `TenantFixture` (nivel 3) obliga a declarar cada ámbito justo por eso.
+  por el motivo equivocado. `TenantFixture` (nivel 3) obliga a declarar cada ámbito justo por eso. **Y el
+  acceso de tenant tiene una sola conexión, a propósito** (`D-100`): se construye **una vez**
+  (`app.tenantUnitOfWork`) y lo comparten servidor y comandos, así que dos ámbitos nunca están abiertos a la
+  vez. No se construye otro con `db(.control)` ni se sube `maxConnectionsPerEventLoop` sin hacer antes seguras
+  las tres carreras de `INSERT` del enganche; `TenantUnitOfWorkTests` se pone en rojo si pasa.
 - **El `CHECK` de un enumerado se deriva, nunca se teclea** (§4.6, `D-02`): `sqlValueList` es genérico sobre
   `CaseIterable where RawValue == String`, así que un enumerado nuevo lo hereda solo. Y el `switch` sobre
   `DomainError` en `ProblemMiddleware` es **exhaustivo** a propósito — un caso de error nuevo no compila hasta
