@@ -2581,6 +2581,14 @@ Lo que pierde es `ownTeamFederationId`, que se muda al enganche.
 - **Una llamada síncrona a la federación más de las que §2.3-c declaraba como única.** El `preview` sigue
   siendo la única que llama **sin persistir**; el enganche llama y persiste, pero **fuera de la petición**.
   La frontera que §2.3-c protegía —no meter latencia de terceros en una ruta HTTP— se mantiene.
+
+  > ⚠️ **Enmienda (2026-10-03, auditoría 002 · A-12/H-78): el enganche sí llama dentro de la petición.**
+  > Desde que las guardas de [D-84] y [D-91] están también en la puerta del enganche (F10, `C-C.13` y
+  > `C-C.14`), el caso de uso **descarga el calendario antes de responder**: las dos guardas necesitan lo que
+  > dice la fuente y tienen que saltar antes de escribir la cascada. Lo que queda fuera de la petición es **la
+  > primera ingesta**, no la llamada. Así que **las dos puertas** tienen latencia de terceros en línea, y el
+  > `202` puede tardar hasta el *timeout* del transporte (20 s) y acabar en `504`. Medido: entre 0,4 y 0,7 s
+  > contra la RFFM.
 - **`/ownership` queda como corrección pura**, ya sin camino feliz que lo justifique. [D-20] lo dejó de
   «mecanismo de corrección»; ahora lo es del todo.
 - **La cascada crea `Season` desde una URL pegada.** Un pegado con la temporada equivocada da de alta una
