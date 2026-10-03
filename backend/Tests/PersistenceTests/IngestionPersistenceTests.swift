@@ -151,6 +151,58 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// Un equipo y su **gemelo**, que solo se diferencia en una columna de la
+    /// clave de §3.5.
+    struct Twin: Sendable, CustomTestStringConvertible {
+        let column: String
+        let category: TeamCategory
+        let letter: String?
+        let gender: Gender
+        let modality: Modality
+        var testDescription: String { "solo cambia \(column)" }
+    }
+
+    /// Partiendo del «Infantil A» masculino de fútbol-11, cada gemelo cambia
+    /// **una** columna y deja las demás iguales.
+    static let twins: [Twin] = [
+        Twin(column: "category", category: .cadete, letter: "A", gender: .masculino, modality: .futbol11),
+        Twin(column: "letter", category: .infantil, letter: "B", gender: .masculino, modality: .futbol11),
+        Twin(column: "gender", category: .infantil, letter: "A", gender: .femenino, modality: .futbol11),
+        Twin(column: "modality", category: .infantil, letter: "A", gender: .masculino, modality: .futbolSala),
+    ]
+
+    /// **La otra mitad de la clave, la que deja pasar** (`A-15`·H-87). Los dos
+    /// tests de arriba prueban que la clave **choca** cuando todo es igual; nada
+    /// probaba que **no choque** cuando una sola columna cambia. Y eso es lo que
+    /// se rompe si alguien quita una columna del índice: en los montajes todo es
+    /// masculino y de fútbol-11, así que quitar `gender` o `modality` de
+    /// `uq_teams_identity` pasaba la batería entera, medido con mutación.
+    ///
+    /// Es el ejemplo con el que `D-58` y `D-07` justifican las dos columnas: el
+    /// «Infantil A» femenino y el masculino **son equipos distintos**, y el de
+    /// fútbol-11 y el de fútbol-sala también. Sin la columna en el índice, la
+    /// ingesta del segundo moriría con un `23505`. En el Dominio la regla ya tenía
+    /// sus dos lados (`MatchingChainTests`, `TeamTests`); aquí faltaba el del índice.
+    @Test("dos equipos que solo difieren en una columna de la clave sí caben (§3.5, D-58, D-07)",
+          arguments: twins)
+    func teamsThatDifferInOneKeyColumnFit(_ twin: Twin) async throws {
+        try await Self.withTenant("team-twin-\(twin.column)") { tenant in
+            let stored = try await tenant.scope { repositories -> [Team] in
+                try await repositories.teams.save(try Team(
+                    id: TeamID(raw: UUID()), opponentClubID: nil,
+                    category: .infantil, letter: "A", gender: .masculino,
+                    modality: .futbol11, createdAt: Date(), updatedAt: Date()))
+                try await repositories.teams.save(try Team(
+                    id: TeamID(raw: UUID()), opponentClubID: nil,
+                    category: twin.category, letter: twin.letter, gender: twin.gender,
+                    modality: twin.modality, createdAt: Date(), updatedAt: Date()))
+                return try await repositories.teams.list()
+            }
+
+            #expect(stored.count == 2, "el índice confunde dos equipos que solo difieren en \(twin.column)")
+        }
+    }
+
     // ── F10 · C-D.1 · el equipo por su id ───────────────────────────────────
 
     /// **`TeamRepository.find(_:)`**, que hasta F10 no existía y no era un olvido:
