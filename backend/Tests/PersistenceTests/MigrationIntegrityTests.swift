@@ -657,3 +657,78 @@ struct RevertAuthorizationTests {
         }
     }
 }
+
+/// Nivel 1, **sin base**: el enumerado de hoy contra lo que **los clubes vivos
+/// tienen congelado** en sus `CHECK` (`A-13`·H-82).
+///
+/// `D-02` deriva cada `CHECK` de su enumerado y `D-90` explica por qué eso no
+/// basta: la derivación ocurre **cuando la migración corre**, y su texto se
+/// queda en el *schema*. Un caso nuevo —o un `rawValue` renombrado— no llega a
+/// un club ya migrado sin una migración que lo rehaga, y la batería no lo ve,
+/// porque en los tests cada tenant nace limpio. F8 y F10-bis lo aprendieron con
+/// `kind` y `outcome`, y sus dos tests de arriba los guardan; **los otros ocho
+/// `CHECK` no tenían nada**.
+@Suite("Los CHECK de enumerado: lo que el club vivo tiene congelado (A-13·H-82, D-02, D-90)")
+struct FrozenEnumCheckTests {
+
+    /// Un enumerado con `CHECK`, y **los valores que su última migración
+    /// congeló** en los clubes vivos.
+    ///
+    /// **Aquí la lista tecleada es el punto, no el defecto.** Los tests de
+    /// `kind` y `outcome` comparan contra `allCases` porque lo que afirman es
+    /// *"el schema admite todo el enumerado"*; éste afirma lo contrario —*"el
+    /// enumerado no se ha movido de lo que el schema tiene"*—, y lo que el
+    /// *schema* tiene **es** una lista fija: la que salió el día que corrió la
+    /// migración. Medida contra `club_atleti` el 2026-10-03 con
+    /// `pg_get_constraintdef`: 10/10 iguales.
+    struct Frozen: Sendable, CustomTestStringConvertible {
+        let enumName: String
+        let current: [String]
+        let frozen: [String]
+        let checks: [String]
+        let lastDerivedBy: String
+        var testDescription: String { enumName }
+    }
+
+    static let anchors: [Frozen] = [
+        Frozen(enumName: "FederationCode",
+               current: FederationCode.allCases.map(\.rawValue),
+               frozen: ["rffm", "fcf"],
+               checks: ["chk_clubs_federation"], lastDerivedBy: "CreateClub"),
+        Frozen(enumName: "MatchStatus",
+               current: MatchStatus.allCases.map(\.rawValue),
+               frozen: ["programado", "finalizado", "aplazado", "suspendido"],
+               checks: ["chk_matches_status"], lastDerivedBy: "CreateMatch"),
+        Frozen(enumName: "TeamCategory",
+               current: TeamCategory.allCases.map(\.rawValue),
+               frozen: ["prebenjamin", "benjamin", "alevin", "infantil", "cadete", "juvenil", "senior"],
+               checks: ["chk_teams_category", "chk_competitions_age_category"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+        Frozen(enumName: "Gender",
+               current: Gender.allCases.map(\.rawValue),
+               frozen: ["masculino", "femenino", "mixto"],
+               checks: ["chk_teams_gender", "chk_competitions_gender"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+        Frozen(enumName: "Modality",
+               current: Modality.allCases.map(\.rawValue),
+               frozen: ["futbol_11", "futbol_7", "futbol_5", "futbol_sala", "futbol_playa"],
+               checks: ["chk_teams_modality", "chk_competitions_modality"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+    ]
+
+    /// **Al añadir o renombrar un caso**, este test se pone rojo hasta que
+    /// exista la migración que rehaga sus `CHECK` con `replaceCheckConstraint`
+    /// —y un test de club vivo como los de `kind` y `outcome`—. Entonces se
+    /// actualiza `frozen` y `lastDerivedBy`. Que es el trabajo.
+    @Test("el enumerado no se ha movido de lo que su CHECK tiene congelado", arguments: anchors)
+    func theEnumMatchesWhatLiveClubsHaveFrozen(_ anchor: Frozen) {
+        #expect(Set(anchor.current) == Set(anchor.frozen),
+                """
+                \(anchor.enumName) es hoy \(anchor.current.sorted()), y los clubes vivos \
+                tienen \(anchor.frozen.sorted()) congelado en \(anchor.checks.joined(separator: " y ")) \
+                desde \(anchor.lastDerivedBy). Un club ya migrado rechazará el valor nuevo con un \
+                23514: hace falta una migración nueva que rehaga esos CHECK (D-90), y luego \
+                actualizar este ancla.
+                """)
+    }
+}
