@@ -1,0 +1,66 @@
+{
+  "title": "A-13 · ronda de arreglos (2026-10-03) · H-80, H-81 y H-82, dos mutaciones cada uno",
+  "filter": "MigrationIntegrityTests",
+  "mutations": [
+    {
+      "id": "H80-a",
+      "description": "H-80: vuelve la bandera `--yes` propia, que ConsoleKit deja siempre en false",
+      "file": "Sources/App/TenantCommands.swift",
+      "edits": [
+        {
+          "find": "public var revert: Bool",
+          "replace": "public var revert: Bool\n\n        @Flag(name: \"yes\", short: \"y\", help: \"Confirma el --revert.\")\n        public var yes: Bool"
+        },
+        {
+          "find": "confirmed: context.console.confirmOverride == true)",
+          "replace": "confirmed: signature.yes)"
+        }
+      ]
+    },
+    {
+      "id": "H80-b",
+      "description": "H-80: guarda laxa, que deja pasar el `--revert` a secas",
+      "file": "Sources/App/TenantCommands.swift",
+      "find": "confirmOverride == true",
+      "replace": "confirmOverride != false"
+    },
+    {
+      "id": "H81-a",
+      "description": "H-81 · M-A13-1: `CreateTeam` crea un índice solo si `competitions` ya existe (un `prepare` que depende del orden)",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "edits": [
+        {
+          "find": "import Foundation",
+          "replace": "import Foundation\nimport SQLKit"
+        },
+        {
+          "find": "columns: [\"opponent_club_id\"])",
+          "replace": "columns: [\"opponent_club_id\"])\n        if let sql = database as? any SQLDatabase,\n           try await sql.raw(\"SELECT to_regclass('competitions') IS NOT NULL AS e\")\n               .first(decodingColumn: \"e\", as: Bool.self) == true {\n            try await sql.raw(\"CREATE INDEX idx_a13_mutante ON teams (category)\").run()\n        }"
+        }
+      ]
+    },
+    {
+      "id": "H81-b",
+      "description": "H-81: el segundo lote del camino B vuelve a `[Club, Season]`, el orden de registro",
+      "file": "Tests/PersistenceTests/MigrationIntegrityTests.swift",
+      "find": "named(\"CreateClub\", \"CreateSeason\", \"CreateCompetition\")",
+      "replace": "named(\"CreateClub\", \"CreateSeason\")"
+    },
+    {
+      "id": "H82-a",
+      "description": "H-82: se renombra un `rawValue` que el club vivo tiene congelado (`futbol_playa` → `playa`)",
+      "file": "Sources/Domain/Enumerations.swift",
+      "find": "case futbolPlaya = \"futbol_playa\"",
+      "replace": "case futbolPlaya = \"playa\"",
+      "filter": "FrozenEnumCheckTests"
+    },
+    {
+      "id": "H82-b",
+      "description": "H-82: `MatchStatus` gana un caso (`anulado`) sin migración gemela",
+      "file": "Sources/Domain/MatchStatus.swift",
+      "find": "case suspendido",
+      "replace": "case suspendido\n    case anulado",
+      "filter": "FrozenEnumCheckTests"
+    }
+  ]
+}

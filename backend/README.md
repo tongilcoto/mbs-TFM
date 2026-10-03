@@ -366,6 +366,20 @@ llama es lo que haría que el canario mirase otra modalidad y lo llamase verde.
 > **El filtro es `RFFMCanaryTests`, el nombre del tipo.** `--filter FederationCanary` —el rótulo del *suite*—
 > no casa con nada y da `0 tests … passed`, que **se lee como verde**.
 
+### 5.2 La comprobación de mutación — `Tools/Mutate`
+
+```sh
+swift build -c release --package-path Tools/Mutate
+Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json --dry-run   # ¿casan los cambios?
+Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json             # 6 mutaciones, 6 cazadas
+swift test --package-path Tools/Mutate                                         # los tests del guion
+```
+
+Rompe una línea a propósito y exige que caiga el test que dice cubrirla. **Una cifra de mutación se afirma con
+su catálogo** en `Tools/Mutate/Catalogs/` (`A-15`·H-52). Hace falta Docker para las mutaciones de base de datos.
+El resumen queda en `.build/mutation-reports/`. Las reglas, el formato del catálogo y los cuatro desenlaces
+(cazada, sobrevive, equivalente, **inválida**) están en [su README](./Tools/Mutate/README.md).
+
 ---
 
 ## 6. Los comandos

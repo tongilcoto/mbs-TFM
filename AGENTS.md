@@ -758,6 +758,14 @@ compilación; y un patrón que no casaba producía un *"sobrevive"* sin haber mu
 aplicarse, no es una mutación que sobrevive** — el guion tiene que comprobar que el fichero cambió, que
 compila, y mirar el `✘` antes que el `error:`.
 
+**Y desde `A-15`·H-52 el guion está versionado: [backend/Tools/Mutate/](./backend/Tools/Mutate/README.md).**
+Hasta entonces vivía en la sesión que lo usaba: falló **cinco** veces (tres en F7, dos en F10-bis), y **ninguna
+cifra de mutación anterior se puede repetir**. Ahora **una cifra de mutación se afirma con su catálogo**:
+`Tools/Mutate/Catalogs/<bloque>.json`, versionado junto al arreglo que sostiene, con qué se rompe, dónde y qué
+filtro tiene que caer. El guion no lee `error:` nunca, trata como **inválido** (ni suma ni resta) lo que no
+casó, no compiló o no ejecutó ningún test, y pasa la batería sin mutar al empezar y al acabar. Sus reglas son
+tests suyos (`swift test --package-path Tools/Mutate`), fuera de la batería del backend a propósito.
+
 **Y dos defectos que F6 solo encontró ejecutando el sistema contra la base de trabajo**, no con la batería:
 el motivo de una pasada fallida era ilegible —`PSQLError` esconde su descripción; se arregla con
 `String(reflecting:)`— y **la pasada con éxito no medía su duración**, porque el informe se construye al
