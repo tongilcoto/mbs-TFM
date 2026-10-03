@@ -480,10 +480,16 @@ struct MigrationIntegrityTests {
     ///
     /// Los dos caminos de §4.7: `provision-tenant` pasa el juego **completo** a
     /// un *schema* nuevo; `migrate-tenants` aplica **solo las que faltan** a uno
-    /// viejo. El tenant de trabajo llegó a las ocho migraciones en **tres lotes
-    /// de tres días** (F0, F1, F5), y aquí eso se reproduce con un prefijo de la
-    /// lista — sin el cual el test compararía dos altas limpias y no diría nada,
-    /// que es por lo que la aserción de los **dos lotes** no es decorativa.
+    /// viejo. El camino B reproduce **los tres primeros lotes de `club_atleti`**
+    /// —`Club` (F0), `Season` y `Competition` (F1), y el resto—, y lo que importa
+    /// de ellos no es que sean tres sino **el orden**: `OpponentClub` y `Team` van
+    /// en la lista *antes* de `Competition` y el club vivo las aplicó *después*.
+    ///
+    /// **`A-13`·H-81: la primera versión no lo reproducía.** Aplicaba
+    /// `prefix(2)` y luego el resto, que es la lista de registro partida en dos
+    /// lotes **en el mismo orden**: un `prepare` que dependiera del orden
+    /// sobrevivía a toda la suite (mutación `M-A13-1`). Partir en lotes no basta;
+    /// hay que sacar a `Competition` de su sitio.
     @Test("dos clubes migrados por caminos distintos convergen (H-30, §4.7)")
     func bothPathsConvergeOnTheSameSchema() async throws {
         try await Self.withApp { app in
@@ -492,19 +498,44 @@ struct MigrationIntegrityTests {
             // Camino A: alta limpia, juego completo de una vez.
             let a = try await Self.provision("path-a", on: app)
 
-            // Camino B: primero las tres de F0/F1, y **después** el resto —que
-            // en la lista van intercaladas *antes* de `CreateCompetition`, así
-            // que se aplican en un orden distinto del de registro.
+            // Camino B: los lotes de `club_atleti`, por nombre y sacados de la
+            // lista, no tecleados: si alguna desaparece, el corte no significa
+            // nada y el `#require` lo dice.
+            let all = TenantMigrations.all()
+            func named(_ suffixes: String...) throws -> [any Migration] {
+                try suffixes.map { suffix in
+                    try #require(all.first { $0.name.hasSuffix(".\(suffix)") },
+                                 "\(suffix) ya no está en la lista")
+                }
+            }
             let b = "\(Self.prefix)path-b"
             let sql = app.db(.control) as! any SQLDatabase
             try await sql.raw("CREATE SCHEMA IF NOT EXISTS \(ident: b)").run()
             try await MigrateTenantsCommand.migrate(
-                schema: b, migrations: Array(TenantMigrations.all().prefix(2)), on: app)
+                schema: b, migrations: try named("CreateClub"), on: app)
+            try await MigrateTenantsCommand.migrate(
+                schema: b, migrations: try named("CreateClub", "CreateSeason", "CreateCompetition"),
+                on: app)
             try await MigrateTenantsCommand.migrate(schema: b, on: app)
 
-            #expect(try await Self.batches(of: b, on: app) == 2,
+            #expect(try await Self.batches(of: b, on: app) == 3,
                     "el camino B no fue incremental: el test compara dos altas limpias")
             #expect(try await Self.batches(of: a, on: app) == 1)
+
+            // **Testigo de la inversión**, que es lo que el test viene a medir:
+            // `Competition` aplicada en un lote anterior a `Team`. Sin esto, un
+            // cambio en la lista que devolviera el orden de registro dejaría el
+            // test pasando por el motivo equivocado (`H-07`).
+            let batchOf = { (name: String) async throws -> Int? in
+                try await sql.raw("""
+                    SELECT batch FROM \(ident: b).\(ident: "_fluent_migrations")
+                    WHERE name = \(bind: "Persistence.\(name)")
+                    """).first(decodingColumn: "batch", as: Int.self)
+            }
+            let competition = try #require(try await batchOf("CreateCompetition"))
+            let team = try #require(try await batchOf("CreateTeam"))
+            #expect(competition < team,
+                    "el camino B aplicó Team antes que Competition: es el orden de un alta limpia")
 
             let inventoryA = try await Self.inventory(of: a, on: app)
             let inventoryB = try await Self.inventory(of: b, on: app)
