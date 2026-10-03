@@ -480,10 +480,16 @@ struct MigrationIntegrityTests {
     ///
     /// Los dos caminos de §4.7: `provision-tenant` pasa el juego **completo** a
     /// un *schema* nuevo; `migrate-tenants` aplica **solo las que faltan** a uno
-    /// viejo. El tenant de trabajo llegó a las ocho migraciones en **tres lotes
-    /// de tres días** (F0, F1, F5), y aquí eso se reproduce con un prefijo de la
-    /// lista — sin el cual el test compararía dos altas limpias y no diría nada,
-    /// que es por lo que la aserción de los **dos lotes** no es decorativa.
+    /// viejo. El camino B reproduce **los tres primeros lotes de `club_atleti`**
+    /// —`Club` (F0), `Season` y `Competition` (F1), y el resto—, y lo que importa
+    /// de ellos no es que sean tres sino **el orden**: `OpponentClub` y `Team` van
+    /// en la lista *antes* de `Competition` y el club vivo las aplicó *después*.
+    ///
+    /// **`A-13`·H-81: la primera versión no lo reproducía.** Aplicaba
+    /// `prefix(2)` y luego el resto, que es la lista de registro partida en dos
+    /// lotes **en el mismo orden**: un `prepare` que dependiera del orden
+    /// sobrevivía a toda la suite (mutación `M-A13-1`). Partir en lotes no basta;
+    /// hay que sacar a `Competition` de su sitio.
     @Test("dos clubes migrados por caminos distintos convergen (H-30, §4.7)")
     func bothPathsConvergeOnTheSameSchema() async throws {
         try await Self.withApp { app in
@@ -492,19 +498,44 @@ struct MigrationIntegrityTests {
             // Camino A: alta limpia, juego completo de una vez.
             let a = try await Self.provision("path-a", on: app)
 
-            // Camino B: primero las tres de F0/F1, y **después** el resto —que
-            // en la lista van intercaladas *antes* de `CreateCompetition`, así
-            // que se aplican en un orden distinto del de registro.
+            // Camino B: los lotes de `club_atleti`, por nombre y sacados de la
+            // lista, no tecleados: si alguna desaparece, el corte no significa
+            // nada y el `#require` lo dice.
+            let all = TenantMigrations.all()
+            func named(_ suffixes: String...) throws -> [any Migration] {
+                try suffixes.map { suffix in
+                    try #require(all.first { $0.name.hasSuffix(".\(suffix)") },
+                                 "\(suffix) ya no está en la lista")
+                }
+            }
             let b = "\(Self.prefix)path-b"
             let sql = app.db(.control) as! any SQLDatabase
             try await sql.raw("CREATE SCHEMA IF NOT EXISTS \(ident: b)").run()
             try await MigrateTenantsCommand.migrate(
-                schema: b, migrations: Array(TenantMigrations.all().prefix(2)), on: app)
+                schema: b, migrations: try named("CreateClub"), on: app)
+            try await MigrateTenantsCommand.migrate(
+                schema: b, migrations: try named("CreateClub", "CreateSeason", "CreateCompetition"),
+                on: app)
             try await MigrateTenantsCommand.migrate(schema: b, on: app)
 
-            #expect(try await Self.batches(of: b, on: app) == 2,
+            #expect(try await Self.batches(of: b, on: app) == 3,
                     "el camino B no fue incremental: el test compara dos altas limpias")
             #expect(try await Self.batches(of: a, on: app) == 1)
+
+            // **Testigo de la inversión**, que es lo que el test viene a medir:
+            // `Competition` aplicada en un lote anterior a `Team`. Sin esto, un
+            // cambio en la lista que devolviera el orden de registro dejaría el
+            // test pasando por el motivo equivocado (`H-07`).
+            let batchOf = { (name: String) async throws -> Int? in
+                try await sql.raw("""
+                    SELECT batch FROM \(ident: b).\(ident: "_fluent_migrations")
+                    WHERE name = \(bind: "Persistence.\(name)")
+                    """).first(decodingColumn: "batch", as: Int.self)
+            }
+            let competition = try #require(try await batchOf("CreateCompetition"))
+            let team = try #require(try await batchOf("CreateTeam"))
+            #expect(competition < team,
+                    "el camino B aplicó Team antes que Competition: es el orden de un alta limpia")
 
             let inventoryA = try await Self.inventory(of: a, on: app)
             let inventoryB = try await Self.inventory(of: b, on: app)
@@ -514,6 +545,49 @@ struct MigrationIntegrityTests {
             try await sql.raw("DROP SCHEMA IF EXISTS \(ident: b) CASCADE").run()
             try await Self.cleanUp(["path-a", "path-b"], on: app)
         }
+    }
+
+    /// **`A-13`·H-80: `--revert --yes` tiene que revertir, y eso solo se ve
+    /// cruzando el parser.**
+    ///
+    /// ConsoleKit consume `--yes`/`-y` como bandera **global** antes de parsear
+    /// la firma del comando (`GlobalSignature`) y la deja en
+    /// `console.confirmOverride`, así que el `@Flag("yes")` propio llegaba
+    /// siempre a `false`: la guarda de H-32 saltaba y no tenía salida. El test
+    /// de nivel 1 de abajo prueba `authorizeRevert` a pelo y por eso seguía en
+    /// verde. Aquí se ejecuta **lo que teclea el operador**, por el mismo grupo
+    /// de comandos que `Run/main.swift`, y se mira la base.
+    @Test("--revert --yes revierte de verdad, pasando por el parser (A-13·H-80, H-32)")
+    func revertWithYesRevertsThroughTheParser() async throws {
+        try await Self.withApp { app in
+            try await Self.cleanUp(["cli"], on: app)
+            let schema = try await Self.provision("cli", on: app)
+
+            // El reverso primero: sin `--yes`, por el mismo camino, no se toca nada.
+            await #expect(throws: MigrateTenantsCommand.RevertNotConfirmed.self) {
+                try await Self.runCommand(["migrate-tenants", "-t", "cli", "--revert"], on: app)
+            }
+            #expect(try await Self.batches(of: schema, on: app) == 1,
+                    "la guarda dejó pasar un --revert sin confirmar")
+
+            await #expect(throws: Never.self, "--yes no llegó a la guarda: la sigue parando") {
+                try await Self.runCommand(["migrate-tenants", "-t", "cli", "--revert", "--yes"], on: app)
+            }
+            #expect(try await Self.batches(of: schema, on: app) == 0,
+                    "--revert --yes no revirtió: la confirmación no llega al comando")
+
+            try await Self.cleanUp(["cli"], on: app)
+        }
+    }
+
+    /// Un comando **tal como lo ejecuta `Run`**: el grupo de la aplicación y una
+    /// línea de argumentos, de modo que pasen por `GlobalSignature` igual que en
+    /// producción.
+    static func runCommand(_ arguments: [String], on app: Application) async throws {
+        var context = CommandContext(
+            console: app.console, input: CommandInput(arguments: ["Run"] + arguments))
+        context.application = app
+        try await app.console.run(app.asyncCommands.group(), with: context)
     }
 
     /// H-33: el recorrido **se para** cuando un club falla —eso ya lo hacía, y es
@@ -581,5 +655,80 @@ struct RevertAuthorizationTests {
         #expect(throws: Never.self) {
             try MigrateTenantsCommand.authorizeRevert(revert: true, confirmed: true)
         }
+    }
+}
+
+/// Nivel 1, **sin base**: el enumerado de hoy contra lo que **los clubes vivos
+/// tienen congelado** en sus `CHECK` (`A-13`·H-82).
+///
+/// `D-02` deriva cada `CHECK` de su enumerado y `D-90` explica por qué eso no
+/// basta: la derivación ocurre **cuando la migración corre**, y su texto se
+/// queda en el *schema*. Un caso nuevo —o un `rawValue` renombrado— no llega a
+/// un club ya migrado sin una migración que lo rehaga, y la batería no lo ve,
+/// porque en los tests cada tenant nace limpio. F8 y F10-bis lo aprendieron con
+/// `kind` y `outcome`, y sus dos tests de arriba los guardan; **los otros ocho
+/// `CHECK` no tenían nada**.
+@Suite("Los CHECK de enumerado: lo que el club vivo tiene congelado (A-13·H-82, D-02, D-90)")
+struct FrozenEnumCheckTests {
+
+    /// Un enumerado con `CHECK`, y **los valores que su última migración
+    /// congeló** en los clubes vivos.
+    ///
+    /// **Aquí la lista tecleada es el punto, no el defecto.** Los tests de
+    /// `kind` y `outcome` comparan contra `allCases` porque lo que afirman es
+    /// *"el schema admite todo el enumerado"*; éste afirma lo contrario —*"el
+    /// enumerado no se ha movido de lo que el schema tiene"*—, y lo que el
+    /// *schema* tiene **es** una lista fija: la que salió el día que corrió la
+    /// migración. Medida contra `club_atleti` el 2026-10-03 con
+    /// `pg_get_constraintdef`: 10/10 iguales.
+    struct Frozen: Sendable, CustomTestStringConvertible {
+        let enumName: String
+        let current: [String]
+        let frozen: [String]
+        let checks: [String]
+        let lastDerivedBy: String
+        var testDescription: String { enumName }
+    }
+
+    static let anchors: [Frozen] = [
+        Frozen(enumName: "FederationCode",
+               current: FederationCode.allCases.map(\.rawValue),
+               frozen: ["rffm", "fcf"],
+               checks: ["chk_clubs_federation"], lastDerivedBy: "CreateClub"),
+        Frozen(enumName: "MatchStatus",
+               current: MatchStatus.allCases.map(\.rawValue),
+               frozen: ["programado", "finalizado", "aplazado", "suspendido"],
+               checks: ["chk_matches_status"], lastDerivedBy: "CreateMatch"),
+        Frozen(enumName: "TeamCategory",
+               current: TeamCategory.allCases.map(\.rawValue),
+               frozen: ["prebenjamin", "benjamin", "alevin", "infantil", "cadete", "juvenil", "senior"],
+               checks: ["chk_teams_category", "chk_competitions_age_category"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+        Frozen(enumName: "Gender",
+               current: Gender.allCases.map(\.rawValue),
+               frozen: ["masculino", "femenino", "mixto"],
+               checks: ["chk_teams_gender", "chk_competitions_gender"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+        Frozen(enumName: "Modality",
+               current: Modality.allCases.map(\.rawValue),
+               frozen: ["futbol_11", "futbol_7", "futbol_5", "futbol_sala", "futbol_playa"],
+               checks: ["chk_teams_modality", "chk_competitions_modality"],
+               lastDerivedBy: "CreateTeam y CreateCompetition"),
+    ]
+
+    /// **Al añadir o renombrar un caso**, este test se pone rojo hasta que
+    /// exista la migración que rehaga sus `CHECK` con `replaceCheckConstraint`
+    /// —y un test de club vivo como los de `kind` y `outcome`—. Entonces se
+    /// actualiza `frozen` y `lastDerivedBy`. Que es el trabajo.
+    @Test("el enumerado no se ha movido de lo que su CHECK tiene congelado", arguments: anchors)
+    func theEnumMatchesWhatLiveClubsHaveFrozen(_ anchor: Frozen) {
+        #expect(Set(anchor.current) == Set(anchor.frozen),
+                """
+                \(anchor.enumName) es hoy \(anchor.current.sorted()), y los clubes vivos \
+                tienen \(anchor.frozen.sorted()) congelado en \(anchor.checks.joined(separator: " y ")) \
+                desde \(anchor.lastDerivedBy). Un club ya migrado rechazará el valor nuevo con un \
+                23514: hace falta una migración nueva que rehaga esos CHECK (D-90), y luego \
+                actualizar este ancla.
+                """)
     }
 }

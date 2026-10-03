@@ -14,8 +14,8 @@ import SQLKit
 // Hoy no es alcanzable —todo es Postgres— y por eso no tiene test propio:
 // fabricar un doble de `Database` cuesta más que el arreglo (§3, regla 2 del
 // plan de auditoría). Lo que sí está bajo test es **su consecuencia**: el
-// inventario de `MigrationIntegrityTests` ancla los 10 `CHECK` y el
-// `NULLS NOT DISTINCT`, así que un ayudante que deje de hacer su trabajo se ve.
+// inventario de `MigrationIntegrityTests` ancla los `CHECK` —19 desde F10-bis— y
+// el `NULLS NOT DISTINCT`, así que un ayudante que deje de hacer su trabajo se ve.
 extension Database {
     /// Añade un `CHECK` con SQL crudo.
     ///
