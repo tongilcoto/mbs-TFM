@@ -516,6 +516,49 @@ struct MigrationIntegrityTests {
         }
     }
 
+    /// **`A-13`·H-80: `--revert --yes` tiene que revertir, y eso solo se ve
+    /// cruzando el parser.**
+    ///
+    /// ConsoleKit consume `--yes`/`-y` como bandera **global** antes de parsear
+    /// la firma del comando (`GlobalSignature`) y la deja en
+    /// `console.confirmOverride`, así que el `@Flag("yes")` propio llegaba
+    /// siempre a `false`: la guarda de H-32 saltaba y no tenía salida. El test
+    /// de nivel 1 de abajo prueba `authorizeRevert` a pelo y por eso seguía en
+    /// verde. Aquí se ejecuta **lo que teclea el operador**, por el mismo grupo
+    /// de comandos que `Run/main.swift`, y se mira la base.
+    @Test("--revert --yes revierte de verdad, pasando por el parser (A-13·H-80, H-32)")
+    func revertWithYesRevertsThroughTheParser() async throws {
+        try await Self.withApp { app in
+            try await Self.cleanUp(["cli"], on: app)
+            let schema = try await Self.provision("cli", on: app)
+
+            // El reverso primero: sin `--yes`, por el mismo camino, no se toca nada.
+            await #expect(throws: MigrateTenantsCommand.RevertNotConfirmed.self) {
+                try await Self.runCommand(["migrate-tenants", "-t", "cli", "--revert"], on: app)
+            }
+            #expect(try await Self.batches(of: schema, on: app) == 1,
+                    "la guarda dejó pasar un --revert sin confirmar")
+
+            await #expect(throws: Never.self, "--yes no llegó a la guarda: la sigue parando") {
+                try await Self.runCommand(["migrate-tenants", "-t", "cli", "--revert", "--yes"], on: app)
+            }
+            #expect(try await Self.batches(of: schema, on: app) == 0,
+                    "--revert --yes no revirtió: la confirmación no llega al comando")
+
+            try await Self.cleanUp(["cli"], on: app)
+        }
+    }
+
+    /// Un comando **tal como lo ejecuta `Run`**: el grupo de la aplicación y una
+    /// línea de argumentos, de modo que pasen por `GlobalSignature` igual que en
+    /// producción.
+    static func runCommand(_ arguments: [String], on app: Application) async throws {
+        var context = CommandContext(
+            console: app.console, input: CommandInput(arguments: ["Run"] + arguments))
+        context.application = app
+        try await app.console.run(app.asyncCommands.group(), with: context)
+    }
+
     /// H-33: el recorrido **se para** cuando un club falla —eso ya lo hacía, y es
     /// lo que `D-86` prescribe para un fallo que no deja constancia— pero antes
     /// se paraba por un error crudo del driver que no nombraba al club.

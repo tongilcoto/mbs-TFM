@@ -22,13 +22,14 @@ public struct MigrateTenantsCommand: AsyncCommand {
         @Option(name: "tenant", short: "t", help: "Migrar solo el club con este slug.")
         public var tenant: String?
 
-        @Flag(name: "revert", help: "Revertir todos los lotes en lugar de aplicarlos.")
+        @Flag(name: "revert", help: "Revertir todos los lotes en lugar de aplicarlos. Exige --yes.")
         public var revert: Bool
 
-        /// Igual que el `migrate` de serie de Fluent, y por el mismo motivo
-        /// (`A-5`, H-32): `--revert` borra las tablas de **todos** los clubes.
-        @Flag(name: "yes", short: "y", help: "Confirma un --revert sin preguntar. Obligatoria.")
-        public var yes: Bool
+        // **Sin `@Flag("yes")` propio, y es el arreglo de `A-13`·H-80.** ConsoleKit
+        // consume `--yes`/`-y` como bandera **global** (`GlobalSignature`) antes
+        // de parsear esta firma, y la deja en `console.confirmOverride`: una
+        // bandera homónima aquí no recibía nunca el valor, así que la guarda de
+        // H-32 saltaba siempre. Se lee de donde ConsoleKit la pone, en `run`.
 
         public init() {}
     }
@@ -70,7 +71,10 @@ public struct MigrateTenantsCommand: AsyncCommand {
     public func run(using context: CommandContext, signature: Signature) async throws {
         let app = context.application
         // Antes de leer nada: un `--revert` sin confirmar no llega a la base.
-        try Self.authorizeRevert(revert: signature.revert, confirmed: signature.yes)
+        // `--yes` llega como `confirmOverride` (ver la firma); `--no` lo pone a
+        // `false`, que aquí cuenta igual que no decir nada.
+        try Self.authorizeRevert(
+            revert: signature.revert, confirmed: context.console.confirmOverride == true)
         let query = TenantRecord.query(on: app.db(.control))
         if let slug = signature.tenant { query.filter(\.$slug == slug) }
         let tenants = try await query.sort(\.$slug).all()
