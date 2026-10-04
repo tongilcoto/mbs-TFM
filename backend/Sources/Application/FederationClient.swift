@@ -33,6 +33,14 @@ public import enum Domain.Modality
 ///    inventado** (la cabecera *"Lo que la federación dice"*, H-99).
 /// 5. **La URL que no es suya se rechaza**, porque el llamante no sabe de qué
 ///    federación es (`coordinate(fromCalendarURL:)`, `D-97`).
+/// 6. **El ranking de goleadores es completo**: todo el que ha marcado, sin
+///    *top-N*, y si la fuente pagina, el adaptador junta las páginas. Lo que no
+///    llega se retira (`D-94`), y la guarda que lo protege da por hecho que el
+///    total de goles no baja nunca (`IngestScorers.requireGoalsDoNotDecrease`,
+///    H-53). **La FCF no la cumple** (su lista es un *top*-50).
+///
+/// El detalle de cada método, campo a campo, está en la guía de alta de una
+/// federación nueva (`docs/API_y_BBDD Guia-Alta-Federacion-001.md`).
 ///
 /// # Sin estado, y no es un detalle de estilo
 ///
@@ -279,9 +287,10 @@ public struct FederationCalendar: Equatable, Sendable {
     ///    este puerto dice de sí mismo que no hay que hacer.
     /// 2. **Era un *Value Object* con invariante dura en medio del sobre.** Si
     ///    la RFFM devolviera `"2026-2028"`, `SeasonLabel` lanzaba y se caía el
-    ///    `fetchCalendar` **entero**, con sus 30 jornadas ya parseadas detrás —
-    ///    y su único lector en todo el backend es `seed-competition`, que es
-    ///    herramienta y no contrato (H-10).
+    ///    `fetchCalendar` **entero**, con sus 30 jornadas ya parseadas detrás.
+    ///    Sus lectores solo la usan **para crear una temporada que aún no
+    ///    existe**: el *preview* y el enganche (F10) y `seed-competition`. Cuando
+    ///    lo escribió H-10, el único era `seed-competition`, y A-9 lo corrigió.
     /// 3. **En la RFFM es el eco de nuestro propio parámetro** ([Anexo RFFM
     ///    §F.16]), así que como evidencia vale **cero**: quien compare esto con
     ///    `Season.label` estará comparando un dato consigo mismo. La evidencia de

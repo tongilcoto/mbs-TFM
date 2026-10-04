@@ -222,8 +222,8 @@ equivoque de número.
 
 ## 5. Lo que cada adaptador promete
 
-Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las cinco primeras
-están en la cabecera de `FederationClient.swift`.
+Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las seis están
+también en la cabecera de `FederationClient.swift`.
 
 | # | Promesa | Si no se cumple |
 |---|---|---|
