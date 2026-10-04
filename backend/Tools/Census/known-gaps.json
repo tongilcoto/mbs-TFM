@@ -1,0 +1,19 @@
+{
+  "problemCodes": {
+    "BAD_REQUEST": "PATCH /club con un cuerpo que no es application/json (ClubHandler); ningún test lo nombra. Ya en la lista de H-46/H-72",
+    "DATABASE_UNAVAILABLE": "503 de ApplicationError.databaseUnavailable (ProblemMiddleware); provocarlo por HTTP exige Postgres caído a mitad de la petición. Ya en la lista de H-46",
+    "EMPTY_PATCH": "PATCH /club con {} (minProperties: 1, que el generador ignora, D-65); ningún test nombra el código. Ya en la lista de H-46",
+    "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
+    "INGESTION_FAILED": "502 de la pasada en línea que falla (IngestionHandler); ningún test nombra el código. Ya en la lista de H-46",
+    "INVALID_LIMIT": "GET /ingestion-runs con un limit fuera de rango (§5.5); ningún test nombra el código. Ya en la lista de H-72",
+    "INVALID_UUID": "un parámetro de ruta o de consulta que no es un UUID (IngestionHandler); ningún test nombra el código. Ya en la lista de H-72",
+    "NOT_EDITABLE_AFTER_SYNC": "traducido en ProblemMiddleware, pero inalcanzable por HTTP hoy: Competition.applying no tiene llamante en producción hasta que el filter incluya updateCompetition",
+    "RUN_NOT_RECORDED": "500 de ApplicationError.runNotRecorded (ProblemMiddleware): la pasada no pudo escribir su fila; provocarlo por HTTP exige romper la escritura a mitad. Ya en la lista de H-46"
+  },
+  "fields": {
+    "ClubResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "ClubResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "ClubResponse.settings": "obligatorio y sin propiedades propias (ClubSettings): no hay valor que afirmar (H-72)",
+    "IngestionRunResponse.startedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
+  }
+}
