@@ -396,6 +396,14 @@ public struct FederationTeamRef: Equatable, Sendable {
     /// `codigo_equipo`: identifica al **equipo**, no al club — dos equipos del
     /// mismo club tienen códigos distintos pese a compartir nombre y escudo
     /// ([Anexo RFFM §F.3]).
+    ///
+    /// **Promesa del puerto, y obligación de cada adaptador** (A-9): un mismo
+    /// equipo lleva **el mismo** `federationTeamID` en todos los métodos del
+    /// adaptador, en el calendario y en la clasificación. La ingesta empareja la
+    /// clasificación **solo** por este campo (`IngestStandings`), sin degradar a
+    /// nombre. Si una fuente usa identificadores distintos en cada ruta, traducir
+    /// entre ellos es trabajo del adaptador: el núcleo no lo puede hacer. La
+    /// RFFM la cumple sin traducción ([Anexo RFFM §F.8], confirmado en §F.18).
     public let federationTeamID: String?
 
     /// El nombre **sin la letra**, tal y como lo publica la fuente. No se corrige
@@ -504,10 +512,19 @@ public struct FederationStanding: Equatable, Sendable {
     ///
     /// Anulable porque la FCF no publica nada equivalente: obligarlo sería
     /// reproducir H-08 en el sobre siguiente.
+    ///
+    /// **Y el adaptador solo lo trae si no es eco** (A-9): si su ruta recibe el
+    /// código de competición como parámetro, devuelve `nil`. Lo lee
+    /// `Competition.requireSameCompetitionCode`, y un eco haría que la guarda
+    /// comparase el dato consigo mismo (la trampa de `D-91`).
     public let federationCompetitionID: String?
 
     /// El nombre literal de la competición, para la guarda de `D-84` que ya
     /// existe (`Competition.requireSameSource`). Anulable por lo mismo.
+    ///
+    /// > Las dos guardas del sobre se conectaron en A-9. Hasta entonces, este
+    /// > tipo decía que tenían llamante y **no lo tenían**: `IngestStandings`
+    /// > solo leía las filas.
     public let competitionName: String?
 
     /// Las filas, **en el orden que publica la fuente**. No se reordenan aquí:

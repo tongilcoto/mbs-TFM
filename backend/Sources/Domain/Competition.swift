@@ -278,4 +278,21 @@ extension Competition {
         throw DomainError.federationSourceMismatch(
             expected: federationName, found: incoming)
     }
+
+    /// La misma guarda que `requireSameSource`, pero con el **código** de
+    /// competición que publica la fuente en vez del nombre (A-9).
+    ///
+    /// Es la evidencia más fuerte de las dos: compara **identificadores**, no
+    /// rótulos, así que no la ciega que el nombre sea el mismo todos los años.
+    /// Solo vale si la fuente **no lo recibió** como parámetro, porque si no
+    /// sería eco. Que lo sea o no lo sabe el adaptador, y por eso el puerto solo
+    /// lo trae cuando no lo es (`FederationStanding.federationCompetitionID`).
+    ///
+    /// Calla si la fuente no lo publica, por lo mismo que su hermana: callar no
+    /// es contradecir (`D-56`).
+    public func requireSameCompetitionCode(as incoming: String?) throws {
+        guard let incoming, incoming != federationCompetitionID else { return }
+        throw DomainError.federationSourceMismatch(
+            expected: federationCompetitionID, found: incoming)
+    }
 }

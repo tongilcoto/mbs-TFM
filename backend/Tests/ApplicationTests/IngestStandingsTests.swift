@@ -145,9 +145,11 @@ struct IngestStandingsTests {
             store: store, competition: competition.id, rounds: rounds, teams: teams)
     }
 
-    static func table(_ codes: [String]) -> FederationStanding {
+    static func table(
+        _ codes: [String], competitionCode: String? = "24037548"
+    ) -> FederationStanding {
         FederationStanding(
-            federationCompetitionID: "24037548",
+            federationCompetitionID: competitionCode,
             competitionName: "PRIMERA DIVISION AUTONOMICA CADETE",
             rows: codes.enumerated().map { index, code in
                 FederationStandingRow(
@@ -351,6 +353,45 @@ struct IngestStandingsTests {
         #expect(runs.first?.kind == .standings)
         #expect(runs.first?.roundID == fixture.rounds[1])
         #expect(runs.first?.error?.isEmpty == false)
+    }
+
+    // ── La guarda de `D-84` (A-9) ────────────────────────────────────────────
+
+    @Test("la clasificación de otra competición falla y no escribe nada (D-84, A-9)")
+    func standingsOfAnotherCompetitionFail() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        // **Los equipos casan a propósito.** Así el test no depende de que el
+        // emparejamiento lo frene por casualidad: lo que para la pasada tiene que
+        // ser el código, no un `unknownStandingTeam` por cada fila.
+        let client = StandingsClient(
+            [1: Self.table(["111", "222"], competitionCode: "99999999")])
+
+        await #expect(throws: DomainError.federationSourceMismatch(
+            expected: "24037548", found: "99999999")) {
+            _ = try await Self.useCase(fixture, client: client)
+                .execute(
+                    competitionID: fixture.competition,
+                    actor: .init(clubSlug: try Slug("atleti")))
+        }
+
+        #expect(await fixture.store.standingRows.isEmpty,
+                "la guarda tiene que cortar antes de escribir")
+        let runs = await fixture.store.ingestionRuns
+        #expect(runs.count == 1)
+        #expect(runs.first?.outcome == .failed,
+                "y tiene que quedar constancia: si no, es otra pasada silenciosa")
+    }
+
+    @Test("si la fuente no publica código, la guarda calla y la pasada sigue (D-56)")
+    func noCompetitionCodeIsNotAContradiction() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        let client = StandingsClient([1: Self.table(["111", "222"], competitionCode: nil)])
+
+        let runs = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+
+        #expect(runs.first?.outcome == .succeeded)
+        #expect(await fixture.store.standingRows.count == 2)
     }
 
     @Test("la PREV de un refresco sale del *snapshot* guardado, no de la nada (D-33)")
