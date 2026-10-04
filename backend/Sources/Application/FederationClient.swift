@@ -232,6 +232,13 @@ public struct FederationCoordinate: Hashable, Sendable {
 // sus huecos. De ahí que casi todo sea opcional — un `nil` aquí significa "la
 // fuente no lo dijo", que es exactamente la distinción sobre la que `D-56`
 // construye la política de *upsert*.
+//
+// **Los pocos `String` obligatorios** —`FederationTeamRef.name`,
+// `FederationScorerRow.fullName` y `teamLabel`— lo son porque en lo medido
+// vienen siempre: más de 1.600 nombres en los volcados y la base de trabajo,
+// cero vacíos (A-9). Si una fuente no los diera, el adaptador entrega `""` y
+// **no inventa un valor** (`"Desconocido"` pasaría por dato): el Dominio
+// rechaza el vacío y la fila se descarta con su motivo, sin tirar la pasada.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// El calendario de un grupo, completo.
