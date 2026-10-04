@@ -1,3 +1,4 @@
+import Application
 import Domain
 import Fluent
 import Persistence
@@ -232,7 +233,14 @@ public struct ProvisionTenantCommand: AsyncCommand {
         "Da de alta un club del tier gestionado: schema + registro + migraciones + la fila del club."
     }
 
-    public init() {}
+    /// Quién dice qué federaciones tienen adaptador. Se inyecta desde
+    /// `configure`, el mismo que usa el resto del backend, para que la guarda
+    /// de abajo lea el mismo catálogo que la ingesta.
+    private let federationClients: any FederationClientProvider
+
+    public init(federationClients: any FederationClientProvider = CatalogFederationClientProvider()) {
+        self.federationClients = federationClients
+    }
 
     public func run(using context: CommandContext, signature: Signature) async throws {
         let app = context.application
@@ -247,6 +255,17 @@ public struct ProvisionTenantCommand: AsyncCommand {
         }
         guard let federation = FederationCode(rawValue: raw) else {
             throw ProvisionError.unknownFederation(raw)
+        }
+        // **Y tiene que haber quien la sincronice** (A-9·H-93). El catálogo del
+        // Dominio declara capacidades de federaciones sin adaptador —la FCF,
+        // `D-95`—, y `GET /v1/club` las publica tal cual: un club así anunciaría
+        // goleadores a una app que pintaría un vacío para siempre. Cortarlo
+        // aquí, antes de crear nada, es más barato que enseñarle al contrato a
+        // distinguir "la federación sabe" de "este backend sabe". Solo en la
+        // entrada del operador: `provision(...)` sigue admitiendo cualquiera,
+        // porque los tests de la FCF la necesitan para probar el hueco.
+        guard federationClients.client(for: federation) != nil else {
+            throw ProvisionError.federationWithoutAdapter(federation.rawValue)
         }
 
         let name = signature.name ?? signature.slug
@@ -307,9 +326,10 @@ public struct ProvisionTenantCommand: AsyncCommand {
         }
     }
 
-    enum ProvisionError: Error, CustomStringConvertible {
+    enum ProvisionError: Error, Equatable, CustomStringConvertible {
         case missingFederation
         case unknownFederation(String)
+        case federationWithoutAdapter(String)
 
         var description: String {
             let valid = FederationCode.allCases.map(\.rawValue).joined(separator: ", ")
@@ -318,6 +338,11 @@ public struct ProvisionTenantCommand: AsyncCommand {
                 return "Falta --federation. Valores válidos: \(valid)."
             case .unknownFederation(let raw):
                 return "Federación desconocida '\(raw)'. Valores válidos: \(valid)."
+            case .federationWithoutAdapter(let raw):
+                return """
+                    La federación '\(raw)' está en el catálogo pero no tiene adaptador \
+                    (D-95): un club suyo no se podría sincronizar. No se ha creado nada.
+                    """
             }
         }
     }
