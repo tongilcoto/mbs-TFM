@@ -21,7 +21,8 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   Autocontenido: una sesión nueva arranca de ahí sin releer el LLD entero.
 - [backend/Plan de auditoría-002.md](./backend/Plan%20de%20auditor%C3%ADa-002.md) — **la auditoría de lo
   construido tras la 001** (F6-bis → F10-ter) antes de montar `launchd` y abrir el backoffice: bloques
-  A-8 a A-15, hallazgos desde H-51, y una puerta por cada cosa que desbloquea.
+  A-8 a A-15, hallazgos H-51 a H-100, y una puerta por cada cosa que desbloquea. **Cerrada el
+  2026-10-04**, con las tres puertas abiertas.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -361,8 +362,15 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**588 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
-montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
+Y la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), **cerrada el 2026-10-04**: ocho bloques
+(A-8 … A-15), 50 hallazgos, **dos S1, los dos arreglados** —la retirada de goleadores podía vaciar la tabla
+con éxito (H-53) y dos enganches a la vez dejaban dos cascadas (H-73)—, y **las tres puertas abiertas**:
+`launchd`, la rebanada 1 y la rebanada 2. Lo abierto tiene dueño: H-58 en la rebanada 1, y H-59, H-85 y H-92
+al montar `launchd`. Su último bloque, A-9, dejó la
+[guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md), con las seis
+promesas que el puerto no puede imponer.
+**591 tests.** Lo siguiente es montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app
+Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16

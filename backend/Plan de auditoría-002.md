@@ -4,6 +4,9 @@
 > F10, F10-bis y F10-ter; **F9 aplazada sin código** (`D-95`)— y **541 tests** (medido por A-8 con `REQUIRE_DB=1` y leído del XML, H-07:
 > 540 corren y el canario se omite).
 >
+> **Cerrado el 2026-10-04** con A-9: ocho bloques, 50 hallazgos, dos S1 arreglados, las tres puertas de
+> §6-bis abiertas y **591 tests**. Ver las notas de cierre de A-9 y de la auditoría en §6.
+>
 > **Es la continuación del [Plan de auditoría-001](./Plan%20de%20auditor%C3%ADa-001.md)**, que auditó F0–F6
 > y cerró el 2026-09-14 con ocho bloques, cero S1 y 50 hallazgos. Éste audita **lo que se construyó después**
 > —F6-bis en adelante— **y lo que esas fases cambiaron debajo de lo que 001 dio por bueno**.
@@ -1041,6 +1044,85 @@ borde declarado, 1 equivalente**, la identidad de `D-58` **11/11** tras H-87, el
 con dueño: **al montar `launchd`, un binario instalado desde un commit, nunca `.build/debug/Run`**. Va en la
 misma lista que H-59.
 
+### Nota de cierre de A-9 · ¿sigue abstrayendo el puerto una federación sin segunda implementación?
+
+**Sí en la forma, y no en lo que no estaba escrito.** Las **38 menciones a la RFFM** del puerto quedaron
+clasificadas una a una, y **ninguna justifica un campo ni una opcionalidad**: son informativas, historia, o
+segundas razones detrás de una genérica. **No sale ningún S2.** Ni el sobre del calendario, ni el de la
+clasificación, ni el de goleadores están cortados a la medida de Madrid. F6-bis hizo su trabajo y F7 y F8 lo
+respetaron.
+
+**Lo que no se veía sin un segundo adaptador eran las promesas implícitas.** El núcleo daba por hechas seis
+cosas que el tipo no puede imponer, y solo una, la de la URL (`D-97`), estaba escrita como obligación:
+
+| # | Promesa | Hallazgo |
+|---|---|---|
+| 1 | "No hay nada" sin afirmar que la coordenada no exista | H-91 |
+| 2 | El código de competición, solo si no es eco | H-97 |
+| 3 | El mismo `federationTeamID` en todos los métodos | H-98 |
+| 4 | Un `String` obligatorio que falte, como `""` y no inventado | H-99 |
+| 5 | Rechazar la URL que no es suya | `D-97` |
+| 6 | El ranking de goleadores, completo | H-100 (la FCF no la cumple) |
+
+Están ahora en la cabecera de `FederationClient.swift` y en la **guía de alta de una federación nueva**
+(`docs/API_y_BBDD Guia-Alta-Federacion-001.md`). Ésa es la **segunda entrega** de §5: *"la lista de lo que el
+adaptador catalán tendría que resolver sin tocar el puerto"*, escrita **sin abrir la FCF** porque son
+obligaciones del puerto y no de Cataluña. **La primera entrega, el ensayo en seco contra §C.10.6, §C.10.7 y
+§C.12, queda aplazada a la reapertura de F9 por decisión del desarrollador**, igual que la sospecha 1, que
+solo tiene sentido con el adaptador catalán delante.
+
+| Sospecha | Resultado |
+|---|---|
+| 1 · La guarda de goleadores sin campo en la FCF | **Aplazada** a la reapertura de F9 |
+| 2 · Capacidades leídas sin pasar por el proveedor | **Sí, `GET /v1/club`** (H-93). Arreglado cortándolo en la entrada: `provision-tenant` no da de alta un club sin adaptador |
+| 3 · Una o varias políticas de error | **Una sola**. Lo que se pasaba era la **definición** de `coordinateNotFound` (H-91) |
+| 4 · ¿Alguna ruta llega a la FCF? | **Ninguna** (H-94). `seed-competition` se salta el proveedor, pero solo acepta URLs de la RFFM |
+| 5 · H-13 medido otra vez | **Cero campos con forma de RFFM.** Salen una guarda sin conectar (H-97), una regla del núcleo apoyada en una medición (H-98) y cuatro comentarios desactualizados o incompletos (H-95, H-96, H-99, H-100) |
+| 6 · El `null` pasajero (H-61) | El adaptador ya no lo llama *"no existe"* (H-91). **Nadie lo reintenta** (H-92, abierto, dueño `launchd`) |
+
+**El hallazgo de más peso no estaba en las sospechas: H-97.** El puerto decía de `FederationStanding` que sus
+dos campos de sobre *"tienen llamante"* y **no lo tenían**. La clasificación era la única de las tres pasadas
+sin guarda de `D-84`, y justo la única ruta que sí puede servir otra competición. No había daño, porque el
+emparejamiento lo frenaba, pero el fallo era silencioso. **Un comentario que dice que algo se lee no es un
+lector**: se comprueba con `grep`.
+
+**Y dos veces en este bloque la auditoría afirmó algo sin medirlo**, en las dos direcciones:
+
+- **Propuso quitar `currentRound` y `venueCode`** por la regla de F6-bis (*"sin lector no se transporta"*).
+  Tienen lector previsto (el backoffice y los mapas), pero esa necesidad **no estaba escrita en ningún
+  sitio**, así que la regla invitaba a borrarlos. Corregido por el propietario y escrito (H-95, borrador del
+  backoffice §5). **"Sin lector en el código" no es "sin lector"** si el lector futuro no está documentado.
+- **Dijo que los nombres "a veces no vienen"**, deduciéndolo de un `?? ""` del *parser*. Medido: más de
+  1.600 nombres y **cero vacíos** (H-99). **Una defensa en el código no es evidencia de que el caso exista.**
+
+Las dos se vieron porque alguien preguntó *"¿con qué datos?"*. Es la lección de A-15 con otra cara: **una
+afirmación sin nada contra qué contrastarla no se escribe hasta tenerlo**.
+
+**Para las puertas (§6-bis): A-9 no bloqueaba ninguna, y no deja ningún S1 ni ningún S2.** Queda abierto
+**H-92** (S3), con dueño: al montar `launchd`, medir cuánto dura el `null` pasajero antes de decidir dónde
+reintentar. Va con H-59 y H-85. **591 tests** (588 → 591: uno de H-93 y dos de H-97), leídos del XML.
+
+### Y con A-9, la auditoría 002 queda cerrada
+
+**Ocho bloques (A-8 … A-15), 50 hallazgos (H-51 … H-100): 2 S1, 14 S2, 25 S3 y 9 S4.** Los dos S1 están
+arreglados: H-53 (la retirada de goleadores podía vaciar la tabla con éxito) y H-73 (dos enganches a la vez
+dejaban dos cascadas), cada uno con su test rojo antes del arreglo. **Las tres puertas de §6-bis están
+abiertas**: `launchd` (por A-10 y A-11), la rebanada 1 (por A-14) y la rebanada 2 (por A-12 y A-13).
+
+**Lo que queda abierto tiene dueño, y ninguno es la auditoría:**
+
+| Hallazgo | Severidad | Dueño |
+|---|---|---|
+| H-58 · `D-89` no sabe leer la fila que transita ni las tres clases de pasada | S2 | Rebanada 1 |
+| H-59 · Con `launchd`, las salidas de una pasada desatendida no las lee nadie | S2 | Montar `launchd` |
+| H-85 · `launchd` ejecuta un binario instalado, no `.build/debug/Run` | S2 | Montar `launchd` |
+| H-92 · Nadie reintenta el `null` pasajero | S3 | Montar `launchd` |
+
+Y lo aplazado con condición: **la sospecha 1 y el ensayo en seco de A-9**, a la reapertura de F9 (`D-95`).
+
+**541 → 591 tests** desde que se abrió (2026-09-25 → 2026-10-04), y dos instrumentos versionados que no
+existían: `Tools/Mutate` y `Tools/Census` (A-15).
+
 ---
 
 ## 6-bis. La puerta: cuándo se puede montar `launchd` y abrir la primera rebanada
@@ -1073,7 +1155,7 @@ sin A-7.
 | Bloque | Estado | Sesión | Hallazgos |
 |---|---|---|---|
 | **A-8** · La vara de medir y el mapa de caducidad | ✅ **cerrado** — la vara al día (H-51 corregido) y el mapa repartido en A-9…A-15; ver su nota de cierre en §6 | 2026-09-25 | H-51 |
-| **A-9** · El puerto sin segunda implementación | ○ pendiente | | |
+| **A-9** · El puerto sin segunda implementación | ✅ **cerrado** (2026-10-04), y **con él la auditoría**: ver las dos notas de cierre en §6. **Cero S1, cero S2.** Las 38 menciones a la RFFM clasificadas, y ninguna da forma al puerto. Seis promesas del adaptador que no estaban escritas, ahora en la cabecera del puerto y en la guía de alta (`docs/API_y_BBDD Guia-Alta-Federacion-001.md`), que es la segunda entrega del bloque. Arreglados H-91 (el `null` ya no es *"no existe"*), H-93 (`provision-tenant` rechaza una federación sin adaptador) y H-97 (la clasificación estrena su guarda de `D-84`), más cinco documentales. **Queda abierto H-92** (S3, dueño `launchd`). **Aplazados a la reapertura de F9**, por decisión del desarrollador: la sospecha 1 y el ensayo en seco. 591 tests | 2026-10-04 | H-91 … H-100 (y H-61) |
 | **A-10** · La única regla que borra | ✅ **cerrado, y su ronda de arreglos también** — H-53 (S1) y H-54 (S3) arreglados el 2026-09-29. Por A-10, la puerta de `launchd` ya no está cerrada: falta A-11 | 2026-09-27/29 | H-53, H-54 |
 | **A-11** · La fila que transita | ✅ **cerrado** — cero S1; no cierra siempre (H-57, corregido) y lo que A-3 midió vale para el calendario pero no para clasificación y goleadores (H-56). `D-89` con dueño: la rebanada 1 (H-58). H-55 arreglado en su ronda (A + B + D). H-56 arreglado en la misma ronda. **Por A-11, la puerta de `launchd` está abierta**: cero S1, y todo S2 arreglado o con dueño (H-58 → rebanada 1, H-59 → `launchd`). Y H-60 (S3), solo test. **La ronda de arreglos de A-11 queda cerrada** | 2026-09-30 | H-55 … H-62 |
 | **A-12** · El enganche fuera del camino feliz | ✅ **cerrado** — **un S1**: dos enganches del mismo equipo a la vez dejan dos cascadas (H-73). El código propio no se comprueba contra el calendario (H-74) y la edad de una competición nueva se copia del equipo (H-75, decisión del desarrollador), los dos de la rebanada 2. H-62 confirmado en el camino canónico, y H-55 D no cubre la primera pasada de goleadores (H-76): los dos a su ronda de arreglos. Las carreras de `INSERT` no dan 500 porque el *pool* de tenant es de una conexión, garantía que nadie escribió (H-77, despliegue). H-78 corregido en el acto. **Ronda de arreglos (2026-10-03)**: H-76, H-62 y H-73 arreglados, cada uno con su test rojo antes del arreglo y verificado contra la base de trabajo. Dos mutaciones sobreviven, las dos por H-77, y queda dicho en el código. **La ronda queda cerrada**: 573 tests. **Por A-12, la puerta de la rebanada 2 está abierta**: cero S1, y todo S2 con dueño **H-74, H-75 y H-77 se adelantaron a la ronda** por decisión del desarrollador: H-74 y H-75 arreglados (H-75 con la salida *inferir del nombre y avisar*) y H-77 decidido y hecho (`D-100`: la conexión única, escrita como regla). **De A-12 no queda nada abierto**: 583 tests. Falta A-13 | 2026-10-02/03 | H-73 … H-79 (y H-62) |
@@ -1091,7 +1173,7 @@ allá de lo generado. Y además:
 
 | Fuera de alcance | Por qué |
 |---|---|
-| **El adaptador de la FCF** | Aplazado por `D-95` con condición de reapertura. A-9 audita **el puerto**, y deja escrito el ensayo en seco para quien reabra |
+| **El adaptador de la FCF** | Aplazado por `D-95` con condición de reapertura. A-9 auditó **el puerto** y dejó escritas las obligaciones de cualquier adaptador (la guía de alta). **El ensayo en seco contra la FCF no se hizo**: se aplazó a la reapertura de F9, por decisión del desarrollador |
 | **El *stack* y el diseño del backoffice** | Sin ADR ni LLD todavía (borrador §4). La auditoría mira **lo que el backoffice va a heredar**, no lo que va a construir |
 | **La vista derivada de §9.12** | Resuelta en el modelo por `D-68`; servirla es de la rebanada 1 |
 | **El desempate de `D-92`** (enfrentamiento directo) | Anotado y sin aplicar a propósito (Plan §4.9); es una regla que falta, no una mal puesta |
