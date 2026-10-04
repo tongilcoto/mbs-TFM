@@ -110,8 +110,10 @@ public protocol FederationClient: Sendable {
     ///
     /// `FederationError.coordinateNotFound` si la coordenada no designa nada —y
     /// **no es un 404**: en la RFFM llega como `200` con el cuerpo a `null`
-    /// ([Anexo RFFM §F.18])—. Una jornada que la competición no tiene es cosa
-    /// medida aparte y hoy sin observar.
+    /// ([Anexo RFFM §F.18])—. Y ese `null` llega también, pasajero, con la
+    /// coordenada buena (H-61), así que es *"no devolvió nada"* y no *"no
+    /// existe"*. Una jornada que la competición no tiene es cosa medida aparte
+    /// y hoy sin observar.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding
@@ -148,6 +150,8 @@ public protocol FederationClient: Sendable {
     /// pareja**, así que un `idCompetition` equivocado o ausente también da `null`
     /// ([Anexo RFFM §F.19]). Es la única ruta medida de la RFFM donde una
     /// coordenada mal tecleada **no** puede servir los datos de otra competición.
+    /// Y, como en su vecina, el `null` también llega pasajero con el par bueno
+    /// (H-61): no prueba que la coordenada no exista.
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable
