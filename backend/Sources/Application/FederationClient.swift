@@ -6,10 +6,33 @@ public import enum Domain.Modality
 /// Puerto de salida hacia la API de la federación (§4.3, §5.6).
 ///
 /// Lo implementa **un adaptador por federación** —el catálogo en código de
-/// `D-17`— y lo usan los dos únicos clientes que hay: el **job** de ingesta
-/// (§2.3-b) y el caso de uso de ***preview*** del BFF (§2.3-c). No hay más:
-/// este módulo **no expone superficie HTTP propia** y **no hay proxy a la
-/// federación** (§5.6).
+/// `D-17`— y lo usan tres casos de uso, siempre a través del proveedor
+/// (`FederationClientProvider`): la **ingesta** (`IngestClubCalendars`, §2.3-b),
+/// el ***preview*** del enganche (`PreviewFederationLink`, §2.3-c) y **el
+/// enganche** mismo (`LinkTeamToFederation`, F10). Fuera de eso solo está
+/// `seed-competition`, que es herramienta y no contrato, y llama al adaptador
+/// de la RFFM directamente (A-9·H-94). Este módulo **no expone superficie
+/// HTTP propia** y **no hay proxy a la federación** (§5.6).
+///
+/// # Lo que cada adaptador promete
+///
+/// Son las obligaciones que el tipo no puede imponer y que el núcleo da por
+/// cumplidas. Reunidas en A-9 para que el segundo adaptador las encuentre
+/// juntas; el detalle está en cada campo:
+///
+/// 1. **"No hay nada" se dice con `coordinateNotFound`, sin afirmar que la
+///    coordenada no exista**: la misma respuesta puede ser pasajera
+///    (`FederationError.coordinateNotFound`, H-91).
+/// 2. **El código de competición del sobre solo se trae si no es eco.** Si la
+///    ruta lo recibió como parámetro, va `nil`
+///    (`FederationStanding.federationCompetitionID`, H-97).
+/// 3. **Un mismo equipo lleva el mismo `federationTeamID` en todos los
+///    métodos.** Si la fuente usa espacios distintos, traducir es del
+///    adaptador (`FederationTeamRef.federationTeamID`, H-98).
+/// 4. **Un `String` obligatorio que falte se entrega como `""`, no
+///    inventado** (la cabecera *"Lo que la federación dice"*, H-99).
+/// 5. **La URL que no es suya se rechaza**, porque el llamante no sabe de qué
+///    federación es (`coordinate(fromCalendarURL:)`, `D-97`).
 ///
 /// # Sin estado, y no es un detalle de estilo
 ///
