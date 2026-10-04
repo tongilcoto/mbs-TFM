@@ -1,0 +1,82 @@
+{
+  "title": "A-15 · punto 4 · ¿se ejerce la identidad de D-58 por los dos lados? Cada campo de la clave, quitado en cada sitio que la compara",
+  "mutations": [
+    {
+      "id": "ID-chain-category",
+      "description": "paso 2 de la cadena: deja de comparar la categoría",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "&& $0.category == scope.ageCategory",
+      "replace": "&& true"
+    },
+    {
+      "id": "ID-chain-letter",
+      "description": "paso 2 de la cadena: deja de comparar la letra",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "&& $0.letter == incoming.letter",
+      "replace": "&& true"
+    },
+    {
+      "id": "ID-chain-gender",
+      "description": "paso 2 de la cadena: deja de comparar el género",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "&& $0.gender == scope.gender",
+      "replace": "&& true"
+    },
+    {
+      "id": "ID-chain-modality",
+      "description": "paso 2 de la cadena: deja de comparar la modalidad",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "&& $0.modality == scope.modality",
+      "replace": "&& true"
+    },
+    {
+      "id": "ID-team-category",
+      "description": "`Team.identityMatches`: deja de comparar la categoría",
+      "file": "Sources/Domain/Team.swift",
+      "find": "        category == scope.ageCategory\n            && gender == scope.gender",
+      "replace": "        true\n            && gender == scope.gender"
+    },
+    {
+      "id": "ID-team-gender",
+      "description": "`Team.identityMatches`: deja de comparar el género",
+      "file": "Sources/Domain/Team.swift",
+      "find": "            && gender == scope.gender\n            && modality == scope.modality",
+      "replace": "            && true\n            && modality == scope.modality"
+    },
+    {
+      "id": "ID-team-modality",
+      "description": "`Team.identityMatches`: deja de comparar la modalidad",
+      "file": "Sources/Domain/Team.swift",
+      "find": "            && gender == scope.gender\n            && modality == scope.modality\n    }",
+      "replace": "            && gender == scope.gender\n            && true\n    }"
+    },
+    {
+      "id": "ID-uq-category",
+      "description": "`uq_teams_identity` sin la categoría: dos equipos que solo difieren en ella chocan",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"]",
+      "replace": "columns: [\"opponent_club_id\", \"letter\", \"gender\", \"modality\"]"
+    },
+    {
+      "id": "ID-uq-letter",
+      "description": "`uq_teams_identity` sin la letra",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"]",
+      "replace": "columns: [\"opponent_club_id\", \"category\", \"gender\", \"modality\"]"
+    },
+    {
+      "id": "ID-uq-gender",
+      "description": "`uq_teams_identity` sin el género",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"]",
+      "replace": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"modality\"]"
+    },
+    {
+      "id": "ID-uq-modality",
+      "description": "`uq_teams_identity` sin la modalidad",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"]",
+      "replace": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\"]"
+    }
+  ]
+}

@@ -361,7 +361,7 @@ Y **F10**, **entregada el 2026-09-24**: el enganche del equipo con su federació
 `POST /teams/{id}/federation-link` y `/preview` asomadas a HTTP. Antes de cerrarla, **F10-bis**: el ciclo de
 vida de la pasada aceptada (`D-96`). Y después, **F10-ter**: el identificador que sabe escribirse, en
 minúscula y en un solo sitio (`TypedIdentifier`).
-**585 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
+**588 tests.** Lo siguiente es la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), antes de
 montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -757,6 +757,20 @@ compilación; y un patrón que no casaba producía un *"sobrevive"* sin haber mu
 `H-07`: confundir *"no se ejecutó"* con un resultado. **Una mutación que no compila, o que no llegó a
 aplicarse, no es una mutación que sobrevive** — el guion tiene que comprobar que el fichero cambió, que
 compila, y mirar el `✘` antes que el `error:`.
+
+**Y desde `A-15`·H-52 el guion está versionado: [backend/Tools/Mutate/](./backend/Tools/Mutate/README.md).**
+Hasta entonces vivía en la sesión que lo usaba: falló **cinco** veces (tres en F7, dos en F10-bis), y **ninguna
+cifra de mutación anterior se puede repetir**. Ahora **una cifra de mutación se afirma con su catálogo**:
+`Tools/Mutate/Catalogs/<bloque>.json`, versionado junto al arreglo que sostiene, con qué se rompe, dónde y qué
+filtro tiene que caer. El guion no lee `error:` nunca, trata como **inválido** (ni suma ni resta) lo que no
+casó, no compiló o no ejecutó ningún test, y pasa la batería sin mutar al empezar y al acabar. Sus reglas son
+tests suyos (`swift test --package-path Tools/Mutate`), fuera de la batería del backend a propósito.
+
+**Y su hermano, el censo del contrato: [backend/Tools/Census/](./backend/Tools/Census/README.md)** (`A-15`,
+punto 7, H-72). Cuenta qué códigos `Problem` y qué campos de las respuestas del contrato no nombra ningún test,
+contra una lista de huecos conocidos con su motivo (`known-gaps.json`). **Al añadir un endpoint en una
+rebanada, se pasa**: un hueco nuevo, o uno de la lista que ya no lo es, lo hace salir con `1`. Encuentra
+huecos; no certifica cobertura, que es cosa de la mutación (H-47).
 
 **Y dos defectos que F6 solo encontró ejecutando el sistema contra la base de trabajo**, no con la batería:
 el motivo de una pasada fallida era ilegible —`PSQLError` esconde su descripción; se arregla con

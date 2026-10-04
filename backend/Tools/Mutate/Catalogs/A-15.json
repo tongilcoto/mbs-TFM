@@ -1,0 +1,62 @@
+{
+  "title": "A-15 · punto 6 · H-45 y H-48 vueltos a medir: el freno del recorrido, de punta a punta, y el Task del trabajo en segundo plano",
+  "mutations": [
+    {
+      "id": "H45-M1",
+      "description": "la sonda del ámbito 1 deja salir el error en crudo en vez de `databaseUnavailable` (la M1 de A-7)",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "                throw ApplicationError.databaseUnavailable",
+      "replace": "                throw error"
+    },
+    {
+      "id": "H45-M1c",
+      "description": "la sonda del ámbito 1 desaparece entera (la M1c de A-7)",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "            if await !databaseResponds(actor: actor) {\n                throw ApplicationError.databaseUnavailable\n            }\n",
+      "replace": ""
+    },
+    {
+      "id": "H45-abort",
+      "description": "el bucle por competición ya no marca `abortedByInfrastructure` cuando la base cae",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "report.abortedByInfrastructure = true",
+      "replace": "report.abortedByInfrastructure = false"
+    },
+    {
+      "id": "H45-rule-success",
+      "description": "`stopsTraversal`: un club que abortó por infraestructura ya no para (la M1 de F6-ter)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "            return report.abortedByInfrastructure",
+      "replace": "            return false"
+    },
+    {
+      "id": "H45-rule-failure",
+      "description": "`stopsTraversal`: `databaseUnavailable` ya no para (la M2/M3 de F6-ter)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "if case ApplicationError.databaseUnavailable = error { return true }",
+      "replace": "if case ApplicationError.databaseUnavailable = error { return false }"
+    },
+    {
+      "id": "H45-rule-always",
+      "description": "`stopsTraversal`: cualquier fallo de un club para el recorrido (la M1b de A-7, la M4 de F6-ter)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "            if case ApplicationError.databaseUnavailable = error { return true }\n            return false",
+      "replace": "            return true"
+    },
+    {
+      "id": "H45-wire",
+      "description": "el bucle deja de llamar a la regla (la M5 de F6-ter: el cable, el borde declarado)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "if Self.stopsTraversal(result) { break }",
+      "replace": "_ = Self.stopsTraversal(result)"
+    },
+    {
+      "id": "H48-M6",
+      "description": "`Task { }` → `Task.detached { }` en el trabajo en segundo plano (la M6 de A-7)",
+      "file": "Sources/HTTPAdapter/BackgroundWork.swift",
+      "find": "Task { await work() }",
+      "replace": "Task.detached { await work() }",
+      "equivalent": "H-48: el tenant no se lee del @TaskLocal en el job; FluentTenantUnitOfWork.resolveTenant lo resuelve del actor capturado (§2.3-b). Las dos variantes difieren en un SELECT redundante, no en corrección"
+    }
+  ]
+}

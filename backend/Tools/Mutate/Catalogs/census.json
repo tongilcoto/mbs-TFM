@@ -1,0 +1,103 @@
+{
+  "title": "El censo del contrato contra sí mismo · cada regla del método, rota (A-15·punto 7, H-72) · --package-path Tools/Census",
+  "mutations": [
+    {
+      "id": "K1-underscore",
+      "description": "el patrón de los códigos pierde el `_`: `TEAM_NOT_FOUND` deja de contarse",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "/code: \"([A-Z_]+)\"/",
+      "replace": "/code: \"([A-Z]+)\"/"
+    },
+    {
+      "id": "K2-line",
+      "description": "la línea del código emitido sale desplazada en uno",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "line: index + 1)",
+      "replace": "line: index)"
+    },
+    {
+      "id": "K3-quotes",
+      "description": "el código se busca sin comillas: `NOT_FOUND` pasa por nombrado dentro de `TEAM_NOT_FOUND`",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "tests.filter { $0.text.contains(\"\\\"\\(code)\\\"\") }.map(\\.path)",
+      "replace": "tests.filter { $0.text.contains(code) }.map(\\.path)"
+    },
+    {
+      "id": "K4-2xx",
+      "description": "solo la 200 cuenta como respuesta de éxito: los 202 del enganche y del disparador se pierden",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "where status.hasPrefix(\"2\")",
+      "replace": "where status == \"200\""
+    },
+    {
+      "id": "K5-responses-ref",
+      "description": "no se resuelve `components/responses`",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "let response = try walker.resolve(response)",
+      "replace": "let response = response as? [String: Any] ?? [:]"
+    },
+    {
+      "id": "K6-allOf",
+      "description": "no se sigue `allOf`/`oneOf`/`anyOf`",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "for key in [\"allOf\", \"oneOf\", \"anyOf\"] {",
+      "replace": "for key in [String]() {"
+    },
+    {
+      "id": "K7-items",
+      "description": "no se entra en las listas (`items`)",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "if let items = dictionary[\"items\"] { try walk(items, owner: owner) }",
+      "replace": ""
+    },
+    {
+      "id": "K8-nested",
+      "description": "no se entra en el objeto anidado de una propiedad",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "            try walk(schema, owner: \"\\(owner).\\(property)\")\n",
+      "replace": ""
+    },
+    {
+      "id": "K9-unknown-op",
+      "description": "una operación del filter que no está en el spec se calla: el censo sale más corto",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "        throw SpecError.operationNotFound(missing)",
+      "replace": "        _ = missing"
+    },
+    {
+      "id": "K10-unresolved",
+      "description": "un `$ref` que no resuelve se toma por esquema vacío",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "                throw SpecError.unresolvedReference(ref)\n            }\n            target = next",
+      "replace": "                return [:]\n            }\n            target = next"
+    },
+    {
+      "id": "K11-unicode-boundary",
+      "description": "el estreno: vuelve el `\\b` de Unicode, y `.competition.ageCategory` deja de nombrar `.competition`",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "(?![A-Za-z0-9_])|",
+      "replace": "\\b|"
+    },
+    {
+      "id": "K12-prefix",
+      "description": "sin borde de identificador: `.outcomeLabel` pasa por nombrar `outcome`",
+      "file": "Sources/CensusCore/ContractFields.swift",
+      "find": "(?![A-Za-z0-9_])|",
+      "replace": "|"
+    },
+    {
+      "id": "K13-stale",
+      "description": "el trinquete deja de ver las entradas caducadas",
+      "file": "Sources/CensusCore/KnownGaps.swift",
+      "find": "stale: knownKeys.subtracting(gaps).sorted())",
+      "replace": "stale: [])"
+    },
+    {
+      "id": "K14-unexpected",
+      "description": "el trinquete deja de ver los huecos nuevos",
+      "file": "Sources/CensusCore/KnownGaps.swift",
+      "find": "unexpected: gaps.subtracting(knownKeys).sorted(),",
+      "replace": "unexpected: [],"
+    }
+  ]
+}

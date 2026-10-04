@@ -1,0 +1,118 @@
+{
+  "title": "El guion contra sí mismo · cada fallo histórico, de vuelta (A-15·H-52)",
+  "mutations": [
+    {
+      "id": "S1",
+      "description": "F7 (patrón que no casa): un cambio que no casa se salta en vez de invalidar la mutación",
+      "file": "Sources/MutateCore/Applying.swift",
+      "find": "case 0: return .failure(.patternNotFound(edit: index + 1))",
+      "replace": "case 0: continue"
+    },
+    {
+      "id": "S2",
+      "description": "un patrón que casa varias veces muta la primera, sin saber si era ésa",
+      "file": "Sources/MutateCore/Applying.swift",
+      "find": "default: return .failure(.patternAmbiguous(edit: index + 1, occurrences: ranges.count))",
+      "replace": "default: result.replaceSubrange(ranges[0], with: edit.replace)"
+    },
+    {
+      "id": "S3",
+      "description": "un reemplazo que no cambia nada cuenta como mutación",
+      "file": "Sources/MutateCore/Applying.swift",
+      "find": "guard result != source else { return .failure(.noChange) }",
+      "replace": ""
+    },
+    {
+      "id": "S4",
+      "description": "F7 ($0 sin escapar): lo que no compila se cuenta como superviviente",
+      "file": "Sources/MutateCore/Outcome.swift",
+      "find": "guard compiled else { return .invalid(.doesNotCompile) }",
+      "replace": "guard compiled else { return .survived }"
+    },
+    {
+      "id": "S5",
+      "description": "F1: se ignora el ✘ y solo se mira el XML (el parametrizado que cae se pierde)",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "let failureSeen = evidence.crossMarks > 0 || evidence.failures > 0",
+      "replace": "let failureSeen = evidence.failures > 0"
+    },
+    {
+      "id": "S6",
+      "description": "salir mal se cuenta como cazada aunque no haya un solo ✘ (una caída)",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "return failureSeen ? .failed : .invalid(.failedWithoutFailures(exitCode: evidence.exitCode))",
+      "replace": "return .failed"
+    },
+    {
+      "id": "S7",
+      "description": "un ✘ con salida 0 se lee como pase",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "if failureSeen { return .invalid(.contradictory) }",
+      "replace": ""
+    },
+    {
+      "id": "S8",
+      "description": "sin informe XML se da por pase",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "guard evidence.reportFound else { return .invalid(.noReport) }",
+      "replace": ""
+    },
+    {
+      "id": "S9",
+      "description": "README §5.1: un filtro que no casa (0 tests, salida 0) se lee como superviviente",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "guard evidence.executed > 0 else { return .invalid(.noTestsRan) }",
+      "replace": ""
+    },
+    {
+      "id": "S10",
+      "description": "H-07: los omitidos cuentan como ejecutados",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "public var executed: Int { max(0, tests - skipped) }",
+      "replace": "public var executed: Int { tests }"
+    },
+    {
+      "id": "S11",
+      "description": "los fallos se cuentan solo por elemento <failure>, no por atributo",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "find": "failures = max(collector.failureAttributes, collector.failureElements)",
+      "replace": "failures = collector.failureElements"
+    },
+    {
+      "id": "S12",
+      "description": "la batería que no cierra en verde no invalida la pasada",
+      "file": "Sources/MutateCore/Report.swift",
+      "find": "if invalid > 0 || !closingBaselinePassed { return 2 }",
+      "replace": "if invalid > 0 { return 2 }"
+    },
+    {
+      "id": "S13",
+      "description": "una equivalente declarada que sobrevive se cuenta como superviviente",
+      "file": "Sources/MutateCore/Outcome.swift",
+      "find": "case .passed?: return declaredEquivalent ? .equivalent : .survived",
+      "replace": "case .passed?: return .survived"
+    },
+    {
+      "id": "S14",
+      "description": "los tests se cuentan por el atributo `tests`, que en swift-testing ya excluye los omitidos (el fallo que el guion tuvo al estrenarse)",
+      "file": "Sources/MutateCore/Verdict.swift",
+      "edits": [
+        {
+          "find": "failureAttributes += count(\"failures\") + count(\"errors\")",
+          "replace": "failureAttributes += count(\"failures\") + count(\"errors\")\n                testcases += count(\"tests\")"
+        },
+        {
+          "find": "case \"testcase\":\n                testcases += 1",
+          "replace": "case \"testcase\":\n                break"
+        }
+      ]
+    },
+    {
+      "id": "S15",
+      "description": "A-15·H-89: el candado de un proceso vivo se pisa, y su diario se restaura a mitad de una mutación",
+      "file": "Sources/MutateCore/RunLock.swift",
+      "find": "    if holder != ownPID, isAlive(holder) { return .refuse(pid: holder) }\n",
+      "replace": ""
+    }
+  ]
+}

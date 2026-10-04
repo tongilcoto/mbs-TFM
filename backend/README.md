@@ -26,7 +26,7 @@ porque los números chocan.
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **585 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
+(`D-95`). **588 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md).
 
 | Operación HTTP | |
 |---|---|
@@ -269,7 +269,7 @@ en el mismo 500 (`A-6`/H-15).
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 585 tests, ~23 s — LA FORMA BUENA
+REQUIRE_DB=1 swift test                 # 588 tests, ~23 s — LA FORMA BUENA
 swift test                              # igual, pero OMITE los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -325,6 +325,11 @@ acabar; `swift test` **barre al arrancar** lo que dejara una pasada que murió l
 en TablePlus sobre `tfm_test`: es la alternativa barata al *breakpoint*, que dentro de un test de integración
 te deja mirando **una transacción sin confirmar**.
 
+> ⚠️ **`KEEP_TEST_DATA=1` es para un test, o para una *suite* que no repita *slug*** (`A-15`·H-88). Lo que se
+> conserva se conserva también **entre los tests de la misma pasada**, y las *suites* que reutilizan su club
+> de un test a otro chocan con lo que dejó el anterior (`23505 … uq:seasons.label`). Con la batería entera
+> salen **42 rojos que no son del código**. Para mirar un fallo, filtra hasta ese test.
+
 ```sh
 docker compose exec db psql -U tfm -d tfm_test -c '\dn'   # lo que dejan los tests
 ```
@@ -339,18 +344,22 @@ Es la única prueba que **habla con internet**, y vive fuera de la batería a pr
 *"¿he roto yo el parser?"* y esto contesta *"¿han cambiado ellos?"*. Fusionarlas las estropea las dos — con
 red dentro de `swift test`, un rojo puede significar que la federación está caída.
 
-**No compara bytes** (el calendario cambia cada semana por diseño): pasa nuestro parser por encima de la
-respuesta viva y exige que no falle. **Sabe decir cuatro cosas y solo una es un hallazgo:**
+**Tres tests, uno por lectura de la ingesta**: calendario, clasificación y goleadores (estos dos desde
+`A-15`·H-86). **No compara bytes** (el calendario cambia cada semana por diseño): pasa nuestro parser por
+encima de la respuesta viva, exige que no falle y comprueba invariantes que solo se rompen si cambia la
+fuente. Por ejemplo, posiciones de 1 a N, G + E + P = J, el código de competición que devuelve
+`/api/standings` es el pedido, y los goles bajan al bajar por el ranking. **Sabe decir cuatro cosas y solo una
+es un hallazgo:**
 
 | Lo que sale | ¿Hay que hacer algo? |
 |---|---|
 | *"No se pudo hablar con la RFFM"* · *"Respondió 500"* | no |
-| *"La coordenada no designa nada"* | pasarle otra por variable |
+| *"La coordenada no designa nada"* | **repetirlo primero**: la RFFM sirve `null` pasajero en clasificación y goleadores (H-61, 2 de 5 pasadas el 2026-10-03). Si se repite, pasarle otra coordenada por variable |
 | **⚠️ *"El parser ya no traga"*** | **sí**: recapturar volcado, revalidar el anexo, y solo entonces tocar el parser |
 
 **Solo `FEDERATION_LIVE=1` es obligatoria**; la coordenada por defecto **envejece** —seguirá sirviendo su
-temporada para siempre—, así que las otras cinco se configuran. Son las del volcado de temporada jugada, para
-que el canario y el *fixture* hablen de lo mismo:
+temporada para siempre—, así que las otras seis se configuran. Son las de los volcados, para que el canario y
+el *fixture* hablen de lo mismo:
 
 | Variable | Por defecto |
 |---|---|
@@ -359,12 +368,39 @@ que el canario y el *fixture* hablen de lo mismo:
 | `FEDERATION_LIVE_GROUP` | `24037549` |
 | `FEDERATION_LIVE_MODALITY` | `futbol_11` — es el `tipojuego` de la URL |
 | `FEDERATION_LIVE_NAME` | `PRIMERA DIVISION AUTONOMICA CADETE` |
+| `FEDERATION_LIVE_ROUND` | `30` — la jornada de la clasificación, la del volcado de F7 |
 
 Una modalidad fuera del catálogo **falla diciendo cuáles hay**, en vez de caer a `futbol_11`: elegir por quien
 llama es lo que haría que el canario mirase otra modalidad y lo llamase verde.
 
 > **El filtro es `RFFMCanaryTests`, el nombre del tipo.** `--filter FederationCanary` —el rótulo del *suite*—
 > no casa con nada y da `0 tests … passed`, que **se lee como verde**.
+
+### 5.2 La comprobación de mutación — `Tools/Mutate`
+
+```sh
+swift build -c release --package-path Tools/Mutate
+Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json --dry-run   # ¿casan los cambios?
+Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/A-13.json             # 6 mutaciones, 6 cazadas
+swift test --package-path Tools/Mutate                                         # los tests del guion
+```
+
+Rompe una línea a propósito y exige que caiga el test que dice cubrirla. **Una cifra de mutación se afirma con
+su catálogo** en `Tools/Mutate/Catalogs/` (`A-15`·H-52). Hace falta Docker para las mutaciones de base de datos.
+El resumen queda en `.build/mutation-reports/`. Las reglas, el formato del catálogo y los cuatro desenlaces
+(cazada, sobrevive, equivalente, **inválida**) están en [su README](./Tools/Mutate/README.md).
+
+### 5.3 El censo del contrato — `Tools/Census`
+
+```sh
+swift build --package-path Tools/Census
+Tools/Census/.build/debug/census          # códigos Problem y campos del contrato sin test que los nombre
+swift test --package-path Tools/Census    # los tests del censo
+```
+
+**Al añadir un endpoint, pásalo.** Sale con `1` si hay un código o un campo nuevo que ningún test nombra, o si
+un hueco de `Tools/Census/known-gaps.json` ya no lo es. **Nombrar no es afirmar** (H-47): encuentra huecos, no
+certifica cobertura; eso lo hace la mutación. El método y sus límites, en [su README](./Tools/Census/README.md).
 
 ---
 
