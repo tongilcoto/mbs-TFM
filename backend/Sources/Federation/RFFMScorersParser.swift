@@ -22,8 +22,9 @@ import class Foundation.JSONDecoder
 /// cambiado la forma!"* cada vez que alguien se equivoque de número, que es
 /// exactamente la falsa alarma que `D-84` existe para evitar.
 ///
-/// Y aquí ese `null` tiene **tres** causas y no una, medidas: par inexistente,
-/// competición que no casa con el grupo, y competición ausente. Esta ruta exige
+/// Y aquí ese `null` tiene **cuatro** causas y no una, medidas: par inexistente,
+/// competición que no casa con el grupo, competición ausente y —con el par
+/// bueno— un `null` **pasajero** de la RFFM (H-61). Esta ruta exige
 /// los dos códigos y **valida que sean pareja** — es la única ruta medida de la
 /// RFFM donde una coordenada mal tecleada no puede servir los datos de otra.
 ///
@@ -61,10 +62,15 @@ public enum RFFMScorersParser {
                 reason: "no es el JSON de /api/scorers: \(error)")
         }
 
-        // **El `null` de raíz es la coordenada, no el formato** (§F.19).
+        // **El `null` de raíz es la coordenada, no el formato** (§F.19). Pero no
+        // dice *cuál* de sus causas: con el par bueno también llega `null`
+        // pasajero (H-61), y desde una sola respuesta no se distingue. El
+        // `detail` acaba en `ingestion_runs.error`, así que no puede afirmar
+        // "no existe" y mandar a revisar una coordenada que está bien.
         guard let payload else {
             throw FederationError.coordinateNotFound(
-                detail: "la respuesta llegó a `null`: ese par idGroup+idCompetition no existe")
+                detail: "la respuesta llegó a `null`: o el par idGroup+idCompetition no designa nada, "
+                    + "o la RFFM devolvió un `null` pasajero (H-61). Repetir antes de revisar la coordenada")
         }
 
         return FederationScorerTable(

@@ -17,11 +17,16 @@ public enum FederationError: Error, Equatable, Sendable {
     /// es el volcado de la federación.
     case malformedResponse(field: String, reason: String)
 
-    /// **La coordenada no designa nada.** Se distingue del resto porque
-    /// significa otra cosa (Plan §4.4): `temporada` cambia cada año y
-    /// `competicion`/`grupo` con ella ([Anexo RFFM §F.1]), así que esto es
-    /// *"revisa la coordenada"* y no *"la fuente ha cambiado de forma"*. Un
+    /// **La fuente no devolvió nada para esa coordenada.** Se distingue del
+    /// resto porque significa otra cosa (Plan §4.4): `temporada` cambia cada
+    /// año y `competicion`/`grupo` con ella ([Anexo RFFM §F.1]), así que esto
+    /// es *"revisa la coordenada"* y no *"la fuente ha cambiado de forma"*. Un
     /// canario que no los separara daría la misma alarma para las dos cosas.
+    ///
+    /// **Y no promete que la coordenada no exista** (A-9, H-61): la RFFM
+    /// devuelve ese mismo "nada" de forma pasajera con la coordenada buena, y
+    /// desde una respuesta suelta el adaptador no puede distinguirlo. Por eso
+    /// quien lo levanta dice en `detail` qué no sabe, y no solo qué sabe.
     ///
     /// **Lo levanta el adaptador tanto como el transporte, y eso es una
     /// corrección de F5.** El diseño daba por hecho que sería un 404; medido

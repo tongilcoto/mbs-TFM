@@ -51,10 +51,14 @@ public enum RFFMStandingsParser {
                 reason: "no es el JSON de /api/standings: \(error)")
         }
 
-        // **El `null` de raíz es la coordenada, no el formato** (§F.18).
+        // **El `null` de raíz es la coordenada, no el formato** (§F.18). Pero no
+        // dice *cuál* de sus causas: con el grupo bueno también llega `null`
+        // pasajero (H-61), y desde una sola respuesta no se distingue. Mismo
+        // texto que su hermano de goleadores, por el mismo motivo.
         guard let payload else {
             throw FederationError.coordinateNotFound(
-                detail: "la respuesta llegó a `null`: ese idGroup no existe")
+                detail: "la respuesta llegó a `null`: o el idGroup no designa nada, "
+                    + "o la RFFM devolvió un `null` pasajero (H-61). Repetir antes de revisar la coordenada")
         }
 
         return FederationStanding(

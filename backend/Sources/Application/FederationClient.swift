@@ -6,10 +6,41 @@ public import enum Domain.Modality
 /// Puerto de salida hacia la API de la federación (§4.3, §5.6).
 ///
 /// Lo implementa **un adaptador por federación** —el catálogo en código de
-/// `D-17`— y lo usan los dos únicos clientes que hay: el **job** de ingesta
-/// (§2.3-b) y el caso de uso de ***preview*** del BFF (§2.3-c). No hay más:
-/// este módulo **no expone superficie HTTP propia** y **no hay proxy a la
-/// federación** (§5.6).
+/// `D-17`— y lo usan tres casos de uso, siempre a través del proveedor
+/// (`FederationClientProvider`): la **ingesta** (`IngestClubCalendars`, §2.3-b),
+/// el ***preview*** del enganche (`PreviewFederationLink`, §2.3-c) y **el
+/// enganche** mismo (`LinkTeamToFederation`, F10). Fuera de eso solo está
+/// `seed-competition`, que es herramienta y no contrato, y llama al adaptador
+/// de la RFFM directamente (A-9·H-94). Este módulo **no expone superficie
+/// HTTP propia** y **no hay proxy a la federación** (§5.6).
+///
+/// # Lo que cada adaptador promete
+///
+/// Son las obligaciones que el tipo no puede imponer y que el núcleo da por
+/// cumplidas. Reunidas en A-9 para que el segundo adaptador las encuentre
+/// juntas; el detalle está en cada campo:
+///
+/// 1. **"No hay nada" se dice con `coordinateNotFound`, sin afirmar que la
+///    coordenada no exista**: la misma respuesta puede ser pasajera
+///    (`FederationError.coordinateNotFound`, H-91).
+/// 2. **El código de competición del sobre solo se trae si no es eco.** Si la
+///    ruta lo recibió como parámetro, va `nil`
+///    (`FederationStanding.federationCompetitionID`, H-97).
+/// 3. **Un mismo equipo lleva el mismo `federationTeamID` en todos los
+///    métodos.** Si la fuente usa espacios distintos, traducir es del
+///    adaptador (`FederationTeamRef.federationTeamID`, H-98).
+/// 4. **Un `String` obligatorio que falte se entrega como `""`, no
+///    inventado** (la cabecera *"Lo que la federación dice"*, H-99).
+/// 5. **La URL que no es suya se rechaza**, porque el llamante no sabe de qué
+///    federación es (`coordinate(fromCalendarURL:)`, `D-97`).
+/// 6. **El ranking de goleadores es completo**: todo el que ha marcado, sin
+///    *top-N*, y si la fuente pagina, el adaptador junta las páginas. Lo que no
+///    llega se retira (`D-94`), y la guarda que lo protege da por hecho que el
+///    total de goles no baja nunca (`IngestScorers.requireGoalsDoNotDecrease`,
+///    H-53). **La FCF no la cumple** (su lista es un *top*-50).
+///
+/// El detalle de cada método, campo a campo, está en la guía de alta de una
+/// federación nueva (`docs/API_y_BBDD Guia-Alta-Federacion-001.md`).
 ///
 /// # Sin estado, y no es un detalle de estilo
 ///
@@ -110,8 +141,10 @@ public protocol FederationClient: Sendable {
     ///
     /// `FederationError.coordinateNotFound` si la coordenada no designa nada —y
     /// **no es un 404**: en la RFFM llega como `200` con el cuerpo a `null`
-    /// ([Anexo RFFM §F.18])—. Una jornada que la competición no tiene es cosa
-    /// medida aparte y hoy sin observar.
+    /// ([Anexo RFFM §F.18])—. Y ese `null` llega también, pasajero, con la
+    /// coordenada buena (H-61), así que es *"no devolvió nada"* y no *"no
+    /// existe"*. Una jornada que la competición no tiene es cosa medida aparte
+    /// y hoy sin observar.
     func fetchStandings(
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding
@@ -148,6 +181,8 @@ public protocol FederationClient: Sendable {
     /// pareja**, así que un `idCompetition` equivocado o ausente también da `null`
     /// ([Anexo RFFM §F.19]). Es la única ruta medida de la RFFM donde una
     /// coordenada mal tecleada **no** puede servir los datos de otra competición.
+    /// Y, como en su vecina, el `null` también llega pasajero con el par bueno
+    /// (H-61): no prueba que la coordenada no exista.
     func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable
@@ -228,6 +263,13 @@ public struct FederationCoordinate: Hashable, Sendable {
 // sus huecos. De ahí que casi todo sea opcional — un `nil` aquí significa "la
 // fuente no lo dijo", que es exactamente la distinción sobre la que `D-56`
 // construye la política de *upsert*.
+//
+// **Los pocos `String` obligatorios** —`FederationTeamRef.name`,
+// `FederationScorerRow.fullName` y `teamLabel`— lo son porque en lo medido
+// vienen siempre: más de 1.600 nombres en los volcados y la base de trabajo,
+// cero vacíos (A-9). Si una fuente no los diera, el adaptador entrega `""` y
+// **no inventa un valor** (`"Desconocido"` pasaría por dato): el Dominio
+// rechaza el vacío y la fila se descarta con su motivo, sin tirar la pasada.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// El calendario de un grupo, completo.
@@ -245,9 +287,10 @@ public struct FederationCalendar: Equatable, Sendable {
     ///    este puerto dice de sí mismo que no hay que hacer.
     /// 2. **Era un *Value Object* con invariante dura en medio del sobre.** Si
     ///    la RFFM devolviera `"2026-2028"`, `SeasonLabel` lanzaba y se caía el
-    ///    `fetchCalendar` **entero**, con sus 30 jornadas ya parseadas detrás —
-    ///    y su único lector en todo el backend es `seed-competition`, que es
-    ///    herramienta y no contrato (H-10).
+    ///    `fetchCalendar` **entero**, con sus 30 jornadas ya parseadas detrás.
+    ///    Sus lectores solo la usan **para crear una temporada que aún no
+    ///    existe**: el *preview* y el enganche (F10) y `seed-competition`. Cuando
+    ///    lo escribió H-10, el único era `seed-competition`, y A-9 lo corrigió.
     /// 3. **En la RFFM es el eco de nuestro propio parámetro** ([Anexo RFFM
     ///    §F.16]), así que como evidencia vale **cero**: quien compare esto con
     ///    `Season.label` estará comparando un dato consigo mismo. La evidencia de
@@ -265,8 +308,14 @@ public struct FederationCalendar: Equatable, Sendable {
     /// muestra, el otro se llama.
     public let groupLabel: String?
 
-    /// La jornada en curso según la fuente. **El mejor disparador para una
-    /// ingesta incremental**, y la app heredada no lo usaba ([Anexo RFFM §F.7]).
+    /// La jornada en curso según la fuente.
+    ///
+    /// **Tiene lector previsto aunque hoy nadie lo lea** (A-9): el backoffice
+    /// necesita saber cuál es la jornada en curso. Hasta que esa fase exista,
+    /// la cadena se corta aquí —ni `Round` ni el contrato lo recogen—, y por
+    /// eso este campo es la excepción declarada a *"un campo sin lector no se
+    /// transporta"*: quitarlo obligaría a volver a meterlo. Opcional porque
+    /// una fuente puede no publicarlo.
     public let currentRound: Int?
 
     public let rounds: [FederationRound]
@@ -320,9 +369,15 @@ public struct FederationRound: Equatable, Sendable {
 
 /// Un partido, tal y como lo publica la fuente.
 public struct FederationMatch: Equatable, Sendable {
-    /// `codacta` en la RFFM. **Anulable** porque es un campo *de la RFFM* y no del
-    /// contrato genérico de federación (`D-31`) — aunque en la práctica venga
-    /// siempre ([Anexo RFFM §F.12], §F.15).
+    /// El identificador del partido en la federación (`codacta` en la RFFM).
+    ///
+    /// **Se espera de toda federación**: las dos medidas lo publican, y en las
+    /// dos viene siempre ([Anexo RFFM §F.12], §F.15; `CODACTA` en 240 de 240
+    /// partidos, [Anexo FCF §C.10.4]). **Y aun así es anulable, de momento**
+    /// (`D-31`, enmienda de A-1/H-12): es un campo del proveedor y no del
+    /// contrato genérico, puede faltar en una respuesta parcial, y la ingesta no
+    /// puede depender de él. Cuando falta, empareja el paso 2 de la cadena
+    /// (jornada + local + visitante, §3.7).
     public let federationMatchID: String?
 
     public let home: FederationTeamRef
@@ -338,9 +393,14 @@ public struct FederationMatch: Equatable, Sendable {
     public let kickoff: WallClockTime?
 
     public let venue: String?
-    /// Existe identificador de campo. Hoy el modelo no lo usa —`Match.venue` es
-    /// texto libre— pero se transporta: si algún día el campo merece entidad
-    /// propia, aquí está la clave ([Anexo RFFM §F.5]).
+    /// El identificador del campo de juego, que las dos federaciones publican.
+    ///
+    /// **Tiene lector previsto aunque hoy nadie lo lea** (A-9): es la clave
+    /// para las consultas de direcciones de los mapas, que una clave estable
+    /// resuelve mejor que el texto libre de `venue`. Hasta que
+    /// esa fase exista, la cadena se corta aquí —`Match.venue` es solo texto y
+    /// el contrato no lo expone—, y por eso este campo es la excepción declarada
+    /// a *"un campo sin lector no se transporta"*.
     public let venueCode: String?
 
     public init(
@@ -375,6 +435,14 @@ public struct FederationTeamRef: Equatable, Sendable {
     /// `codigo_equipo`: identifica al **equipo**, no al club — dos equipos del
     /// mismo club tienen códigos distintos pese a compartir nombre y escudo
     /// ([Anexo RFFM §F.3]).
+    ///
+    /// **Promesa del puerto, y obligación de cada adaptador** (A-9): un mismo
+    /// equipo lleva **el mismo** `federationTeamID` en todos los métodos del
+    /// adaptador, en el calendario y en la clasificación. La ingesta empareja la
+    /// clasificación **solo** por este campo (`IngestStandings`), sin degradar a
+    /// nombre. Si una fuente usa identificadores distintos en cada ruta, traducir
+    /// entre ellos es trabajo del adaptador: el núcleo no lo puede hacer. La
+    /// RFFM la cumple sin traducción ([Anexo RFFM §F.8], confirmado en §F.18).
     public let federationTeamID: String?
 
     /// El nombre **sin la letra**, tal y como lo publica la fuente. No se corrige
@@ -483,10 +551,19 @@ public struct FederationStanding: Equatable, Sendable {
     ///
     /// Anulable porque la FCF no publica nada equivalente: obligarlo sería
     /// reproducir H-08 en el sobre siguiente.
+    ///
+    /// **Y el adaptador solo lo trae si no es eco** (A-9): si su ruta recibe el
+    /// código de competición como parámetro, devuelve `nil`. Lo lee
+    /// `Competition.requireSameCompetitionCode`, y un eco haría que la guarda
+    /// comparase el dato consigo mismo (la trampa de `D-91`).
     public let federationCompetitionID: String?
 
     /// El nombre literal de la competición, para la guarda de `D-84` que ya
     /// existe (`Competition.requireSameSource`). Anulable por lo mismo.
+    ///
+    /// > Las dos guardas del sobre se conectaron en A-9. Hasta entonces, este
+    /// > tipo decía que tenían llamante y **no lo tenían**: `IngestStandings`
+    /// > solo leía las filas.
     public let competitionName: String?
 
     /// Las filas, **en el orden que publica la fuente**. No se reordenan aquí:

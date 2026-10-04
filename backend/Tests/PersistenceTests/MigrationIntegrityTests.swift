@@ -1,3 +1,4 @@
+import Application
 import Domain
 import Fluent
 import Foundation
@@ -578,6 +579,59 @@ struct MigrationIntegrityTests {
 
             try await Self.cleanUp(["cli"], on: app)
         }
+    }
+
+    /// **`A-9`·H-93: no se da de alta un club que nadie puede sincronizar.**
+    ///
+    /// La FCF está en el catálogo del Dominio y sin adaptador (`D-95`), y
+    /// `GET /v1/club` publica sus capacidades sin preguntar al proveedor: un
+    /// club así le anunciaría goleadores a una app que pintaría un vacío para
+    /// siempre. Se prueba por el parser, como lo teclea el operador, y se mira
+    /// que **no quede nada** —ni *schema* ni fila en `public.tenants`—: una
+    /// guarda que cortara a mitad dejaría un tenant a medias.
+    ///
+    /// El control positivo va con el mismo comando y otro proveedor: lo que
+    /// decide es **tener adaptador**, no ser la FCF.
+    @Test("provision-tenant rechaza una federación sin adaptador, y no deja nada (A-9·H-93)")
+    func provisionRejectsAFederationWithoutAdapter() async throws {
+        let schema = "\(Self.prefix)nofed"
+
+        try await Self.withApp { app in
+            try await Self.cleanUp(["nofed"], on: app)
+
+            await #expect(throws: ProvisionTenantCommand.ProvisionError.federationWithoutAdapter("fcf")) {
+                try await Self.runCommand(
+                    ["provision-tenant", "nofed", "-f", "fcf", "-s", schema], on: app)
+            }
+            #expect(try await TenantRecord.query(on: app.db(.control))
+                        .filter(\.$slug == "nofed").first() == nil,
+                    "la guarda dejó el registro en public.tenants")
+            #expect(try await Self.schemaExists(schema, on: app) == false,
+                    "la guarda dejó el schema creado")
+        }
+
+        // Control positivo: con adaptador para la FCF, el mismo comando pasa.
+        try await TestEnvironment.withApp(federationClients: EveryFederationHasAdapter()) { app in
+            try await Self.runCommand(
+                ["provision-tenant", "nofed", "-f", "fcf", "-s", schema], on: app)
+            #expect(try await Self.schemaExists(schema, on: app),
+                    "con adaptador, el alta tenía que crear el schema")
+            try await Self.cleanUp(["nofed"], on: app)
+        }
+    }
+
+    /// Un proveedor que da adaptador a todas: el de la RFFM, que el test no
+    /// llega a llamar. Solo importa que no sea `nil`.
+    struct EveryFederationHasAdapter: FederationClientProvider {
+        let rffm = CatalogFederationClientProvider().client(for: .rffm)
+        func client(for code: FederationCode) -> (any FederationClient)? { rffm }
+    }
+
+    static func schemaExists(_ schema: String, on app: Application) async throws -> Bool {
+        let sql = app.db(.control) as! any SQLDatabase
+        let rows = try await sql.raw(
+            "SELECT 1 FROM pg_namespace WHERE nspname = \(bind: schema)").all()
+        return !rows.isEmpty
     }
 
     /// Un comando **tal como lo ejecuta `Run`**: el grupo de la aplicación y una

@@ -85,6 +85,17 @@ public struct IngestStandings: Sendable {
                 case .fetch:
                     let published = try await federation.fetchStandings(
                         plan.coordinate, round: step.round.number)
+                    // **La guarda de `D-84`, que esta pasada no tenía** (A-9).
+                    // Las otras dos la llamaban y ésta no, aunque es la única de
+                    // las tres rutas que **sí puede servir otra competición**: la
+                    // RFFM la pide solo por grupo. Sin ella, otro grupo no da
+                    // error: ninguna fila casa, no se escribe nada y la pasada
+                    // sale `succeeded` con todo descartado. El código va primero
+                    // porque compara identificadores; el nombre cubre a la
+                    // fuente que no publique código.
+                    try plan.competition.requireSameCompetitionCode(
+                        as: published.federationCompetitionID)
+                    try plan.competition.requireSameSource(as: published.competitionName)
                     (lines, skipped) = Self.lines(from: published, teams: plan.teamsByFederationID)
                 case .compute:
                     lines = StandingTable.upTo(
@@ -167,9 +178,13 @@ public struct IngestStandings: Sendable {
     /// *snapshot* al equipo equivocado, y un *snapshot* no lo corrige nadie
     /// después.
     ///
-    /// Lo que sostiene que el paso 1 baste: `codequipo` **es el mismo
-    /// identificador** que el `codigo_equipo_*` del calendario, medido en
-    /// [Anexo RFFM §F.8] y reconfirmado en §F.18.
+    /// Lo que sostiene que el paso 1 baste es **una promesa del puerto**, no una
+    /// casualidad de la RFFM (A-9): un mismo equipo lleva el mismo
+    /// `federationTeamID` en el calendario y en la clasificación, y si una
+    /// fuente no lo cumple, traducir es del adaptador
+    /// (`FederationTeamRef.federationTeamID`). La RFFM lo cumple sin traducir:
+    /// `codequipo` es el `codigo_equipo_*` del calendario ([Anexo RFFM §F.8],
+    /// reconfirmado en §F.18).
     static func lines(
         from published: FederationStanding, teams: [String: TeamID]
     ) -> (lines: [StandingTable.Line], skipped: [IngestionSkip]) {
@@ -202,6 +217,8 @@ public struct IngestStandings: Sendable {
 
     private struct Plan: Sendable {
         let coordinate: FederationCoordinate
+        /// Para las guardas de `D-84`, contra lo que publique la fuente.
+        let competition: Competition
         let steps: [StandingsSyncPlan.Step]
         let fixtures: [StandingTable.Fixture]
         let teamsByFederationID: [String: TeamID]
@@ -268,6 +285,7 @@ public struct IngestStandings: Sendable {
                     federationCompetitionID: competition.federationCompetitionID,
                     federationGroupID: competition.federationGroupID,
                     modality: competition.modality),
+                competition: competition,
                 steps: steps,
                 fixtures: fixtures,
                 teamsByFederationID: Dictionary(

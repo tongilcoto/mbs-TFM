@@ -83,3 +83,17 @@ verdad y el CI**, que son los tres deberes que no son de ninguna fase.
 - **Si el backoffice estrena su propio plan de fases** o vive como rebanadas sueltas. Por el tamaño, esto
   segundo — pero la regla 2 del plan de auditoría sigue valiendo: **lo que toque más de un *target* o cambie
   una API pública es mini-fase con su renglón**.
+
+---
+
+## 5. Dos datos que ya llegan de la federación y se pierden en la ingesta
+
+Anotado el **2026-10-04** desde la auditoría 002 (A-9, sospecha 5). El puerto de federación ya los recibe,
+pero **ningún caso de uso los lee**, así que no llegan ni al modelo ni al contrato. El puerto los conserva
+como excepción declarada a su regla *"un campo sin lector no se transporta"*. Lo que falta está detrás:
+recogerlos en la ingesta, guardarlos y exponerlos.
+
+| Dato | En el puerto | Quién lo necesitará | Lo que falta |
+|---|---|---|---|
+| **La jornada en curso** | `FederationCalendar.currentRound` | **El backoffice** | Que `IngestCalendar` lo lea, un sitio en el modelo (`Competition` o `Round`) y su campo en el contrato |
+| **El código del campo de juego** | `FederationMatch.venueCode` | **No es de la UI del backoffice**: es la clave de las **consultas de direcciones para los mapas** | Que `IngestCalendar` lo lea, un sitio en el modelo (hoy `Match.venue` es solo texto) y su campo en el contrato |

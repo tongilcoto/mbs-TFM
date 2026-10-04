@@ -98,7 +98,8 @@ public func configure(
     app.migrations.add(CreateTenants(), to: .control)
 
     app.asyncCommands.use(MigrateTenantsCommand(), as: "migrate-tenants")
-    app.asyncCommands.use(ProvisionTenantCommand(), as: "provision-tenant")
+    app.asyncCommands.use(
+        ProvisionTenantCommand(federationClients: federationClients), as: "provision-tenant")
     // F6: el adaptador primario de la ingesta (§2.3-b). Es un comando y no una
     // ruta a propósito — un job de sistema no tiene usuario ni JWT que validar.
     app.asyncCommands.use(IngestCommand(), as: "ingest")
