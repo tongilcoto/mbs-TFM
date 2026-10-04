@@ -330,9 +330,15 @@ public struct FederationRound: Equatable, Sendable {
 
 /// Un partido, tal y como lo publica la fuente.
 public struct FederationMatch: Equatable, Sendable {
-    /// `codacta` en la RFFM. **Anulable** porque es un campo *de la RFFM* y no del
-    /// contrato genérico de federación (`D-31`) — aunque en la práctica venga
-    /// siempre ([Anexo RFFM §F.12], §F.15).
+    /// El identificador del partido en la federación (`codacta` en la RFFM).
+    ///
+    /// **Se espera de toda federación**: las dos medidas lo publican, y en las
+    /// dos viene siempre ([Anexo RFFM §F.12], §F.15; `CODACTA` en 240 de 240
+    /// partidos, [Anexo FCF §C.10.4]). **Y aun así es anulable, de momento**
+    /// (`D-31`, enmienda de A-1/H-12): es un campo del proveedor y no del
+    /// contrato genérico, puede faltar en una respuesta parcial, y la ingesta no
+    /// puede depender de él. Cuando falta, empareja el paso 2 de la cadena
+    /// (jornada + local + visitante, §3.7).
     public let federationMatchID: String?
 
     public let home: FederationTeamRef
