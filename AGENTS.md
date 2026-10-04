@@ -766,6 +766,12 @@ filtro tiene que caer. El guion no lee `error:` nunca, trata como **inválido** 
 casó, no compiló o no ejecutó ningún test, y pasa la batería sin mutar al empezar y al acabar. Sus reglas son
 tests suyos (`swift test --package-path Tools/Mutate`), fuera de la batería del backend a propósito.
 
+**Y su hermano, el censo del contrato: [backend/Tools/Census/](./backend/Tools/Census/README.md)** (`A-15`,
+punto 7, H-72). Cuenta qué códigos `Problem` y qué campos de las respuestas del contrato no nombra ningún test,
+contra una lista de huecos conocidos con su motivo (`known-gaps.json`). **Al añadir un endpoint en una
+rebanada, se pasa**: un hueco nuevo, o uno de la lista que ya no lo es, lo hace salir con `1`. Encuentra
+huecos; no certifica cobertura, que es cosa de la mutación (H-47).
+
 **Y dos defectos que F6 solo encontró ejecutando el sistema contra la base de trabajo**, no con la batería:
 el motivo de una pasada fallida era ilegible —`PSQLError` esconde su descripción; se arregla con
 `String(reflecting:)`— y **la pasada con éxito no medía su duración**, porque el informe se construye al

@@ -390,6 +390,18 @@ su catálogo** en `Tools/Mutate/Catalogs/` (`A-15`·H-52). Hace falta Docker par
 El resumen queda en `.build/mutation-reports/`. Las reglas, el formato del catálogo y los cuatro desenlaces
 (cazada, sobrevive, equivalente, **inválida**) están en [su README](./Tools/Mutate/README.md).
 
+### 5.3 El censo del contrato — `Tools/Census`
+
+```sh
+swift build --package-path Tools/Census
+Tools/Census/.build/debug/census          # códigos Problem y campos del contrato sin test que los nombre
+swift test --package-path Tools/Census    # los tests del censo
+```
+
+**Al añadir un endpoint, pásalo.** Sale con `1` si hay un código o un campo nuevo que ningún test nombra, o si
+un hueco de `Tools/Census/known-gaps.json` ya no lo es. **Nombrar no es afirmar** (H-47): encuentra huecos, no
+certifica cobertura; eso lo hace la mutación. El método y sus límites, en [su README](./Tools/Census/README.md).
+
 ---
 
 ## 6. Los comandos
