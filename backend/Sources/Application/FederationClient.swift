@@ -269,8 +269,14 @@ public struct FederationCalendar: Equatable, Sendable {
     /// muestra, el otro se llama.
     public let groupLabel: String?
 
-    /// La jornada en curso según la fuente. **El mejor disparador para una
-    /// ingesta incremental**, y la app heredada no lo usaba ([Anexo RFFM §F.7]).
+    /// La jornada en curso según la fuente.
+    ///
+    /// **Tiene lector previsto aunque hoy nadie lo lea** (A-9): el backoffice
+    /// necesita saber cuál es la jornada en curso. Hasta que esa fase exista,
+    /// la cadena se corta aquí —ni `Round` ni el contrato lo recogen—, y por
+    /// eso este campo es la excepción declarada a *"un campo sin lector no se
+    /// transporta"*: quitarlo obligaría a volver a meterlo. Opcional porque
+    /// una fuente puede no publicarlo.
     public let currentRound: Int?
 
     public let rounds: [FederationRound]
@@ -342,9 +348,14 @@ public struct FederationMatch: Equatable, Sendable {
     public let kickoff: WallClockTime?
 
     public let venue: String?
-    /// Existe identificador de campo. Hoy el modelo no lo usa —`Match.venue` es
-    /// texto libre— pero se transporta: si algún día el campo merece entidad
-    /// propia, aquí está la clave ([Anexo RFFM §F.5]).
+    /// El identificador del campo de juego, que las dos federaciones publican.
+    ///
+    /// **Tiene lector previsto aunque hoy nadie lo lea** (A-9): es la clave
+    /// para las consultas de direcciones de los mapas, que una clave estable
+    /// resuelve mejor que el texto libre de `venue`. Hasta que
+    /// esa fase exista, la cadena se corta aquí —`Match.venue` es solo texto y
+    /// el contrato no lo expone—, y por eso este campo es la excepción declarada
+    /// a *"un campo sin lector no se transporta"*.
     public let venueCode: String?
 
     public init(
