@@ -46,6 +46,10 @@ public struct IngestCommand: AsyncCommand {
         @Flag(name: "force", help: "Ignora el intervalo mínimo y sincroniza todo lo que toque.")
         public var force: Bool
 
+        @Flag(name: "fail-if-empty",
+              help: "Un club sin nada que recorrer (ni sincronizado, ni fallido, ni saltado por el intervalo mínimo) cuenta como fallo. Lo usa launchd.")
+        public var failIfEmpty: Bool
+
         public init() {}
     }
 
@@ -85,7 +89,7 @@ public struct IngestCommand: AsyncCommand {
         }
 
         for outcome in outcomes {
-            switch outcome.summary {
+            switch outcome.summary(failIfEmpty: signature.failIfEmpty) {
             case .skipped(let reason):
                 context.console.warning("→ \(outcome.slug): \(reason)")
             case .done(let line):
@@ -98,7 +102,7 @@ public struct IngestCommand: AsyncCommand {
         // **El código de salida es la única señal que ve el cron.** Un recorrido
         // que continúa tras un fallo (`D-86`) tiene que decirlo por aquí, o la
         // resiliencia se convierte en silencio.
-        let failed = Self.incomplete(outcomes)
+        let failed = Self.incomplete(outcomes, failIfEmpty: signature.failIfEmpty)
         guard failed.isEmpty else { throw IngestionIncomplete(slugs: failed) }
         context.console.success("\(outcomes.count) club(es) sincronizados.")
     }
@@ -210,8 +214,13 @@ public struct IngestCommand: AsyncCommand {
     /// club que ni llegó a recorrerse (`error`) y el que se recorrió con alguna
     /// competición fallida (`hasFailures`). Contar solo la primera dejaría al
     /// cron viendo verde con media temporada sin sincronizar.
-    public static func incomplete(_ outcomes: [TenantIngestion]) -> [String] {
-        outcomes.filter { !$0.succeeded }.map(\.slug)
+    public static func incomplete(
+        _ outcomes: [TenantIngestion], failIfEmpty: Bool = false
+    ) -> [String] {
+        // **El vacío solo es fallo si quien lanza lo pide** (Plan launchd
+        // `DL-2`): a mano, un club sin temporada no ha hecho nada mal; en un
+        // disparo desatendido es el verde de H-59, que no acumula nada.
+        outcomes.filter { !$0.succeeded || (failIfEmpty && $0.isEmpty) }.map(\.slug)
     }
 
     /// **Qué clubes va a recorrer**, sin recorrer ninguno.
@@ -301,12 +310,29 @@ public struct TenantIngestion: Sendable {
         case skipped(String)
     }
 
-    public var summary: Summary {
+    /// **No tenía nada que recorrer** (Plan launchd `DL-2`, A-11·H-59).
+    ///
+    /// Ni sincronizó, ni falló, ni el antirrebote le saltó nada: **no había nada
+    /// que recorrer**, normalmente porque no hay temporada vigente con
+    /// competiciones. Lo saltado no es vacío —es el disparo de más que `D-87`
+    /// hace inofensivo—, y lo abortado tampoco: no llegó a mirar.
+    public var isEmpty: Bool {
+        guard let report else { return false }
+        return report.entries.isEmpty && report.skippedByDebounce == 0
+            && !report.abortedByInfrastructure
+    }
+
+    public func summary(failIfEmpty: Bool = false) -> Summary {
         if let error { return .failed(error) }
         guard let report else { return .skipped("sin recorrido") }
         let synced = report.entries.count { if case .synced = $0.outcome { true } else { false } }
         let failed = report.entries.count - synced
-        let line = "\(synced) competición(es) sincronizada(s), \(failed) con fallo"
+        if isEmpty {
+            let line = "nada que recorrer: ninguna competición en la temporada (¿está dada de alta la vigente?)"
+            return failIfEmpty ? .failed(line) : .skipped(line)
+        }
+        let line = "\(synced) competición(es) sincronizada(s), \(failed) con fallo, "
+            + "\(report.skippedByDebounce) saltada(s) por el antirrebote"
         return failed == 0 ? .done(line) : .failed(line)
     }
 }
@@ -317,7 +343,8 @@ public struct IngestionIncomplete: Error, CustomStringConvertible {
     public let slugs: [String]
     public var description: String {
         "La ingesta no terminó bien en: \(slugs.joined(separator: ", ")). "
-            + "El motivo de cada pasada está en su fila de `ingestion_runs` (D-85)."
+            + "El de cada club está en su línea, arriba; el de cada pasada, en su fila de "
+            + "`ingestion_runs` (D-85). Un club sin nada que recorrer no deja fila."
     }
 }
 

@@ -63,7 +63,7 @@ public struct IngestClubCalendars: Sendable {
         // de dejar salir un error de conexión en crudo: el llamante que recorre
         // clubes necesita distinguir *"este club ha fallado"* de *"no hay base"*,
         // porque la segunda no se arregla probando con el siguiente (H-23).
-        let plan: (federation: FederationCode, competitions: [Competition])
+        let plan: Plan
         do {
             plan = try await self.plan(scope: scope, actor: actor)
         } catch {
@@ -97,6 +97,7 @@ public struct IngestClubCalendars: Sendable {
 
         var report = ClubIngestionReport(
             clubSlug: actor.clubSlug, federation: plan.federation)
+        report.skippedByDebounce = plan.skippedByDebounce
         for competition in plan.competitions {
             // **Se continúa, y se apunta** (`D-86`). Las dos mitades son
             // igual de necesarias: continuar sin apuntar convierte un recorrido
@@ -256,7 +257,7 @@ public struct IngestClubCalendars: Sendable {
     /// la red — igual que el ámbito 1 de `D-83`, y por el mismo motivo.
     private func plan(
         scope: IngestionScope, actor: ActorContext
-    ) async throws -> (federation: FederationCode, competitions: [Competition]) {
+    ) async throws -> Plan {
         try await unitOfWork.withRepositories(actor: actor) { repositories in
             guard let club = try await repositories.clubs.current() else {
                 throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)
@@ -280,7 +281,7 @@ public struct IngestClubCalendars: Sendable {
                     }
                     competitions.append(competition)
                 }
-                return (club.federation, due(competitions, scope: scope))
+                return Plan(federation: club.federation, due(competitions, scope: scope))
             }
 
             // **La vigente es el valor por defecto, no una prohibición** (§3.2).
@@ -306,9 +307,9 @@ public struct IngestClubCalendars: Sendable {
             } else {
                 season = seasons.current(on: clock.now())
             }
-            guard let season else { return (club.federation, []) }
+            guard let season else { return Plan(federation: club.federation, (due: [], skipped: 0)) }
             let competitions = try await repositories.competitions.list(seasonID: season.id)
-            return (club.federation, due(competitions, scope: scope))
+            return Plan(federation: club.federation, due(competitions, scope: scope))
         }
     }
 
@@ -324,12 +325,32 @@ public struct IngestClubCalendars: Sendable {
     /// que tenga: `lastSyncedAt` nulo significa *"nunca, con éxito"* (§3.2), y
     /// una guarda que la excluyera dejaría a la competición recién dada de alta
     /// esperando para siempre.
-    private func due(_ competitions: [Competition], scope: IngestionScope) -> [Competition] {
-        guard let minInterval = scope.minInterval else { return competitions }
+    ///
+    /// Devuelve también **cuántas dejó fuera**, porque es lo único que distingue
+    /// un disparo de más de un recorrido vacío (`ClubIngestionReport.skippedByDebounce`).
+    private func due(
+        _ competitions: [Competition], scope: IngestionScope
+    ) -> (due: [Competition], skipped: Int) {
+        guard let minInterval = scope.minInterval else { return (competitions, 0) }
         let now = clock.now()
-        return competitions.filter { competition in
+        let due = competitions.filter { competition in
             guard let lastSyncedAt = competition.lastSyncedAt else { return true }
             return now.timeIntervalSince(lastSyncedAt) >= minInterval
+        }
+        return (due, competitions.count - due.count)
+    }
+
+    /// El resultado del ámbito 1: qué federación, qué competiciones entran y
+    /// cuántas se quedaron fuera por el antirrebote.
+    private struct Plan {
+        let federation: FederationCode
+        let competitions: [Competition]
+        let skippedByDebounce: Int
+
+        init(federation: FederationCode, _ due: (due: [Competition], skipped: Int)) {
+            self.federation = federation
+            self.competitions = due.due
+            self.skippedByDebounce = due.skipped
         }
     }
 }
@@ -400,6 +421,16 @@ public struct ClubIngestionReport: Sendable, Equatable {
     /// que faltan **ni se intentaron**, y entran en el disparo siguiente porque su
     /// `last_synced_at` no se ha movido.
     public var abortedByInfrastructure: Bool = false
+
+    /// **Cuántas competiciones saltó el antirrebote** (`D-87`), y por tanto no
+    /// están en `entries`.
+    ///
+    /// Existe para distinguir dos recorridos que sin él dicen lo mismo —*"0
+    /// sincronizadas, 0 con fallo"*— y significan lo contrario (Plan launchd
+    /// `DL-2`, A-11·H-59): el disparo de más, que encontró todo reciente y es
+    /// legítimo, y el recorrido **vacío**, que no tenía nada que recorrer y es el
+    /// verde que no acumula un solo dato.
+    public var skippedByDebounce: Int = 0
 
     public init(clubSlug: Slug, federation: FederationCode, entries: [Entry] = []) {
         self.clubSlug = clubSlug

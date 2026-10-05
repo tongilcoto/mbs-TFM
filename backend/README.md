@@ -30,12 +30,12 @@ Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
-| Operación HTTP | |
-|---|---|
-| `GET /v1/club` · `PATCH /v1/club` | F0 |
-| `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
-| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#42-el-enganche--las-dos-puertas-de-d-67) |
-| Las otras 77 del *spec* | ⛔ no generadas — [§7](#7-el-spec) |
+| Operación HTTP                                                                        |                                   |
+| ------------------------------------------------------------------------------------- | --------------------------------- |
+| `GET /v1/club` · `PATCH /v1/club`                                                     | F0                                |
+| `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
+| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#enganche)           |
+| Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
 y era el plan: el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b). Lo demás
@@ -197,6 +197,8 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **`competitionIds` vacía es 400**, no *"todas"*. Para la temporada entera, se omite.
 - **Una pasada fallida también se lee**: el `POST` da **502** y el `GET` enseña la fila con su `outcome` y su
   motivo — con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
+
+<a id="enganche"></a>
 
 ### 4.2 El enganche — las dos puertas de `D-67`
 
@@ -446,7 +448,7 @@ swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name
 ### 6.1 `seed-competition` — la *entrada* de la ingesta
 
 La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`). El camino de verdad es
-pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es §4.2. Esto se conserva como vía para
+pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es [§4.2](#enganche). Esto se conserva como vía para
 semillas, *scripts* y tests, que no deberían depender del formato de URL de un tercero:
 
 ```sh
@@ -486,10 +488,12 @@ columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La
 —«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
 
 > **Lo que no hace, y ya no es porque falte la tabla:** no escribe `TeamRegistration` (`D-68`). La tabla
-> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** (§4.2), que es la que
+> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** ([§4.2](#enganche)), que es la que
 > sabe en qué competición queda inscrito el equipo. Recién sembrado, el equipo existe y se puede enganchar
 > pero **no está inscrito en ninguna temporada** — el estado que el *spec* evita exigiendo `seasonId` en el
 > alta, porque es **invisible en toda pantalla que filtre por temporada**. Engancharlo lo arregla.
+
+<a id="ingest"></a>
 
 ### 6.3 `ingest` — la pasada de la federación
 
@@ -500,6 +504,7 @@ swift run Run ingest -c "<uuid>,<uuid>"     # competiciones concretas, en el ord
 swift run Run ingest --season <uuid>        # una temporada aunque no sea la vigente
 swift run Run ingest --force                # ignora el antirrebote de 6 h
 swift run Run ingest --min-interval-hours 24   # o cámbialo en vez de ignorarlo
+swift run Run ingest --fail-if-empty          # un club sin nada que recorrer sale con 1 (lo usa launchd)
 ```
 
 **Un disparo son TRES pasadas por competición**, y hay que saberlo antes de mirar `ingestion_runs`:
@@ -527,7 +532,89 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
 - **`round_id` solo lo lleva la clasificación**, y el esquema lo hace cumplir.
 - **El antirrebote de 6 h no es el tope semanal.** Aquél es un mínimo que evita repetir trabajo; el tope lo
   hace cumplir el calendario de disparos (`D-87`). Una competición **que nunca se sincronizó entra siempre**.
-- **Hoy no hay cron**, así que el tope semanal de §5.6 no lo garantiza nada. Apuntado en Plan §9.
+- **Sin `--fail-if-empty`, un recorrido vacío sale en verde**: *"nada que recorrer"* es un aviso, no un fallo,
+  porque quien lanza `ingest` a mano sobre un club recién dado de alta no ha hecho nada mal. Con el *flag*
+  sale con `1`, y es lo que pasa el disparo desatendido ([§6.4](#ingesta-programada)). Lo
+  saltado por el antirrebote **no** es vacío: es un disparo de más, y la línea dice cuántas saltó.
+- **El tope semanal de §5.6 lo pone `launchd`** ([§6.4](#ingesta-programada)): lunes y fin de
+  semana. El código sigue sin hacerlo cumplir; `ingestion_runs` permite comprobarlo a posteriori.
+
+<a id="ingesta-programada"></a>
+
+### 6.4 La ingesta programada — `launchd`
+
+**`ingest` se dispara solo en el Mac**, contra esta misma base (`tfm`), los **sábados y domingos a las 23:30 y
+los lunes a las 08:00**, en hora local (`D-87`; las horas, `DL-3` del
+[Plan launchd-001](./Plan%20launchd-001.md)). Un disparo que caiga con el portátil **dormido** se ejecuta al
+despertar. Es un montaje **local**, para que la base acumule semanas reales mientras se construye el
+backoffice: en Fly.io se dispara de otra forma, y lo que se lleva y lo que se tira está en el §1.6 del plan.
+
+**Son tres piezas, y ninguna se ejecuta desde el repositorio:**
+
+```
+~/Library/LaunchAgents/com.tongilcoto.tfm.ingest.plist      ← CUÁNDO   (lo copia agent.sh install)
+        │  launchd, a esa hora, ejecuta…
+        ▼
+~/Library/Application Support/tfm/current/run-ingest.sh     ← QUÉ PASA EN CADA DISPARO
+        │                                                       (lo copia install.sh, del commit)
+        ▼
+~/Library/Application Support/tfm/current/Run ingest --fail-if-empty
+                                                              (lo compila install.sh, del commit)
+```
+
+- **`run-ingest.sh` no programa nada**: es el envoltorio. Lanza `ingest`, escribe cada línea en el log con la
+  hora y el commit delante y, si el código de salida no es `0`, **avisa**.
+- **El binario y el envoltorio salen de un commit, nunca de tu árbol de trabajo** (A-15·H-85). `swift build`,
+  `swift test` y `Tools/Mutate` reescriben `.build`; si `launchd` ejecutara `.build/debug/Run`, un disparo a
+  mitad de una mutación correría código roto a propósito contra tu base. Por eso **lo que no está commiteado
+  no se instala**, y cambiar de rama no cambia lo que se dispara.
+
+Los dos guiones, desde `backend/`:
+
+| Para                                                                  | Comando                                                                       |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh`: instala **lo último commiteado en tu rama** (lo no commiteado no entra). `install.sh main` o `install.sh <sha>` instala otra rama o un commit concreto |
+| **Cargar** el agente en `launchd` (una vez, o si cambia el `.plist`)  | `Tools/Deploy/agent.sh install`                                               |
+| **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status`                                                |
+| **Disparar ya**, sin esperar a la hora                                | `Tools/Deploy/agent.sh run`                                                   |
+| **Quitarlo** (el binario y los logs se quedan)                        | `Tools/Deploy/agent.sh uninstall`                                             |
+
+**Montarlo desde cero son dos comandos**, en este orden, porque `agent.sh install` se niega si no hay nada
+instalado:
+
+```sh
+Tools/Deploy/install.sh          # ~3 min la primera vez (release, dependencias incluidas); ~20 s después
+Tools/Deploy/agent.sh install
+```
+
+**Para que `launchd` ejecute un cambio**: commit y `Tools/Deploy/install.sh`. **No hay que recargar el
+agente**: el `.plist` apunta a `current/`, e `install.sh` mueve ese enlace de forma atómica. Guarda las cinco
+últimas versiones en `releases/`, y volver a una es `install.sh <sha>` (instantáneo si sigue ahí). El guion
+**avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no entran).
+
+#### Dónde mirar
+
+| Qué | Dónde |
+|---|---|
+| La salida de cada disparo, con hora y commit | `~/Library/Logs/tfm/ingest.log` |
+| **Los fallos, uno por línea con su motivo. No se borra solo** | `~/Library/Logs/tfm/ULTIMO_FALLO` — bórralo cuando lo hayas visto |
+| Lo que falle **antes** de que arranque el envoltorio (p. ej., que no exista) | `~/Library/Logs/tfm/launchd.log` — normalmente vacío |
+| Lo que escribió cada pasada | `ingestion_runs`, igual que con `ingest` a mano ([§6.3](#ingest)) |
+| Qué versión está instalada | `agent.sh status`, o `~/Library/Application Support/tfm/current/VERSION` |
+
+**Cuándo avisa**: solo si el código de salida no es `0`. Entonces sale una **notificación de macOS** («TFM ·
+ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
+
+| El motivo dice | Qué pasa | Qué hacer |
+|---|---|---|
+| *"la base no responde: ¿está Docker parado?"* | Postgres no estaba a la hora del disparo. La pasada se detuvo sin dejar nada a medias (`D-86`) | Levantar Docker; entra en el disparo siguiente, o `agent.sh run` |
+| *"<club>: nada que recorrer…"* | **No hay temporada vigente con competiciones**: el disparo no habría acumulado nada (H-59) | Dar de alta la temporada y enganchar los equipos ([§4.2](#enganche)) |
+| *"<club>: N competición(es) sincronizada(s), M con fallo…"* | Alguna pasada falló; las demás siguieron (`D-86`) | Su fila de `ingestion_runs` dice cuál y por qué. Un `null` de la RFFM suele ser pasajero (H-61) |
+| *"no se pudo ejecutar el binario instalado"* | No hay nada en `current/` | `Tools/Deploy/install.sh` |
+
+> **Lo que no cubre:** el portátil **apagado** a la hora del disparo (se está midiendo: `L-L.4` del plan), y
+> que nadie mire las notificaciones. Un disparo **de más** no avisa ni repite trabajo: el antirrebote lo salta
+> y la línea lo dice (*"N saltada(s) por el antirrebote"*).
 
 ---
 

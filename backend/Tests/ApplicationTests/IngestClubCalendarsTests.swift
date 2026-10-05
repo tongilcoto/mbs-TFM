@@ -343,13 +343,72 @@ struct IngestClubCalendarsTests {
             ])
 
         let federation = SpyFederationClient(returning: Self.calendar)
-        _ = try await Self.useCase(store: store, federation: federation)
+        let report = try await Self.useCase(store: store, federation: federation)
             .execute(scope: IngestionScope(), actor: Self.actor)
 
         // Es el caso del botón del backoffice: quien lo pulsa lo pulsa porque
         // quiere **ahora**, y un antirrebote silencioso le diría que ya está
         // sincronizado sin haber ido a mirar.
         #expect(federation.received.count == 1)
+        // Y sin guarda no hay nada saltado: un `--force` que dijera *"1
+        // saltada"* mentiría en el log de `launchd` (Plan launchd `DL-2`).
+        #expect(report.skippedByDebounce == 0)
+    }
+
+    @Test("lo que salta el antirrebote queda contado en el informe (D-87, H-59)")
+    func theReportCountsWhatTheGuardSkipped() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        await store.seed(
+            seasons: [current],
+            competitions: [
+                try Self.competition(
+                    seasonID: current.id, federationGroupID: "111",
+                    lastSyncedAt: Self.now.addingTimeInterval(-3600)),
+                try Self.competition(
+                    seasonID: current.id, federationGroupID: "222",
+                    lastSyncedAt: Self.now.addingTimeInterval(-3600)),
+                try Self.competition(seasonID: current.id, federationGroupID: "333"),
+            ])
+
+        let report = try await Self.useCase(
+            store: store, federation: SpyFederationClient(returning: Self.calendar)
+        ).execute(scope: IngestionScope(minInterval: 6 * 3600), actor: Self.actor)
+
+        // Sin esta cuenta, *"0 sincronizadas, 0 con fallo"* lo dicen igual el
+        // disparo de más —que lo encontró todo reciente— y el recorrido que no
+        // tenía nada que recorrer, que es el verde de H-59 (Plan launchd `DL-2`).
+        // Son tres y no una para que la cuenta no pueda salir de `entries`.
+        #expect(report.entries.count == 1)
+        #expect(report.skippedByDebounce == 2)
+    }
+
+    @Test("sin temporada vigente no hay nada saltado: el recorrido está vacío (H-59)")
+    func withoutACurrentSeasonNothingIsSkipped() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+
+        // Solo la pasada: el estado de la base de trabajo el 2026-10-04 (H-59).
+        let past = try Self.season("2024/25", federationSeasonID: "20")
+        await store.seed(
+            seasons: [past],
+            competitions: [
+                try Self.competition(
+                    seasonID: past.id, lastSyncedAt: Self.now.addingTimeInterval(-3600))
+            ])
+
+        let report = try await Self.useCase(
+            store: store, federation: SpyFederationClient(returning: Self.calendar)
+        ).execute(scope: IngestionScope(minInterval: 6 * 3600), actor: Self.actor)
+
+        // La competición de la temporada pasada **no la saltó el antirrebote**:
+        // ni siquiera entró en el plan. Contarla como saltada convertiría el
+        // recorrido vacío en un disparo de más, que es justo la confusión que
+        // la cuenta existe para deshacer.
+        #expect(report.entries.isEmpty)
+        #expect(report.skippedByDebounce == 0)
     }
 
     // ── El recorrido no se detiene (D-86) ────────────────────────────────────
