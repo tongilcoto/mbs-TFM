@@ -277,7 +277,7 @@ porque mide algo que solo se puede medir mirando, y lo que mide decide la forma 
 
 | Paso | Qué | Verificación |
 |---|---|---|
-| `L-I.1` | `Tools/Deploy/install.sh`. **Se niega** con el árbol sucio. Hace `swift build -c release`, copia `Run` a `~/Library/Application Support/tfm/releases/<sha>/Run`, apunta el enlace `current` y escribe `<sha>` y la fecha en `releases/<sha>/VERSION` | Con el árbol sucio: sale con `≠ 0` y no copia nada. Con el árbol limpio: el binario existe y `current/Run --help` lista `ingest` |
+| `L-I.1` | `Tools/Deploy/install.sh [<ref>]`. **Compila un commit, no el árbol**: `git archive <sha> backend` a un directorio aparte y `swift build -c release --scratch-path $TFM_HOME/build`, fuera de `.build`. Copia `Run` a `~/Library/Application Support/tfm/releases/<sha>/Run`, escribe `VERSION` (commit, rama, fecha) y mueve el enlace `current` de forma atómica. Lo que no está commiteado **no entra, y el guion lo avisa**; también avisa si no se instala desde `main`. Guarda las 5 últimas versiones | Con una referencia que no existe: sale con `≠ 0` y no crea nada. Con una buena: el binario existe, `current/Run --help` lista `ingest`, y con un cambio sin commitear en `Sources/` sale el aviso |
 | `L-I.2` | El instalado no depende de `.build`: compilar algo distinto en `.build` (o borrarlo) y volver a ejecutar `current/Run ingest --help` | Funciona igual, y `shasum` del instalado no ha cambiado |
 | `L-I.3` | El binario *release* contra la base de trabajo: `current/Run ingest` (el antirrebote evita repetir lo de `L-P.3`) | `exit 0`, y la salida dice cuántas saltó o cuántas sincronizó |
 
@@ -327,7 +327,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 |---|---|---|---|
 | **P** · Datos 2026/27 | ⏳ pendiente — **espera las URLs del desarrollador** | 0/4 | — |
 | **M** · Medir el `null` | ⏳ pendiente | 0/3 | — |
-| **I** · Binario instalado | ⏳ pendiente | 0/3 | — |
+| **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
 | **L** · El agente | ⏳ pendiente — `DL-1`…`DL-3` decididas | 0/6 | — |
 | **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
@@ -342,6 +342,19 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | `DL-5` · Canario | propuesta (c); **sin decidir** |
 
 **Punto de partida: 591 tests.**
+
+**Bloque I (2026-10-05).** Cambio respecto al plan: `L-I.1` decía *"se niega con el árbol sucio"*, y eso dejaba
+una carrera entre comprobar y compilar (una mutación de `Tools/Mutate` podía empezar en medio). Compilar el
+**commit** con `git archive` la elimina y permite instalar cualquier `<ref>`. Medido:
+
+- **`L-I.1`**: la primera instalación tarda **3 min 15 s** (*release* desde cero, dependencias incluidas) y
+  ocupa **59,5 MB**. Reinstalar un commit que ya está instalado tarda **0,06 s** (solo mueve `current`).
+  `no-existe` → `exit 1` sin crear `TFM_HOME`. El aviso de `Sources/` sucio sale (probado con una línea
+  temporal en `Enumerations.swift`, restaurada después).
+- **`L-I.2`**: después de un `swift build` en el árbol de trabajo, `shasum -c` del instalado → `OK`.
+- **`L-I.3`**: `current/Run ingest`, lanzado desde `/tmp` contra `club_atleti` (respaldo previo con
+  `pg_dump`, 560 KB) → *"0 competición(es) sincronizada(s), 0 con fallo"*, `exit 0`, **ninguna fila nueva**
+  en `ingestion_runs` (183). Es el verde vacío de H-59, tal como se esperaba hasta que P dé de alta 2026/27.
 
 ---
 
