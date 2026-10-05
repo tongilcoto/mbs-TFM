@@ -1,0 +1,90 @@
+{
+  "title": "Plan launchd · L-L.0 · el recorrido vacío (DL-2, H-59): lo saltado por el antirrebote, y --fail-if-empty",
+  "filter": "IngestEmptyTraversalTests|IngestClubCalendarsTests",
+  "mutations": [
+    {
+      "id": "S1-cero",
+      "description": "el antirrebote salta pero no lo cuenta",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "return (due, competitions.count - due.count)",
+      "replace": "return (due, 0)"
+    },
+    {
+      "id": "S2-todas",
+      "description": "cuenta como saltadas todas las de la temporada, también las que entran",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "return (due, competitions.count - due.count)",
+      "replace": "return (due, competitions.count)"
+    },
+    {
+      "id": "S3-sin-guarda",
+      "description": "sin intervalo mínimo (--force, el botón) da todo por saltado",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "guard let minInterval = scope.minInterval else { return (competitions, 0) }",
+      "replace": "guard let minInterval = scope.minInterval else { return (competitions, competitions.count) }"
+    },
+    {
+      "id": "S4-informe",
+      "description": "el plan cuenta lo saltado pero el informe no lo recibe",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "report.skippedByDebounce = plan.skippedByDebounce",
+      "replace": "_ = plan.skippedByDebounce"
+    },
+    {
+      "id": "E1-saltado",
+      "description": "lo saltado por el antirrebote cuenta como vacío (cada disparo de más daría rojo)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "return report.entries.isEmpty && report.skippedByDebounce == 0",
+      "replace": "return report.entries.isEmpty"
+    },
+    {
+      "id": "E2-entradas",
+      "description": "un club con competiciones recorridas cuenta como vacío",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "return report.entries.isEmpty && report.skippedByDebounce == 0",
+      "replace": "return report.skippedByDebounce == 0"
+    },
+    {
+      "id": "E3-abortado",
+      "description": "el club que abortó por infraestructura cuenta como vacío",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "            && !report.abortedByInfrastructure\n",
+      "replace": "\n"
+    },
+    {
+      "id": "F1-flag-ignorado",
+      "description": "--fail-if-empty no hace nada",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "outcomes.filter { !$0.succeeded || (failIfEmpty && $0.isEmpty) }",
+      "replace": "outcomes.filter { !$0.succeeded || (false && $0.isEmpty) }"
+    },
+    {
+      "id": "F2-flag-siempre",
+      "description": "el vacío es rojo también sin el flag (quien lo lanza a mano vería fallar un club sin temporada)",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "outcomes.filter { !$0.succeeded || (failIfEmpty && $0.isEmpty) }",
+      "replace": "outcomes.filter { !$0.succeeded || $0.isEmpty }"
+    },
+    {
+      "id": "R1-resumen-flag",
+      "description": "el resumen del club vacío nunca sale como fallo",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "return failIfEmpty ? .failed(line) : .skipped(line)",
+      "replace": "return .skipped(line)"
+    },
+    {
+      "id": "R2-resumen-cifra",
+      "description": "el resumen no dice cuántas saltó",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "+ \"\\(report.skippedByDebounce) saltada(s) por el antirrebote\"",
+      "replace": "+ \"\\(0) saltada(s) por el antirrebote\""
+    },
+    {
+      "id": "R3-resumen-vacio",
+      "description": "el club vacío se resume como un recorrido normal de cero",
+      "file": "Sources/App/IngestCommand.swift",
+      "find": "        if isEmpty {\n            let line = \"nada que recorrer",
+      "replace": "        if false {\n            let line = \"nada que recorrer"
+    }
+  ]
+}

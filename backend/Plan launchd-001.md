@@ -291,7 +291,7 @@ fusionado. Pero eso impide probar este mismo plan antes de fusionarlo. Por eso e
 
 | Paso | Qué | Verificación |
 |---|---|---|
-| `L-L.0` | *(Solo si `DL-2` = la propuesta.)* **Ciclo TDD**: `ingest` dice en su resumen cuántas competiciones saltó el antirrebote | Test rojo de aserción → verde; catálogo de mutación |
+| `L-L.0` | **Dos ciclos TDD** (`DL-2`). **(1)** `ClubIngestionReport.skippedByDebounce`: el informe cuenta lo que saltó el antirrebote, y la línea de resumen lo dice. **(2)** `ingest --fail-if-empty`: un club sin nada recorrido, fallido ni saltado (`TenantIngestion.isEmpty`) cuenta como incompleto y el proceso sale con `1`. Es opcional para que quien lo lanza a mano no vea rojo con un club recién dado de alta. **El envoltorio solo lee el código de salida**: no analiza la salida | Rojo de aserción → verde en los dos; catálogo `Tools/Mutate/Catalogs/launchd-L0.json`. El cableado de `run()` (una `Signature` no se construye en un test) se prueba a mano contra la base vacía: sin el flag `exit 0`, con él `exit 1` |
 | `L-L.1` | `Tools/Deploy/run-ingest.sh`, el envoltorio: pone el entorno `DB_*`, antepone hora y `<sha>` a cada línea, ejecuta `current/Run ingest` y traduce el resultado a la señal de `DL-1` (fallo, base caída o recorrido vacío según `DL-2`) | Ejecutado a mano tres veces: **éxito** (sin señal), **base inalcanzable** con `DB_PORT=1` (señal) y **vacío** con `-t` de un club sin competiciones vigentes o equivalente (señal según `DL-2`) |
 | `L-L.2` | `Tools/Deploy/com.tongilcoto.tfm.ingest.plist` (plantilla versionada) con `StartCalendarInterval` según `DL-3`, `StandardOutPath`/`StandardErrorPath` en `~/Library/Logs/tfm/`, y `install.sh` copiándolo y cargándolo (`bootout` + `bootstrap`) | `plutil -lint` limpio; `launchctl print gui/$(id -u)/com.tongilcoto.tfm.ingest` muestra los disparos programados |
 | `L-L.3` | Disparo forzado: `launchctl kickstart gui/$(id -u)/com.tongilcoto.tfm.ingest` | Línea nueva en el log con `<sha>`, filas en `ingestion_runs` y `last exit code` en `launchctl print` |
@@ -328,7 +328,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **P** · Datos 2026/27 | ⏳ pendiente — **espera las URLs del desarrollador** | 0/4 | — |
 | **M** · Medir el `null` | ⏳ pendiente | 0/3 | — |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | ⏳ pendiente — `DL-1`…`DL-3` decididas | 0/6 | — |
+| **L** · El agente | 🔄 en curso — `L-L.0` entregado | 1/6 | 2026-10-05 |
 | **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
 | **D** · Documentación | ⏳ pendiente | 0/3 | — |
@@ -342,6 +342,19 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | `DL-5` · Canario | propuesta (c); **sin decidir** |
 
 **Punto de partida: 591 tests.**
+
+**`L-L.0` (2026-10-05): 591 → 599 tests, 12/12 mutaciones**, contadas en el XML (`<testcase>`: 599, 0 fallos,
+3 omitidos, que son los del canario). Ocho tests: dos del informe y uno ampliado en `IngestClubCalendarsTests`
+(el de sin intervalo mínimo afirma además `skippedByDebounce == 0`, porque sin esa aserción `S3` sobrevivía), y
+seis en `IngestEmptyTraversalTests`, de nivel 1. Dos cosas que salieron por el camino:
+
+- **El `error == nil` de `isEmpty` era una mutación equivalente**: `ingest` nunca construye un club con
+  informe y error a la vez. Se quitó en vez de declararlo, para que el código no prometa una comprobación que no
+  hace nada.
+- **El mensaje final mentía en el caso vacío**: *"El motivo de cada pasada está en su fila de
+  `ingestion_runs`"*, y un recorrido vacío no deja fila. Se vio lanzándolo contra la base de trabajo, no en un
+  test.
+- **El README (§6.3) no lista todavía `--fail-if-empty`**: va con `L-D.1`. Lo dice el `--help`.
 
 **Bloque I (2026-10-05).** Cambio respecto al plan: `L-I.1` decía *"se niega con el árbol sucio"*, y eso dejaba
 una carrera entre comprobar y compilar (una mutación de `Tools/Mutate` podía empezar en medio). Compilar el
