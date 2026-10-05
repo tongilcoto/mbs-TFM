@@ -331,7 +331,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **L** · El agente | 🔄 en curso — falta `L-L.4` (dormir/apagar; lo hace el desarrollador) | 5/6 | 2026-10-05 |
 | **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
-| **D** · Documentación | ⏳ pendiente | 0/3 | — |
+| **D** · Documentación | 🔄 en curso — `L-D.1` entregado (README §6.3 y §6.4) | 1/3 | 2026-10-05 |
 
 | Decisión | Estado |
 |---|---|
