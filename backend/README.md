@@ -34,7 +34,7 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 |---|---|
 | `GET /v1/club` · `PATCH /v1/club` | F0 |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
-| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#42-el-enganche--las-dos-puertas-de-d-67) |
+| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#enganche) |
 | Las otras 77 del *spec* | ⛔ no generadas — [§7](#7-el-spec) |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
@@ -197,6 +197,8 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **`competitionIds` vacía es 400**, no *"todas"*. Para la temporada entera, se omite.
 - **Una pasada fallida también se lee**: el `POST` da **502** y el `GET` enseña la fila con su `outcome` y su
   motivo — con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
+
+<a id="enganche"></a>
 
 ### 4.2 El enganche — las dos puertas de `D-67`
 
@@ -446,7 +448,7 @@ swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name
 ### 6.1 `seed-competition` — la *entrada* de la ingesta
 
 La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`). El camino de verdad es
-pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es §4.2. Esto se conserva como vía para
+pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es [§4.2](#enganche). Esto se conserva como vía para
 semillas, *scripts* y tests, que no deberían depender del formato de URL de un tercero:
 
 ```sh
@@ -486,7 +488,7 @@ columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La
 —«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
 
 > **Lo que no hace, y ya no es porque falte la tabla:** no escribe `TeamRegistration` (`D-68`). La tabla
-> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** (§4.2), que es la que
+> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** ([§4.2](#enganche)), que es la que
 > sabe en qué competición queda inscrito el equipo. Recién sembrado, el equipo existe y se puede enganchar
 > pero **no está inscrito en ninguna temporada** — el estado que el *spec* evita exigiendo `seasonId` en el
 > alta, porque es **invisible en toda pantalla que filtre por temporada**. Engancharlo lo arregla.
