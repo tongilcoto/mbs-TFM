@@ -30,12 +30,12 @@ Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
-| Operación HTTP | |
-|---|---|
-| `GET /v1/club` · `PATCH /v1/club` | F0 |
-| `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs` | F6 |
-| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#enganche) |
-| Las otras 77 del *spec* | ⛔ no generadas — [§7](#7-el-spec) |
+| Operación HTTP                                                                        |                                   |
+| ------------------------------------------------------------------------------------- | --------------------------------- |
+| `GET /v1/club` · `PATCH /v1/club`                                                     | F0                                |
+| `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
+| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#enganche)           |
+| Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
 y era el plan: el adaptador primario de la ingesta es un `AsyncCommand`, no un Controller (§2.3-b). Lo demás
@@ -571,13 +571,13 @@ backoffice: en Fly.io se dispara de otra forma, y lo que se lleva y lo que se ti
 
 Los dos guiones, desde `backend/`:
 
-| Para | Comando |
-|---|---|
+| Para                                                                  | Comando                                                                       |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh`: instala **lo último commiteado en tu rama** (lo no commiteado no entra). `install.sh main` o `install.sh <sha>` instala otra rama o un commit concreto |
-| **Cargar** el agente en `launchd` (una vez, o si cambia el `.plist`) | `Tools/Deploy/agent.sh install` |
-| **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status` |
-| **Disparar ya**, sin esperar a la hora | `Tools/Deploy/agent.sh run` |
-| **Quitarlo** (el binario y los logs se quedan) | `Tools/Deploy/agent.sh uninstall` |
+| **Cargar** el agente en `launchd` (una vez, o si cambia el `.plist`)  | `Tools/Deploy/agent.sh install`                                               |
+| **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status`                                                |
+| **Disparar ya**, sin esperar a la hora                                | `Tools/Deploy/agent.sh run`                                                   |
+| **Quitarlo** (el binario y los logs se quedan)                        | `Tools/Deploy/agent.sh uninstall`                                             |
 
 **Montarlo desde cero son dos comandos**, en este orden, porque `agent.sh install` se niega si no hay nada
 instalado:
