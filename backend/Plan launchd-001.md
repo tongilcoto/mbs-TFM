@@ -328,7 +328,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **P** · Datos 2026/27 | ⏳ pendiente — **espera las URLs del desarrollador** | 0/4 | — |
 | **M** · Medir el `null` | ⏳ pendiente | 0/3 | — |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | 🔄 en curso — `L-L.0` entregado | 1/6 | 2026-10-05 |
+| **L** · El agente | 🔄 en curso — falta `L-L.4` (dormir/apagar; lo hace el desarrollador) | 5/6 | 2026-10-05 |
 | **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
 | **D** · Documentación | ⏳ pendiente | 0/3 | — |
@@ -342,6 +342,38 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | `DL-5` · Canario | propuesta (c); **sin decidir** |
 
 **Punto de partida: 591 tests.**
+
+**`L-L.1` a `L-L.3` y `L-L.5` (2026-10-05).** Tres ficheros en `Tools/Deploy/`: `run-ingest.sh` (el
+envoltorio), la plantilla `com.tongilcoto.tfm.ingest.plist` y `agent.sh install|uninstall|status|run`. **Un
+cambio respecto al plan**: el envoltorio **tampoco** se ejecuta desde el árbol. `install.sh` lo copia **del
+mismo commit** que el binario, a `releases/<sha>/run-ingest.sh`, y el `.plist` apunta a `current/`. Es H-85
+otra vez: un cambio de rama no puede cambiar lo que dispara `launchd`. Medido:
+
+- **`L-L.1`**, a mano con el log en el *scratch*: éxito (`--season <2025/26> --min-interval-hours 100000`) →
+  `exit 0`, *"2 saltada(s) por el antirrebote"*, sin señal. Base inalcanzable (`DB_PORT=1`) → `exit 1` con
+  señal. Vacío → `exit 1` con señal. `ULTIMO_FALLO` acumula y no sobrescribe.
+- **`L-L.2`**: `plutil -lint` OK; `launchctl print` muestra los tres disparos de `DL-3` (`Weekday` 6 y 0 a las
+  23:30, 1 a las 08:00).
+- **`L-L.3`**: `agent.sh run` (`kickstart`) → `runs = 1`, `last exit code = 1` (el vacío de hoy), la línea en
+  `~/Library/Logs/tfm/ingest.log` con el commit, la entrada en `ULTIMO_FALLO`, y `launchd.log` vacío.
+- **`L-L.5`**: `uninstall` → el `.plist` desaparece y `launchctl print` no lo encuentra; `install` lo vuelve a
+  dejar cargado.
+- **Reinstalar con dependencias ya compiladas: 19 s** (frente a los 3 min 15 s de la primera vez).
+- **La notificación se ve**: el desarrollador recibió las tres de estas pruebas. **Eran idénticas**, y de ahí
+  el cambio siguiente.
+
+**Después, a petición del desarrollador**: el aviso y `ULTIMO_FALLO` llevan **el motivo**, sacado de la salida
+del disparo (*"la base no responde: ¿está Docker parado?"*, *"atleti: nada que recorrer…"*), y `agent.sh
+status` lista los disparos que `launchd` tiene cargados. Lo que decide si hay aviso sigue siendo **solo el
+código de salida**. Probado otra vez con los tres casos de `L-L.1`.
+
+**Queda cargado desde el 2026-10-05**, con `81b1cea`. Para actualizarlo basta `install.sh`: el `.plist` apunta a
+`current/`, así que no hay que recargar el agente. Hasta que P dé de alta 2026/27, **cada disparo avisará de
+que está vacío**, y es lo correcto: es el verde de H-59 convertido en rojo.
+
+> *(Estas notas tenían que haber entrado en `3ed2dde`, cuyo mensaje las anuncia. No entraron porque un `grep`
+> de comprobación falló y cortó la cadena de comandos antes de editar este fichero. El commit solo llevó
+> `agent.sh`. Se vio el mismo día, al ir a añadir la nota siguiente.)*
 
 **`L-L.0` (2026-10-05): 591 → 599 tests, 12/12 mutaciones**, contadas en el XML (`<testcase>`: 599, 0 fallos,
 3 omitidos, que son los del canario). Ocho tests: dos del informe y uno ampliado en `IngestClubCalendarsTests`
