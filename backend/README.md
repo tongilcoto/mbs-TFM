@@ -573,7 +573,7 @@ Los dos guiones, desde `backend/`:
 
 | Para | Comando |
 |---|---|
-| **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh` — el commit de `HEAD`; `install.sh <ref>` para otro |
+| **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh`: instala **lo último commiteado en tu rama** (lo no commiteado no entra). `install.sh main` o `install.sh <sha>` instala otra rama o un commit concreto |
 | **Cargar** el agente en `launchd` (una vez, o si cambia el `.plist`) | `Tools/Deploy/agent.sh install` |
 | **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status` |
 | **Disparar ya**, sin esperar a la hora | `Tools/Deploy/agent.sh run` |
