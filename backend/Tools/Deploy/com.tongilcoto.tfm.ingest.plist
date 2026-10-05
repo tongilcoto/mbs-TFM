@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Plantilla del agente de la ingesta (Plan launchd-001, L-L.2).
+  `agent.sh install` sustituye __TFM_HOME__ y __LOG_DIR__ y la copia a
+  ~/Library/LaunchAgents/. No se carga desde aquí.
+
+  Cadencia: D-87 (lunes, sábado y domingo). Horas: DL-3, en hora local.
+  Weekday: 0 = domingo, 1 = lunes, 6 = sábado.
+  Un disparo con el portátil dormido se ejecuta al despertar (§1.1 del plan).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tongilcoto.tfm.ingest</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__TFM_HOME__/current/run-ingest.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Weekday</key><integer>6</integer>
+            <key>Hour</key><integer>23</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>0</integer>
+            <key>Hour</key><integer>23</integer>
+            <key>Minute</key><integer>30</integer>
+        </dict>
+        <dict>
+            <key>Weekday</key><integer>1</integer>
+            <key>Hour</key><integer>8</integer>
+            <key>Minute</key><integer>0</integer>
+        </dict>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__TFM_HOME__</string>
+
+    <!-- Lo que escribe el envoltorio va a ingest.log; aquí solo cae lo que
+         falle ANTES de que el envoltorio arranque (p. ej., que no exista). -->
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/launchd.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

@@ -16,6 +16,7 @@
 #
 # Deja:
 #   $TFM_HOME/releases/<sha>/Run       el binario
+#   $TFM_HOME/releases/<sha>/run-ingest.sh   el envoltorio que ejecuta launchd, del mismo commit
 #   $TFM_HOME/releases/<sha>/VERSION   de qué commit y rama salió, y cuándo
 #   $TFM_HOME/current                  enlace a la versión que ejecuta `launchd`
 #
@@ -62,6 +63,13 @@ else
     mkdir -p "$DEST"
     cp "$BIN" "$DEST/Run.tmp"
     mv "$DEST/Run.tmp" "$DEST/Run"
+    # El envoltorio sale del **mismo commit**, no del árbol: un cambio de rama
+    # tampoco puede cambiar lo que dispara launchd (H-85).
+    if [ -f "$SRC/backend/Tools/Deploy/run-ingest.sh" ]; then
+        install -m 755 "$SRC/backend/Tools/Deploy/run-ingest.sh" "$DEST/run-ingest.sh"
+    else
+        echo "aviso: $SHA no trae Tools/Deploy/run-ingest.sh; launchd no podrá dispararlo." >&2
+    fi
     {
         echo "commit=$(git -C "$REPO" rev-parse "$SHA")"
         echo "ref=$REF"
