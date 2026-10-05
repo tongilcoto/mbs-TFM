@@ -51,6 +51,20 @@ status)
         echo "$LABEL no está cargado" >&2
         exit 1
     }
+    # Los disparos **que launchd tiene cargados**, no los del fichero: si alguien
+    # edita el .plist sin `agent.sh install`, son estos los que mandan.
+    echo "── disparos programados (hora local):"
+    launchctl print "$DOMAIN/$LABEL" | awk '
+        BEGIN { split("domingo lunes martes miércoles jueves viernes sábado", day, " ") }
+        /descriptor = \{/ { inside = 1; w = ""; h = 0; m = 0; next }
+        inside && /"Weekday"/ { w = $3 }
+        inside && /"Hour"/    { h = $3 }
+        inside && /"Minute"/  { m = $3 }
+        inside && /\}/ {
+            printf "\t%02d:%02d  %s\n", h, m, (w == "" ? "cada día" : day[(w % 7) + 1])
+            inside = 0
+        }'
+    echo "── binario: $(basename "$(readlink "$TFM_HOME/current")")"
     [ -s "$LOG_DIR/ULTIMO_FALLO" ] && { echo "── ULTIMO_FALLO:"; cat "$LOG_DIR/ULTIMO_FALLO"; }
     exit 0
     ;;
