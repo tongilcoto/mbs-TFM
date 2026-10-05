@@ -78,8 +78,35 @@ enseñar una notificación (`DL-1`) y el *daemon* no. Va en `~/Library/LaunchAge
 ### 1.6 Ni Fly.io, ni el CI, ni el cron de verdad
 
 Llegan juntos con el despliegue (el borrador, §3). **Este plan monta un disparador local para acumular datos;
-no es el despliegue.** Nada de lo de aquí tiene que sobrevivir a la mudanza, salvo lo que se aprenda en
-`L-M` y `DL-4`, que sí sirve en cualquier sitio.
+no es el despliegue.** El día que la ingesta corra en Fly.io contra la base de verdad, el agente local **se
+desinstala** (`L-L.5` deja escrito cómo).
+
+**Al CI no le afecta.** El CI garantiza que lo que entra en `main` está en verde (H-07). `launchd` no ejecuta
+tests y garantiza otra cosa: que lo que corre **salió de un commit conocido** (H-85). En Fly.io las dos se
+encadenan solas: el CI en verde, `fly deploy` construye la imagen desde ese commit y el disparo la ejecuta.
+Aquí, `install.sh` hace de `fly deploy`.
+
+**Qué se lleva a Fly.io y qué se tira**, para que la sesión que lo monte no lo vuelva a pensar:
+
+| Sobrevive | Se tira |
+|---|---|
+| `Run ingest` con sus *flags*, el antirrebote y los códigos de salida. `D-87` puso el disparador fuera del proceso justo para que se pudiera cambiar | El `.plist` |
+| Las horas (`DL-3`) y lo que `ingestion_runs` diga de ellas | El envoltorio y su `osascript` |
+| La medida del `null` (`L-M`) y la decisión de dónde reintentar (`DL-4`) | `install.sh`: lo sustituye el `Dockerfile`, que ya existe |
+| *"Vacío = fallo"* (`L-L.0`), porque es código de la aplicación | |
+| El **concepto** de la señal (`DL-1`); en Fly cambia la forma (correo, chequeo de salud…) | |
+
+**Cómo se disparará en Fly.io: se decide allí, con su documentación de ese día delante.** Hay dos candidatos.
+Las *Scheduled Machines* tienen, de memoria y sin verificar, intervalos gruesos (cada hora, diario, semanal) y no
+admiten hora exacta: con uno diario funcionarían gracias al antirrebote, pero preguntarían a la RFFM de martes
+a viernes. El otro es un cron dentro de una máquina (p. ej. `supercronic`), que es lo más parecido a esto. Y con
+servidor y cron en máquinas distintas, **el borde de reloj que A-11 dejó apuntado deja de ser teórico**: si el
+reloj de quien cierra va por detrás del de quien aceptó, la fila `accepted` se queda abierta
+(`IngestCalendar.swift:97`).
+
+**Vale la pena montarlo igualmente, por dos razones.** La base local acumula semanas reales desde ya, y contra
+eso se diseñan las pantallas del backoffice, que va antes que Fly.io. Y lo que se aprende aquí se lleva entero
+a Fly.io. Lo desechable son un `.plist` y dos guiones.
 
 ---
 
@@ -301,16 +328,16 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **P** · Datos 2026/27 | ⏳ pendiente — **espera las URLs del desarrollador** | 0/4 | — |
 | **M** · Medir el `null` | ⏳ pendiente | 0/3 | — |
 | **I** · Binario instalado | ⏳ pendiente | 0/3 | — |
-| **L** · El agente | ⏳ pendiente — **espera `DL-1`…`DL-3`** | 0/6 | — |
+| **L** · El agente | ⏳ pendiente — `DL-1`…`DL-3` decididas | 0/6 | — |
 | **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
 | **D** · Documentación | ⏳ pendiente | 0/3 | — |
 
 | Decisión | Estado |
 |---|---|
-| `DL-1` · Señal | propuesta (c), **sin decidir** |
-| `DL-2` · Vacío = fallo | propuesta: sí, salvo saltado por antirrebote; **sin decidir** |
-| `DL-3` · Horas | propuesta: sáb/dom 23:30, lun 08:00; **sin decidir** |
+| `DL-1` · Señal | ✅ **(c)**: notificación + log + `ULTIMO_FALLO` — decidido el 2026-10-05 |
+| `DL-2` · Vacío = fallo | ✅ **sí, salvo lo saltado por el antirrebote**, con `L-L.0` — decidido el 2026-10-05 |
+| `DL-3` · Horas | ✅ **sáb y dom 23:30, lun 08:00**, hora local — decidido el 2026-10-05 |
 | `DL-4` · Reintento | **se decide tras `L-M`** |
 | `DL-5` · Canario | propuesta (c); **sin decidir** |
 
