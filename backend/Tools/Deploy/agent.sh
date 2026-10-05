@@ -47,7 +47,7 @@ uninstall)
     echo "Descargado y borrado: $LABEL. El binario ($TFM_HOME) y los logs ($LOG_DIR) se quedan."
     ;;
 status)
-    launchctl print "$DOMAIN/$LABEL" | grep -E "state =|last exit code|runs =|path =" || {
+    launchctl print "$DOMAIN/$LABEL" 2>/dev/null | grep -E "state =|last exit code|runs =|path =" || {
         echo "$LABEL no está cargado" >&2
         exit 1
     }
