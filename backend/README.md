@@ -226,16 +226,16 @@ swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
 **Las cuatro primeras no se pueden cambiar después** (`D-58`), y equivocarse no da un error al crear el
 equipo, sino un **409** al engancharlo, si la competición es de otra edad, género o modalidad.
 
-La salida trae el UUID del equipo en la primera línea, y debajo el `curl` del paso 1 ya montado:
+La salida empieza así:
 
 ```
 Equipo listo: 3f2a9c1e-…
   cadete A · masculino · futbol_11
   propio, SIN enganchar y SIN inscribir (la inscribe la cascada de D-67)
-
-  curl -s -X POST http://atleti.localhost:8080/v1/teams/3f2a9c1e-…/federation-link/preview \
-  …
 ```
+
+Debajo imprime además el `curl` del paso 1 con el UUID ya puesto, **solo como recordatorio: no lo ejecuta**.
+Puedes pegarlo desde ahí o seguir con el paso 1 de aquí, que es el mismo.
 
 **Copia el UUID de `Equipo listo` a una variable**, que es la que usan los `curl` de abajo:
 
