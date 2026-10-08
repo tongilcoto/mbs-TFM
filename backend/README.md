@@ -76,10 +76,13 @@ migraciones y escribe su fila en `clubs`. Es idempotente: repetirlo no duplica n
 
 | Parámetro | Por defecto | Qué es |
 |---|---|---|
-| `--port`, `-p` | `8080` | El puerto. Si lo cambias, cambia en todos los `curl`: `http://atleti.localhost:8765/…` |
+| `--port`, `-p` | `8080`, o `API_PORT` | El puerto. Si lo cambias, cambia en todos los `curl`: `http://atleti.localhost:8765/…` |
 | `--hostname`, `-H` | `127.0.0.1` | La interfaz donde escucha |
 | `--bind`, `-b` | — | Las dos cosas juntas: `-b 127.0.0.1:8765` |
 
+- **Para usar otro puerto siempre, mejor `export API_PORT=8765` que `--port`**: `serve` lo toma como puerto
+  por defecto, y `provision-tenant`, `seed-team` y `seed-competition` lo usan en los `curl` que imprimen
+  para pegar. Con `--port` solo se entera `serve`, y esos `curl` siguen diciendo `8080`.
 - **`*.localhost` resuelve a 127.0.0.1 sin configurar nada**, así que desarrollo usa la misma vía que
   producción: el club va en el subdominio (§6.1). No hace falta ninguna cabecera.
 - Para parar: `Ctrl-C`, y `docker compose down` (conserva datos) o `down -v` (los borra).
@@ -102,6 +105,7 @@ misma base de datos.**
 | `DB_HOST` / `DB_PORT` | `localhost` / `5434` | `db` / `5432` dentro de compose |
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm` | |
 | `DOMAIN_SUFFIX` | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
+| `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos |
 | `LOG_LEVEL` | `info` | `debug` muestra cada petición y cada SQL. Vale también en `swift test` |
 | `HTTP_TRACE` | apagado | `1` vuelca los **cuerpos** HTTP. Solo en `.development` / `.testing` |
 | `REQUIRE_DB` | apagado | `1` hace **fallar** los tests de BD en vez de omitirlos ([§5](#5-los-tests)). `CI` la activa sola |

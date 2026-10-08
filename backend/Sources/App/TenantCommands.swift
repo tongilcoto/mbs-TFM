@@ -280,7 +280,7 @@ public struct ProvisionTenantCommand: AsyncCommand {
         context.console.success("""
             Club \(signature.slug) provisionado en el schema \(schema).
               federación: \(federation.rawValue)
-              prueba:     curl http://\(signature.slug).localhost:8080/v1/club
+              prueba:     curl \(APIAddress.fromEnvironment().clubURL(slug: signature.slug))/v1/club
             """)
     }
 

@@ -142,7 +142,7 @@ public struct SeedTeamCommand: AsyncCommand {
               \(category.rawValue) \(signature.letter ?? "—") · \(gender.rawValue) · \(modality.rawValue)
               propio, SIN enganchar y SIN inscribir (la inscribe la cascada de D-67)
 
-              curl -s -X POST http://\(slug).localhost:8080/v1/teams/\(id)/federation-link/preview \\
+              curl -s -X POST \(APIAddress.fromEnvironment().clubURL(slug: slug))/v1/teams/\(id)/federation-link/preview \\
                 -H 'Content-Type: application/json' \\
                 -d '{"federationCalendarUrl":"<URL del calendario>"}' | jq
             """)

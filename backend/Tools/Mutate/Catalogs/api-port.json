@@ -1,0 +1,41 @@
+{
+  "title": "README · API_PORT: el puerto que comparten serve y las pistas de los comandos",
+  "filter": "APIAddressTests",
+  "mutations": [
+    {
+      "id": "P1-ignora",
+      "description": "no lee API_PORT: siempre 8080",
+      "file": "Sources/App/APIAddress.swift",
+      "find": "port = environment[\"API_PORT\"].flatMap(Int.init)",
+      "replace": "port = environment[\"API_PORT_X\"].flatMap(Int.init)"
+    },
+    {
+      "id": "P2-sin-rango",
+      "description": "acepta cualquier entero, también 0 y 65536",
+      "file": "Sources/App/APIAddress.swift",
+      "find": ".flatMap { (1...65535).contains($0) ? $0 : nil }",
+      "replace": ".flatMap { $0 }"
+    },
+    {
+      "id": "P3-rango-corto",
+      "description": "el rango se queda sin el último puerto válido",
+      "file": "Sources/App/APIAddress.swift",
+      "find": "(1...65535)",
+      "replace": "(1..<65535)"
+    },
+    {
+      "id": "P4-defecto",
+      "description": "el puerto por defecto deja de ser 8080",
+      "file": "Sources/App/APIAddress.swift",
+      "find": "public static let defaultPort = 8080",
+      "replace": "public static let defaultPort = 8000"
+    },
+    {
+      "id": "P5-url",
+      "description": "la URL del club pierde el puerto",
+      "file": "Sources/App/APIAddress.swift",
+      "find": "\"http://\\(slug).localhost:\\(port)\"",
+      "replace": "\"http://\\(slug).localhost\""
+    }
+  ]
+}
