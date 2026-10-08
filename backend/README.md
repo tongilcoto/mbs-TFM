@@ -179,9 +179,9 @@ aceptarla en producción sería dejar abierto un conmutador de tenant (§6.1).
 ### 4.1 La ingesta
 
 ```sh
-# UNA competición: síncrona, 200, con el resultado dentro
+# UNA competición (lista de un elemento): síncrona, 200, con el resultado dentro
 curl -s -X POST http://atleti.localhost:8080/v1/ingestion-runs \
-  -H 'Content-Type: application/json' -d '{"competitionId":"<uuid>"}' | jq
+  -H 'Content-Type: application/json' -d '{"competitionIds":["<uuid>"]}' | jq
 
 # La temporada vigente entera: 202, y dice qué ha aceptado
 curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
