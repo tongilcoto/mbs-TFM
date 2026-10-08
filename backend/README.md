@@ -208,7 +208,7 @@ la competición y la inscripción del equipo, y se encola su primera ingesta.
 un comando ([§6.2](#62-seed-team--el-equipo-propio-para-poder-engancharlo)):
 
 ```sh
-TEAM=$(swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A | grep -o '[0-9a-f-]\{36\}')
+swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
 ```
 
 | Parámetro | ¿Obligatorio? | Qué es |
@@ -220,8 +220,24 @@ TEAM=$(swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l 
 | `--letter`, `-l` | no | Distingue equipos de la misma edad, género y modalidad (`A`, `B`…). **Sin `-l` es otro equipo, no "cualquiera"**: el que no lleva letra porque es el único |
 
 **Las cuatro primeras no se pueden cambiar después** (`D-58`), y equivocarse no da un error al crear el
-equipo, sino un **409** al engancharlo, si la competición es de otra edad, género o modalidad. El comando
-imprime el UUID del equipo; la línea de arriba lo guarda en `$TEAM`.
+equipo, sino un **409** al engancharlo, si la competición es de otra edad, género o modalidad.
+
+La salida trae el UUID del equipo en la primera línea, y debajo el `curl` del paso 1 ya montado:
+
+```
+Equipo listo: 3f2a9c1e-…
+  cadete A · masculino · futbol_11
+  propio, SIN enganchar y SIN inscribir (la inscribe la cascada de D-67)
+
+  curl -s -X POST http://atleti.localhost:8080/v1/teams/3f2a9c1e-…/federation-link/preview \
+  …
+```
+
+**Copia el UUID de `Equipo listo` a una variable**, que es la que usan los `curl` de abajo:
+
+```sh
+TEAM=3f2a9c1e-…
+```
 
 **Paso 1 — verificar.** Se manda la URL del calendario, copiada tal cual de la web de la federación. El
 servidor **consulta a la federación en ese momento y no guarda nada**: devuelve lo que hay en esa URL para
