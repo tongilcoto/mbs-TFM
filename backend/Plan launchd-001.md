@@ -250,7 +250,7 @@ porque mide algo que solo se puede medir mirando, y lo que mide decide la forma 
 
 ### Bloque P · Prerrequisito de datos — la temporada 2026/27 enganchada
 
-**Leer antes:** `README.md` §4.2 (el enganche) y §6.2 (`seed-team`); la nota de cierre de A-11 en la auditoría.
+**Leer antes:** `README.md` §4.1 (el enganche) y §6.2 (`seed-team`); la nota de cierre de A-11 en la auditoría.
 
 | Paso | Qué | Verificación |
 |---|---|---|

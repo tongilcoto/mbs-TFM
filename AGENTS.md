@@ -645,7 +645,7 @@ enganche de [D-67] es por donde entra el usuario y era lo último que faltaba
 - **Las dos puertas de [D-67] existen**: `POST /v1/teams/{id}/federation-link/preview` → **200** sin
   persistir nada, y `POST /v1/teams/{id}/federation-link` → **202** con la cascada escrita y la primera
   ingesta encolada. El manual con los `curl` y los ocho códigos de error está en
-  [`backend/README.md` §4.2](./backend/README.md).
+  [`backend/README.md` §4.1](./backend/README.md#enganche).
 - **La traducción error → HTTP tiene UN sitio y es `ProblemMiddleware`.** F10 midió que los códigos que el
   contrato declara ya salían correctos por ahí cuando el error se escapa de un *handler*, así que **no se
   duplicó** en los *handlers*: un segundo sitio decidiendo el mismo código HTTP es lo que acaba divergiendo.

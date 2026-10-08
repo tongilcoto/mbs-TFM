@@ -34,7 +34,7 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | ------------------------------------------------------------------------------------- | --------------------------------- |
 | `GET /v1/club` · `PATCH /v1/club`                                                     | F0                                |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
-| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.2](#enganche)           |
+| `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
 | Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **Esa lista no dice lo que hay montado, solo lo que se toca con `curl`.** De F1 a F5 no se añadió un endpoint
@@ -54,17 +54,34 @@ swift run Run migrate --yes        # crea public.tenants (plano de control)
 swift run Run provision-tenant atleti \
   --federation rffm --name "Club Atlético de Ejemplo" --short-name "CD Atleti"
 
-swift run Run serve                # la API en :8080
+swift run Run serve                # la API en :8080 (otro puerto: --port 8765)
 ```
 
 ```sh
 curl -s http://atleti.localhost:8080/v1/club | jq     # en otra terminal
 ```
 
-- **`--federation` es obligatoria**: fija a qué API se sincroniza el tenant entero y no hay defecto que no sea
-  inventárselo (§3.6).
+**`provision-tenant` da de alta un club**: crea su *schema*, lo registra en `public.tenants`, le pasa las
+migraciones y escribe su fila en `clubs`. Es idempotente: repetirlo no duplica nada.
+
+| Parámetro | ¿Obligatorio? | Qué es |
+|---|---|---|
+| `<slug>` (`atleti`) | **sí** | El identificador del club. Va sin guion delante y es **lo que se teclea en el subdominio** para hablarle (`atleti.localhost`), y de él sale el nombre del *schema* |
+| `--federation`, `-f` | **sí** | De qué federación se sincroniza el club entero. No hay valor por defecto que no sea inventárselo (§3.6). Hoy solo vale **`rffm`**: `fcf` está en el catálogo pero no tiene adaptador, y se rechaza (H-93) |
+| `--name` | no | El nombre oficial. Por defecto, el *slug*. **No tiene forma corta**: `-n` la reserva ConsoleKit |
+| `--short-name` | no | El nombre corto. Por defecto, el nombre |
+| `--schema`, `-s` | no | El nombre del *schema*. Por defecto, `club_<slug>`; no hace falta cambiarlo |
+
+**`serve` levanta la API.** Sin parámetros escucha en `127.0.0.1:8080`:
+
+| Parámetro | Por defecto | Qué es |
+|---|---|---|
+| `--port`, `-p` | `8080` | El puerto. Si lo cambias, cambia en todos los `curl`: `http://atleti.localhost:8765/…` |
+| `--hostname`, `-H` | `127.0.0.1` | La interfaz donde escucha |
+| `--bind`, `-b` | — | Las dos cosas juntas: `-b 127.0.0.1:8765` |
+
 - **`*.localhost` resuelve a 127.0.0.1 sin configurar nada**, así que desarrollo usa la misma vía que
-  producción: el club en el subdominio (§6.1). No hace falta ninguna cabecera.
+  producción: el club va en el subdominio (§6.1). No hace falta ninguna cabecera.
 - Para parar: `Ctrl-C`, y `docker compose down` (conserva datos) o `down -v` (los borra).
 
 ---
@@ -140,6 +157,9 @@ docker compose exec db psql -U tfm -d tfm
 
 ## 4. La API con `curl`
 
+**A qué club le hablas lo dice el subdominio**: `atleti.localhost` es el club con *slug* `atleti`. La ruta
+no lleva el club en ningún sitio.
+
 ```sh
 curl -s http://atleti.localhost:8080/v1/club | jq
 
@@ -149,91 +169,116 @@ curl -s -X PATCH http://atleti.localhost:8080/v1/club \
 
 `PATCH` es **parcial**: lo que no mandas no se toca (§5.5).
 
-**Las banderas de federación del `GET` no están en la base**: se derivan del catálogo en código (`D-17`), y
-`Sources/Domain/FederationCode.swift` es el único sitio del proyecto donde aparecen `"rffm"` y `"fcf"`. Da de
-alta un club con `-f fcf` y pide la misma URL para verlo.
+**Dos campos del `GET` no se guardan en la base**: `federationProvidesRoundStandings` (la federación publica
+la clasificación de cada jornada) y `federationProvidesScorers` (publica goleadores). Dicen **qué puede
+traer la ingesta para este club** y dependen solo de su federación, así que se calculan al responder a
+partir del catálogo de federaciones que vive en el código (`Sources/Domain/FederationCode.swift`, `D-17`).
+Cambiar lo que publica una federación es tocar ese fichero, no un dato.
 
-**Los tres errores que conviene probar seguidos**, porque la diferencia entre ellos es el reparto de §5.5:
+**Los errores llegan como `application/problem+json`** (§5.4): el `code` es para que un programa decida, y el
+`title` es para leerlo. Los que salen al montar o al llamar están en [§8](#8-cuando-algo-falla).
 
-```sh
-curl -s -i -X PATCH …  -d '{}'               | head -1   # 400
-curl -s    -X PATCH …  -d '{"name":"   "}'   | jq        # 422
-curl -s http://noexiste.localhost:8080/v1/club | jq      # 404
-```
-
-| Caso | Código | Quién lo decide |
-|---|---|---|
-| `{}` | **400** | el adaptador — `minProperties` del *spec*, que el generador ignora (`D-65`) |
-| `{"name":"   "}` | **422** | el *Value Object* del Dominio: el JSON es válido, falla el **valor** |
-| club inexistente | **404** | `TenantResolutionMiddleware`, antes de tocar ningún *schema* |
-
-Todos devuelven `application/problem+json` (§5.4). **El `code` es para ramificar; el `title`, para leerlo.**
+**Si no puedes usar el subdominio**, hay una alternativa en desarrollo: llamar a `localhost` sin subdominio
+y decir el club en la cabecera `X-Club`. Sirve para herramientas que no resuelven `*.localhost` o que no
+permiten tocar el `Host`:
 
 ```sh
-curl -s -H 'X-Club: atleti' http://localhost:8080/v1/club | jq   # atajo sin subdominio
+curl -s -H 'X-Club: atleti' http://localhost:8080/v1/club | jq
 ```
 
-`X-Club` **solo funciona en `.development`/`.testing`**: es un dato que controla el cliente entero, así que
-aceptarla en producción sería dejar abierto un conmutador de tenant (§6.1).
-
-### 4.1 La ingesta
-
-```sh
-# UNA competición (lista de un elemento): síncrona, 200, con el resultado dentro
-curl -s -X POST http://atleti.localhost:8080/v1/ingestion-runs \
-  -H 'Content-Type: application/json' -d '{"competitionIds":["<uuid>"]}' | jq
-
-# La temporada vigente entera: 202, y dice qué ha aceptado
-curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
-  -H 'Content-Type: application/json' -d '{}'
-
-curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&limit=5" | jq
-```
-
-- **El cuerpo `{}` no es opcional**: un `POST` sin cuerpo da **400**, porque el servidor generado lo parsea
-  igual (`D-65`).
-- **200 con exactamente una competición, 202 con dos o más o con la temporada.** Lo decide **la petición, no
-  los datos**: con `{}` sigue siendo 202 aunque el club tenga una sola competición (`D-88`).
-- **`competitionIds` vacía es 400**, no *"todas"*. Para la temporada entera, se omite.
-- **Una pasada fallida también se lee**: el `POST` da **502** y el `GET` enseña la fila con su `outcome` y su
-  motivo — con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
+`X-Club` **solo funciona en `.development` y `.testing`**: cualquier cliente puede poner la cabecera que
+quiera, así que en producción serviría para leer otro club con solo cambiarla (§6.1).
 
 <a id="enganche"></a>
 
-### 4.2 El enganche — las dos puertas de `D-67`
+### 4.1 El enganche — dar de alta lo que la ingesta va a sincronizar
 
-El camino de verdad para dar de alta una competición: **se pega la URL del calendario en la ficha del
-equipo**. Son dos peticiones y entre ellas hay un humano.
+La ingesta ([§4.2](#42-la-ingesta)) no busca sola qué sincronizar: recorre **las competiciones que el club
+ya tiene dadas de alta**. Con el club recién creado no hay ninguna, y una ingesta no hace nada. Esto va
+primero.
+
+**Una competición se da de alta enganchando un equipo del club**: se pega en la ficha del equipo la URL de
+su calendario en la web de la federación (`D-67`). Con eso se crean de una vez la temporada (si no existía),
+la competición y la inscripción del equipo, y se encola su primera ingesta.
+
+> **Cuando exista la web**, esto se hace desde la ficha del equipo y los `curl` de aquí sobran. Hasta
+> entonces, este es el camino, y son tres pasos.
+
+**Paso 0 — el equipo.** `POST /v1/teams` es del *backoffice* y no está hecho, así que el equipo se crea con
+un comando ([§6.2](#62-seed-team--el-equipo-propio-para-poder-engancharlo)):
 
 ```sh
 TEAM=$(swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A | grep -o '[0-9a-f-]\{36\}')
+```
+
+| Parámetro | ¿Obligatorio? | Qué es |
+|---|---|---|
+| `--tenant`, `-t` | **sí** | El *slug* del club |
+| `--category`, `-c` | **sí** | Edad: `prebenjamin`, `benjamin`, `alevin`, `infantil`, `cadete`, `juvenil`, `senior` |
+| `--gender`, `-g` | **sí** | `masculino`, `femenino`, `mixto` |
+| `--modality`, `-m` | **sí** | `futbol_11`, `futbol_7`, `futbol_5`, `futbol_sala`, `futbol_playa` |
+| `--letter`, `-l` | no | Distingue equipos de la misma edad, género y modalidad (`A`, `B`…). **Sin `-l` es otro equipo, no "cualquiera"**: el que no lleva letra porque es el único |
+
+**Las cuatro primeras no se pueden cambiar después** (`D-58`), y equivocarse no da un error al crear el
+equipo, sino un **409** al engancharlo, si la competición es de otra edad, género o modalidad. El comando
+imprime el UUID del equipo; la línea de arriba lo guarda en `$TEAM`.
+
+**Paso 1 — verificar.** Se manda la URL del calendario, copiada tal cual de la web de la federación. El
+servidor **consulta a la federación en ese momento y no guarda nada**: devuelve lo que hay en esa URL para
+que lo mire una persona.
+
+```sh
 URL="https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037548&grupo=24037549"
 
-# 1) Verificar: llama a la federación EN LÍNEA y no escribe nada
 curl -s -X POST http://atleti.localhost:8080/v1/teams/$TEAM/federation-link/preview \
   -H 'Content-Type: application/json' -d "{\"federationCalendarUrl\":\"$URL\"}" | jq
+```
 
-# 2) Confirmar: escribe la cascada y encola la primera ingesta -> 202
+La respuesta tiene esta forma (recortada):
+
+```json
+{
+  "season":      { "federationSeasonId": "21", "label": "2025/26", "exists": false },
+  "competition": {
+    "ageCategory": "cadete", "gender": "masculino", "modality": "futbol_11",
+    "divisionLabel": "Primera", "groupLabel": "Grupo 1", "roundCount": 30,
+    "alreadyRegistered": false,
+    "teams": [
+      { "federationTeamId": "3349086", "rawName": "CELTIC CASTILLA C.F. 'A'" },
+      { "federationTeamId": null,      "rawName": "OTRO EQUIPO" }
+    ]
+  },
+  "identityMatches": true,
+  "ageCategoryChecked": true
+}
+```
+
+**Qué mirar, en este orden:**
+
+| Campo | Qué dice | Qué hacer |
+|---|---|---|
+| `competition.teams[]` | Los equipos del grupo, con el nombre tal cual lo publica la federación | **Buscar el tuyo y apuntar su `federationTeamId`**: es el `ownTeamFederationId` del paso 2. Es la comprobación importante: un dígito mal en la URL **no da error**, devuelve el calendario de otra liga (`D-84`), y solo una persona que no encuentra su club en la lista lo detecta (`D-16`) |
+| `teams[].federationTeamId: null` | La federación publica ese equipo sin código | Se ve, pero **no se puede elegir**. Si es el tuyo, no se puede enganchar con esta URL |
+| `competition.ageCategory` · `gender` · `modality` | Edad, género y modalidad de la competición | Comprobar que son las del equipo. `gender` es una **propuesta**: se deduce de si el nombre dice `FEMENINO`, y en el paso 2 se confirma o se corrige |
+| `identityMatches` | `true` si las tres de arriba coinciden con las del equipo | En `false`, **el paso 2 dará 409**. O la URL no es de este equipo, o el equipo se creó con algo mal |
+| `ageCategoryChecked` | `false` si la edad **no se ha podido comprobar** | Pasa cuando la competición es nueva y su nombre no dice edad (*"TERCERA FEDERACIÓN RFEF"*): entonces se usa la del equipo y `identityMatches` sale `true` sin saberlo. **Compruébalo tú**: si no es su edad, la competición se crea mal y todos los rivales la heredan (A-12·H-75) |
+| `season.label` · `season.exists` | La temporada que dice la federación, y si ya está en la base | En `false`, el paso 2 **la creará**. Su `label` es lo que se manda como `seasonLabel` |
+| `competition.alreadyRegistered` | `true` si ese grupo ya está dado de alta en esa temporada | Avisa de que ese grupo ya existe. Puede ser normal (otro equipo del club en el mismo grupo) o un enganche repetido |
+
+**Paso 2 — confirmar.** Se vuelve a mandar la URL (el paso 1 no guardó nada), con lo que has comprobado:
+
+```sh
 curl -s -i -X POST http://atleti.localhost:8080/v1/teams/$TEAM/federation-link \
   -H 'Content-Type: application/json' \
   -d "{\"federationCalendarUrl\":\"$URL\",\"ownTeamFederationId\":\"3349086\",\"gender\":\"masculino\",\"seasonLabel\":\"2025/26\"}"
 ```
 
-**Lo que hay que mirar en la respuesta del `/preview`, y por qué existe:**
-
-- **`competition.teams[]`** es la razón de ser del endpoint: de ahí sale el `ownTeamFederationId` que lleva el
-  paso 2. Un dígito mal en la URL **no da error** —devuelve el calendario de otra liga (`D-84`)—, así que
-  quien lo caza es un humano reconociendo su club en esa lista (`D-16`). El equipo que la fuente publica **sin
-  código** viaja igual, con el campo a `null`: se ve y no se puede elegir.
-- **`season.exists: false`** ⇒ al confirmar se **creará** la temporada en cascada. Se ve antes, que es lo que
-  hace aceptable que una URL pegada dé de alta una `Season`.
-- **`identityMatches: false`** ⇒ confirmar devolverá **409**. Los tres valores propuestos van en
-  `competition`, así que se puede decir *"tu equipo es cadete y esta competición es juvenil"* sin preguntar
-  otra vez.
-- **`ageCategoryChecked: false`** ⇒ la edad **no se ha podido comprobar**: la competición es nueva y su
-  nombre no la dice (*"TERCERA FEDERACIÓN RFEF"*), así que la que viaja es la del equipo. Cuando el nombre
-  sí la dice (*"PRIMERA CADETE"*), es la del nombre, y si no cuadra con el equipo, `identityMatches` es
-  `false` (A-12·H-75).
+| Campo | ¿Obligatorio? | Qué va |
+|---|---|---|
+| `federationCalendarUrl` | **sí** | La misma URL del paso 1 |
+| `ownTeamFederationId` | **sí** | El `federationTeamId` de tu equipo en `teams[]`. Si no está en esa lista, **409** |
+| `gender` | **sí** | El `competition.gender` del paso 1, o el corregido |
+| `seasonLabel` | solo si `season.exists` era `false` | El `season.label` del paso 1 |
 
 **El `202` deja fila desde que se acepta** (`D-96`): el `jobId` que devuelve es una `ingestion_runs` con
 `outcome: accepted`, y **la pasada que va detrás cierra ESA fila**, no abre otra. Se sigue leyendo:
@@ -267,6 +312,51 @@ ingesta**.
 Los **502/504** existen porque ésta es la única ruta síncrona con latencia de terceros: *"la RFFM está
 caída"* y *"la RFFM cambió de formato"* merecen respuestas distintas, y hasta F10 las cuatro señales caían
 en el mismo 500 (`A-6`/H-15).
+
+### 4.2 La ingesta
+
+**Una ingesta es una pasada que descarga de la federación los datos de las competiciones del club** —
+calendario y resultados, clasificaciones y goleadores— y los escribe en la base. Normalmente no la lanza
+nadie a mano: la lanza `launchd` tras los partidos del fin de semana con el comando `ingest` ([§6.3](#ingest),
+[§6.4](#64-la-ingesta-programada--launchd)), que se salta lo sincronizado hace menos de 6 h.
+
+Este endpoint es **el disparador manual**, el botón de *"sincroniza ahora"*: **no** respeta esas 6 h, porque
+quien lo pulsa quiere los datos ya. Solo recorre competiciones que existan, así que antes hay que haber
+enganchado algún equipo ([§4.1](#enganche)).
+
+```sh
+# Una competición: síncrona, 200, con el resultado dentro
+curl -s -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' -d '{"competitionIds":["<uuid>"]}' | jq
+
+# La temporada vigente entera: 202, y dice qué ha aceptado
+curl -s -i -X POST http://atleti.localhost:8080/v1/ingestion-runs \
+  -H 'Content-Type: application/json' -d '{}'
+
+# Qué pasó: las últimas pasadas de una competición, de la más reciente hacia atrás
+curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&limit=5" | jq
+```
+
+**Qué se recorre lo decide el cuerpo del `POST`**, que tiene dos campos, los dos opcionales:
+
+| Cuerpo | Recorre | Respuesta |
+|---|---|---|
+| `{}` | Todas las competiciones de la **temporada vigente** | **202** con la lista de lo aceptado |
+| `{"seasonId":"<uuid>"}` | Todas las de **esa** temporada, aunque no sea la vigente. Si no existe, **404**: no cae a la vigente | **202** |
+| `{"competitionIds":["<uuid>"]}` | **Solo esa** competición, y espera a que termine | **200** con la pasada hecha |
+| `{"competitionIds":["<a>","<b>"]}` | Solo esas, sin mirar de qué temporada son | **202** |
+
+- **Si van los dos campos, gana `competitionIds`**, por ser más concreto.
+- **200 o 202 lo decide la petición, no los datos.** Con `{}` sale 202 aunque el club tenga una sola
+  competición (`D-88`): un cliente que recibiera una cosa u otra según cuántos equipos tiene el club no
+  podría programarse.
+- **`competitionIds` vacía es 400**, no *"todas"*. Para la temporada entera, se omite el campo.
+- **Un campo mal escrito no da error, se ignora.** `{"competitionId":"…"}` (en singular) se lee como `{}` y
+  recorre la temporada entera con un 202. Si esperabas un 200 y llega un 202, revisa el nombre.
+- **El cuerpo no se puede omitir**: un `POST` sin cuerpo da **400**, porque el servidor generado lo intenta
+  leer igual (`D-65`). Para "todo", `{}`.
+- **Las pasadas que fallan también quedan registradas**: el `POST` da **502** y el `GET` enseña la fila con
+  su `outcome` y su motivo, con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
 
 ---
 
@@ -448,7 +538,7 @@ swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name
 ### 6.1 `seed-competition` — la *entrada* de la ingesta
 
 La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`). El camino de verdad es
-pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es [§4.2](#enganche). Esto se conserva como vía para
+pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es [§4.1](#enganche). Esto se conserva como vía para
 semillas, *scripts* y tests, que no deberían depender del formato de URL de un tercero:
 
 ```sh
@@ -488,7 +578,7 @@ columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La
 —«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
 
 > **Lo que no hace, y ya no es porque falte la tabla:** no escribe `TeamRegistration` (`D-68`). La tabla
-> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** ([§4.2](#enganche)), que es la que
+> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** ([§4.1](#enganche)), que es la que
 > sabe en qué competición queda inscrito el equipo. Recién sembrado, el equipo existe y se puede enganchar
 > pero **no está inscrito en ninguna temporada** — el estado que el *spec* evita exigiendo `seasonId` en el
 > alta, porque es **invisible en toda pantalla que filtre por temporada**. Engancharlo lo arregla.
@@ -608,7 +698,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 | El motivo dice | Qué pasa | Qué hacer |
 |---|---|---|
 | *"la base no responde: ¿está Docker parado?"* | Postgres no estaba a la hora del disparo. La pasada se detuvo sin dejar nada a medias (`D-86`) | Levantar Docker; entra en el disparo siguiente, o `agent.sh run` |
-| *"<club>: nada que recorrer…"* | **No hay temporada vigente con competiciones**: el disparo no habría acumulado nada (H-59) | Dar de alta la temporada y enganchar los equipos ([§4.2](#enganche)) |
+| *"<club>: nada que recorrer…"* | **No hay temporada vigente con competiciones**: el disparo no habría acumulado nada (H-59) | Dar de alta la temporada y enganchar los equipos ([§4.1](#enganche)) |
 | *"<club>: N competición(es) sincronizada(s), M con fallo…"* | Alguna pasada falló; las demás siguieron (`D-86`) | Su fila de `ingestion_runs` dice cuál y por qué. Un `null` de la RFFM suele ser pasajero (H-61) |
 | *"no se pudo ejecutar el binario instalado"* | No hay nada en `current/` | `Tools/Deploy/install.sh` |
 
