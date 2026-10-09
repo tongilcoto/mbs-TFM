@@ -719,6 +719,16 @@ del plan).
 - **Usa la base de `docker compose`** (`localhost:5434`, usuario `tfm`). `launchd` no hereda las variables de
   tu terminal: si tu base es otra, añade las `DB_*` ([§2](#2-ejecución-y-entorno)) en `EnvironmentVariables`
   de la plantilla `Tools/Deploy/ingest.plist`.
+- **Decide el nombre del agente** en `launchd`. Es opcional: por defecto se llama `local.tfm.ingest`. Si
+  quieres otro (p. ej., `com.<tu-usuario>.tfm.ingest`), ponlo en tu perfil de shell, porque `status`, `run` y
+  `uninstall` lo buscan por ese nombre:
+
+  ```sh
+  export TFM_AGENT_LABEL=com.<tu-usuario>.tfm.ingest
+  ```
+
+  Mejor decidirlo ahora: cambiarlo después obliga a quitar antes el agente con el nombre viejo (ver el aviso
+  de abajo).
 
 **Montarlo son dos comandos**, desde `backend/` y en este orden, porque `agent.sh install` se niega si no hay
 nada instalado:
@@ -770,11 +780,10 @@ entran).
 | Qué | Cómo |
 |---|---|
 | **Las horas** | Edita `StartCalendarInterval` en `Tools/Deploy/ingest.plist` (`Weekday`: 0 = domingo, 1 = lunes… 6 = sábado) y vuelve a pasar `agent.sh install` |
-| **El nombre del agente** en `launchd` (por defecto, `local.tfm.ingest`) | `export TFM_AGENT_LABEL=com.<tu-usuario>.tfm.ingest` antes de `agent.sh install`, y déjala puesta en tu perfil de shell: `status`, `run` y `uninstall` lo buscan por ese nombre |
 | **Dónde se instala** (por defecto, `~/Library/Application Support/tfm`) | `TFM_HOME`, puesta igual para `install.sh` y para `agent.sh install` |
 | **Dónde van los logs** (por defecto, `~/Library/Logs/tfm`) | `TFM_LOG_DIR`, antes de `agent.sh install` |
 
-> **Al cambiar el nombre, quita antes el agente viejo.** Si no, habría dos agentes y cada disparo se
+> **Si cambias el nombre después de montarlo, quita antes el agente viejo.** Si no, habría dos agentes y cada disparo se
 > ejecutaría dos veces. `agent.sh install` lo comprueba: si otro agente ya lanza esta ingesta, se para y
 > dice cómo quitarlo (`launchctl bootout gui/<uid>/<nombre-viejo>` y borrar su `.plist`).
 
