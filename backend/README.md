@@ -781,7 +781,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **6.739 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **6.860 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh
@@ -796,11 +796,13 @@ al *spec* y no al revés.
 
 - **El generador crea los tipos, pero no valida** (`D-65`): ignora `pattern`, `minLength`, `readOnly`,
   `minProperties`, `default`, `tags` y `security`. Que algo esté en el YAML **no** significa que se compruebe.
-- **Los errores se devuelven, no se lanzan**: lo que lance un *handler* se convierte en 500 antes de que
-  ningún middleware lo vea. La consecuencia es buena: **un código que el *spec* no declara no se puede
-  devolver**, porque no existe como caso del enum.
-- **`ProblemMiddleware` es para lo de fuera del transporte**: tenancy, 404 de ruta y lo que el transporte
-  rechaza antes del *handler* — un parámetro obligatorio que falta ni llega a tu código.
+- **Los errores se traducen a HTTP en un solo sitio: `ProblemMiddleware`.** También los que se escapan de un
+  *handler* (H-40): le llegan envueltos en un `ServerError`, y los desenvuelve. Por eso un tipo de error nuevo
+  hay que añadirlo **también** a su lista de desenvoltorio, o se queda en 500. Además traduce lo que pasa
+  antes de llegar al *handler*: el club que no existe, la ruta que no existe o un parámetro obligatorio que
+  falta.
+- **Un *handler* solo atrapa un error si quiere devolverlo como una respuesta del *spec***. Y lo que
+  devuelve tiene que ser una de las respuestas que el *spec* declara: el tipo generado no tiene otras.
 
 **Las capas, qué hay en cada *target* y quién puede depender de quién: [AGENTS.md](../AGENTS.md).** Para
 comprobar que una capa no puede usar lo que no le toca:
