@@ -707,8 +707,12 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
 acumulando datos reales sin lanzarla a mano. Por defecto se dispara los **sábados y domingos a las 23:30 y
 los lunes a las 08:00**, en hora local (`D-87`; las horas, `DL-3` del
 [Plan launchd-001](./Plan%20launchd-001.md)). Si a esa hora el Mac está **dormido**, se ejecuta al
-despertar. Es solo para macOS y para la base local; en producción (Fly.io) se programará de otra forma (§1.6
-del plan).
+despertar. Es para la base local; en producción (Fly.io) se programará de otra forma (§1.6 del plan).
+
+> **Solo macOS.** Como es una utilidad de desarrollo, solo se ha preparado para macOS: `launchd` no existe en
+> Linux, y los guiones usan herramientas propias de macOS (`launchctl`, `plutil`, el `mv` de BSD y las
+> notificaciones con `osascript`). En Linux, `ingest` funciona igual ([§6.4](#ingest)), pero programarlo
+> habría que hacerlo a mano, con `cron` o con un temporizador de `systemd`.
 
 **Antes de montarlo:**
 
