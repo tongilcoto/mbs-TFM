@@ -512,7 +512,7 @@ swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
                                           # falte: quien la escribe es LA CASCADA DEL
                                           # ENGANCHE (`D-68`, `C-C.10`), que es la que
                                           # sabe en qué competición queda inscrito.
-                                          # Manual: README §6.2
+                                          # Manual: README §6.3
 swift run Run ingest                      # LA PASADA DE INGESTA (§2.3-b, F6)
                                           #   -t <slug[,slug]>  solo esos clubes
                                           #   -c <uuid>         solo esa competición

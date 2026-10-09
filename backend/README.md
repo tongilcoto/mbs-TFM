@@ -209,7 +209,7 @@ la competición y la inscripción del equipo, y se encola su primera ingesta.
 > entonces, este es el camino, y son tres pasos.
 
 **Paso 0 — el equipo.** `POST /v1/teams` es del *backoffice* y no está hecho, así que el equipo se crea con
-un comando ([§6.2](#62-seed-team--el-equipo-propio-para-poder-engancharlo)):
+un comando ([§6.3](#seed-team)):
 
 ```sh
 swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
@@ -337,8 +337,8 @@ en el mismo 500 (`A-6`/H-15).
 
 **Una ingesta es una pasada que descarga de la federación los datos de las competiciones del club** —
 calendario y resultados, clasificaciones y goleadores— y los escribe en la base. Normalmente no la lanza
-nadie a mano: la lanza `launchd` tras los partidos del fin de semana con el comando `ingest` ([§6.3](#ingest),
-[§6.4](#64-la-ingesta-programada--launchd)), que se salta lo sincronizado hace menos de 6 h.
+nadie a mano: la lanza `launchd` tras los partidos del fin de semana con el comando `ingest` ([§6.4](#ingest),
+[§6.5](#ingesta-programada)), que se salta lo sincronizado hace menos de 6 h.
 
 Este endpoint es **el disparador manual**, el botón de *"sincroniza ahora"*: **no** respeta esas 6 h, porque
 quien lo pulsa quiere los datos ya. Solo recorre competiciones que existan, así que antes hay que haber
@@ -520,8 +520,23 @@ certifica cobertura; eso lo hace la mutación. El método y sus límites, en [su
 
 ## 6. Los comandos
 
+Todos se lanzan con `swift run Run <comando>` y **trabajan siempre sobre `tfm`**, tu base manual; los tenants
+de los tests los crean y borran los propios tests. `swift run Run --help` los lista, y
+`swift run Run <comando> --help` da los parámetros de cada uno.
+
+| Comando | Para qué | Dónde |
+|---|---|---|
+| `migrate` · `migrate-tenants` · `provision-tenant` | Crear las tablas y dar de alta clubes | [§6.1](#provision) |
+| `seed-competition` | Dar de alta una competición sin equipo: semillas, *scripts* y tests | [§6.2](#seed-competition) |
+| `seed-team` | Dar de alta un equipo del club, para engancharlo | [§6.3](#seed-team) |
+| `ingest` | La pasada de la federación | [§6.4](#ingest) |
+| — (`launchd`) | `ingest` programado en el Mac | [§6.5](#ingesta-programada) |
+
+<a id="provision"></a>
+
+### 6.1 `migrate`, `migrate-tenants` y `provision-tenant` — las tablas y los clubes
+
 ```sh
-swift run Run --help
 swift run Run migrate --yes                           # plano de control (public.tenants)
 swift run Run migrate-tenants                         # migraciones nuevas a TODOS los clubes
 swift run Run migrate-tenants -t atleti               # solo a uno
@@ -529,7 +544,6 @@ swift run Run migrate-tenants --revert --yes          # revierte TODOS: pide --y
 swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name "Corto"
 ```
 
-- **Trabajan siempre sobre `tfm`**, tu base manual. Los tenants de los tests los crean y borran ellos.
 - **Cuando una fase añade tablas, vuelve a pasar `migrate-tenants`.** Fluent aplica solo las que faltan.
 - **`--revert` exige `--yes`**: borra las tablas de todos los clubes y sus datos. Si uno falla a mitad, el
   comando **se para** diciendo de qué club era (`D-86`); reanudar es volver a pasarlo.
@@ -555,7 +569,9 @@ swift run Run provision-tenant atleti -f rffm --name "Nombre Largo" --short-name
 >   -c "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conname LIKE 'chk_%';"
 > ```
 
-### 6.1 `seed-competition` — la *entrada* de la ingesta
+<a id="seed-competition"></a>
+
+### 6.2 `seed-competition` — la *entrada* de la ingesta
 
 La ingesta necesita una `Season` y una `Competition` **antes** de poder pasar (`D-16`). El camino de verdad es
 pegar la URL en la ficha del equipo (`D-67`), y **ya existe**: es [§4.1](#enganche). Esto se conserva como vía para
@@ -573,7 +589,22 @@ herramienta, no contrato** (`POST /v1/competitions` del *spec* es otra cosa). Ha
 da error sino que sincroniza otro calendario—, los **rótulos los dice la fuente**, **pasa por el Dominio**, y
 **valida antes de escribir**: coordenada mala o URL incompleta → falla **sin dejar fila**.
 
-### 6.2 `seed-team` — el equipo propio, para poder engancharlo
+**Qué escribe, comparado con el enganche:**
+
+| | Escribe |
+|---|---|
+| `/preview` ([§4.1](#enganche), paso 1) | **Nada**: consulta a la federación y enseña lo que hay |
+| `federation-link` ([§4.1](#enganche), paso 2) | Temporada, competición, **el equipo emparejado y su inscripción**, y encola la primera ingesta |
+| `seed-competition` | Temporada y competición. **Nada del equipo** |
+
+> ⚠️ **Para los equipos del club, engancha; no uses esto.** Si la competición entra por aquí y pasa una
+> ingesta antes del enganche —y `launchd` la pasa solo—, la ingesta crea al equipo del club **como rival**,
+> con su código. Engancharlo después da `409 FEDERATION_TEAM_ID_TAKEN`, y fundir las dos filas está sin
+> diseñar (§9.5).
+
+<a id="seed-team"></a>
+
+### 6.3 `seed-team` — el equipo propio, para poder engancharlo
 
 `seed-competition` da de alta la **entrada** de la ingesta; esto da de alta el **equipo del club**, que es la
 otra mitad que hace falta para probar el enganche de `D-67`. `POST /v1/teams` es del backoffice y no existe,
@@ -605,7 +636,7 @@ columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La
 
 <a id="ingest"></a>
 
-### 6.3 `ingest` — la pasada de la federación
+### 6.4 `ingest` — la pasada de la federación
 
 ```sh
 swift run Run ingest                        # todos los clubes, temporada vigente
@@ -644,14 +675,14 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
   hace cumplir el calendario de disparos (`D-87`). Una competición **que nunca se sincronizó entra siempre**.
 - **Sin `--fail-if-empty`, un recorrido vacío sale en verde**: *"nada que recorrer"* es un aviso, no un fallo,
   porque quien lanza `ingest` a mano sobre un club recién dado de alta no ha hecho nada mal. Con el *flag*
-  sale con `1`, y es lo que pasa el disparo desatendido ([§6.4](#ingesta-programada)). Lo
+  sale con `1`, y es lo que pasa el disparo desatendido ([§6.5](#ingesta-programada)). Lo
   saltado por el antirrebote **no** es vacío: es un disparo de más, y la línea dice cuántas saltó.
-- **El tope semanal de §5.6 lo pone `launchd`** ([§6.4](#ingesta-programada)): lunes y fin de
+- **El tope semanal de §5.6 lo pone `launchd`** ([§6.5](#ingesta-programada)): lunes y fin de
   semana. El código sigue sin hacerlo cumplir; `ingestion_runs` permite comprobarlo a posteriori.
 
 <a id="ingesta-programada"></a>
 
-### 6.4 La ingesta programada — `launchd`
+### 6.5 La ingesta programada — `launchd`
 
 **`ingest` se dispara solo en el Mac**, contra esta misma base (`tfm`), los **sábados y domingos a las 23:30 y
 los lunes a las 08:00**, en hora local (`D-87`; las horas, `DL-3` del
@@ -709,7 +740,7 @@ agente**: el `.plist` apunta a `current/`, e `install.sh` mueve ese enlace de fo
 | La salida de cada disparo, con hora y commit | `~/Library/Logs/tfm/ingest.log` |
 | **Los fallos, uno por línea con su motivo. No se borra solo** | `~/Library/Logs/tfm/ULTIMO_FALLO` — bórralo cuando lo hayas visto |
 | Lo que falle **antes** de que arranque el envoltorio (p. ej., que no exista) | `~/Library/Logs/tfm/launchd.log` — normalmente vacío |
-| Lo que escribió cada pasada | `ingestion_runs`, igual que con `ingest` a mano ([§6.3](#ingest)) |
+| Lo que escribió cada pasada | `ingestion_runs`, igual que con `ingest` a mano ([§6.4](#ingest)) |
 | Qué versión está instalada | `agent.sh status`, o `~/Library/Application Support/tfm/current/VERSION` |
 
 **Cuándo avisa**: solo si el código de salida no es `0`. Entonces sale una **notificación de macOS** («TFM ·
@@ -774,7 +805,7 @@ mensaje desconcertante (`missing required module '_NumericsShims'`).
 | `400 TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |
 | `404 UNKNOWN_TENANT` | Falta `swift run Run provision-tenant <slug>` |
 | `500 TENANT_NOT_PROVISIONED` | El *schema* existe pero `clubs` está vacío. Repite `provision-tenant`: es idempotente |
-| `23514` al ingerir | Un `CHECK` del *schema* que se quedó atrás — ver el aviso de [§6](#6-los-comandos) |
+| `23514` al ingerir | Un `CHECK` del *schema* que se quedó atrás — ver el aviso de [§6.1](#provision) |
 | Los tests petan con **señal 5** | Una `Application` destruida sin esperar a su cierre. Usa `TestEnvironment.withApp` |
 | Los tests fallan **la primera vez** y pasan a la segunda | Arranque compartido en carrera entre suites paralelas. Va en `TestEnvironment.bootstrap()` |
 | `PSQLError – Generic description…` | PostgresNIO esconde el detalle. Se reexpone con `String(reflecting:)` |
