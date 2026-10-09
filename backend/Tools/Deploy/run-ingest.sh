@@ -73,7 +73,7 @@ if [ "$status" -ne 0 ]; then
         -e 'on run argv' \
         -e 'display notification (item 1 of argv) with title "TFM · ingesta falló" subtitle (item 2 of argv)' \
         -e 'end run' \
-        "$why" "exit $status · detalle en ~/Library/Logs/tfm/ingest.log" \
+        "$why" "exit $status · detalle en $LOG" \
         >/dev/null 2>&1 || true
 fi
 exit "$status"

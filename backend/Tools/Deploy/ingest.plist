@@ -42,6 +42,16 @@
         </dict>
     </array>
 
+    <!-- launchd no hereda el entorno de la terminal: sin esto, run-ingest.sh
+         usaría sus rutas por defecto aunque agent.sh se instalase con otras. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TFM_HOME</key>
+        <string>__TFM_HOME__</string>
+        <key>TFM_LOG_DIR</key>
+        <string>__LOG_DIR__</string>
+    </dict>
+
     <key>WorkingDirectory</key>
     <string>__TFM_HOME__</string>
 

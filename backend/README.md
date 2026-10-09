@@ -771,12 +771,16 @@ entran).
 |---|---|
 | **Las horas** | Edita `StartCalendarInterval` en `Tools/Deploy/ingest.plist` (`Weekday`: 0 = domingo, 1 = lunes… 6 = sábado) y vuelve a pasar `agent.sh install` |
 | **El nombre del agente** en `launchd` (por defecto, `local.tfm.ingest`) | `export TFM_AGENT_LABEL=com.<tu-usuario>.tfm.ingest` antes de `agent.sh install`, y déjala puesta en tu perfil de shell: `status`, `run` y `uninstall` lo buscan por ese nombre |
+| **Dónde se instala** (por defecto, `~/Library/Application Support/tfm`) | `TFM_HOME`, puesta igual para `install.sh` y para `agent.sh install` |
+| **Dónde van los logs** (por defecto, `~/Library/Logs/tfm`) | `TFM_LOG_DIR`, antes de `agent.sh install` |
 
 > **Al cambiar el nombre, quita antes el agente viejo.** Si no, habría dos agentes y cada disparo se
 > ejecutaría dos veces. `agent.sh install` lo comprueba: si otro agente ya lanza esta ingesta, se para y
 > dice cómo quitarlo (`launchctl bootout gui/<uid>/<nombre-viejo>` y borrar su `.plist`).
 
 #### Dónde mirar
+
+Con las rutas por defecto; si cambiaste `TFM_LOG_DIR` o `TFM_HOME`, en las tuyas.
 
 | Qué | Dónde |
 |---|---|
