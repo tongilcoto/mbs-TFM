@@ -920,7 +920,7 @@ struct CalendarIngestionEndToEndTests {
         func ref(_ teamID: String, _ clubID: String, _ name: String) -> FederationTeamRef {
             FederationTeamRef(
                 federationTeamID: federationTeamIDs ? teamID : nil,
-                name: name, letter: "A",
+                name: name, letter: "A", rawName: "\(name) 'A'",
                 federationClubID: federationClubIDs ? clubID : nil,
                 crestURL: nil)
         }
@@ -944,7 +944,7 @@ struct CalendarIngestionEndToEndTests {
     static func calendarWithADatelessMatch() -> FederationCalendar {
         func ref(_ id: String, _ name: String) -> FederationTeamRef {
             FederationTeamRef(
-                federationTeamID: id, name: name, letter: "A",
+                federationTeamID: id, name: name, letter: "A", rawName: "\(name) 'A'",
                 federationClubID: "club-\(id)", crestURL: nil)
         }
         func match(
@@ -972,7 +972,7 @@ struct CalendarIngestionEndToEndTests {
     static func brokenCalendar() -> FederationCalendar {
         func ref(_ id: String, _ name: String) -> FederationTeamRef {
             FederationTeamRef(
-                federationTeamID: id, name: name, letter: "A",
+                federationTeamID: id, name: name, letter: "A", rawName: "\(name) 'A'",
                 federationClubID: "club-\(id)", crestURL: nil)
         }
         let date = Date(timeIntervalSince1970: 1_758_931_200)

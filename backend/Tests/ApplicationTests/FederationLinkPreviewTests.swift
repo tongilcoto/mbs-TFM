@@ -88,7 +88,7 @@ struct FederationLinkPreviewTests {
 
     static func teamRef(_ id: String?, _ name: String) -> FederationTeamRef {
         FederationTeamRef(
-            federationTeamID: id, name: name, letter: nil,
+            federationTeamID: id, name: name, letter: nil, rawName: name,
             federationClubID: nil, crestURL: nil)
     }
 
@@ -454,6 +454,52 @@ struct FederationLinkPreviewTests {
         // **Y llega reconocible**: el nombre en crudo es lo único que le queda a
         // la pantalla para enseñarlo.
         #expect(unidentified.first?.rawName == "C.D. EL ESCORIAL")
+    }
+
+    /// **El nombre que se enseña es el que publica la fuente, con su letra.**
+    ///
+    /// El adaptador entrega la letra **ya separada** (`name` + `letter`), que es lo
+    /// que la ingesta necesita. Pero el `/preview` no es la ingesta: es la
+    /// pantalla donde una persona reconoce a su equipo, y con dos equipos del
+    /// club en el mismo grupo —el A y el B— el nombre sin letra los enseña
+    /// iguales. Medido contra la RFFM el 2026-10-09: el grupo 4 de Primera
+    /// Cadete salía como `"CELTIC CASTILLA C.F."` y el calendario decía
+    /// `"CELTIC CASTILLA C.F. 'B'"`.
+    ///
+    /// Se usa `rawName` del adaptador, sin recomponerlo: cómo pega la letra cada
+    /// fuente es cosa suya, y el formato de Madrid no puede vivir en el núcleo.
+    @Test("rawName es el nombre de la fuente con la letra, no el nombre sin ella (D-16, D-67)")
+    func rawNameKeepsTheLetter() async throws {
+        let team = try Self.team()
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(teams: [team])
+
+        func ref(_ id: String, _ letter: String) -> FederationTeamRef {
+            FederationTeamRef(
+                federationTeamID: id, name: "CELTIC CASTILLA C.F.", letter: letter,
+                rawName: "CELTIC CASTILLA C.F. '\(letter)'",
+                federationClubID: nil, crestURL: nil)
+        }
+        let calendar = Self.calendar(rounds: [
+            FederationRound(number: 1, matches: [
+                FederationMatch(
+                    federationMatchID: "1",
+                    home: ref("819", "A"), away: ref("820", "B"),
+                    homeScore: nil, awayScore: nil,
+                    date: Self.instant("2026-09-13"), kickoff: nil,
+                    venue: nil, venueCode: nil)
+            ])
+        ])
+
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(
+                returning: calendar, readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(preview.competition.teams.map(\.rawName)
+            == ["CELTIC CASTILLA C.F. 'A'", "CELTIC CASTILLA C.F. 'B'"])
     }
 
     // ── C-C.8 · la misma regla en la primera puerta ──────────────────────────

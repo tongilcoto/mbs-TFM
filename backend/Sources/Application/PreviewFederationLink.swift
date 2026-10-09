@@ -194,8 +194,9 @@ public struct PreviewFederationLink: Sendable {
                 federationTeamID: reference.federationTeamID,
                 // **En crudo y con la letra embebida**: se enseña tal cual para
                 // que el administrador lo reconozca como lo ve en la web de la
-                // federación. Separar club y letra es de la ingesta (§3.7).
-                rawName: reference.name,
+                // federación. `name` no sirve: llega ya **sin** la letra, y con
+                // el A y el B del club en el mismo grupo los enseñaría iguales.
+                rawName: reference.rawName,
                 crestURL: reference.crestURL))
         }
         return teams

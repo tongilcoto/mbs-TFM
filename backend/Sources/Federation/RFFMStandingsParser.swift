@@ -97,6 +97,7 @@ public enum RFFMStandingsParser {
                 federationTeamID: nonEmpty(raw.codequipo),
                 name: split.name,
                 letter: split.letter,
+                rawName: split.name,
                 federationClubID: RFFMValue.federationClubID(fromCrestPath: raw.urlImg),
                 crestURL: raw.urlImg.flatMap {
                     $0.isEmpty || host.isEmpty ? nil : host + $0

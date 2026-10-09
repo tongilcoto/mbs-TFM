@@ -87,7 +87,7 @@ struct IngestCalendarTests {
         id: String?, name: String, letter: String?, club: String?
     ) -> FederationTeamRef {
         FederationTeamRef(
-            federationTeamID: id, name: name, letter: letter,
+            federationTeamID: id, name: name, letter: letter, rawName: name,
             federationClubID: club, crestURL: nil)
     }
 

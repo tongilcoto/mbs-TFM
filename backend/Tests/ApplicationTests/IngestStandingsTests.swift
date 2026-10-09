@@ -154,7 +154,7 @@ struct IngestStandingsTests {
             rows: codes.enumerated().map { index, code in
                 FederationStandingRow(
                     team: FederationTeamRef(
-                        federationTeamID: code, name: "CLUB \(code)", letter: nil,
+                        federationTeamID: code, name: "CLUB \(code)", letter: nil, rawName: "CLUB \(code)",
                         federationClubID: nil, crestURL: nil),
                     position: index + 1, played: 1,
                     won: index == 0 ? 1 : 0, drawn: 0, lost: index == 0 ? 0 : 1,
