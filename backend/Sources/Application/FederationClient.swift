@@ -460,6 +460,14 @@ public struct FederationTeamRef: Equatable, Sendable {
     /// entra en la clave única de `Team` (`D-77`), así que no es cosmética.
     public let letter: String?
 
+    /// El nombre **completo, tal y como lo publica la fuente**: con la letra
+    /// dentro y en el formato de esa fuente (la RFFM, `"CELTIC CASTILLA C.F.
+    /// 'B'"`). Es lo que se **enseña** cuando una persona tiene que reconocer su
+    /// equipo —el `/preview` del enganche (`D-67`)—, y por eso no se recompone a
+    /// partir de `name` y `letter`: cómo pega cada fuente la letra es cosa suya
+    /// ([Anexo RFFM §F.5]), y el núcleo no la conoce. Nada empareja por él.
+    public let rawName: String
+
     /// El **club**, no el equipo. `nil` cuando la fuente no lo da o el adaptador
     /// no logra sacarlo: §3.7 exige que la ingesta **tolere el fallo y degrade**,
     /// y el paso 2 de la cadena de emparejamiento existe para eso.
@@ -494,12 +502,14 @@ public struct FederationTeamRef: Equatable, Sendable {
         federationTeamID: String?,
         name: String,
         letter: String?,
+        rawName: String,
         federationClubID: String?,
         crestURL: String?
     ) {
         self.federationTeamID = federationTeamID
         self.name = name
         self.letter = letter
+        self.rawName = rawName
         self.federationClubID = federationClubID
         self.crestURL = crestURL
     }

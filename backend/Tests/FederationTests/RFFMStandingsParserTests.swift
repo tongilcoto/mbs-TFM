@@ -126,6 +126,7 @@ struct RFFMStandingsParserTests {
         #expect(top.team.federationTeamID == "3350761")
         #expect(top.team.name == "C.D.E. FOOTBALL DREAMS EXPERIENCE")
         #expect(top.team.letter == "A")
+        #expect(top.team.rawName == "C.D.E. FOOTBALL DREAMS EXPERIENCE 'A'")
         // Del nombre del fichero del escudo sale la clave de club ([Anexo RFFM §F.4]).
         #expect(top.team.federationClubID == "0011221693")
     }

@@ -124,10 +124,13 @@ struct RFFMCalendarParserTests {
         #expect(match.home.federationTeamID == "439")
         #expect(match.home.name == "C.D. GALAPAGAR")
         #expect(match.home.letter == "B")
+        // Y el nombre **tal cual llega**, que es lo que enseña el `/preview`.
+        #expect(match.home.rawName == "C.D. GALAPAGAR 'B'")
         #expect(match.home.federationClubID == "0011078749")
         #expect(match.away.federationTeamID == "10656492")
         #expect(match.away.name == "S.A.D. FOMENTO ALUMNI")
         #expect(match.away.letter == "A")
+        #expect(match.away.rawName == "S.A.D. FOMENTO ALUMNI 'A'")
         #expect(match.away.federationClubID == "0011595212")
         #expect(match.venue == "GALAPAGAR - EL CHOPO")
         #expect(match.venueCode == "1212")

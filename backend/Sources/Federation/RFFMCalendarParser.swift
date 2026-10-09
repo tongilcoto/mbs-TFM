@@ -139,6 +139,8 @@ public enum RFFMCalendarParser {
             federationTeamID: id.flatMap { $0.isEmpty ? nil : $0 },
             name: split.name,
             letter: split.letter,
+            // Entero, con la `'B'`: es lo que enseña el `/preview` (§F.5).
+            rawName: (name ?? "").trimmingCharacters(in: .whitespaces),
             federationClubID: RFFMValue.federationClubID(fromCrestPath: crestPath),
             // El host **lo publica la respuesta** (§F.15); las rutas del escudo son
             // relativas a él (§F.4).

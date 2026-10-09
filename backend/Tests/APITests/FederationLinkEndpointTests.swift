@@ -69,7 +69,7 @@ struct FederationLinkEndpointTests {
         _ id: String?, _ name: String, crest: String? = nil
     ) -> FederationTeamRef {
         FederationTeamRef(
-            federationTeamID: id, name: name, letter: nil,
+            federationTeamID: id, name: name, letter: nil, rawName: name,
             federationClubID: nil, crestURL: crest)
     }
 
