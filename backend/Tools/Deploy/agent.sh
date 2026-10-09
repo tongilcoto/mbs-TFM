@@ -8,13 +8,18 @@
 #
 # El binario lo instala `install.sh`; esto solo maneja el agente. Por eso
 # `install` se niega si no hay nada instalado.
+#
+# Variables (todas opcionales):
+#   TFM_AGENT_LABEL   nombre del agente en launchd; por defecto, local.tfm.ingest
+#   TFM_HOME          ~/Library/Application Support/tfm
+#   TFM_LOG_DIR       ~/Library/Logs/tfm
 
 set -euo pipefail
 
-LABEL="com.tongilcoto.tfm.ingest"
+LABEL="${TFM_AGENT_LABEL:-local.tfm.ingest}"
 TFM_HOME="${TFM_HOME:-$HOME/Library/Application Support/tfm}"
 LOG_DIR="${TFM_LOG_DIR:-$HOME/Library/Logs/tfm}"
-TEMPLATE="$(cd "$(dirname "$0")" && pwd)/$LABEL.plist"
+TEMPLATE="$(cd "$(dirname "$0")" && pwd)/ingest.plist"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 DOMAIN="gui/$(id -u)"
 
@@ -24,10 +29,22 @@ install)
         echo "error: no hay nada instalado en $TFM_HOME/current. Primero: Tools/Deploy/install.sh" >&2
         exit 1
     fi
+    # Otro agente que ya lanza esta misma ingesta —p. ej., el de antes de
+    # cambiar TFM_AGENT_LABEL— haría que cada disparo se ejecutase dos veces.
+    others=0
+    while IFS= read -r other; do
+        [ "$other" = "$PLIST" ] && continue
+        other_label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$other" 2>/dev/null || basename "$other" .plist)"
+        echo "error: el agente $other_label ya lanza esta ingesta; con dos, cada disparo se ejecutaría dos veces." >&2
+        echo "  Quítalo antes:  launchctl bootout $DOMAIN/$other_label; rm \"$other\"" >&2
+        others=1
+    done < <(grep -l -F "$TFM_HOME/current/run-ingest.sh" "$HOME/Library/LaunchAgents"/*.plist 2>/dev/null)
+    [ "$others" -eq 0 ] || exit 1
     mkdir -p "$LOG_DIR" "$(dirname "$PLIST")"
     # `|` como separador porque las rutas llevan `/`; y "Application Support"
     # lleva un espacio, que en un <string> de plist no necesita escaparse.
-    sed -e "s|__TFM_HOME__|$TFM_HOME|g" -e "s|__LOG_DIR__|$LOG_DIR|g" "$TEMPLATE" > "$PLIST.tmp"
+    sed -e "s|__LABEL__|$LABEL|g" -e "s|__TFM_HOME__|$TFM_HOME|g" -e "s|__LOG_DIR__|$LOG_DIR|g" \
+        "$TEMPLATE" > "$PLIST.tmp"
     plutil -lint "$PLIST.tmp" >/dev/null
     mv "$PLIST.tmp" "$PLIST"
     # `bootout` de lo que hubiera: `bootstrap` sobre un agente ya cargado falla.
@@ -73,7 +90,7 @@ run)
     echo "Disparado. Log: $LOG_DIR/ingest.log"
     ;;
 *)
-    sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
     ;;
 esac

@@ -701,19 +701,38 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
 
 <a id="ingesta-programada"></a>
 
-### 6.5 La ingesta programada — `launchd`
+### 6.5 La ingesta programada en macOS — `launchd`
 
-**`ingest` se dispara solo en el Mac**, contra esta misma base (`tfm`), los **sábados y domingos a las 23:30 y
+**Opcional.** Programa `ingest` con `launchd`, el programador de tareas de macOS, para que tu base local vaya
+acumulando datos reales sin lanzarla a mano. Por defecto se dispara los **sábados y domingos a las 23:30 y
 los lunes a las 08:00**, en hora local (`D-87`; las horas, `DL-3` del
-[Plan launchd-001](./Plan%20launchd-001.md)). Un disparo que caiga con el portátil **dormido** se ejecuta al
-despertar. Es un montaje **solo para este Mac**, para que la base vaya acumulando datos reales mientras se
-construye el *backoffice*. En producción (Fly.io) se programará de otra forma; qué se reaprovecha está en el
-§1.6 del plan.
+[Plan launchd-001](./Plan%20launchd-001.md)). Si a esa hora el Mac está **dormido**, se ejecuta al
+despertar. Es solo para macOS y para la base local; en producción (Fly.io) se programará de otra forma (§1.6
+del plan).
+
+**Antes de montarlo:**
+
+- **Postgres tiene que estar levantado a la hora de los disparos** (`docker compose up -d db`). Si no, el
+  disparo falla y avisa.
+- **El club tiene que tener equipos enganchados** ([§4.1](#enganche)). Si no, no hay nada que sincronizar y
+  cada disparo avisa de ello.
+- **Usa la base de `docker compose`** (`localhost:5434`, usuario `tfm`). `launchd` no hereda las variables de
+  tu terminal: si tu base es otra, añade las `DB_*` ([§2](#2-ejecución-y-entorno)) en `EnvironmentVariables`
+  de la plantilla `Tools/Deploy/ingest.plist`.
+
+**Montarlo son dos comandos**, desde `backend/` y en este orden, porque `agent.sh install` se niega si no hay
+nada instalado:
+
+```sh
+Tools/Deploy/install.sh          # compila e instala; ~3 min la primera vez, ~20 s después
+Tools/Deploy/agent.sh install    # da de alta el agente en launchd
+Tools/Deploy/agent.sh status     # comprobarlo: disparos programados y binario instalado
+```
 
 **Son tres piezas, y ninguna se ejecuta desde el repositorio:**
 
 ```
-~/Library/LaunchAgents/com.tongilcoto.tfm.ingest.plist      ← CUÁNDO   (lo copia agent.sh install)
+~/Library/LaunchAgents/local.tfm.ingest.plist               ← CUÁNDO   (lo escribe agent.sh install)
         │  launchd, a esa hora, ejecuta…
         ▼
 ~/Library/Application Support/tfm/current/run-ingest.sh     ← QUÉ PASA EN CADA DISPARO
@@ -730,28 +749,32 @@ construye el *backoffice*. En producción (Fly.io) se programará de otra forma;
   disparo en mitad de una prueba de mutación ejecutaría contra tu base código roto a propósito. Por eso **lo
   que no está en un commit no se instala**, y cambiar de rama no cambia lo que se ejecuta.
 
-Los dos guiones, desde `backend/`:
+**Los dos guiones**, desde `backend/`:
 
-| Para                                                                  | Comando                                                                       |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh`: instala **lo último commiteado en tu rama** (lo no commiteado no entra). `install.sh main` o `install.sh <sha>` instala otra rama o un commit concreto |
-| **Cargar** el agente en `launchd` (una vez, o si cambia el `.plist`)  | `Tools/Deploy/agent.sh install`                                               |
-| **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status`                                                |
-| **Disparar ya**, sin esperar a la hora                                | `Tools/Deploy/agent.sh run`                                                   |
-| **Quitarlo** (el binario y los logs se quedan)                        | `Tools/Deploy/agent.sh uninstall`                                             |
+| Para | Comando |
+|---|---|
+| **Instalar** o **actualizar** el binario y el envoltorio | `Tools/Deploy/install.sh`: instala **lo último que hay en un commit de tu rama** (lo no commiteado no entra). `install.sh main` o `install.sh <sha>` instala otra rama o un commit concreto |
+| **Dar de alta** el agente en `launchd` (una vez, o si cambias la plantilla) | `Tools/Deploy/agent.sh install` |
+| **Ver** el estado: disparos, último código de salida, binario, fallos | `Tools/Deploy/agent.sh status` |
+| **Disparar ya**, sin esperar a la hora | `Tools/Deploy/agent.sh run` |
+| **Quitarlo** (el binario y los logs se quedan) | `Tools/Deploy/agent.sh uninstall` |
 
-**Montarlo desde cero son dos comandos**, en este orden, porque `agent.sh install` se niega si no hay nada
-instalado:
-
-```sh
-Tools/Deploy/install.sh          # ~3 min la primera vez (release, dependencias incluidas); ~20 s después
-Tools/Deploy/agent.sh install
-```
-
-**Para que `launchd` ejecute un cambio**: commit y `Tools/Deploy/install.sh`. **No hay que recargar el
-agente**: el `.plist` apunta a `current/`, e `install.sh` mueve ese enlace de forma atómica. Guarda las cinco
+**Para que `launchd` ejecute un cambio del código**: commit y `Tools/Deploy/install.sh`. **No hay que volver
+a dar de alta el agente**: apunta a `current/`, e `install.sh` cambia ese enlace de una vez. Guarda las cinco
 últimas versiones en `releases/`, y volver a una es `install.sh <sha>` (instantáneo si sigue ahí). El guion
-**avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no entran).
+**avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no
+entran).
+
+**Para personalizarlo:**
+
+| Qué | Cómo |
+|---|---|
+| **Las horas** | Edita `StartCalendarInterval` en `Tools/Deploy/ingest.plist` (`Weekday`: 0 = domingo, 1 = lunes… 6 = sábado) y vuelve a pasar `agent.sh install` |
+| **El nombre del agente** en `launchd` (por defecto, `local.tfm.ingest`) | `export TFM_AGENT_LABEL=com.<tu-usuario>.tfm.ingest` antes de `agent.sh install`, y déjala puesta en tu perfil de shell: `status`, `run` y `uninstall` lo buscan por ese nombre |
+
+> **Al cambiar el nombre, quita antes el agente viejo.** Si no, habría dos agentes y cada disparo se
+> ejecutaría dos veces. `agent.sh install` lo comprueba: si otro agente ya lanza esta ingesta, se para y
+> dice cómo quitarlo (`launchctl bootout gui/<uid>/<nombre-viejo>` y borrar su `.plist`).
 
 #### Dónde mirar
 
@@ -773,8 +796,8 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 | *"<club>: N competición(es) sincronizada(s), M con fallo…"* | Alguna pasada falló; las demás siguieron (`D-86`) | Su fila de `ingestion_runs` dice cuál y por qué. Un `null` de la RFFM suele ser pasajero (H-61) |
 | *"no se pudo ejecutar el binario instalado"* | No hay nada en `current/` | `Tools/Deploy/install.sh` |
 
-> **Lo que no cubre:** el portátil **apagado** a la hora del disparo (se está midiendo: `L-L.4` del plan), y
-> que nadie mire las notificaciones. Un disparo **de más** no avisa ni repite trabajo: el antirrebote lo salta
+> **Lo que no cubre:** el Mac **apagado** a la hora del disparo (está por comprobar si se recupera: `L-L.4`
+> del plan), y que nadie mire las notificaciones. Un disparo **de más** no avisa ni repite trabajo: el antirrebote lo salta
 > y la línea lo dice (*"N saltada(s) por el antirrebote"*).
 
 ---
