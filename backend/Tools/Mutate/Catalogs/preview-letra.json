@@ -1,0 +1,27 @@
+{
+  "title": "El /preview enseña el nombre de la fuente con la letra (rawName del puerto)",
+  "filter": "FederationLinkPreviewTests|RFFMCalendarParserTests|RFFMStandingsParserTests",
+  "mutations": [
+    {
+      "id": "L1-preview-name",
+      "description": "el /preview vuelve a enseñar el nombre sin la letra",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "rawName: reference.rawName,",
+      "replace": "rawName: reference.name,"
+    },
+    {
+      "id": "L2-calendario-split",
+      "description": "el parser del calendario entrega el nombre sin la letra como rawName",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "rawName: (name ?? \"\").trimmingCharacters(in: .whitespaces),",
+      "replace": "rawName: split.name,"
+    },
+    {
+      "id": "L3-clasificacion-split",
+      "description": "el parser de la clasificación entrega el nombre sin la letra como rawName",
+      "file": "Sources/Federation/RFFMStandingsParser.swift",
+      "find": "rawName: (raw.nombre ?? \"\").trimmingCharacters(in: .whitespaces),",
+      "replace": "rawName: split.name,"
+    }
+  ]
+}
