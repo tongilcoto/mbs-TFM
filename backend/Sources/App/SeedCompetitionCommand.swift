@@ -158,7 +158,7 @@ public struct SeedCompetitionCommand: AsyncCommand {
 
               swift run Run ingest -t \(slug) -c \(id)
 
-              curl -s -X POST http://\(slug).localhost:8080/v1/ingestion-runs \\
+              curl -s -X POST \(APIAddress.fromEnvironment().clubURL(slug: slug))/v1/ingestion-runs \\
                 -H 'Content-Type: application/json' \\
                 -d '{"competitionIds":["\(id)"]}' | jq
             """)

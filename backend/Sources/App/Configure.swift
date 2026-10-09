@@ -70,6 +70,11 @@ public func configure(
     // saltar la guarda de §6.1 sin esperar a JWKS.
     actors: any ActorResolver = AmbientTenantActorResolver()
 ) async throws {
+    // ── Puerto ───────────────────────────────────────────────────────────────
+    // El **por defecto** de `serve`: `--port` sigue ganando. Sale de `API_PORT`
+    // porque los comandos lo leen de ahí para imprimir sus `curl`.
+    app.http.server.configuration.port = APIAddress.fromEnvironment().port
+
     // ── Datos ────────────────────────────────────────────────────────────────
     // Un solo *pool*, sin `search_path`: es el del plano de control y también
     // sobre el que la estrategia A abre las transacciones de petición. Su tamaño

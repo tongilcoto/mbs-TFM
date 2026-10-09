@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Plantilla del agente de la ingesta (Plan launchd-001, L-L.2).
-  `agent.sh install` sustituye __TFM_HOME__ y __LOG_DIR__ y la copia a
-  ~/Library/LaunchAgents/. No se carga desde aquí.
+  `agent.sh install` sustituye __LABEL__, __TFM_HOME__ y __LOG_DIR__ y la copia
+  a ~/Library/LaunchAgents/<label>.plist. No se carga desde aquí.
+
+  Para cambiar las horas: edita StartCalendarInterval y vuelve a pasar
+  `agent.sh install`.
 
   Cadencia: D-87 (lunes, sábado y domingo). Horas: DL-3, en hora local.
   Weekday: 0 = domingo, 1 = lunes, 6 = sábado.
@@ -12,7 +15,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.tongilcoto.tfm.ingest</string>
+    <string>__LABEL__</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -38,6 +41,16 @@
             <key>Minute</key><integer>0</integer>
         </dict>
     </array>
+
+    <!-- launchd no hereda el entorno de la terminal: sin esto, run-ingest.sh
+         usaría sus rutas por defecto aunque agent.sh se instalase con otras. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>TFM_HOME</key>
+        <string>__TFM_HOME__</string>
+        <key>TFM_LOG_DIR</key>
+        <string>__LOG_DIR__</string>
+    </dict>
 
     <key>WorkingDirectory</key>
     <string>__TFM_HOME__</string>
