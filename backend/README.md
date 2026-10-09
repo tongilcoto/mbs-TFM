@@ -606,33 +606,32 @@ da error sino que sincroniza otro calendario—, los **rótulos los dice la fuen
 
 ### 6.3 `seed-team` — el equipo propio, para poder engancharlo
 
-`seed-competition` da de alta la **entrada** de la ingesta; esto da de alta el **equipo del club**, que es la
-otra mitad que hace falta para probar el enganche de `D-67`. `POST /v1/teams` es del backoffice y no existe,
-así que sin esta herramienta la base de trabajo **no puede tener un equipo propio**.
+Da de alta un equipo del club. Hace falta para el enganche ([§4.1](#enganche)), que se hace sobre un equipo
+que ya existe: crear equipos desde la API (`POST /v1/teams`) le toca al *backoffice*, que todavía no está
+hecho.
 
 ```sh
 swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
 ```
 
-El equipo nace en el **único estado desde el que se puede enganchar**: propio (`opponent_club_id` nulo ⇒ se
-deriva, no hay columna `is_own`) y **sin emparejar** (`federation_team_id` nulo). Esa fila **no tiene segundo
-escritor**, que es la mitad de `D-66` sin la cual el enganche no se sostiene.
+Los parámetros están explicados en el paso 0 de [§4.1](#enganche).
 
-**Las tres que son identidad se teclean y ninguna tiene defecto honesto**: `category`, `gender` y `modality`
-forman la clave única con la letra (§3.5) y quedan congeladas tras el alta (`D-58`). Equivocar una no da un
-rótulo feo, da un **409** el día que la ingesta cree el equipo que éste tenía que haber sido. La hermana puede
-derivar la modalidad de la URL; aquí no hay URL.
+**El equipo queda como equipo del club, no como rival, y sin emparejar con la federación.** Es el único
+estado desde el que se puede enganchar.
 
-**Valida antes de escribir**, igual que `seed-competition`: si ya existe un equipo propio con esa identidad lo
-dice con su UUID en vez de dejar que reviente el `UNIQUE` — un `23505` en crudo no dice cuál de las cinco
-columnas repetiste, y la violación abortaría el ámbito entero (`25P02`). **La letra nula ES un valor**
-—«el único equipo»—, no un comodín: sin `-l` se da de alta **otro** equipo distinto del "A".
+**Edad, género y modalidad tienen que estar bien, porque después no se pueden cambiar** (`D-58`). Junto con
+la letra, son lo que identifica al equipo. Si alguno está mal, el comando no lo detecta. El error aparece
+al enganchar, como un **409**, cuando la competición no coincide con el equipo.
 
-> **Lo que no hace, y ya no es porque falte la tabla:** no escribe `TeamRegistration` (`D-68`). La tabla
-> existe desde el bloque D de F10 y quien la escribe es **la cascada del enganche** ([§4.1](#enganche)), que es la que
-> sabe en qué competición queda inscrito el equipo. Recién sembrado, el equipo existe y se puede enganchar
-> pero **no está inscrito en ninguna temporada** — el estado que el *spec* evita exigiendo `seasonId` en el
-> alta, porque es **invisible en toda pantalla que filtre por temporada**. Engancharlo lo arregla.
+**Comprueba antes de escribir.** Si el club ya tiene un equipo con esa edad, género, modalidad y letra, lo
+dice y da su UUID, en vez de crear otro o fallar con un error de base de datos difícil de leer.
+
+**Sin `-l` es un equipo distinto**: el que no lleva letra porque es el único de su edad, género y
+modalidad. No significa «cualquier letra»: `cadete` sin letra y `cadete A` son dos equipos.
+
+> **No inscribe al equipo en ninguna temporada** (`D-68`): `team_registrations` queda vacía. Lo hace el
+> enganche, porque es el que sabe en qué temporada y competición juega. Mientras tanto, el equipo existe pero
+> no aparece en las pantallas que filtran por temporada.
 
 <a id="ingest"></a>
 
