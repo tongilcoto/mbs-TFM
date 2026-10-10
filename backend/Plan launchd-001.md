@@ -325,11 +325,11 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 
 | Bloque | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **P** · Datos 2026/27 | ⏳ pendiente — **espera las URLs del desarrollador** | 0/4 | — |
-| **M** · Medir el `null` | ⏳ pendiente | 0/3 | — |
+| **P** · Datos 2026/27 | ✅ cerrado con lo que hay — **no habrá más URLs**: es una base de desarrollo, no un club (nota abajo) | 4/4 | 2026-10-10 |
+| **M** · Medir el `null` | ⏸ aplazado al despliegue (Fly.io) — nota abajo | 0/3 | 2026-10-10 |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | 🔄 en curso — falta `L-L.4` (dormir/apagar; lo hace el desarrollador) | 5/6 | 2026-10-05 |
-| **R** · El reintento | ⏳ pendiente — **espera `L-M` y `DL-4`** | 0/2 | — |
+| **L** · El agente | 🔄 en curso — `L-L.4` en marcha: portátil cerrado del sáb 10 al lun 12 de octubre; se mira el lunes (nota abajo) | 5/6 | 2026-10-05 |
+| **R** · El reintento | ⏸ aplazado al despliegue (Fly.io), con `L-M` y `DL-4` — nota abajo | 0/2 | 2026-10-10 |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
 | **D** · Documentación | 🔄 en curso — `L-D.1` entregado (README §6.3 y §6.4) | 1/3 | 2026-10-05 |
 
@@ -338,10 +338,35 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | `DL-1` · Señal | ✅ **(c)**: notificación + log + `ULTIMO_FALLO` — decidido el 2026-10-05 |
 | `DL-2` · Vacío = fallo | ✅ **sí, salvo lo saltado por el antirrebote**, con `L-L.0` — decidido el 2026-10-05 |
 | `DL-3` · Horas | ✅ **sáb y dom 23:30, lun 08:00**, hora local — decidido el 2026-10-05 |
-| `DL-4` · Reintento | **se decide tras `L-M`** |
+| `DL-4` · Reintento | **se decide tras `L-M`**, que queda aplazado al despliegue |
 | `DL-5` · Canario | propuesta (c); **sin decidir** |
 
 **Punto de partida: 591 tests.**
+
+**Bloque P, cerrado el 2026-10-10 sin más URLs, por decisión del desarrollador.** La base de trabajo es de
+**desarrollo**, no la de un club real, así que no se van a enganchar más equipos. Lo que el bloque pedía ya
+estaba hecho el 2026-10-09, aunque fuera de este plan: el club es `celtic-castilla` (no `club_atleti`, que es
+el nombre que usa el texto de arriba), su temporada vigente es **2026/27**, y tiene **dos** equipos
+enganchados: Primera Cadete (240 partidos) y Primera Alevín (156). Las pasadas de las tres clases
+(calendario, clasificación y goleadores) salieron `succeeded`. Esto es lo que cuenta como `L-P.2` a
+`L-P.4`; el respaldo de `L-P.1` no se hizo. **Con dos competiciones basta** para lo que el bloque perseguía:
+que el recorrido no salga vacío y que la base acumule semanas reales contra las que diseñar el backoffice.
+
+**`L-L.4`, en marcha.** El portátil se queda **cerrado (dormido)** desde el sábado 2026-10-10 hasta el
+lunes 12. Por el camino caen los tres disparos de `DL-3` (sáb 23:30, dom 23:30, lun 08:00). Lo esperado es
+que al despertar se ejecute **una sola** pasada, porque `launchd` junta los disparos perdidos en uno. Se
+comprueba el lunes con `launchctl print gui/$(id -u)/com.tongilcoto.tfm.ingest` (`runs` y `last exit code`),
+la línea nueva en `~/Library/Logs/tfm/ingest.log` y las filas nuevas de `ingestion_runs`. **El caso
+«apagado» no se mide**: cerrar la tapa duerme el portátil, no lo apaga. Queda como riesgo conocido.
+
+**Bloques M y R, aplazados al despliegue el 2026-10-10, por decisión del desarrollador.** En una base de
+desarrollo, perder de vez en cuando una clasificación no cuesta nada real; en producción, con clubes de
+verdad, sí. Además, la medida del `null` y la decisión de dónde reintentar (`DL-4`) son de lo que **se lleva
+entero a Fly.io** (§1.6), así que aplazarlas no tira nada. H-92 sigue abierto y pasa a ser del despliegue.
+Mientras tanto, cada disparo hace de observación gratis: una fila `failed` de clasificación o de goleadores
+en `ingestion_runs` es un `null`, con su fecha y su hora. **El hallazgo de `DL-4` sigue en pie y sin
+confirmar** (`L-M.3`): con el calendario bueno, el antirrebote salta la competición durante 6 h, así que un
+segundo disparo no reintenta la clasificación.
 
 **`L-L.1` a `L-L.3` y `L-L.5` (2026-10-05).** Tres ficheros en `Tools/Deploy/`: `run-ingest.sh` (el
 envoltorio), la plantilla `com.tongilcoto.tfm.ingest.plist` y `agent.sh install|uninstall|status|run`. **Un
