@@ -89,7 +89,7 @@ plan.
 **Consecuencia que hay que resolver, y cómo:** con A, la web está en el navegador y pide datos al servidor.
 Si los dos estuvieran en direcciones distintas, el navegador exigiría un permiso previo en cada petición
 (CORS) y una lista de clubes permitidos que mantener. **Se evita poniendo web y servidor bajo la misma
-dirección de cada club** y repartiendo por el principio del camino (`/api/…` al servidor, lo demás a la web),
+dirección de cada club** y repartiendo por el principio del camino (`/v1/…` al servidor, lo demás a la web),
 con un «recepcionista» en la puerta. Explicado en
 [CORS explicado sencillo](./lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md)
 y, con el detalle técnico, en
