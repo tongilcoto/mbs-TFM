@@ -706,8 +706,9 @@ FROM club_atleti.ingestion_runs ORDER BY finished_at DESC LIMIT 10;"
 **Opcional.** Programa `ingest` con `launchd`, el programador de tareas de macOS, para que tu base local vaya
 acumulando datos reales sin lanzarla a mano. Por defecto se dispara los **sábados y domingos a las 23:30 y
 los lunes a las 08:00**, en hora local (`D-87`; las horas, `DL-3` del
-[Plan launchd-001](./Plan%20launchd-001.md)). Si a esa hora el Mac está **dormido**, se ejecuta al
-despertar. Es para la base local; en producción (Fly.io) se programará de otra forma (§1.6 del plan).
+[Plan launchd-001](./Plan%20launchd-001.md)). Si a esa hora el Mac está **dormido**, macOS lo lanza en
+uno de sus despertares en segundo plano, que no tienen red; el guion **espera a que vuelva la red** (hasta
+12 h) y entonces lanza la ingesta. Si en 12 h no hay red, avisa y no lanza nada. Es para la base local; en producción (Fly.io) se programará de otra forma (§1.6 del plan).
 
 > **Solo macOS.** Como es una utilidad de desarrollo, solo se ha preparado para macOS: `launchd` no existe en
 > Linux, y los guiones usan herramientas propias de macOS (`launchctl`, `plutil`, el `mv` de BSD y las
