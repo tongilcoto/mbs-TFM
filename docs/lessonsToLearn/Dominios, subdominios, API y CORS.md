@@ -3,6 +3,7 @@
 > Decisión de reparto de nombres públicos para el tier gestionado: un subdominio por club,
 > un solo backend, y por qué el backoffice y la API deben compartir origen.
 > Relacionado: [[Multi-tenancy por schema - search_path, SET LOCAL y pooling]].
+> Versión en lenguaje llano del punto 2: [[CORS explicado sencillo - la web y la API en la misma dirección]].
 
 ---
 
