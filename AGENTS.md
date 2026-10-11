@@ -24,7 +24,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   A-8 a A-15, hallazgos H-51 a H-100, y una puerta por cada cosa que desbloquea. **Cerrada el
   2026-10-04**, con las tres puertas abiertas.
 - [backend/Plan launchd-001.md](./backend/Plan%20launchd-001.md) — **la ingesta corriendo sola en el Mac**,
-  con `launchd` y contra la base local de desarrollo. **Hecho lo que importa** (2026-10-11): el agente dispara
+  con `launchd` y contra la base local de desarrollo. **Cerrado el 2026-10-11**: el agente dispara
   sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
 

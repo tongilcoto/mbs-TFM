@@ -10,6 +10,10 @@
 > como `L-X.n` (bloque X, paso n), y las decisiones pendientes como `DL-n`.
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin renglón en §5 no está hecho.
+>
+> **Cerrado el 2026-10-11**, con **604 tests**. Entregados P, I, L y D; M y R, aplazados al despliegue; C, sin
+> trabajo por `DL-5`. Queda una sola cosa, que no es trabajo sino mirar: confirmar `L-L.6` el primer fin de
+> semana con la tapa cerrada (nota en §5).
 
 ---
 
@@ -315,7 +319,8 @@ fusionado. Pero eso impide probar este mismo plan antes de fusionarlo. Por eso e
 
 ### Bloque C · El canario programado — **condicionado a `DL-5`**
 
-Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes de empezar.
+Cerrado sin trabajo: `DL-5` se decidió (c) el 2026-10-11. Si se reabre, sus pasos se escriben aquí antes de
+empezar.
 
 ### Bloque D · Documentación y cierre
 
@@ -334,10 +339,10 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **P** · Datos 2026/27 | ✅ cerrado con lo que hay — **no habrá más URLs**: es una base de desarrollo, no un club (nota abajo) | 4/4 | 2026-10-10 |
 | **M** · Medir el `null` | ⏸ aplazado al despliegue (Fly.io) — nota abajo | 0/3 | 2026-10-10 |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | 🔄 en curso — `L-L.4` medido (dormido: falla sin red); `L-L.6` entregado, falta verlo con la tapa cerrada (nota abajo) | 6/7 | 2026-10-11 |
+| **L** · El agente | ✅ entregado — `L-L.4` medido (dormido: lanza sin red) y `L-L.6` instalado; **queda confirmarlo con la tapa cerrada** (nota abajo) | 7/7 | 2026-10-11 |
 | **R** · El reintento | ⏸ aplazado al despliegue (Fly.io), con `L-M` y `DL-4` — nota abajo | 0/2 | 2026-10-10 |
-| **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
-| **D** · Documentación | 🔄 en curso — `L-D.1` (README §6.3 y §6.4) y `L-D.3` (`AGENTS.md`) entregados; falta `L-D.2` (auditoría) | 2/3 | 2026-10-11 |
+| **C** · Canario programado | ✅ cerrado sin trabajo — `DL-5` = (c) | — | 2026-10-11 |
+| **D** · Documentación | ✅ entregado — README §6.3–§6.5, auditoría 002 (H-59 y H-85 cerrados, H-92 al despliegue) y `AGENTS.md` | 3/3 | 2026-10-11 |
 
 | Decisión | Estado |
 |---|---|
@@ -345,7 +350,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | `DL-2` · Vacío = fallo | ✅ **sí, salvo lo saltado por el antirrebote**, con `L-L.0` — decidido el 2026-10-05 |
 | `DL-3` · Horas | ✅ **sáb y dom 23:30, lun 08:00**, hora local — decidido el 2026-10-05 |
 | `DL-4` · Reintento | **se decide tras `L-M`**, que queda aplazado al despliegue |
-| `DL-5` · Canario | propuesta (c); **sin decidir** |
+| `DL-5` · Canario | ✅ **(c)**: no se programa; cada disparo de `ingest` ya hace de canario — decidido el 2026-10-11 |
 
 **Punto de partida: 591 tests.**
 
