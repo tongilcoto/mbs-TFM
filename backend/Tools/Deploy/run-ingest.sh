@@ -5,8 +5,19 @@
 # binario, a `$TFM_HOME/releases/<sha>/`, por el mismo motivo que el binario
 # (H-85): un cambio de rama no puede cambiar lo que dispara `launchd`.
 #
-# Hace tres cosas y ninguna más:
+# Hace cuatro cosas y ninguna más:
 #
+#   0. Esperar a que haya red (L-L.6). Con el portátil cerrado, `launchd` no
+#      espera a que alguien lo abra: lanza el disparo en uno de los despertares
+#      en segundo plano que macOS hace cada ~15 min (DarkWake), que duran unos
+#      segundos y **no tienen red**. Medido en L-L.4: el disparo del sábado salió
+#      a las 23:42 con la tapa cerrada y las dos competiciones fallaron con
+#      `Network is down`; al abrir el portátil no se repitió, porque para
+#      `launchd` ya estaba hecho. Así que la espera va aquí: el guion se queda
+#      esperando dentro del mismo disparo y la ingesta corre cuando vuelve la red.
+#      El plazo se mide con el reloj de pared (`date +%s`), que sí avanza
+#      mientras el Mac duerme; `sleep` no, y con él solo el plazo podría
+#      alargarse días.
 #   1. `Run ingest --fail-if-empty`, con los argumentos que se le pasen detrás.
 #      El flag convierte el recorrido vacío en `exit 1` (DL-2), así que **lo que
 #      decide si hay aviso es solo el código de salida**; la salida se lee
@@ -21,6 +32,8 @@
 # Variables (todas opcionales):
 #   TFM_HOME      ~/Library/Application Support/tfm
 #   TFM_LOG_DIR   ~/Library/Logs/tfm
+#   TFM_NET_WAIT_HOURS    plazo para que vuelva la red (12); si vence, aviso y exit 75
+#   TFM_NET_POLL_SECONDS  cada cuánto se vuelve a mirar (60)
 #   DB_*          las de `DatabaseConfig.swift`; por defecto, el Postgres de docker compose
 
 set -uo pipefail
@@ -43,7 +56,9 @@ stamp() {
 # forma al aviso**: lo que decide si hay aviso es el código de salida.
 reason() {
     local status="$1" output="$2" line
-    if [ "$status" -eq 127 ] || [ "$status" -eq 126 ]; then
+    if [ "$status" -eq 75 ]; then
+        echo "sin red durante ${NET_WAIT_HOURS} h: no se lanzó la ingesta"
+    elif [ "$status" -eq 127 ] || [ "$status" -eq 126 ]; then
         echo "no se pudo ejecutar el binario instalado: ¿falta Tools/Deploy/install.sh?"
     elif grep -q "connectionError" <<< "$output"; then
         echo "la base no responde: ¿está Docker parado?"
@@ -56,9 +71,43 @@ reason() {
     fi
 }
 
+NET_WAIT_HOURS="${TFM_NET_WAIT_HOURS:-12}"
+NET_POLL_SECONDS="${TFM_NET_POLL_SECONDS:-60}"
+
+# "Hay red" = hay ruta por defecto. No pregunta a la federación a propósito: el
+# host es conocimiento del adaptador (D-97), y si la fuente falla, eso lo
+# registra la pasada en su fila; aquí solo se evita lanzarla sin red.
+has_network() {
+    route -n get default >/dev/null 2>&1
+}
+
+# Devuelve 0 en cuanto hay red y 1 si vence el plazo.
+wait_for_network() {
+    has_network && return 0
+    local start deadline
+    start="$(date +%s)"
+    deadline=$(( start + NET_WAIT_HOURS * 3600 ))
+    echo "── sin red: espero hasta ${NET_WAIT_HOURS} h, mirando cada ${NET_POLL_SECONDS} s" | stamp >> "$LOG"
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        sleep "$NET_POLL_SECONDS"
+        if has_network; then
+            echo "── red de vuelta tras $(( ($(date +%s) - start) / 60 )) min" | stamp >> "$LOG"
+            return 0
+        fi
+    done
+    return 1
+}
+
 echo "── disparo · ingest --fail-if-empty $*" | stamp >> "$LOG"
-output="$("$TFM_HOME/current/Run" ingest --fail-if-empty "$@" 2>&1)"
-status=$?
+if wait_for_network; then
+    output="$("$TFM_HOME/current/Run" ingest --fail-if-empty "$@" 2>&1)"
+    status=$?
+else
+    # 75 = EX_TEMPFAIL: no se intentó nada, así que no hay filas en
+    # `ingestion_runs` y la competición entra entera en el disparo siguiente.
+    output=""
+    status=75
+fi
 [ -n "$output" ] && printf '%s\n' "$output" | stamp >> "$LOG"
 echo "── fin · exit $status" | stamp >> "$LOG"
 

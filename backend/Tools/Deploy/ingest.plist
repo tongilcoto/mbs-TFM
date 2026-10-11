@@ -10,7 +10,9 @@
 
   Cadencia: D-87 (lunes, sábado y domingo). Horas: DL-3, en hora local.
   Weekday: 0 = domingo, 1 = lunes, 6 = sábado.
-  Un disparo con el portátil dormido se ejecuta al despertar (§1.1 del plan).
+  Un disparo con el portátil dormido NO espera a que se abra: launchd lo lanza
+  en un despertar en segundo plano, sin red. Por eso run-ingest.sh espera a la
+  red antes de lanzar la ingesta (§1.1 y L-L.6 del plan).
 -->
 <plist version="1.0">
 <dict>

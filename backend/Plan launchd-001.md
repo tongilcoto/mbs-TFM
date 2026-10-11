@@ -46,6 +46,11 @@ ejecuta **al despertar**. Con la clasificación irrecuperable, esa diferencia es
 
 > **Lo que eso NO cubre, y hay que medirlo en vez de suponerlo (`L-L.4`):** el portátil **apagado** a la hora
 > del disparo. La documentación de `launchd` solo habla de *dormido*.
+>
+> **Y «al despertar» resultó ser verdad a medias (medido en `L-L.4`, 2026-10-11).** `launchd` no espera a que
+> alguien abra el portátil: lanza el disparo en el primer **despertar en segundo plano** (*DarkWake*, que macOS
+> hace cada ~15 min con la tapa cerrada), que dura unos segundos y **no tiene red**. Al abrir el portátil no
+> lo repite, porque para él ya está hecho. Lo arregla `L-L.6`: el envoltorio espera a la red.
 
 ### 1.2 La cadencia: lunes, sábado y domingo — `D-87`
 
@@ -297,6 +302,7 @@ fusionado. Pero eso impide probar este mismo plan antes de fusionarlo. Por eso e
 | `L-L.3` | Disparo forzado: `launchctl kickstart gui/$(id -u)/com.tongilcoto.tfm.ingest` | Línea nueva en el log con `<sha>`, filas en `ingestion_runs` y `last exit code` en `launchctl print` |
 | `L-L.4` | **Dormido y apagado**: programar un disparo de prueba a +5 min, dormir el portátil, despertarlo después; repetir **apagándolo** | Dormido: el disparo aparece al despertar (§1.1). Apagado: **se escribe lo que pase**, y si no se ejecuta, va a §7 como riesgo conocido para los fines de semana |
 | `L-L.5` | Desinstalar y reinstalar limpio (`bootout`, borrar, `install.sh`) | `launchctl print` no lo encuentra tras el `bootout`, y vuelve tras la reinstalación |
+| `L-L.6` | **Esperar a la red** (añadido tras `L-L.4`). Antes de lanzar `ingest`, el envoltorio mira si hay ruta por defecto (`route -n get default`); si no la hay, vuelve a mirar cada 60 s durante un plazo de 12 h **de reloj de pared**. Si vence, no lanza nada, avisa con la señal de `DL-1` y sale con `75` | Con dobles de `Run` y `route` en el *scratch*: red presente → sin espera; la red vuelve al tercer intento → espera y lanza; plazo vencido → `exit 75`, aviso y `ULTIMO_FALLO`. **La prueba real es el siguiente fin de semana con la tapa cerrada** |
 
 ### Bloque R · El reintento — H-92
 
@@ -328,7 +334,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **P** · Datos 2026/27 | ✅ cerrado con lo que hay — **no habrá más URLs**: es una base de desarrollo, no un club (nota abajo) | 4/4 | 2026-10-10 |
 | **M** · Medir el `null` | ⏸ aplazado al despliegue (Fly.io) — nota abajo | 0/3 | 2026-10-10 |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | 🔄 en curso — `L-L.4` en marcha: portátil cerrado del sáb 10 al lun 12 de octubre; se mira el lunes (nota abajo) | 5/6 | 2026-10-05 |
+| **L** · El agente | 🔄 en curso — `L-L.4` medido (dormido: falla sin red); `L-L.6` entregado, falta verlo con la tapa cerrada (nota abajo) | 6/7 | 2026-10-11 |
 | **R** · El reintento | ⏸ aplazado al despliegue (Fly.io), con `L-M` y `DL-4` — nota abajo | 0/2 | 2026-10-10 |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
 | **D** · Documentación | 🔄 en curso — `L-D.1` entregado (README §6.3 y §6.4) | 1/3 | 2026-10-05 |
@@ -352,12 +358,29 @@ enganchados: Primera Cadete (240 partidos) y Primera Alevín (156). Las pasadas 
 `L-P.4`; el respaldo de `L-P.1` no se hizo. **Con dos competiciones basta** para lo que el bloque perseguía:
 que el recorrido no salga vacío y que la base acumule semanas reales contra las que diseñar el backoffice.
 
-**`L-L.4`, en marcha.** El portátil se queda **cerrado (dormido)** desde el sábado 2026-10-10 hasta el
-lunes 12. Por el camino caen los tres disparos de `DL-3` (sáb 23:30, dom 23:30, lun 08:00). Lo esperado es
-que al despertar se ejecute **una sola** pasada, porque `launchd` junta los disparos perdidos en uno. Se
-comprueba el lunes con `launchctl print gui/$(id -u)/com.tongilcoto.tfm.ingest` (`runs` y `last exit code`),
-la línea nueva en `~/Library/Logs/tfm/ingest.log` y las filas nuevas de `ingestion_runs`. **El caso
-«apagado» no se mide**: cerrar la tapa duerme el portátil, no lo apaga. Queda como riesgo conocido.
+**`L-L.4`, medido el 2026-10-11, y lo esperado no pasó.** El portátil quedó cerrado (dormido) desde el
+sábado 10 por la noche. Lo esperado era que el disparo del sábado a las 23:30 se ejecutara **al abrirlo**. Lo
+que pasó, leído en `ingest.log`, `ingestion_runs` y `pmset -g log`:
+
+| Hora | Qué |
+|---|---|
+| sáb 23:42:29 | Despertar en segundo plano (*DarkWake*, 2 s). `launchd` lanza el disparo **con la tapa cerrada** |
+| 23:42 → 00:30 | La ingesta avanza solo en esos despertares de segundos, **sin red**. Las dos competiciones, `failed` con `transportFailure … Network is down` |
+| dom 00:30 | `exit 1`. La notificación y `ULTIMO_FALLO`, como manda `DL-1` |
+| dom 22:59 | Se abre el portátil. **No se ejecuta nada**: el disparo del sábado ya estaba hecho |
+
+Lo que sí se portó bien: la base no quedó a medias (`D-83`), cada fallo dejó su fila (`D-85`) y la señal
+llegó. **El caso «apagado» no se mide**: cerrar la tapa duerme el portátil, no lo apaga. Queda como riesgo
+conocido. El arreglo es `L-L.6`; la alternativa (`pmset -a powernap 0`) se descartó porque depende de la
+configuración de cada Mac y no garantiza que no haya otros despertares sin red.
+
+**`L-L.6`, entregado el 2026-10-11.** El envoltorio espera a que haya ruta por defecto antes de lanzar
+`ingest`, con un plazo de 12 h medido con el reloj de pared, que avanza mientras el Mac duerme (`sleep` no).
+Mientras espera, el disparo sigue en marcha, así que `launchd` no lanza otro encima. Si el plazo vence: sin
+filas en `ingestion_runs` (no se intentó nada), aviso con su motivo y `exit 75` (`EX_TEMPFAIL`). Probado con
+dobles de `Run` y `route`; **lo que no está probado es que `route -n get default` falle de verdad en un
+*DarkWake***, y eso solo lo dice el próximo fin de semana con la tapa cerrada. Para que el agente use el
+envoltorio nuevo hay que reinstalar desde un commit con él (`agent.sh install`).
 
 **Bloques M y R, aplazados al despliegue el 2026-10-10, por decisión del desarrollador.** En una base de
 desarrollo, perder de vez en cuando una clasificación no cuesta nada real; en producción, con clubes de
