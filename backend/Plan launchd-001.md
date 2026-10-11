@@ -337,7 +337,7 @@ Vacío mientras `DL-5` sea (c). Si se reabre, sus pasos se escriben aquí antes 
 | **L** · El agente | 🔄 en curso — `L-L.4` medido (dormido: falla sin red); `L-L.6` entregado, falta verlo con la tapa cerrada (nota abajo) | 6/7 | 2026-10-11 |
 | **R** · El reintento | ⏸ aplazado al despliegue (Fly.io), con `L-M` y `DL-4` — nota abajo | 0/2 | 2026-10-10 |
 | **C** · Canario programado | ⏸ condicionado a `DL-5` | — | — |
-| **D** · Documentación | 🔄 en curso — `L-D.1` entregado (README §6.3 y §6.4) | 1/3 | 2026-10-05 |
+| **D** · Documentación | 🔄 en curso — `L-D.1` (README §6.3 y §6.4) y `L-D.3` (`AGENTS.md`) entregados; falta `L-D.2` (auditoría) | 2/3 | 2026-10-11 |
 
 | Decisión | Estado |
 |---|---|
