@@ -1,6 +1,6 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera) y §4 (los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, y lo que le falta al servidor). El resto, pendiente.
+- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera) y §4 (los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, y lo que le falta al servidor) y §5 (los formularios: las reglas del catálogo comprobadas con Ajv, todas a la vez; solo se envía lo cambiado; aviso al salir sin guardar). El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -294,7 +294,8 @@ curl -s -X PATCH -H 'Content-Type: application/json' -d '{"name":""}' \
 #### 4.1 La web decide por el `code`, nunca por el texto
 
 En `src/api/errors.ts` hay **una tabla: a cada código, su mensaje en español**. La web nunca mira `title`
-ni `detail` para decidir qué hacer. El número (`status`) solo se usa como red cuando llega un código que la
+ni `detail` para decidir qué hacer, **con una sola excepción**: el campo al que pertenece un error de valor
+(§4.5 *a*). El número (`status`) solo se usa como red cuando llega un código que la
 tabla no tiene, para elegir un mensaje genérico de su familia: «no se ha encontrado» (404), «no se ha podido
 guardar» (409, 422), «error del servidor» (5xx).
 
@@ -302,7 +303,7 @@ guardar» (409, 422), «error del servidor» (5xx).
 
 Los textos del servidor están pensados para quien desarrolla, no para quien usa la web. Por eso:
 
-- **`detail` no se enseña nunca.** Es una explicación técnica (`"name: no puede estar vacío"`,
+- **`detail` no se enseña nunca**, salvo el motivo de un error de valor (§4.5 *a*). Es una explicación técnica (`"name: no puede estar vacío"`,
   `"host=… claim=…"`). En desarrollo, en un 500 lleva además el diagnóstico interno; en producción el
   servidor ya lo omite (`exposesInternalDetail`), pero la regla de la web no depende de eso.
 - **Sí se enseña el `code`, en pequeño, al final del mensaje** («Código: TEAM_NOT_FOUND»), para que quien
@@ -335,10 +336,32 @@ El botón *Reintentar* aparece **solo cuando el fallo puede ser pasajero**:
 
 #### 4.5 Lo que le falta al servidor
 
-**a. Decir a qué campo pertenece el error.** Hoy el campo viene metido en el texto de `detail`
-(`"name: no puede estar vacío"`). Sacarlo de ahí sería frágil: si cambia la frase, el mensaje deja de salir
-junto al campo sin que nada falle. **Propuesta:** un campo opcional `field` en el error del catálogo, con el
-nombre del campo. **Mientras no exista**, esos errores salen en el aviso de arriba del formulario.
+**a. A qué campo pertenece el error: se lee del texto, con un formato fijo.** En los dos errores de valor
+—`INVALID_VALUE` (422) y `NOT_EDITABLE_AFTER_SYNC` (409)— el servidor escribe `detail` siempre igual:
+
+```
+<campo>: <motivo>          p. ej.  name: no puede estar vacío
+```
+
+**Decisión: la web lee ese formato tal cual**, sin esperar a un campo `field` en el error. Separa por el
+primer `": "`: lo de delante es el campo y lo de detrás el motivo, que **sí** se enseña junto a ese campo
+porque el servidor lo escribe en español y para el usuario. Si el texto no sigue el formato, o el campo no
+está en el formulario, el error sale en el aviso de arriba (§4.3).
+
+- **Es un acuerdo publicado, no un truco.** El catálogo ya dice que `detail` «nombra el campo, para que la
+  UI pueda señalarlo» (`openapi.yaml`, respuesta 422 de `PATCH /club`), pero no dice el formato exacto.
+  **Pendiente con la portada:** escribir en el catálogo el formato `<campo>: <motivo>`, para que la web
+  dependa de algo escrito.
+- **Lo vigila una prueba**: un escenario BDD que provoca un error de valor y comprueba que sale junto a su
+  campo. Si el servidor cambia el formato, ese escenario falla.
+- **Por qué no un campo `field` ahora:** el servidor comprueba **un campo cada vez** (el Dominio se para en
+  el primer error). Lo que de verdad hace falta es que devuelva **todos los errores a la vez** (*c*), y con
+  ese cambio se decidirá cómo viaja el campo. Añadir `field` antes sería tocar el error dos veces.
+
+**c. Todos los errores a la vez.** Hoy el servidor avisa del primer campo mal y se para. En la web, las
+reglas que están escritas en el catálogo ya salen todas a la vez (§5.1); las que solo conoce el Dominio
+(por ejemplo, un nombre que solo tiene espacios), de una en una. **Pendiente del backend**: devolver la
+lista entera de errores de valor. Ese cambio es el momento de revisar la *a*.
 
 **b. La lista de códigos, escrita.** Hoy `code` es un texto libre en el catálogo (`openapi.yaml`, esquema
 `Problem`), así que **nada comprueba que la web tenga un mensaje para cada código**. Se resuelve en dos pasos:
@@ -348,14 +371,85 @@ nombre del campo. **Mientras no exista**, esos errores salen en el aviso de arri
 | **1. La lista en el catálogo** | `openapi.yaml`: `code` pasa a tener la lista cerrada de códigos (`enum`). Ni una línea de Swift | **En la web, la garantía completa**: la tabla de `errors.ts` se declara como «un mensaje para cada código de la lista», y si falta uno **no compila**. En el servidor, a medias: las pruebas que leen un error con los tipos generados fallan ante un código que no está en la lista, pero solo para los errores que esas pruebas provocan | Con la rebanada de la portada |
 | **2. El servidor usa la lista** | `ProblemMiddleware.swift`: su `Problem`, escrito a mano con `code: String`, pasa a usar la lista generada. Unas 30 líneas, en ese fichero | La garantía completa también en el servidor: un código que no está en la lista no compila | **Pendiente del backend**, sin prisa y en su propio commit |
 
-Los dos, *a* y *b*, se diseñan en el catálogo y en el LLD del backend (§5.4), no aquí.
+Los tres, *a*, *b* y *c*, se diseñan en el catálogo y en el LLD del backend (§5.4), no aquí.
 
 ### 5. Los formularios
 
-*Qué comprueba la web solo por comodidad y qué deja al servidor, que es quien manda. Y qué pasa si sales de
-un formulario con cambios sin guardar.*
+#### 5.1 Antes de enviar, la web comprueba las reglas del catálogo, todas a la vez
 
-> Pendiente.
+**Lo que más molesta de un formulario es corregir los errores de uno en uno.** Así que, al pulsar *Guardar*,
+la web comprueba lo rellenado **antes de enviarlo** y marca **todos** los campos que fallan a la vez, cada
+uno junto a su campo.
+
+**Las reglas no se escriben en la web: se leen del catálogo.** El catálogo es **OpenAPI 3.1**, y en esa
+versión la descripción de cada dato está escrita en un formato estándar de reglas (*JSON Schema*):
+obligatorio (`required`), longitud mínima (`minLength`), valor mínimo (`minimum`), formato (`format`), lista
+cerrada (`enum`)… Un comprobador ya hecho, **Ajv**, lee esas reglas **tal cual**, sin traducirlas ni
+generar código, y devuelve la lista de fallos con el campo de cada uno:
+
+```
+                          openapi.yaml
+             /                  |                       \
+   servidor (Swift)    web: la forma de los datos     web: las reglas de cada campo
+                       (schema.d.ts, §1.1)             (Ajv las lee de la misma descripción)
+```
+
+Por ejemplo, para el alta de equipo se comprueba lo rellenado contra `CreateTeamRequest`, y sale:
+
+```
+letter   → minLength   (si se rellena, no puede quedar vacía)
+seasonId → required    (falta)
+```
+
+**Lo que se escribe a mano es solo el texto de los mensajes, por tipo de regla y no por campo**: «Este campo
+es obligatorio», «No puede estar vacío», «Como mínimo {n}», «Como máximo {n}», «El formato no es válido»,
+«Elige un valor de la lista». Una tabla de unas seis entradas.
+
+**Lo que sigue comprobando solo el servidor**, y llega como error del §4: lo que el catálogo no puede
+describir. Que ya exista un equipo igual, que la temporada no exista, o un nombre que solo tiene espacios
+(el catálogo dice «mínimo un carácter» y el espacio lo es; el Dominio lo rechaza igualmente). Esos llegan
+**de uno en uno** hasta que el servidor sepa devolverlos todos (§4.5 *c*). **El servidor sigue siendo quien
+manda**: la comprobación de la web solo ahorra un viaje y deja ver todos los fallos juntos.
+
+**Amplía la decisión 3 del ADR**, que generaba del catálogo «solo las descripciones de los datos». La idea
+es la misma —una sola fuente de verdad, sin copias a mano— y sin código generado nuevo: Ajv usa la
+descripción que ya está en el catálogo.
+
+#### 5.2 Cada dato con la pieza que le corresponde
+
+Los valores imposibles **no se pueden ni escribir**: un selector para las listas cerradas (género,
+modalidad, categoría), un calendario para las fechas y un campo numérico para los números. **Los campos
+obligatorios se marcan con un asterisco**, según el `required` del catálogo.
+
+#### 5.3 Al guardar un cambio, solo se envía lo que ha cambiado
+
+El catálogo dice que, al modificar, **un campo que no se envía no se toca** y **un campo enviado vacío
+(`null`) se borra**. Por eso:
+
+- La web envía **solo los campos que el usuario ha cambiado**.
+- **Vaciar un campo opcional lo borra**, a propósito.
+- **Un campo obligatorio no se puede vaciar**: lo impide la comprobación del §5.1.
+
+#### 5.4 Al guardar bien
+
+Sale un **aviso breve, «Guardado»**, y la pantalla vuelve a pedir sus datos (§3.3). **Adónde se va después
+de un alta** lo dice la ficha de cada pantalla (parte E).
+
+#### 5.5 Salir con cambios sin guardar
+
+Si el usuario intenta salir de un formulario con cambios sin guardar, la web **pregunta antes**: «Tienes
+cambios sin guardar. ¿Salir sin guardar?».
+
+- **Moviéndose dentro de la web**, el aviso es de la web y con ese texto.
+- **Cerrando la pestaña o recargando**, el aviso lo pone el propio navegador, con su texto, que no se puede
+  cambiar.
+- **No se guarda un borrador en el navegador**: lo prohíbe el §2.3.
+
+#### 5.6 Límite conocido: dos personas editando lo mismo
+
+**Si dos personas editan lo mismo a la vez, se queda lo último que se guardó**, sin aviso. El servidor no
+detecta ese choque. **Se acepta**: los usuarios son pocos y rara vez tocarán lo mismo a la vez. Si algún día
+molesta, se resuelve en el servidor, no en la web.
 
 ### 6. El mapa de pantallas
 

@@ -179,6 +179,10 @@ se generan al compilar, y `Run serve` ya no mira el catálogo.
    servidor tiene activadas** (hoy, 6). Cada pantalla usa solo las que su rebanada activó; si usara otra, el
    servidor respondería «no encontrado». Eso lo controla el plan de rebanadas, no esta decisión.
 
+**Ampliada en el [LLD §5.1](./Backoffice%20LLD-001.md):** además de la forma de los datos, la web usa las
+**reglas de cada campo** del catálogo (obligatorio, longitud, mínimo…) para avisar de todos los fallos a la
+vez antes de enviar. Las lee **Ajv** directamente del catálogo, sin generar código nuevo.
+
 ## 6. Decisión 4 — El aspecto visual
 
 **Qué se decide:** de dónde salen los botones, tablas, formularios, calendarios y menús, y cómo se les da un
