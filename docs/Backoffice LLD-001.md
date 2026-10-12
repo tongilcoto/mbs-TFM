@@ -96,13 +96,14 @@ contesta «no encontrado». Es la pista de que alguien se saltó el recepcionist
 
 **Cómo se configura en cada sitio:**
 
-- **En la web** (`src/api/client.ts`): la pieza de peticiones lleva `/api` como comienzo fijo, y cada
-  petición se escribe con el camino del catálogo, que empieza por `/v1`. Así el editor sigue comprobando
-  cada camino contra el catálogo.
+- **En la web** (`src/api/client.ts`): la pieza de peticiones lleva `/api/v1` como comienzo fijo, y cada
+  petición se escribe con el camino tal como está en el catálogo, que **no** lleva el `/v1`: el catálogo lo
+  pone en su dirección base (`servers`, `https://{tenant}.{host}/v1`) y sus caminos son `/teams`, `/club`…
+  Así el editor sigue comprobando cada camino contra el catálogo.
 
   ```ts
-  const client = createClient<paths>({ baseUrl: '/api' })
-  client.GET('/v1/teams')   // el navegador pide /api/v1/teams
+  const client = createClient<paths>({ baseUrl: '/api/v1' })
+  client.GET('/teams')   // el navegador pide /api/v1/teams
   ```
 
 - **En local** (`vite.config.ts`):
