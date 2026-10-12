@@ -1,6 +1,6 @@
 # ADR-Backoffice-001 · Cómo se construye la web del backoffice
 
-- **Estado:** En curso. Decididas 2 de 6 (ver §2).
+- **Estado:** En curso. Decididas 3 de 6 (ver §2).
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [Project HLD-001](./Project%20HLD-001.md) §2.3 ·
@@ -58,8 +58,8 @@ plan.
 |---|---|---|---|
 | 1 | Qué tipo de web | ✅ Decidido (2026-10-12) | **Se descarga entera al navegador y después solo pide datos** al servidor que ya existe |
 | 2 | Con qué herramienta se construye | ✅ Decidido (2026-10-12) | **Vue, escrito en TypeScript** |
-| 3 | Cómo sabe la web qué datos manda y recibe | ⏳ En discusión | — |
-| 4 | El aspecto visual | ⏳ Pendiente | — |
+| 3 | Cómo sabe la web qué datos manda y recibe | ✅ Decidido (2026-10-12) | **Se generan del catálogo `openapi.yaml` solo las descripciones de los datos**; las peticiones, con una pieza pequeña que las usa |
+| 4 | El aspecto visual | ⏳ En discusión | — |
 | 5 | Dónde se publica y cuánto cuesta | ⏳ Pendiente | — |
 | 6 | Cómo se prueba | ⏳ Pendiente | — |
 
@@ -130,7 +130,48 @@ JavaScript con «etiquetas» que avisan de los errores antes de ejecutar, como h
 
 ## 5. Decisión 3 — Cómo sabe la web qué datos manda y recibe
 
-*En discusión.*
+**Qué se decide:** cómo conoce la web la forma de cada dato (un club tiene `id`, `name`, `shortName` y
+`slug`) y de cada petición (a qué dirección va y qué lleva). Si la web cree que un campo se llama `nombre` y
+el servidor manda `name`, la pantalla sale vacía, y eso se descubre **usándola**, delante del usuario.
+
+En el servidor esto ya está resuelto: el catálogo `openapi.yaml` es la fuente de verdad (`D-65`) y de él se
+generan las descripciones en Swift. Si el catálogo cambia y el código no, no compila.
+
+| Opción | Cómo funciona | A favor | En contra |
+|---|---|---|---|
+| **A. A mano** | Se escribe en TypeScript cómo es cada dato y cada petición, copiándolo del catálogo | Nada que instalar | Dos copias de lo mismo que se separan con el tiempo; un cambio del servidor se descubre usando la web |
+| **B. Generar solo las descripciones** | Una herramienta lee el catálogo y escribe las descripciones de todos los datos; una pieza pequeña hace las peticiones usándolas (p. ej. `openapi-typescript` + `openapi-fetch`) | Una sola fuente de verdad, como en el servidor. Los errores salen **antes de ejecutar**, en el editor. Lo generado es corto y legible | Hay que regenerar cuando cambia el catálogo (se hace solo, al arrancar o al fabricar la web) |
+| **C. Generar un cliente completo** | Una herramienta escribe además una función por operación, con su lógica de llamada | Todavía menos código a mano | Mucho código generado, difícil de leer y de revisar; más «magia» entre la web y el servidor |
+
+**Decisión: B.**
+
+**Razones:**
+
+- **Repite lo que ya funciona en el servidor**: un catálogo y dos lados generados de él, que no pueden
+  separarse sin que salte un error antes de ejecutar.
+- **Es lo que mejor se revisa**: lo generado se lee bien y lo que se escribe a mano es poco. La C esconde
+  demasiado para quien tiene que verificar lo que pasa.
+
+**Cuándo ocurre:** la generación es parte de **fabricar** la web (en el Mac del desarrollador o en el CI),
+no de ejecutarla. Lo generado acaba dentro de los ficheros `.js` que corren en el navegador, y ningún
+proceso lee el catálogo mientras la web funciona. Es lo mismo que pasa con `Run`: las descripciones en Swift
+se generan al compilar, y `Run serve` ya no mira el catálogo.
+
+```
+                         openapi.yaml
+                        /            \
+          al compilar el servidor   al fabricar la web
+                   ↓                          ↓
+              Run (Swift)             dist/*.js (TypeScript)
+```
+
+**Dos consecuencias que hay que tener presentes:**
+
+1. **Lo generado describe, pero no comprueba.** Es la misma lección que en el servidor (`D-65`): si llega
+   un dato mal formado, la web no lo detecta sola. Quien valida es el servidor.
+2. **La web conoce las 83 operaciones del catálogo desde el primer día, aunque solo funcionen las que el
+   servidor tiene activadas** (hoy, 6). Cada pantalla usa solo las que su rebanada activó; si usara otra, el
+   servidor respondería «no encontrado». Eso lo controla el plan de rebanadas, no esta decisión.
 
 ## 6. Decisión 4 — El aspecto visual
 
