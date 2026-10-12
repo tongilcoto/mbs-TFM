@@ -63,6 +63,12 @@ plan.
 | 5 | Dónde se publica y cuánto cuesta | ✅ Decidido (2026-10-12) | **Dos máquinas en Fly.io**: «web» (Caddy + ficheros, única puerta pública) y «api» (`Run serve`, solo red privada). ~3 $/mes |
 | 6 | Cómo se prueba | ✅ Decidido (2026-10-12) | **Piezas con Vitest + Testing Library; punta a punta en BDD con Playwright + Cucumber contra el servidor real**, sin simulacros, y **accesibilidad automática desde el principio** |
 
+**Resultado:** una web **Vue + TypeScript** con **PrimeVue**, que se descarga al navegador y pide los datos
+al servidor que ya existe, con las descripciones de esos datos **generadas del mismo catálogo** que usa el
+servidor. En producción, **dos máquinas en Fly.io**: Caddy con los ficheros de la web como única puerta, y
+`Run serve` detrás, sin dirección pública. Probada con **Vitest** y con **escenarios BDD (Playwright +
+Cucumber)** contra un servidor real de pruebas, con **accesibilidad** comprobada en cada escenario.
+
 ---
 
 ## 3. Decisión 1 — Qué tipo de web
