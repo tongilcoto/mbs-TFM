@@ -1,6 +1,6 @@
 # ADR-Backoffice-001 · Cómo se construye la web del backoffice
 
-- **Estado:** En curso. Decididas 3 de 6 (ver §2).
+- **Estado:** En curso. Decididas 4 de 6 (ver §2).
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [Project HLD-001](./Project%20HLD-001.md) §2.3 ·
@@ -59,8 +59,8 @@ plan.
 | 1 | Qué tipo de web | ✅ Decidido (2026-10-12) | **Se descarga entera al navegador y después solo pide datos** al servidor que ya existe |
 | 2 | Con qué herramienta se construye | ✅ Decidido (2026-10-12) | **Vue, escrito en TypeScript** |
 | 3 | Cómo sabe la web qué datos manda y recibe | ✅ Decidido (2026-10-12) | **Se generan del catálogo `openapi.yaml` solo las descripciones de los datos**; las peticiones, con una pieza pequeña que las usa |
-| 4 | El aspecto visual | ⏳ En discusión | — |
-| 5 | Dónde se publica y cuánto cuesta | ⏳ Pendiente | — |
+| 4 | El aspecto visual | ✅ Decidido (2026-10-12) | **PrimeVue**, con un tema oscuro inspirado en los bocetos del móvil |
+| 5 | Dónde se publica y cuánto cuesta | ⏳ En discusión | — |
 | 6 | Cómo se prueba | ⏳ Pendiente | — |
 
 ---
@@ -175,7 +175,38 @@ se generan al compilar, y `Run serve` ya no mira el catálogo.
 
 ## 6. Decisión 4 — El aspecto visual
 
-*Pendiente.*
+**Qué se decide:** de dónde salen los botones, tablas, formularios, calendarios y menús, y cómo se les da un
+estilo común.
+
+**Punto de partida:** los bocetos del móvil (`docs/design-assets/mobile/`, hechos con Stitch) tienen un
+estilo reconocible: **fondo oscuro, tarjetas, verde para victorias y rojo para derrotas**. Conviene que el
+backoffice se le parezca, sin que sea obligatorio.
+
+| Opción | Cómo es | A favor | En contra |
+|---|---|---|---|
+| **A. Colección completa «en una caja»** (PrimeVue, Vuetify) | Más de 80 piezas ya hechas con el mismo estilo: tablas que se editan en el sitio, formularios, calendarios, ventanas, menús | Lo más pesado —tablas editables y formularios largos— **viene hecho y probado**. El aspecto se ajusta con un «tema» | Se parecerá a otras webs hechas con la misma colección si no se le da tema propio |
+| **B. Piezas sin estilo + estilo propio** (Tailwind con piezas «en blanco») | Las piezas traen el funcionamiento; el aspecto se escribe aparte | Control total; puede quedar idéntica a los bocetos | Hay que **diseñar cada pieza**: muchas decisiones visuales para quien no es diseñador |
+| **C. Todo a mano** | CSS propio para todo | — | Muchísimo trabajo sin nada que ganar aquí |
+
+**Dentro de la A**, las dos candidatas:
+
+- **PrimeVue**: la tabla más completa (edición por celda o por fila, filtros, orden, columnas fijas), buenos
+  formularios y calendarios, y un sistema de temas que permite acercarla a los bocetos oscuros.
+- **Vuetify**: también completa, pero con el estilo de Google (Material Design) muy marcado, y darle otro
+  aire cuesta más.
+
+**Decisión: A, con PrimeVue**, y un tema oscuro inspirado en los bocetos del móvil.
+
+**Razones:**
+
+- **Una sola persona, que no es diseñadora**, construye una herramienta de gestión: lo que más pesa es que
+  tablas y formularios vengan resueltos, no el control fino del aspecto.
+- **La tabla editable es la pieza central** del backoffice (plantilla, acta del partido, convocatoria), y la
+  de PrimeVue es la más completa de las dos.
+- **Su sistema de temas** permite parecerse a las apps del móvil sin diseñar pieza a pieza.
+
+**Detalles que quedan para el LLD:** los colores exactos del tema, el idioma de las piezas (fechas en
+`dd/mm/aaaa`, calendario empezando en lunes, textos en español) y si se ofrece también un modo claro.
 
 ## 7. Decisión 5 — Dónde se publica y cuánto cuesta
 
