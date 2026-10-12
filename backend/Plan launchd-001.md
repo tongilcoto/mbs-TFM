@@ -12,8 +12,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin renglón en §5 no está hecho.
 >
 > **Cerrado el 2026-10-11**, con **604 tests**. Entregados P, I, L y D; M y R, aplazados al despliegue; C, sin
-> trabajo por `DL-5`. Queda una sola cosa, que no es trabajo sino mirar: confirmar `L-L.6` el primer fin de
-> semana con la tapa cerrada (nota en §5).
+> trabajo por `DL-5`. **Reabierto un paso el 2026-10-12: `L-L.6` no funcionó** con la tapa cerrada (nota en
+> §5). Se está midiendo antes de rehacerlo.
 
 ---
 
@@ -339,7 +339,7 @@ empezar.
 | **P** · Datos 2026/27 | ✅ cerrado con lo que hay — **no habrá más URLs**: es una base de desarrollo, no un club (nota abajo) | 4/4 | 2026-10-10 |
 | **M** · Medir el `null` | ⏸ aplazado al despliegue (Fly.io) — nota abajo | 0/3 | 2026-10-10 |
 | **I** · Binario instalado | ✅ entregado — adelantado a P y M porque no depende de ellos | 3/3 | 2026-10-05 |
-| **L** · El agente | ✅ entregado — `L-L.4` medido (dormido: lanza sin red) y `L-L.6` instalado; **queda confirmarlo con la tapa cerrada** (nota abajo) | 7/7 | 2026-10-11 |
+| **L** · El agente | 🔄 `L-L.6` **reabierto**: la ruta por defecto no distingue un despertar en segundo plano; midiendo con `pmset -g systemstate` (nota abajo) | 6/7 | 2026-10-12 |
 | **R** · El reintento | ⏸ aplazado al despliegue (Fly.io), con `L-M` y `DL-4` — nota abajo | 0/2 | 2026-10-10 |
 | **C** · Canario programado | ✅ cerrado sin trabajo — `DL-5` = (c) | — | 2026-10-11 |
 | **D** · Documentación | ✅ entregado — README §6.3–§6.5, auditoría 002 (H-59 y H-85 cerrados, H-92 al despliegue) y `AGENTS.md` | 3/3 | 2026-10-11 |
@@ -386,6 +386,20 @@ filas en `ingestion_runs` (no se intentó nada), aviso con su motivo y `exit 75`
 dobles de `Run` y `route`; **lo que no está probado es que `route -n get default` falle de verdad en un
 *DarkWake***, y eso solo lo dice el próximo fin de semana con la tapa cerrada. Para que el agente use el
 envoltorio nuevo hay que reinstalar desde un commit con él (`agent.sh install`).
+
+**`L-L.6`, reabierto el 2026-10-12: la comprobación de red no sirve.** El disparo del lunes a las 08:00 cayó
+con la tapa cerrada y **ya con el envoltorio nuevo** instalado (`559698…`). En el log no aparece *"sin red:
+espero"*: `route -n get default` respondió que sí había ruta, la ingesta se lanzó a las 08:00:10 y las dos
+competiciones fallaron con `Network is down` (08:00 → 08:55, avanzando solo en despertares de 2-3 s). Es
+justo lo que quedó escrito como no probado: **durante un despertar en segundo plano macOS conserva la
+configuración de red, así que la ruta existe aunque la red no funcione.** Sin pérdida de datos: la pasada del
+domingo 23:30 ya había recogido la jornada.
+
+**Se mide antes de rehacerlo.** La candidata es `pmset -g systemstate`: despierto de verdad dice
+`Current System Capabilities are: CPU Graphics Audio Network`, y en segundo plano, en principio, **falta
+`Graphics`**. Sin verlo no se da por bueno. Así que el envoltorio apunta ahora en cada disparo una línea
+`── estado al disparar · capacidades: … · ruta por defecto: sí/no`, **sin cambiar todavía la espera**. El
+próximo disparo con la tapa cerrada dirá qué ve el Mac en ese momento, y con eso se decide la señal.
 
 **Bloques M y R, aplazados al despliegue el 2026-10-10, por decisión del desarrollador.** En una base de
 desarrollo, perder de vez en cuando una clasificación no cuesta nada real; en producción, con clubes de

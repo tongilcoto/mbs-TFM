@@ -81,6 +81,18 @@ has_network() {
     route -n get default >/dev/null 2>&1
 }
 
+# MEDIDA, no decisión (L-L.6 reabierto, 2026-10-12). La ruta por defecto
+# resultó no bastar: el disparo del lunes 08:00 la vio en un DarkWake y falló
+# con `Network is down`. Antes de cambiar la señal se apunta qué ve el Mac en
+# cada disparo: si en un despertar en segundo plano falta `Graphics` en
+# `pmset -g systemstate`, ésa será la señal de "despierto de verdad".
+power_state() {
+    local caps route
+    caps="$(pmset -g systemstate 2>/dev/null | sed -n 's/^Current System Capabilities are: *//p' | sed 's/ *$//')"
+    if has_network; then route="sí"; else route="no"; fi
+    echo "capacidades: ${caps:-?} · ruta por defecto: $route"
+}
+
 # Devuelve 0 en cuanto hay red y 1 si vence el plazo.
 wait_for_network() {
     has_network && return 0
@@ -99,6 +111,7 @@ wait_for_network() {
 }
 
 echo "── disparo · ingest --fail-if-empty $*" | stamp >> "$LOG"
+echo "── estado al disparar · $(power_state)" | stamp >> "$LOG"
 if wait_for_network; then
     output="$("$TFM_HOME/current/Run" ingest --fail-if-empty "$@" 2>&1)"
     status=$?
