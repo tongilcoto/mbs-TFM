@@ -1,6 +1,6 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera). El resto, pendiente.
+- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera) y §4 (los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, y lo que le falta al servidor). El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -270,10 +270,85 @@ de que el escenario que comprueba el estado *cargando* no dependa de la velocida
 
 ### 4. Los errores
 
-*Cómo se convierte cada error del servidor (no encontrado, conflicto, servidor caído…) en un mensaje en
-español, y dónde se enseña: junto al campo en un formulario, como aviso en una pantalla.*
+**Lo que manda el servidor cuando algo falla** (LLD del backend §5.4,
+`backend/Sources/HTTPAdapter/ProblemMiddleware.swift`): siempre el mismo formato, con cinco campos.
 
-> Pendiente.
+```json
+{ "status": 422, "code": "INVALID_VALUE", "title": "Valor no válido",
+  "detail": "name: no puede estar vacío", "type": "https://…/invalid-value" }
+```
+
+A 2026-10-12, el servidor emite **32 códigos distintos** (`TEAM_NOT_FOUND`, `ALREADY_LINKED_TO_FEDERATION`,
+`FEDERATION_UNREACHABLE`, `DATABASE_UNAVAILABLE`, `UNKNOWN_TENANT`…). La lista crece con cada operación nueva.
+
+**Cómo verlo** (con `Run serve` arrancado; cambiar `celtic-castilla` por un club que exista en local):
+
+```sh
+# Un club que no existe → 404 UNKNOWN_TENANT
+curl -s http://noexiste.localhost:8080/v1/club
+# Un valor que no vale → 422 INVALID_VALUE, con el nombre del campo metido en "detail"
+curl -s -X PATCH -H 'Content-Type: application/json' -d '{"name":""}' \
+     http://celtic-castilla.localhost:8080/v1/club
+```
+
+#### 4.1 La web decide por el `code`, nunca por el texto
+
+En `src/api/errors.ts` hay **una tabla: a cada código, su mensaje en español**. La web nunca mira `title`
+ni `detail` para decidir qué hacer. El número (`status`) solo se usa como red cuando llega un código que la
+tabla no tiene, para elegir un mensaje genérico de su familia: «no se ha encontrado» (404), «no se ha podido
+guardar» (409, 422), «error del servidor» (5xx).
+
+#### 4.2 Los mensajes los escribe la web
+
+Los textos del servidor están pensados para quien desarrolla, no para quien usa la web. Por eso:
+
+- **`detail` no se enseña nunca.** Es una explicación técnica (`"name: no puede estar vacío"`,
+  `"host=… claim=…"`). En desarrollo, en un 500 lleva además el diagnóstico interno; en producción el
+  servidor ya lo omite (`exposesInternalDetail`), pero la regla de la web no depende de eso.
+- **Sí se enseña el `code`, en pequeño, al final del mensaje** («Código: TEAM_NOT_FOUND»), para que quien
+  lo vea pueda contar exactamente qué pasó.
+
+#### 4.3 Dónde se enseña un error
+
+Depende de cuándo ocurre:
+
+| Cuándo | Dónde | Ejemplo |
+|---|---|---|
+| Al **cargar** una pantalla | **En el hueco de la pantalla**, en lugar de los datos: el estado *error* del §3.1 | «No se ha podido conectar con el servidor» |
+| Al **guardar**, por un dato concreto | **Junto al campo** del formulario | «El nombre no puede estar vacío» |
+| Al **guardar**, por algo que no es de un campo | **Un aviso arriba del formulario**, que no desaparece solo | «Este equipo ya está enganchado a la federación» |
+| **El club no existe** | **La página entera** (§8) | «Este club no existe» |
+
+Un error al guardar **no borra lo que el usuario escribió**: el formulario sigue relleno para que corrija y
+vuelva a intentarlo.
+
+#### 4.4 *Reintentar* solo cuando tiene sentido
+
+El botón *Reintentar* aparece **solo cuando el fallo puede ser pasajero**:
+
+| Situación | Cómo se reconoce | ¿Reintentar? |
+|---|---|---|
+| El servidor no responde en 30 s, o no se puede conectar | Sin respuesta (§3.4) | ✅ Sí |
+| La base de datos está caída | `DATABASE_UNAVAILABLE` (503) | ✅ Sí |
+| La federación no responde | `FEDERATION_UNREACHABLE` (504) | ✅ Sí |
+| Todo lo demás: «ya existe», «no encontrado», «valor no válido»… | El resto de códigos | ❌ No: daría lo mismo |
+
+#### 4.5 Lo que le falta al servidor
+
+**a. Decir a qué campo pertenece el error.** Hoy el campo viene metido en el texto de `detail`
+(`"name: no puede estar vacío"`). Sacarlo de ahí sería frágil: si cambia la frase, el mensaje deja de salir
+junto al campo sin que nada falle. **Propuesta:** un campo opcional `field` en el error del catálogo, con el
+nombre del campo. **Mientras no exista**, esos errores salen en el aviso de arriba del formulario.
+
+**b. La lista de códigos, escrita.** Hoy `code` es un texto libre en el catálogo (`openapi.yaml`, esquema
+`Problem`), así que **nada comprueba que la web tenga un mensaje para cada código**. Se resuelve en dos pasos:
+
+| Paso | Qué se toca | Qué se gana | Cuándo |
+|---|---|---|---|
+| **1. La lista en el catálogo** | `openapi.yaml`: `code` pasa a tener la lista cerrada de códigos (`enum`). Ni una línea de Swift | **En la web, la garantía completa**: la tabla de `errors.ts` se declara como «un mensaje para cada código de la lista», y si falta uno **no compila**. En el servidor, a medias: las pruebas que leen un error con los tipos generados fallan ante un código que no está en la lista, pero solo para los errores que esas pruebas provocan | Con la rebanada de la portada |
+| **2. El servidor usa la lista** | `ProblemMiddleware.swift`: su `Problem`, escrito a mano con `code: String`, pasa a usar la lista generada. Unas 30 líneas, en ese fichero | La garantía completa también en el servidor: un código que no está en la lista no compila | **Pendiente del backend**, sin prisa y en su propio commit |
+
+Los dos, *a* y *b*, se diseñan en el catálogo y en el LLD del backend (§5.4), no aquí.
 
 ### 5. Los formularios
 
