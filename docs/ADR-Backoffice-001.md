@@ -1,6 +1,6 @@
 # ADR-Backoffice-001 · Cómo se construye la web del backoffice
 
-- **Estado:** En curso. Decididas 5 de 6 (ver §2).
+- **Estado:** Cerrado el 2026-10-12. Las seis decisiones tomadas (ver §2); lo que queda para el LLD, en §9.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [Project HLD-001](./Project%20HLD-001.md) §2.3 ·
@@ -61,7 +61,7 @@ plan.
 | 3 | Cómo sabe la web qué datos manda y recibe | ✅ Decidido (2026-10-12) | **Se generan del catálogo `openapi.yaml` solo las descripciones de los datos**; las peticiones, con una pieza pequeña que las usa |
 | 4 | El aspecto visual | ✅ Decidido (2026-10-12) | **PrimeVue**, con un tema oscuro inspirado en los bocetos del móvil |
 | 5 | Dónde se publica y cuánto cuesta | ✅ Decidido (2026-10-12) | **Dos máquinas en Fly.io**: «web» (Caddy + ficheros, única puerta pública) y «api» (`Run serve`, solo red privada). ~3 $/mes |
-| 6 | Cómo se prueba | ⏳ En discusión | — |
+| 6 | Cómo se prueba | ✅ Decidido (2026-10-12) | **Piezas con Vitest + Testing Library; punta a punta en BDD con Playwright + Cucumber contra el servidor real**, sin simulacros, y **accesibilidad automática desde el principio** |
 
 ---
 
@@ -259,4 +259,91 @@ A o D evitan el problema.
 
 ## 8. Decisión 6 — Cómo se prueba
 
-*Pendiente.*
+**Qué se decide:** qué niveles de prueba tiene la web, con qué herramientas, contra qué servidor, y dónde y
+cuándo se ejecutan.
+
+**Punto de partida:** quien mantiene el proyecto es **ingeniero de pruebas** y trabaja con **Playwright y
+Cucumber (BDD)**. En el servidor el proyecto ya tiene sus costumbres: prueba antes que código, cuatro niveles
+(LLD §8.1), mutación (`Tools/Mutate`) y censo de lo que no se prueba (`Tools/Census`).
+
+| Nivel | Qué prueba | Opción | Decisión |
+|---|---|---|---|
+| **1. Piezas sueltas** | Que una pieza, con unos datos dados, pinta lo que debe y responde al clic | Vitest + Testing Library | ✅ **Sí** |
+| **2. Navegador con el servidor simulado** | Pantallas enteras con respuestas del servidor preparadas a mano | Playwright con respuestas preparadas | ❌ **No**: teniendo el servidor real en local, no se simula |
+| **3. Punta a punta** | Escenarios en un navegador real, con servidor y base reales | Playwright + Cucumber (BDD) | ✅ **Sí** |
+
+**Decisión:**
+
+1. **Nivel 1 con Vitest + Testing Library.** Aquí **no se simula el servidor**: la pieza no habla con nadie,
+   recibe unos datos como una función recibe sus argumentos. Es el equivalente a los niveles 1 y 2 del
+   backend. Testing Library busca las cosas como lo haría un usuario («el botón que dice *Dar de baja*»).
+2. **Nivel 3 en BDD con Playwright + Cucumber**, la forma de trabajar del mantenedor. Las palabras clave en
+   inglés (`Given` / `When` / `Then`) y **los pasos escritos en español**:
+
+   ```gherkin
+   Feature: Plantilla del equipo
+
+     Scenario: Dar de baja a un jugador
+       Given el equipo "Cadete A" tiene a "Lucía Pérez" en la plantilla
+       When doy de baja a "Lucía Pérez"
+       Then "Lucía Pérez" ya no aparece en la plantilla
+   ```
+
+3. **Sin simulacros: los errores se provocan de verdad.** Un 409, dando de alta dos veces lo mismo; un
+   servidor caído, parando el servidor **de las pruebas**.
+4. **Accesibilidad automática desde el principio.** Se comprueba con código, así que cuesta poco si se pone
+   desde el primer escenario y mucho si se añade al final:
+   - **Mientras se escribe**: reglas de accesibilidad en el revisor de código de Vue (p. ej.
+     `eslint-plugin-vuejs-accessibility`): imagen sin texto alternativo, botón sin nombre, campo sin
+     etiqueta…
+   - **En cada escenario de punta a punta**: un análisis automático de la pantalla con **axe**
+     (`@axe-core/playwright`). Un fallo de accesibilidad hace fallar el escenario, como cualquier otro.
+   - **Objetivo de referencia: WCAG 2.2, nivel AA.**
+   - **Lo que no cubre, dicho para no confiarse**: lo automático encuentra solo una parte de los
+     problemas. Moverse con el teclado, el orden de lectura o el sentido de los textos para un lector de
+     pantalla piden una revisión a mano de vez en cuando.
+5. **Capturas de pantalla comparadas: no por ahora.** Se pueden añadir más tarde con Playwright sin cambiar
+   nada de lo anterior.
+
+**Contra qué servidor: uno propio de las pruebas, nunca el de trabajo.** Los escenarios **no usan** el
+servidor del desarrollador ni su base de trabajo: escribirían datos falsos en su club y, para probar «servidor
+caído», habría que pararle el suyo. Las pruebas arrancan **su propia copia** de `Run serve`, en otro puerto,
+contra un club de pruebas creado para la ocasión en la base de pruebas (`tfm_test`, la que ya usa el backend)
+y borrado al terminar.
+
+**Si el servidor de pruebas no arranca, los escenarios fallan; nunca se saltan en silencio.** Es la lección
+de H-07 en el backend: un verde que significa «no se probó nada» es peor que un rojo.
+
+**Dónde y cuándo se ejecutan:**
+
+| Momento | Qué | Dónde |
+|---|---|---|
+| Mientras se escribe | Nivel 1, solo, al guardar cada fichero; y las reglas de accesibilidad del revisor de código | Mac del desarrollador |
+| Antes de cada commit | Nivel 1 entero (segundos) | Mac del desarrollador |
+| Antes de fusionar un PR | Nivel 1 + escenarios BDD con su análisis de accesibilidad | Mac del desarrollador **hasta que haya CI**; después, el CI |
+| Justo después de publicar | Prueba de humo de los cuatro `curl` (decisión 5) | Contra producción |
+
+**Razones:**
+
+- **Es la forma de trabajar de quien mantiene el proyecto**, y en pruebas eso pesa más que cualquier otra
+  consideración.
+- **Sin simulacros no hay dos verdades**: lo que pasa en el escenario es lo que hace el servidor real. La
+  forma de los datos ya la vigilan las descripciones generadas (decisión 3).
+- **La accesibilidad, anotada desde el principio**, es una comprobación más de cada escenario y no un
+  proyecto aparte al final.
+
+**Queda para más adelante:** la mutación de las pruebas de la web (StrykerJS, sobre Vitest), con la misma
+idea que `Tools/Mutate` en el servidor.
+
+---
+
+## 9. Lo que este ADR deja para el LLD del backoffice
+
+- **El reparto de carpetas** dentro de `backoffice/` y cómo se arranca en local (Vite, con su recepcionista
+  hacia `Run serve`; nota de CORS, sección 5).
+- **El prefijo**: `/v1` tal cual o `/api/v1` con el recepcionista quitando `/api` (nota de CORS, sección 5).
+- **El tema de PrimeVue**: colores, idioma de las piezas (fechas `dd/mm/aaaa`, semana desde el lunes) y si
+  hay modo claro.
+- **Cómo arrancan las pruebas su propio servidor y su club** (puerto, alta y baja del club de pruebas).
+- **El inicio de sesión con Supabase Auth**, que va al final (borrador, §3).
+- **La lista de pantallas y su orden**, en rebanadas verticales (borrador, §2): la portada primero.
