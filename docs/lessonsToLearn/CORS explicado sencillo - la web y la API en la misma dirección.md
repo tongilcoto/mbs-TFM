@@ -161,10 +161,14 @@ las tres se piensan alrededor de eso.
 | **c. Sin recepcionista: el servidor entrega también la web** | El propio servidor Swift sirve los ficheros de la web (Vapor trae una pieza para eso) además de los datos | Los ficheros de la web se copian dentro de la imagen del servidor antes de `fly deploy` | Un solo programa y nada que configurar. El nombre llega intacto porque no hay intermediario | Cada cambio en la web obliga a volver a publicar el servidor. Mezcla dos trabajos en el mismo programa |
 
 En las tres, **el candado lo puede poner la propia entrada de Fly.io**, que se encarga de los certificados.
-**Por comprobar en la decisión 5, con la documentación de Fly.io delante y no de memoria:** que emite el
-certificado comodín `*.miapp.com` (suele exigir una comprobación por DNS), que pasa el nombre intacto, y si
-sabe repartir por camino entre dos programas. Si supiera lo último, la entrada de Fly.io sería el
-recepcionista y la opción a. se quedaría sin trabajo.
+
+**Elegida el 2026-10-12: la a., con Caddy en una máquina propia** («web») y el servidor en otra («api»), sin
+dirección pública. Lo comprobado en la documentación y las razones están en la decisión 5 del
+[ADR-Backoffice-001](../ADR-Backoffice-001.md). En resumen: Fly.io emite el certificado comodín (1 $/mes);
+su función para servir ficheros (`[[statics]]`) **no cumple las dos reglas de la sección 6**; y Caddy pasa
+el nombre intacto mientras reenvíe por `http`, que es lo que ocurre dentro de la red privada de Fly.io. Queda
+por medir al publicar si la entrada de Fly.io se lo entrega intacto a Caddy: lo dice la prueba de humo de
+abajo.
 
 ### Cómo se comprueba que funciona
 

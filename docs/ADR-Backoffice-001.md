@@ -1,6 +1,6 @@
 # ADR-Backoffice-001 · Cómo se construye la web del backoffice
 
-- **Estado:** En curso. Decididas 4 de 6 (ver §2).
+- **Estado:** En curso. Decididas 5 de 6 (ver §2).
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [Project HLD-001](./Project%20HLD-001.md) §2.3 ·
@@ -60,8 +60,8 @@ plan.
 | 2 | Con qué herramienta se construye | ✅ Decidido (2026-10-12) | **Vue, escrito en TypeScript** |
 | 3 | Cómo sabe la web qué datos manda y recibe | ✅ Decidido (2026-10-12) | **Se generan del catálogo `openapi.yaml` solo las descripciones de los datos**; las peticiones, con una pieza pequeña que las usa |
 | 4 | El aspecto visual | ✅ Decidido (2026-10-12) | **PrimeVue**, con un tema oscuro inspirado en los bocetos del móvil |
-| 5 | Dónde se publica y cuánto cuesta | ⏳ En discusión | — |
-| 6 | Cómo se prueba | ⏳ Pendiente | — |
+| 5 | Dónde se publica y cuánto cuesta | ✅ Decidido (2026-10-12) | **Dos máquinas en Fly.io**: «web» (Caddy + ficheros, única puerta pública) y «api» (`Run serve`, solo red privada). ~3 $/mes |
+| 6 | Cómo se prueba | ⏳ En discusión | — |
 
 ---
 
@@ -210,7 +210,52 @@ backoffice se le parezca, sin que sea obligatorio.
 
 ## 7. Decisión 5 — Dónde se publica y cuánto cuesta
 
-*Pendiente.*
+**Qué se decide:** dónde viven el recepcionista y los ficheros de la web en producción, y cómo llegan a
+ellos las peticiones. El servidor va a Fly.io (ADR-API_y_BBDD-001, decisión 6). Qué hacen el recepcionista y
+quien entrega los ficheros, y por qué hacen falta, está explicado en la
+[nota de CORS](./lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md),
+secciones 5 y 6.
+
+**Comprobado en la documentación el 2026-10-12, no de memoria:**
+
+| Pregunta | Respuesta | Fuente |
+|---|---|---|
+| ¿Fly.io emite el certificado comodín `*.miapp.com`? | Sí, con comprobación por DNS (un registro `_acme-challenge`). **1 $/mes** por comodín | [Fly.io, dominios propios](https://docs.fly.io/networking/custom-domain) y [precios](https://docs.fly.io/about/pricing) |
+| ¿Puede Fly.io entregar los ficheros de la web sin programa propio (`[[statics]]`)? | **No sirve aquí**: no devuelve `index.html` en caminos desconocidos y no deja poner cabeceras de caché. Incumple las dos reglas de la sección 6 de la nota | [Fly.io, configuración](https://docs.fly.io/reference/configuration) |
+| ¿Caddy pasa intacto el nombre de la dirección (`Host`)? | Sí, por defecto. **Excepción**: desde la v2.11 lo cambia si reenvía a un destino `https`. Dentro de la red privada de Fly.io el reenvío es `http`, así que no aplica | [Caddy, `reverse_proxy`](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) |
+| ¿Cuánto cuesta la máquina más pequeña? | 2,19 $/mes (256 MB, encendida todo el mes); 3,69 $ con 512 MB | [Fly.io, precios](https://docs.fly.io/about/pricing) |
+
+| Opción | Cómo queda | Coste extra | A favor | En contra |
+|---|---|---|---|---|
+| **A. Todo en una máquina** | Caddy, ficheros y `Run serve` en la misma máquina | 0 $ | La más barata | Cambiar la web obliga a recompilar y subir el servidor Swift. Dos programas en un contenedor |
+| **B. Dos máquinas en Fly.io** | «web»: Caddy y los ficheros, única dirección pública, con el certificado. «api»: `Run serve`, **sin dirección pública**, solo por la red privada | +2,19 $/mes | Cada pieza se publica por su lado. El servidor queda escondido tras una única puerta. El nombre llega intacto sin tocar el servidor | Una máquina más que vigilar |
+| **C. Web en un servicio externo gratuito** (Cloudflare Pages, Netlify) que reenvía `/v1` a Fly.io | Ficheros repartidos por el mundo | 0 $ | Gratis y rápida | Estos servicios suelen cambiar el nombre al reenviar: habría que leer `X-Forwarded-Host` en el servidor (código de seguridad nuevo). Dos proveedores |
+| **D. Sin recepcionista** | `Run serve` entrega también la web | 0 $ | Un solo programa | Como la A, y además las dos reglas de los ficheros habría que programarlas en Swift |
+
+**Decisión: B.**
+
+```
+navegador / apps ──https──► entrada de Fly.io (*.miapp.com, certificado)
+                                   │
+                                   ▼
+                      máquina «web»: Caddy
+                      ├─ /v1/*  ──http, red privada──► máquina «api»: Run serve ──► Supabase (Postgres)
+                      └─ lo demás ─► ficheros de la web (dist/)
+```
+
+**Razones:**
+
+- **Separa lo que cambia a distinto ritmo.** La web cambiará mucho y el servidor menos: publicar la web es
+  copiar ficheros, sin recompilar Swift (ver la nota *Medir la RAM de un build en Docker*).
+- **El servidor deja de estar expuesto.** Todo —también las apps del móvil— entra por el recepcionista.
+- **El nombre de la dirección llega intacto sin tocar una línea del servidor**, que hoy solo lee `Host`
+  (`TenantResolver.swift`).
+- **Coste total del backoffice: unos 3 $/mes** (máquina y certificado), muy por debajo del tope de 20 $.
+
+**Lo que no se puede comprobar hasta publicar:** que la entrada de Fly.io entrega el nombre intacto a Caddy.
+La documentación de cabeceras no lo dice ni en un sentido ni en otro. Lo mide la prueba de humo de la nota
+de CORS (sección 5, cuatro `curl`), y es **lo primero que se ejecuta al publicar**. Si fallara, las opciones
+A o D evitan el problema.
 
 ## 8. Decisión 6 — Cómo se prueba
 
