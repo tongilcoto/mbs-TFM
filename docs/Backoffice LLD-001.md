@@ -1,6 +1,6 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`). El resto, pendiente.
+- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez). El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -131,10 +131,60 @@ contesta «no encontrado». Es la pista de que alguien se saltó el recepcionist
 
 ### 2. Qué recuerda la web y dónde
 
-*El club en el que estás, los datos ya descargados para no pedirlos dos veces, y qué pasa al recargar la
-página.*
+**Lo que hay que saber antes:** la web, mientras está abierta, recuerda las cosas **en memoria**, y la memoria
+se borra al recargar la página o cerrar la pestaña. Que algo dure más exige **escribirlo en el navegador** a
+propósito. Con eso, cuatro reglas.
 
-> Pendiente.
+#### 2.1 El club no se guarda: se lee de la dirección
+
+La web **no necesita saber qué club es** para pedir sus datos: el servidor lo deduce del nombre de la
+dirección (`celtic-castilla.miapp.com`), como hace hoy (LLD del backend, §6.1). Al arrancar, la web pide
+**una vez** `/api/v1/club` para tener el nombre y el escudo, y lo mantiene en memoria mientras la pestaña
+está abierta. Es la única excepción a la regla 2.4. Qué enseña si el club no existe: §8.
+
+#### 2.2 Lo que debe sobrevivir a una recarga va en la dirección
+
+La web saca todo lo que necesita para pintar una pantalla de **tres partes de la dirección**:
+
+| Parte | Ejemplo | Qué dice |
+|---|---|---|
+| El nombre | `celtic-castilla.miapp.com` | El club |
+| El camino | `/equipos/123/plantilla` | Qué estás viendo (§6) |
+| Lo que va detrás de `?` | `?temporada=2025-26` | Lo que has elegido: temporada, filtros, orden |
+
+Así, **recargar o abrir un enlace guardado deja en la misma pantalla**, y un enlace que se manda a un
+compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**:
+si una elección debe sobrevivir, su sitio es la dirección, no el navegador.
+
+#### 2.3 En el navegador no se guarda ningún dato del club
+
+Ni jugadores, ni partidos, ni nombres: **nada** en las zonas de almacenamiento del navegador
+(`localStorage`, `sessionStorage`, IndexedDB, *cookies* propias). Es lo que pide el ADR para los datos de
+menores (requisito 7, RGPD). **Única excepción, reservada:** la sesión de Supabase Auth, cuando se monte el
+inicio de sesión (§12).
+
+#### 2.4 Los datos se piden cada vez que se entra en una pantalla
+
+**Decisión: cada pantalla pide sus datos al entrar**, también al volver a una que ya se había visto, y no se
+guarda nada en memoria entre pantallas. Tras guardar un cambio, la pantalla vuelve a pedir lo que enseña.
+
+**La alternativa descartada:** una herramienta que guarda en memoria lo ya descargado (Pinia Colada,
+TanStack Query) y, al volver a una pantalla, enseña al momento lo que tenía mientras lo actualiza por
+detrás.
+
+**Razones:**
+
+- **Siempre se ve lo que hay en el servidor**, también lo que acaba de cambiar un compañero. Lo grave en
+  esta web no es esperar un momento, sino corregir un acta mirando datos viejos.
+- **No hay que acordarse de nada después de guardar.** Con datos guardados, cada cambio obliga a decir qué
+  otros datos ya no valen; si se olvida, la pantalla enseña algo que ya no es verdad.
+- **Las pruebas ven lo que respondió el servidor**, sin una pantalla que cambia sola después de aparecer y
+  pasos que tienen que esperar a que se asiente.
+- **El coste es pequeño:** pocos usuarios, un servidor que responde rápido y pantallas que piden poco. El
+  precio es un «cargando…» corto al entrar en cada pantalla (§3).
+
+**Cuándo se revisa:** si una pantalla **se mide** lenta. Entonces se añade la memoria solo donde haga falta.
+Es barato porque todas las peticiones salen de `api/` (§1.2).
 
 ### 3. El recorrido de una petición
 
