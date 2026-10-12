@@ -1,6 +1,6 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez). El resto, pendiente.
+- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera). El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -188,10 +188,81 @@ Es barato porque todas las peticiones salen de `api/` (§1.2).
 
 ### 3. El recorrido de una petición
 
-*De punta a punta: la pantalla pide, enseña «cargando…», la petición pasa por el recepcionista y el
-servidor, y la respuesta vuelve a la pantalla. El equivalente al §2.3 del LLD del backend.*
+El equivalente, en la web, al §2.3 del LLD del backend: qué pasa desde que el usuario entra en una pantalla
+hasta que ve sus datos.
 
-> Pendiente.
+```mermaid
+sequenceDiagram
+  participant U as Usuario
+  participant P as Pantalla (screens/)
+  participant C as Conexión (api/client.ts)
+  participant R as Recepcionista (Vite en local, Caddy en producción)
+  participant S as Servidor (Run serve)
+  participant DB as Base de datos (schema del club)
+
+  U->>P: Entra en /equipos
+  P->>P: Enseña «cargando…»
+  P->>C: Pide los equipos
+  C->>R: GET /api/v1/teams (nombre: celtic-castilla.miapp.com)
+  R->>S: GET /v1/teams — quita /api y deja el nombre intacto
+  S->>S: Saca el club del nombre (LLD backend §6.1)
+  S->>DB: Consulta en el schema de ese club
+  DB-->>S: Filas
+  S-->>R: Respuesta: datos o error
+  R-->>C: La misma respuesta, sin tocar
+  C-->>P: Datos, o el error ya traducido (§4)
+  P->>P: Elige el estado: error, vacío o con datos
+  P-->>U: Lo pinta con las piezas (components/)
+```
+
+**Lo que hace cada uno:** la **pantalla** decide qué enseñar; la **conexión** hace la petición y traduce la
+respuesta; el **recepcionista** solo reparte (nota de CORS, sección 5); y el **servidor** es quien sabe el
+club, valida y responde. Ninguna regla del negocio se decide en la web (ADR, requisito 1).
+
+#### 3.1 Toda pantalla tiene cuatro estados
+
+| Estado | Cuándo | Ejemplo |
+|---|---|---|
+| **Cargando** | Desde que se pide hasta que llega la respuesta | «Cargando equipos…» |
+| **Error** | El servidor respondió con un error, o no respondió (§3.4) | «No se ha podido conectar con el servidor» |
+| **Vacío** | La respuesta llegó bien, pero no trae nada | «Este equipo aún no tiene jugadores» |
+| **Con datos** | La respuesta trae algo que enseñar | La lista de jugadores |
+
+**Los cuatro se diseñan siempre**, y la ficha de cada pantalla (parte E) dice cómo se ve cada uno. **Vacío
+no es error**: un equipo sin jugadores es una situación normal y se dice con un mensaje que explica qué
+hacer, no con un aviso de fallo. Para las pruebas, son **cuatro escenarios por pantalla**.
+
+#### 3.2 Si se sale de una pantalla antes de la respuesta, la petición se cancela
+
+Si el usuario se va a otra pantalla mientras la primera aún espera, su petición se cancela. Así una
+respuesta que llega tarde **no puede pintarse en la pantalla equivocada**.
+
+#### 3.3 Mientras se guarda, el botón se bloquea
+
+Al pulsar *Guardar* (o *Dar de alta*, *Dar de baja*…), el botón queda bloqueado hasta que llega la
+respuesta: **un doble clic no puede mandar dos veces lo mismo**. Al terminar bien, la pantalla vuelve a pedir
+sus datos (§2.4); si termina mal, el error se enseña como dice el §4 y el botón se desbloquea.
+
+#### 3.4 La web espera un máximo de 30 segundos
+
+Pasados **30 segundos** sin respuesta, la web deja de esperar y avisa de que el servidor no responde. **Un
+solo límite para todas las peticiones.**
+
+**Por qué 30 y no menos:** la vista previa del enganche con la federación
+(`POST /v1/teams/{id}/federation-link/preview`) pregunta **en directo** a la federación, y el servidor espera
+hasta **20 segundos** antes de dar su propio error (`backend/Sources/Federation/HTTPFederationTransport.swift`,
+LLD del backend §2.3-c). Ese error dice más («la federación no responde») que el de la web («el servidor no
+responde»). Si la web se rindiera antes de los 20 s, ese mensaje no llegaría nunca. **Si alguna vez se sube
+el límite del servidor, hay que subir este por encima.**
+
+#### 3.5 El «cargando…» se enseña desde el primer momento
+
+Se enseña **en cuanto se pide**, sin esperar unos milisegundos a ver si la respuesta llega antes. Puede
+parpadear un instante con un servidor rápido, a cambio de que **la pantalla se comporte siempre igual** y
+de que el escenario que comprueba el estado *cargando* no dependa de la velocidad del servidor.
+
+**Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
+«cargando…» a un lector de pantalla (§10).
 
 ---
 
