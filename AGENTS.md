@@ -23,13 +23,17 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   construido tras la 001** (F6-bis → F10-ter) antes de montar `launchd` y abrir el backoffice: bloques
   A-8 a A-15, hallazgos H-51 a H-100, y una puerta por cada cosa que desbloquea. **Cerrada el
   2026-10-04**, con las tres puertas abiertas.
+- [backend/Plan launchd-001.md](./backend/Plan%20launchd-001.md) — **la ingesta corriendo sola en el Mac**,
+  con `launchd` y contra la base local de desarrollo. **Cerrado el 2026-10-11**: el agente dispara
+  sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
+  al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
 | **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/Sources/APIContract/openapi.yaml) · [Guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md) — qué implementa el adaptador, con qué datos y qué promete, para las tres ingestas y el enganche (A-9) |
-| **Web backoffice** | *(pendiente)* | *(pendiente)* | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
+| **Web backoffice** | [ADR-Backoffice-001](./docs/ADR-Backoffice-001.md) — **cerrado el 2026-10-12**: web que se descarga al navegador, Vue + TypeScript, descripciones de datos generadas del catálogo, PrimeVue, dos máquinas en Fly.io (Caddy + web, y la API sin dirección pública) y pruebas con Vitest y BDD (Playwright + Cucumber) con accesibilidad · [CORS explicado sencillo](./docs/lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md) | *(pendiente)* | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
 
@@ -369,8 +373,13 @@ con éxito (H-53) y dos enganches a la vez dejaban dos cascadas (H-73)—, y **l
 al montar `launchd`. Su último bloque, A-9, dejó la
 [guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md), con las seis
 promesas que el puerto no puede imponer.
-**604 tests.** Lo siguiente es montar `launchd` y abrir el backoffice. **Web backoffice, app iOS y app
-Android siguen sin empezar.**
+Y **`launchd` está montado** ([su plan](./backend/Plan%20launchd-001.md), 2026-10-11): la ingesta corre sola
+en el Mac contra la base de desarrollo, con un binario instalado desde un commit (H-85) y un aviso cuando
+falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
+medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
+despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
+**604 tests.** Lo siguiente es **abrir el backoffice**. **Web backoffice, app iOS y app Android siguen sin
+empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
 decide qué se le escribe. El volcado real de una temporada jugada entra entero —30 jornadas, 240 partidos, 16
@@ -733,7 +742,9 @@ desde la web (`D-88`)—.
 
 **Quedan dos deberes que no son de código, van juntos y conviene no perderlos**: **montar el cron** y **montar
 el CI**. F6 entrega el comando, pero quién lo llama los lunes y los fines de semana es una decisión de
-despliegue; hasta que exista, el tope semanal de §5.6 **no lo garantiza nada**. Y **no hay CI de ningún tipo**,
+despliegue; hasta que exista, el tope semanal de §5.6 **no lo garantiza nada**. *(En local ya lo llama
+`launchd` ([Plan launchd-001](./backend/Plan%20launchd-001.md)); el cron de producción sigue pendiente y va
+con Fly.io.)* Y **no hay CI de ningún tipo**,
 con el agravante de que el código sí está preparado: la guarda de `DatabaseAvailability` falla con `CI` o
 `REQUIRE_DB` definidas y **nadie las define**, así que hoy un verde puede significar *"no se probó nada que
 toque la base"* — el texto de la salida es **idéntico** corriendo y omitiendo, y lo único que cambia es la
