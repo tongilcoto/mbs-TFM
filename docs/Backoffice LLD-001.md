@@ -1,6 +1,14 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactado: §1 (carpetas, las tres partes y el prefijo `/api/v1`) y §2 (qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez) y §3 (el recorrido de una petición: cuatro estados por pantalla, cancelar al salir, botón bloqueado al guardar, 30 s de espera) y §4 (los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, y lo que le falta al servidor) y §5 (los formularios: las reglas del catálogo comprobadas con Ajv, todas a la vez; solo se envía lo cambiado; aviso al salir sin guardar). El resto, pendiente.
+- **Estado:** Borrador. Redactadas:
+  - §1 · las carpetas, las tres partes y el prefijo `/api/v1`;
+  - §2 · qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez;
+  - §3 · el recorrido de una petición: cuatro estados, cancelar al salir, botón bloqueado al guardar, 30 s;
+  - §4 · los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, lo que falta al servidor;
+  - §5 · los formularios: reglas del catálogo con Ajv, todas a la vez; solo lo cambiado; aviso al salir;
+  - §6 · el mapa de pantallas: caminos en español, código interno, pestañas con camino, temporada tras `?`.
+
+  El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -454,9 +462,63 @@ molesta, se resuelve en el servidor, no en la web.
 
 ### 6. El mapa de pantallas
 
-*Qué caminos existen (`/equipos/123/plantilla`), cómo se navega entre ellos y el menú.*
+Sigue el esquema de los bocetos del móvil (`docs/design-assets/mobile/`): una portada con los equipos del
+club, y la ficha de cada equipo con tres pestañas —Resultados, Estadísticas y Plantilla— y la temporada y
+la competición arriba.
 
-> Pendiente.
+#### 6.1 El mapa
+
+| Camino | Pantalla | Estado |
+|---|---|---|
+| `/` | **Portada**: los equipos del club con su competición (E.1) | ✅ Rebanada 1 |
+| `/equipos/nuevo` | **Alta de equipo** | ✅ Rebanada 2 |
+| `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
+| `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |
+| `/equipos/:id/estadisticas` | Pestaña Estadísticas | Borrador |
+| `/equipos/:id/federacion` | Enganche con la federación: pegar la URL del calendario | Borrador |
+| `/partidos/:id` | El acta del partido: goles, tarjetas, minutos | Borrador |
+| `/jugadores/:id` | Ficha del jugador | Borrador |
+| `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
+
+**Solo las dos primeras están decididas.** El resto es un borrador: cada camino se confirma, o se cambia,
+al escribir la ficha de su pantalla (parte E).
+
+#### 6.2 Los caminos, en español
+
+El código va en inglés (§1.1), pero **los caminos los ve el usuario** en la barra del navegador y en los
+enlaces que comparte: `/equipos`, no `/teams`. Sin tildes ni eñes (`/estadisticas`), para que se puedan
+escribir y copiar sin que el navegador los convierta en códigos raros.
+
+#### 6.3 Lo que identifica a cada cosa en el camino es su código interno
+
+`:id` es **el identificador que da el servidor** (un UUID): `/equipos/3f2a91c4-…/plantilla`. Es largo, pero
+no pide nada al servidor. **La alternativa descartada**, un nombre legible (`/equipos/cadete-a`), exigiría
+añadir ese dato al servidor y mantener que no se repita, para una herramienta interna en la que casi nadie
+escribe los caminos a mano.
+
+#### 6.4 Cada pestaña tiene su propio camino
+
+Así, **recargar en la pestaña Plantilla deja en Plantilla** (§2.2). `/equipos/:id` a secas lleva a
+Resultados.
+
+#### 6.5 La temporada va detrás de `?`
+
+`/equipos/:id/plantilla?temporada=2025-26`. **Si no se indica, se usa la temporada en curso**, la que el
+servidor marca con `isCurrent`. En el camino se escribe con guion (`2025-26`) aunque la etiqueta de la
+temporada lleve barra (`2025/26`, esquema `SeasonLabel`), porque una barra dentro de un valor del camino
+tiene que codificarse y quedaría `2025%2F26`.
+
+#### 6.6 El menú solo enseña lo que ya existe
+
+**El menú crece con cada rebanada**: no hay entradas que lleven a pantallas a medio hacer. En la rebanada 1,
+el menú tiene solo «Equipos».
+
+#### 6.7 Dos formas de «no encontrado»
+
+| Qué pasa | Ejemplo | Quién lo sabe | Qué se enseña |
+|---|---|---|---|
+| **El camino no existe en la web** | `/equipoz` | La web, sin preguntar al servidor | «Esta página no existe», con un enlace a la portada |
+| **El camino existe, pero lo que nombra no** | `/equipos/abc/plantilla` | El servidor: `TEAM_NOT_FOUND` | El estado de error de la pantalla (§4.3), con un enlace a la portada |
 
 ---
 
