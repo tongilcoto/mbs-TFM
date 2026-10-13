@@ -9,6 +9,7 @@
   - §6 · el mapa de pantallas: caminos en español, código interno, pestañas con camino, temporada tras `?`.
   - §7 · quién es dueño de cada dato: cuatro tipos, lo que nunca se permite no aparece, lo que a veces sí, desactivado y con motivo.
   - §8 · el club en la web: lo resuelve el servidor, un club por dirección, página entera si no carga, lo que publica su federación.
+  - §9 · el tema y el idioma: Aura ajustado, colores con significado, modo claro y oscuro con interruptor, formatos en un solo fichero.
 
   El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
@@ -171,8 +172,14 @@ si una elección debe sobrevivir, su sitio es la dirección, no el navegador.
 
 Ni jugadores, ni partidos, ni nombres: **nada** en las zonas de almacenamiento del navegador
 (`localStorage`, `sessionStorage`, IndexedDB, *cookies* propias). Es lo que pide el ADR para los datos de
-menores (requisito 7, RGPD). **Única excepción, reservada:** la sesión de Supabase Auth, cuando se monte el
-inicio de sesión (§12).
+menores (requisito 7, RGPD).
+
+**Las excepciones son una lista cerrada, con nombre.** Lo que no esté aquí no se guarda:
+
+| Qué se guarda | Dónde | Por qué no es un dato del club |
+|---|---|---|
+| `tema` = `claro` u `oscuro` | `localStorage` | Es una preferencia de la pantalla, no de nadie del club (§9.3) |
+| La sesión de Supabase Auth — **reservada** | La decide Supabase | Llega con el inicio de sesión (§12) |
 
 #### 2.4 Los datos se piden cada vez que se entra en una pantalla
 
@@ -638,9 +645,69 @@ revisar el mensaje de «Este club no existe»** (§12).
 
 ### 9. El tema y el idioma
 
-*Colores, fechas y números a la española, y si hay modo claro.*
+El ADR (decisión 4) eligió PrimeVue con un tema oscuro inspirado en los bocetos del móvil, y dejó aquí los
+colores, el idioma de las piezas y el modo claro.
 
-> Pendiente.
+#### 9.1 El tema parte de uno de PrimeVue
+
+Se parte de **Aura**, uno de los temas que trae PrimeVue, y se ajusta: **fondo azul muy oscuro y verde como
+color principal**, como en los bocetos (`docs/design-assets/mobile/`). No se diseña pieza a pieza.
+
+**Los valores exactos de cada color se toman de los bocetos al montar la portada**, no en este documento:
+no se han medido todavía y no se inventan.
+
+#### 9.2 Los colores se nombran por lo que significan
+
+Las pantallas usan **nombres con significado** —`victoria`, `derrota`, `empate`, `aviso`— y **nunca un color
+escrito a mano**. Todos se definen en `src/theme/`. Cambiar un color es tocar un solo sitio, y **cada nombre
+tiene dos valores, uno por modo** (§9.3).
+
+#### 9.3 Dos modos, claro y oscuro, con un interruptor
+
+**Por qué los dos:** el fondo oscuro de los bocetos va bien en el móvil, pero en el ordenador, que es donde
+más se usará el backoffice (ADR §1), el contexto cambia: oficinas con luz, pantallas grandes, ratos largos.
+
+- **La primera vez, sigue la preferencia del sistema** (del ordenador o del móvil). Cuando el usuario toca
+  el interruptor, **manda su elección**.
+- **La elección se recuerda** en el navegador: es la excepción con nombre del §2.3, y solo se guarda
+  `tema = claro | oscuro`.
+- **El modo se aplica antes de pintar nada**, para que no haya un destello blanco al abrir la web en oscuro.
+- **El interruptor dice lo que hace** («Cambiar a modo claro»), no solo un dibujo de sol o luna, para que lo
+  entienda un lector de pantalla.
+
+#### 9.4 El color nunca va solo, y todo texto se lee en los dos modos
+
+- **El color nunca es la única pista.** Una victoria es verde **y además** lleva una «V»: quien no distingue
+  el verde del rojo tiene que poder leerla igual (WCAG 2.2, criterio 1.4.1).
+- **Todo texto tiene el contraste mínimo de nivel AA en los dos modos.** Un verde que se lee bien sobre fondo
+  oscuro puede no leerse sobre blanco. Por eso **el análisis de axe de cada escenario mira la pantalla dos
+  veces, una en cada modo** (ADR, decisión 6). No se duplican los escenarios, solo el análisis del final.
+
+#### 9.5 Las piezas de PrimeVue, en español
+
+Los textos que traen las piezas —los meses, «Hoy», «Borrar», «No hay resultados»…— **en español**, y **el
+calendario empieza en lunes**.
+
+#### 9.6 Formatos fijos, desde un solo fichero
+
+**Todo se formatea en `src/theme/format.ts`**; ninguna pantalla lo hace por su cuenta:
+
+| Dato | Cómo se ve |
+|---|---|
+| Fecha | `14/09/2025`; en tablas, si cabe, `sáb 14/09` |
+| Hora | `12:00`, en formato de 24 horas |
+| Hora aún sin fijar (`kickoffTime` vacío) | «Hora por confirmar» |
+| Números | A la española: `1.234,5` |
+
+#### 9.7 Las fechas sin hora son texto, no un instante
+
+El servidor manda la fecha de un partido sin hora: `2025-05-18` (`matchDate`, `format: date`). Si la web la
+convierte en un instante —la medianoche de ese día en tiempo universal— y luego lo enseña en la hora del
+navegador, **un navegador en otra zona horaria enseña el día anterior**. Es un fallo clásico y difícil de
+ver, porque en España funciona.
+
+**Regla:** `format.ts` formatea esas fechas directamente desde el texto, **sin pasar por la zona horaria**. Lo
+vigila una prueba de Vitest que ejecuta el formateo con el navegador en otra zona horaria.
 
 ### 10. La accesibilidad en concreto
 
