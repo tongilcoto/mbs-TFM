@@ -7,6 +7,7 @@
   - §4 · los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, lo que falta al servidor;
   - §5 · los formularios: reglas del catálogo con Ajv, todas a la vez; solo lo cambiado; aviso al salir;
   - §6 · el mapa de pantallas: caminos en español, código interno, pestañas con camino, temporada tras `?`.
+  - §7 · quién es dueño de cada dato: cuatro tipos, lo que nunca se permite no aparece, lo que a veces sí, desactivado y con motivo.
 
   El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
@@ -526,11 +527,60 @@ el menú tiene solo «Equipos».
 
 ### 7. Quién es dueño de cada dato
 
-*Lo que trae la federación (partidos, rivales, clasificación) solo se corrige; lo que mete el club
-(jugadores, goles, tarjetas) se gestiona entero. Y el equipo propio, la excepción: se crea y se borra
-mientras no esté enganchado (`D-66`). Cómo se refleja en botones y formularios.*
+La regla viene del backend: **cada dato tiene un solo dueño**, y lo que trae la federación se corrige, pero
+no se crea ni se borra (LLD del backend §5.1, «Matriz de propiedad», y `D-21`). La web la hace **visible**:
+el usuario tiene que entender, sin preguntar, por qué en un sitio hay botón de borrar y en otro no.
 
-> Pendiente.
+#### 7.1 Cuatro tipos de dato
+
+| Tipo | Qué datos | Qué puede hacer el usuario |
+|---|---|---|
+| **1. De la federación, solo lectura** | Partidos, jornadas, clasificación, goleadores de la liga | **Solo mirar**: ni crear, ni editar, ni borrar |
+| **2. De la federación, corregible** | Rivales (nombre, nombre corto, escudo) y competiciones | **Corregir**, sin crear ni borrar. **La corrección se mantiene** aunque la federación vuelva a actualizar: la ingesta no pisa esos campos (LLD del backend §3.7, «Política de *upsert*») |
+| **3. Del club** | Jugadores, goles, tarjetas, minutos, ausencias, personal | **Todo**: crear, editar y borrar |
+| **4. El equipo propio, la excepción** (`D-66`) | Los equipos del club | **Crear**, siempre. **Borrar, solo mientras no esté enganchado** a la federación; enganchado, no se borra: se **libera** (`/ownership`) |
+
+**El partido y su acta son de dueños distintos:** el partido (fecha, rival, marcador) es del tipo 1; sus
+goles, tarjetas y minutos, del tipo 3. En el acta se edita lo segundo, nunca lo primero.
+
+#### 7.2 Lo que no se permite nunca lo garantiza el catálogo
+
+El catálogo no tiene, por ejemplo, «borrar un partido», así que **esa petición no existe en los tipos
+generados** (§1.1): si alguien la escribe en la web, **no compila**. No hace falta una regla en la web para
+esto, y no hay forma de equivocarse.
+
+#### 7.3 Lo que se permite solo a veces lo decide la web mirando el dato
+
+La web lo deduce de los datos que ya tiene, para enseñar el botón bien desde el principio. **El servidor
+sigue siendo quien manda**: si la web se equivoca, responde con un error del §4.
+
+| Acción | Cuándo se permite | Qué mira la web | Si aun así se intenta |
+|---|---|---|---|
+| Borrar un equipo | Mientras no esté enganchado | `federationTeamId` vacío | 409 |
+| Cambiar los campos de una competición que se bloquean tras sincronizarla | Antes de su primera sincronización | `lastSyncedAt` vacío | 409 `NOT_EDITABLE_AFTER_SYNC` |
+| Borrar un equipo con jugadores o cargos | Nunca | **No se puede saber de antemano**: el equipo no trae cuántos tiene | 409, que sale como aviso (§4.3) |
+
+#### 7.4 Ocultar o desactivar
+
+- **Lo que no se permite nunca, no aparece.** En un partido no hay botón «Borrar».
+- **Lo que se permite a veces aparece desactivado y con el motivo escrito a la vista**, por ejemplo: «No se
+  puede borrar: el equipo está enganchado a la federación. Para dejar de gestionarlo, libéralo». Así el
+  usuario sabe que la acción existe y qué le falta para poder hacerla. **El motivo va escrito en la
+  pantalla, no solo en un globo al pasar el ratón**: un globo no lo ve quien usa el teclado o un lector de
+  pantalla (§10).
+
+#### 7.5 La etiqueta «Federación»
+
+Las pantallas de los tipos 1 y 2 llevan una **etiqueta «Federación»** que explica, sin preguntar, por qué no
+hay botones de crear o borrar. Las del tipo 2 añaden: **«Tus correcciones se mantienen aunque la federación
+actualice los datos»**.
+
+#### 7.6 Lo que no se puede enseñar con lo que hay hoy
+
+**Si un dato de un rival lo corrigió el club o sigue como vino de la federación.** El servidor no guarda esa
+diferencia, a propósito (LLD del backend §3.7: la regla de la ingesta funciona «sin necesidad de banderas
+nuevas»). Enseñar «corregido por el club» pediría un cambio en el servidor. **No se propone ahora**; queda
+anotado como límite.
 
 ---
 
