@@ -8,6 +8,7 @@
   - §5 · los formularios: reglas del catálogo con Ajv, todas a la vez; solo lo cambiado; aviso al salir;
   - §6 · el mapa de pantallas: caminos en español, código interno, pestañas con camino, temporada tras `?`.
   - §7 · quién es dueño de cada dato: cuatro tipos, lo que nunca se permite no aparece, lo que a veces sí, desactivado y con motivo.
+  - §8 · el club en la web: lo resuelve el servidor, un club por dirección, página entera si no carga, lo que publica su federación.
 
   El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
@@ -588,9 +589,52 @@ anotado como límite.
 
 ### 8. El club en la web
 
-*Cómo lo saca de la dirección y qué enseña si el club no existe.*
+**Cómo saca el servidor el club de la dirección** (`backend/Sources/Tenancy/TenantResolver.swift`,
+`slug(fromHost:)`): toma **una sola palabra** delante del dominio. `celtic-castilla.miapp.com` es un club;
+`miapp.com` a secas o `a.b.miapp.com`, no. Y hay palabras reservadas que nunca son un club: `www`, `api`,
+`admin`, `app`, `status`, `mail` y `staging`.
 
-> Pendiente.
+#### 8.1 La web no lee la dirección: se la deja al servidor
+
+Al arrancar, la web pide `/api/v1/club` (§2.1). Con la respuesta pone **el nombre corto y el escudo en la
+cabecera**, y el nombre en la pestaña del navegador («CD Ejemplo · Backoffice»). Mientras llega se ve el
+marco vacío con «cargando…»: **no se pinta ninguna pantalla hasta saber de qué club es**.
+
+#### 8.2 Un club por dirección
+
+**No hay forma de cambiar de club dentro de la web.** Cambiar de club es abrir otra dirección, y eso arranca
+la web desde cero, con la memoria vacía: **los datos de dos clubes no se pueden mezclar nunca**. Si algún día
+una persona trabaja para dos clubes, lo resolverá el inicio de sesión (§12).
+
+#### 8.3 Si el club no se puede cargar, una página entera
+
+Sin club no funciona ninguna pantalla, así que se enseña **una página entera, sin menú**:
+
+| Qué responde el servidor | Cuándo pasa | Qué se enseña |
+|---|---|---|
+| `UNKNOWN_TENANT` (404) | La palabra no es de ningún club: `noexiste.miapp.com` | «Este club no existe. Revisa la dirección» |
+| `TENANT_NOT_RESOLVED` (400) | Falta el club en la dirección: `miapp.com`, `www.miapp.com`, `localhost:5173` | «Falta el club en la dirección», con un ejemplo (`tu-club.miapp.com`); en local, además, cómo abrirla: `celtic-castilla.localhost:5173` |
+| `TENANT_NOT_PROVISIONED` (500) | El club existe, pero su base de datos no está preparada | «Este club aún no está preparado. Avisa a quien lo administra» |
+| Sin respuesta, o `DATABASE_UNAVAILABLE` (503) | El servidor o la base no responden | «No se ha podido conectar con el servidor», con *Reintentar* (§4.4) |
+
+#### 8.4 Lo que publica su federación cambia lo que se enseña
+
+La respuesta del club trae dos datos sobre lo que publica su federación, y **la web se guía por ellos, nunca
+por «si es Madrid» escrito en su código**:
+
+| Dato | Con `false` |
+|---|---|
+| `federationProvidesScorers` | No hay goleadores de la liga: **esa sección no aparece**, ni siquiera vacía |
+| `federationProvidesRoundStandings` | La clasificación de las jornadas anteriores al alta del club es calculada, no oficial: **se rotula «Clasificación calculada»** |
+
+Cómo se ve en cada caso lo concreta la ficha de cada pantalla (parte E).
+
+#### 8.5 Lo que se revisará con el inicio de sesión
+
+Hoy, quien pruebe direcciones al azar puede saber qué clubes existen, porque «no existe» y «sí existe» se
+distinguen. Es el aviso del borrador (§3): la API no tiene control de acceso hasta que llegue el inicio de
+sesión. La web no lo empeora, porque el servidor ya lo dice; pero **al montar el inicio de sesión hay que
+revisar el mensaje de «Este club no existe»** (§12).
 
 ### 9. El tema y el idioma
 
@@ -612,7 +656,8 @@ anotado como límite.
 
 ### 12. El inicio de sesión
 
-*Hueco reservado: se monta al final (borrador, §3).*
+*Hueco reservado: se monta al final (borrador, §3). Ya anotado para entonces: revisar el mensaje «Este club
+no existe» (§8.5) y cómo trabaja quien pertenezca a dos clubes (§8.2).*
 
 > Pendiente.
 
