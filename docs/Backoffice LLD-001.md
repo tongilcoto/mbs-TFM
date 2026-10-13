@@ -10,6 +10,7 @@
   - §7 · quién es dueño de cada dato: cuatro tipos, lo que nunca se permite no aparece, lo que a veces sí, desactivado y con motivo.
   - §8 · el club en la web: lo resuelve el servidor, un club por dirección, página entera si no carga, lo que publica su federación.
   - §9 · el tema y el idioma: Aura ajustado, colores con significado, modo claro y oscuro con interruptor, formatos en un solo fichero.
+  - §10 · la accesibilidad: teclado, cambio de pantalla, anuncios, estructura, tamaño; escenarios de teclado y revisión a mano por rebanada.
 
   El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
@@ -711,9 +712,86 @@ vigila una prueba de Vitest que ejecuta el formateo con el navegador en otra zon
 
 ### 10. La accesibilidad en concreto
 
-*Qué reglas se cumplen siempre, además de lo que comprueban solas las herramientas del ADR.*
+El ADR (decisión 6) fijó el objetivo —**WCAG 2.2, nivel AA**— y dos comprobaciones automáticas: el revisor
+de código mientras se escribe y **axe** en cada escenario, en los dos modos (§9.4). Y dejó escrito que eso
+solo encuentra una parte de los problemas. Aquí van **las reglas que se cumplen siempre**, sobre todo las que
+las herramientas no ven, y **cómo se comprueban**.
 
-> Pendiente.
+Ya repartidas por el documento: el motivo de lo desactivado, escrito a la vista (§7.4); el color nunca
+solo y el contraste en los dos modos (§9.4); el interruptor que dice lo que hace (§9.3).
+
+#### 10.1 Todo se puede hacer con el teclado
+
+- Cada botón, enlace, campo y celda editable **se alcanza con Tab** y se activa con Intro o Espacio.
+- **Se ve siempre dónde está el foco**, con un marco claro en los dos modos, y **nunca queda tapado** por una
+  cabecera o un aviso.
+- **El orden de Tab es el orden de lectura.**
+- Una **ventana emergente retiene el foco** mientras está abierta; se cierra con **Esc**, y el foco vuelve al
+  botón que la abrió.
+- Al principio de cada página, un enlace **«Saltar al contenido»**, para no recorrer el menú entero cada vez.
+
+#### 10.2 Al cambiar de pantalla, se nota
+
+En una web que se descarga entera, cambiar de pantalla no recarga la página, y **un lector de pantalla no se
+entera** de que algo ha cambiado. Por eso, en cada cambio:
+
+- **El título de la pestaña cambia** y dice dónde se está: «Plantilla · Cadete A · CD Ejemplo».
+- **El foco pasa al título principal** de la pantalla nueva, que el lector lee en voz alta.
+
+#### 10.3 Lo que cambia solo se anuncia
+
+- **El «cargando…» y el «Guardado» se leen en voz alta sin mover el foco.**
+- **Al fallar un formulario, arriba sale una lista con todos los errores**, cada uno con un enlace a su campo,
+  y **el foco va a esa lista**. Cada campo con error queda marcado como no válido y con su mensaje unido, para
+  que el lector lo lea al llegar a él. Es el complemento de «todos los errores a la vez» (§5.1).
+- El aviso «Guardado» puede desaparecer solo; **los de error, no** (§4.3).
+
+#### 10.4 La estructura se puede recorrer
+
+- **Un solo título principal por pantalla**, y los de dentro en orden.
+- **Las tablas tienen cabeceras de verdad**, para que el lector diga «Dorsal: 7» y no solo «7».
+- **Cada campo tiene una etiqueta visible**; el texto gris de dentro del campo no cuenta como etiqueta.
+- **Lo obligatorio se marca con el asterisco y con la palabra**, para que el lector diga «obligatorio» (§5.2).
+
+#### 10.5 Tamaño, zoom y movimiento
+
+- Todo lo que se pulsa mide **al menos 24 × 24 píxeles** (WCAG 2.2, criterio 2.5.8, nuevo en esta versión).
+- La web se usa con **el zoom del navegador al 200 %** sin que se corte nada.
+- Si el sistema pide **reducir el movimiento**, no hay animaciones.
+
+#### 10.6 La página dice que está en español
+
+Para que el lector de pantalla la pronuncie bien (`lang="es"`).
+
+#### 10.7 Cómo se comprueba lo que no ve axe
+
+**a. Escenarios de teclado, automáticos.** Playwright pulsa teclas y comprueba dónde está el foco, así que
+buena parte de §10.1–§10.3 se prueba como cualquier otra cosa:
+
+```gherkin
+Scenario: Dar de alta un equipo solo con el teclado
+  Given estoy en la portada
+  When doy de alta el equipo "Cadete B" usando solo el teclado
+  Then el equipo "Cadete B" aparece en la portada
+
+Scenario: Al fallar el alta, el foco va a la lista de errores
+  When envío el alta de equipo sin categoría ni temporada
+  Then el foco está en la lista de errores
+  And la lista nombra "Categoría" y "Temporada"
+```
+
+**Uno por cada pantalla con formulario**, y **uno para el cambio de pantalla** que compruebe el título y el
+foco (§10.2).
+
+**b. Una revisión a mano al cerrar cada rebanada**, con esta lista en el PR (unos diez minutos):
+
+- [ ] Recorrer la pantalla **solo con el teclado**.
+- [ ] Escucharla con **VoiceOver** (viene con el Mac).
+- [ ] Verla con el **zoom al 200 %**.
+- [ ] Verla en los **dos modos**.
+
+Lo que no se automatiza es lo que solo se juzga escuchando o mirando: **si los textos tienen sentido leídos
+en voz alta y si el orden de lectura es natural**.
 
 ### 11. Las pruebas por dentro
 
