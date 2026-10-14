@@ -129,8 +129,8 @@ HTTP_TRACE=1 swift run Run serve --log debug     # cuerpos + SQL
 
 | | `tfm` | `tfm_test` |
 |---|---|---|
-| Quién escribe | tú, y `swift run Run …` | `swift test` |
-| *Schemas* de club | `club_<slug>` | `test_<slug>` y `e2e_<slug>` |
+| Quién escribe | tú, y `swift run Run …` | `swift test`, y los escenarios de la web |
+| *Schemas* de club | `club_<slug>` | `test_<slug>` y `e2e_<slug>`; los de la web, `bo_<slug>` |
 | Si la borras | pierdes tu trabajo | nada: se recrea sola |
 
 ```

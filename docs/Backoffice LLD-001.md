@@ -11,6 +11,7 @@
   - §8 · el club en la web: lo resuelve el servidor, un club por dirección, página entera si no carga, lo que publica su federación.
   - §9 · el tema y el idioma: Aura ajustado, colores con significado, modo claro y oscuro con interruptor, formatos en un solo fichero.
   - §10 · la accesibilidad: teclado, cambio de pantalla, anuncios, estructura, tamaño; escenarios de teclado y revisión a mano por rebanada.
+  - §11 · las pruebas por dentro: servidor y web propios contra `tfm_test`, un club `bo_` por escenario, federación falsa con las respuestas grabadas, reglas de los pasos.
 
   El resto, pendiente.
 - **Fecha de apertura:** 2026-10-12
@@ -797,7 +798,82 @@ en voz alta y si el orden de lectura es natural**.
 
 *Cómo arrancan las pruebas su propio servidor y su club, y cómo se escriben los pasos.*
 
-> Pendiente.
+Hay dos tipos de prueba (ADR) y **solo uno arranca algo**:
+
+| | **Pruebas de piezas** (Vitest) | **Escenarios de punta a punta** (Playwright + Cucumber) |
+|---|---|---|
+| Qué hay en marcha | Solo la pieza: ni navegador real, ni servidor, ni base | Navegador, web, `Run serve` y la base `tfm_test`, todo de verdad |
+| De dónde salen los datos | Se los pasa la prueba, como argumentos (§1.2) | Del servidor de verdad |
+| ¿Federación falsa? | No: aquí nadie habla con la federación | **Sí** (§11.3) |
+
+El resto de esta sección es de los escenarios.
+
+#### 11.1 El arranque: un servidor y una web solo para los escenarios
+
+```sh
+DB_NAME=tfm_test API_PORT=8081 swift run Run serve     # el servidor, en otro puerto y otra base
+# la web en el 5174, con su receptor apuntando al 8081 (§1.3)
+```
+
+- **No se usan ni tu servidor ni tu base**: tu `tfm` y tu `Run serve` en el 8080 siguen como estén, y
+  Postgres no se para.
+- **Si alguno de los dos no arranca, la prueba falla enseguida** con un mensaje que dice cuál. Nunca se
+  queda esperando.
+- **Al empezar se barren los restos** de una pasada anterior que se cortara (§11.2).
+- **Por comprobar en la primera rebanada:** que `DB_NAME=tfm_test` funcione tal cual. Las variables están
+  documentadas (README del backend, §2), pero nadie ha arrancado así el servidor todavía.
+
+#### 11.2 Un club por escenario, con el prefijo `bo_`
+
+Cada escenario crea su propio club, así ninguno ve lo que dejó otro.
+
+```sh
+swift run Run provision-tenant <slug> --schema bo_<slug>     # el mismo camino que en producción
+```
+
+- **`bo_`, no `e2e_` ni `test_`**: las pruebas del backend borran al arrancar los *schemas* con esos dos
+  prefijos (`TestEnvironment.swift`, `disposableSchemaPrefixes`), y se llevarían los de un escenario a
+  medias. Al revés, el barrido de los escenarios solo toca `bo_`.
+- **El barrido borra las dos cosas**: el *schema* `bo_…` y su fila en `public.tenants`.
+- **`KEEP_TEST_DATA=1` deja los datos**, como en el backend, para mirarlos en TablePlus sobre `tfm_test`.
+- **Se mide cuánto cuesta** crear un club por escenario. Si resultara lento, se revisa con números.
+
+#### 11.3 Los datos de los `Given`
+
+**Lo que es del club se crea a través del servidor**, como lo haría un usuario: equipos, temporadas…
+
+**Lo que es de la federación se prepara siempre con la federación falsa.** Partidos, competiciones y
+clasificación no se pueden crear por el servidor (§7): solo los trae la ingesta. Así que el escenario hace
+lo mismo que en producción: engancha el equipo y **ejecuta la ingesta de verdad**, que lee de la federación
+falsa. La ingesta queda probada de paso.
+
+```
+navegador → web → Run serve → tfm_test
+                       │
+                       └──→ federación falsa      ← en lugar de rffm.es
+```
+
+- **No sustituye a nada nuestro**: se pone detrás del servidor, en el lugar de rffm.es. Por eso no
+  contradice el «sin simulacros» del ADR, que hablaba de nuestro servidor. Es lo mismo que hacen las
+  pruebas del backend, que nunca llaman a la federación de verdad.
+- **Una sola técnica para todo**: sirve igual para los `Given` de la portada que para las pantallas que
+  hacen que el servidor llame a la federación en ese momento (el enganche). Cada escenario elige su
+  `Given`; por debajo, siempre la misma pieza.
+- **Es un servidor pequeño que devuelve las respuestas grabadas** que ya usa el backend
+  (`backend/Tests/*/Fixtures/`): calendario jugado y sin jugar, goleadores, clasificación y los casos de
+  «no existe». Si un escenario necesita algo que no está grabado, se graba una respuesta nueva.
+- **Pendiente del backend, con la portada:** hoy la dirección de la federación está fija en
+  `Sources/Federation/RFFMEndpoints.swift:13` (`https://www.rffm.es`). Tiene que poder cambiarse con una
+  variable de entorno; si no se pone, sigue siendo rffm.es.
+
+#### 11.4 Cómo se escriben los pasos
+
+- **Como hablaría el usuario**: «doy de alta el equipo "Cadete B"», no «relleno el input `name`».
+- **Los elementos se buscan por su texto o por lo que son** (un botón, un título, un campo con su
+  etiqueta), no por detalles internos de la página. Si un paso no encuentra algo así, suele ser un fallo
+  de accesibilidad (§10.4).
+- **Un `Given` solo prepara y un `Then` solo comprueba.** Un `Given` no verifica nada, y un `Then` no crea
+  ni cambia datos.
 
 ### 12. El inicio de sesión
 
