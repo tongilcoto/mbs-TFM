@@ -1,19 +1,7 @@
 # Backoffice LLD-001 · Cómo está hecha la web del backoffice por dentro
 
-- **Estado:** Borrador. Redactadas:
-  - §1 · las carpetas, las tres partes y el prefijo `/api/v1`;
-  - §2 · qué recuerda la web: la dirección, nada en el navegador y los datos pedidos cada vez;
-  - §3 · el recorrido de una petición: cuatro estados, cancelar al salir, botón bloqueado al guardar, 30 s;
-  - §4 · los errores: por `code`, mensajes de la web, dónde se enseñan, cuándo reintentar, lo que falta al servidor;
-  - §5 · los formularios: reglas del catálogo con Ajv, todas a la vez; solo lo cambiado; aviso al salir;
-  - §6 · el mapa de pantallas: caminos en español, código interno, pestañas con camino, temporada tras `?`.
-  - §7 · quién es dueño de cada dato: cuatro tipos, lo que nunca se permite no aparece, lo que a veces sí, desactivado y con motivo.
-  - §8 · el club en la web: lo resuelve el servidor, un club por dirección, página entera si no carga, lo que publica su federación.
-  - §9 · el tema y el idioma: Aura ajustado, colores con significado, modo claro y oscuro con interruptor, formatos en un solo fichero.
-  - §10 · la accesibilidad: teclado, cambio de pantalla, anuncios, estructura, tamaño; escenarios de teclado y revisión a mano por rebanada.
-  - §11 · las pruebas por dentro: servidor y web propios contra `tfm_test`, un club `bo_` por escenario, federación falsa con las respuestas grabadas, reglas de los pasos.
-
-  El resto, pendiente.
+- **Estado:** **Cerrado el 2026-10-14** para §1–§11. §12, el inicio de sesión, queda reservado para el
+  final. Lo que se descubra en una rebanada y valga para todas las pantallas se añade aquí (parte E).
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
 - **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
@@ -28,7 +16,7 @@
 > - **Las herramientas**: están en el ADR.
 > - **El detalle campo a campo de los datos**: está en el catálogo `backend/Sources/APIContract/openapi.yaml`.
 >   Copiarlo aquí sería tener dos verdades (`D-25`).
-> - **El orden de trabajo y los pasos**: van en el plan de rebanadas.
+> - **El orden de trabajo, los pasos y la ficha de cada pantalla**: van en el plan de desarrollo (parte E).
 
 ---
 
@@ -52,7 +40,7 @@ backoffice/
 │   │   ├── client.ts    la pieza que hace las peticiones
 │   │   └── errors.ts    traduce los errores del servidor (§4)
 │   ├── screens/         una carpeta por pantalla: pide los datos y se los pasa a las piezas
-│   │   └── home/        la portada (E.1)
+│   │   └── home/        la portada
 │   ├── components/      piezas que solo pintan: reciben datos y avisan de los clics
 │   └── theme/           colores e idioma de PrimeVue (§9)
 └── e2e/
@@ -248,7 +236,7 @@ club, valida y responde. Ninguna regla del negocio se decide en la web (ADR, req
 | **Vacío** | La respuesta llegó bien, pero no trae nada | «Este equipo aún no tiene jugadores» |
 | **Con datos** | La respuesta trae algo que enseñar | La lista de jugadores |
 
-**Los cuatro se diseñan siempre**, y la ficha de cada pantalla (parte E) dice cómo se ve cada uno. **Vacío
+**Los cuatro se diseñan siempre**, y la ficha de cada pantalla (en el plan de desarrollo) dice cómo se ve cada uno. **Vacío
 no es error**: un equipo sin jugadores es una situación normal y se dice con un mensaje que explica qué
 hacer, no con un aviso de fallo. Para las pruebas, son **cuatro escenarios por pantalla**.
 
@@ -453,7 +441,7 @@ El catálogo dice que, al modificar, **un campo que no se envía no se toca** y 
 #### 5.4 Al guardar bien
 
 Sale un **aviso breve, «Guardado»**, y la pantalla vuelve a pedir sus datos (§3.3). **Adónde se va después
-de un alta** lo dice la ficha de cada pantalla (parte E).
+de un alta** lo dice la ficha de cada pantalla (en el plan de desarrollo).
 
 #### 5.5 Salir con cambios sin guardar
 
@@ -481,7 +469,7 @@ la competición arriba.
 
 | Camino | Pantalla | Estado |
 |---|---|---|
-| `/` | **Portada**: los equipos del club con su competición (E.1) | ✅ Rebanada 1 |
+| `/` | **Portada**: los equipos del club con su competición | ✅ Rebanada 1 |
 | `/equipos/nuevo` | **Alta de equipo** | ✅ Rebanada 2 |
 | `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
 | `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |
@@ -492,7 +480,7 @@ la competición arriba.
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
 **Solo las dos primeras están decididas.** El resto es un borrador: cada camino se confirma, o se cambia,
-al escribir la ficha de su pantalla (parte E).
+al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español
 
@@ -636,7 +624,7 @@ por «si es Madrid» escrito en su código**:
 | `federationProvidesScorers` | No hay goleadores de la liga: **esa sección no aparece**, ni siquiera vacía |
 | `federationProvidesRoundStandings` | La clasificación de las jornadas anteriores al alta del club es calculada, no oficial: **se rotula «Clasificación calculada»** |
 
-Cómo se ve en cada caso lo concreta la ficha de cada pantalla (parte E).
+Cómo se ve en cada caso lo concreta la ficha de cada pantalla (en el plan de desarrollo).
 
 #### 8.5 Lo que se revisará con el inicio de sesión
 
@@ -884,12 +872,26 @@ no existe» (§8.5) y cómo trabaja quien pertenezca a dos clubes (§8.2).*
 
 ---
 
-## E. Fichas de pantalla
+## E. Lo que sigue
 
-*Una ficha por pantalla, que crece con cada rebanada: qué enseña, qué peticiones usa, qué acciones permite,
-cómo se ve vacía, cargando o con error, y qué le falta al servidor. Lo que falte se diseña en el catálogo y
-en el LLD del backend.*
+### E.1 Las fichas de pantalla van en el plan de desarrollo
 
-### E.1 La portada
+Este LLD dice lo que vale para **todas** las pantallas. Lo propio de cada una —qué enseña, qué peticiones
+usa, qué acciones permite, cómo se ve vacía, cargando o con error, adónde lleva después de guardar y qué le
+falta al servidor— va en **su rebanada del plan de desarrollo**, que se escribe cuando toca hacerla. Lo que
+le falte al servidor se diseña en el catálogo y en el LLD del backend.
 
-> Pendiente.
+**Regla:** al cerrar cada rebanada, si salió una norma que vale para todas las pantallas, se sube a este LLD,
+en el apartado que le toque y en un commit aparte.
+
+### E.2 Lo que le falta al servidor
+
+Recogido de §4.5 y §11.3, para que el plan lo reparta:
+
+| Qué | Dónde | Cuándo |
+|---|---|---|
+| La lista cerrada de códigos de error (`enum` de `code`) | `openapi.yaml`, esquema `Problem` (§4.5 *b*, paso 1) | Con la portada |
+| El formato `<campo>: <motivo>` de `detail` en los errores de valor | `openapi.yaml` (§4.5 *a*) | Con la portada |
+| Poder cambiar la dirección de la federación con una variable de entorno; sin ella, rffm.es | `Sources/Federation/RFFMEndpoints.swift:13` (§11.3) | Con la portada |
+| Que `ProblemMiddleware` use la lista de códigos generada | `ProblemMiddleware.swift` (§4.5 *b*, paso 2) | Sin prisa |
+| Devolver todos los errores de valor a la vez | Dominio y `ProblemMiddleware` (§4.5 *c*) | Sin prisa; entonces se revisa §4.5 *a* |
