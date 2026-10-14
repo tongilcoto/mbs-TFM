@@ -27,6 +27,10 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   con `launchd` y contra la base local de desarrollo. **Cerrado el 2026-10-11**: el agente dispara
   sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
+- [backoffice/Plan backoffice-001.md](./backoffice/Plan%20backoffice-001.md) — **la web del backoffice,
+  rebanada a rebanada**, abierto el 2026-10-14: el mapa de las diez rebanadas con las operaciones que activa
+  cada una, y el detalle del andamiaje (bloques W y E), la portada y el alta de equipo. Cinco decisiones
+  pendientes del desarrollador (`DBO-1`…`DBO-5`), con su evidencia.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
@@ -378,7 +382,8 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**604 tests.** Lo siguiente es **abrir el backoffice**. **Web backoffice, app iOS y app Android siguen sin
+**604 tests.** Lo siguiente es **abrir el backoffice**, con su
+[plan](./backoffice/Plan%20backoffice-001.md) escrito el 2026-10-14. **Web backoffice, app iOS y app Android siguen sin
 empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
