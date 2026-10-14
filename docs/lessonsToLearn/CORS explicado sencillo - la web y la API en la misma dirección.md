@@ -78,7 +78,7 @@ Se ponen la web y el servidor **bajo la misma dirección**, y se distinguen por 
 
 ```
 https://celtic-castilla.miapp.com/              → la web (pantallas, botones, formularios)
-https://celtic-castilla.miapp.com/v1/...        → el servidor (los datos)
+https://celtic-castilla.miapp.com/api/v1/...    → el servidor (los datos)
 ```
 
 En la puerta hay un **recepcionista**: un programa pequeño cuya única tarea es repartir lo que llega. En
@@ -87,7 +87,7 @@ el oficio se llama *proxy inverso*.
 ```mermaid
 flowchart LR
     N[Navegador] --> R{Recepcionista<br/>celtic-castilla.miapp.com}
-    R -- "empieza por /v1" --> S[Servidor de datos<br/>Swift · Vapor]
+    R -- "empieza por /api" --> S[Servidor de datos<br/>Swift · Vapor]
     R -- "todo lo demás" --> W[Ficheros de la web]
 ```
 
@@ -133,7 +133,7 @@ Cuatro trabajos, y ninguno más:
 1. **Pone el candado.** Es el que habla con el navegador en `https`, así que es quien guarda el
    certificado de seguridad. Por dentro, hacia el servidor, la conversación puede ir sin cifrar si es en la
    misma máquina o en una red privada.
-2. **Reparte por el principio del camino.** Lo que empieza por `/v1` va al servidor de datos y todo lo
+2. **Reparte por el principio del camino.** Lo que empieza por `/api` va al servidor de datos y todo lo
    demás, a los ficheros de la web.
 3. **Pasa el nombre de la dirección sin tocarlo.** Este es **el trabajo que no se puede hacer mal**. El
    servidor averigua el club leyendo el nombre con el que llegó la petición: la cabecera `Host`, en
@@ -144,10 +144,10 @@ Cuatro trabajos, y ninguno más:
    nombre llegue intacto.
 4. **Entrega los ficheros de la web**, si se decide que sea él quien lo haga (sección 6).
 
-**Sobre el prefijo:** el servidor ya contesta en `/v1/…`, sin `/api` delante. Lo más sencillo es que el
-recepcionista reparta por `/v1` y no tenga que reescribir nada; ninguna pantalla de la web empezará por
-`/v1`. Si se prefiere `/api/v1` por claridad, el recepcionista quita el `/api` al pasarla. Se decide en el
-LLD del backoffice.
+**Sobre el prefijo:** el servidor contesta en `/v1/…`, sin `/api` delante. Aun así, desde fuera los datos
+se piden en **`/api/v1/…`**, para que al leer una dirección se sepa a la primera si es de datos o de la web,
+y el recepcionista quita el `/api` al pasarla. Decidido en el
+[LLD del backoffice, §1.3](../Backoffice%20LLD-001.md), con la regla de cuándo se escribe cada forma.
 
 ### Dónde puede vivir
 
@@ -157,7 +157,7 @@ las tres se piensan alrededor de eso.
 | | Dónde vive | Cómo se despliega | A favor | En contra |
 |---|---|---|---|---|
 | **a. Un recepcionista propio junto al servidor** | Un programa pequeño (p. ej. **Caddy**) dentro del mismo paquete que se sube a Fly.io, o en un segundo paquete al lado, hablando por la red privada de Fly.io | Su configuración es un fichero de texto en el repositorio (el `Caddyfile`, ejemplo en [[Dominios, subdominios, API y CORS]]). Se mete en la imagen de Docker y se sube con `fly deploy`, como el servidor | Todo bajo control y versionado. Pasa el nombre intacto por defecto. Puede entregar también los ficheros de la web | Un programa más que vigilar. Si va en el mismo paquete que el servidor, hay que arrancar dos programas dentro de un solo contenedor |
-| **b. El servicio que aloja la web hace de recepcionista** | Netlify, Vercel o Cloudflare alojan los ficheros y, con una regla de "reenvío", mandan `/v1/*` al servidor en Fly.io | Una regla en un fichero de configuración del propio servicio | Nada que montar: viene con el alojamiento. Los ficheros se sirven desde copias repartidas por el mundo | **El riesgo del trabajo 3**: al reenviar a otra dirección, estos servicios suelen poner el nombre del destino. Habría que comprobarlo en cada uno y, si lo cambian, enseñar al servidor a leer `X-Forwarded-Host` **solo cuando venga del recepcionista**, que es código de seguridad nuevo |
+| **b. El servicio que aloja la web hace de recepcionista** | Netlify, Vercel o Cloudflare alojan los ficheros y, con una regla de "reenvío", mandan `/api/*` al servidor en Fly.io | Una regla en un fichero de configuración del propio servicio | Nada que montar: viene con el alojamiento. Los ficheros se sirven desde copias repartidas por el mundo | **El riesgo del trabajo 3**: al reenviar a otra dirección, estos servicios suelen poner el nombre del destino. Habría que comprobarlo en cada uno y, si lo cambian, enseñar al servidor a leer `X-Forwarded-Host` **solo cuando venga del recepcionista**, que es código de seguridad nuevo |
 | **c. Sin recepcionista: el servidor entrega también la web** | El propio servidor Swift sirve los ficheros de la web (Vapor trae una pieza para eso) además de los datos | Los ficheros de la web se copian dentro de la imagen del servidor antes de `fly deploy` | Un solo programa y nada que configurar. El nombre llega intacto porque no hay intermediario | Cada cambio en la web obliga a volver a publicar el servidor. Mezcla dos trabajos en el mismo programa |
 
 En las tres, **el candado lo puede poner la propia entrada de Fly.io**, que se encarga de los certificados.
@@ -176,8 +176,8 @@ Cuatro llamadas desde la terminal, con la web ya publicada. Son la prueba de hum
 
 | Llamada | Lo que tiene que pasar |
 |---|---|
-| `curl https://celtic-castilla.miapp.com/v1/club` | Devuelve los datos de **ese** club. Si sale otro club o un error de "club desconocido", el recepcionista ha cambiado el nombre (trabajo 3) |
-| `curl https://otro-club.miapp.com/v1/club` | Devuelve el **otro** club, no el mismo que antes |
+| `curl https://celtic-castilla.miapp.com/api/v1/club` | Devuelve los datos de **ese** club. Si sale otro club o un error de "club desconocido", el recepcionista ha cambiado el nombre (trabajo 3) |
+| `curl https://otro-club.miapp.com/api/v1/club` | Devuelve el **otro** club, no el mismo que antes |
 | `curl https://celtic-castilla.miapp.com/` | Devuelve la página de la web (`index.html`) |
 | `curl https://celtic-castilla.miapp.com/equipos/123` | **También** devuelve `index.html`, no un "no encontrado" (sección 6, regla 1) |
 
@@ -190,9 +190,13 @@ desarrollo, trae **su propio recepcionista**. Se configura en su fichero, `vite.
 ```ts
 server: {
   proxy: {
-    // Lo que empiece por /v1, al servidor de datos.
+    // Lo que empiece por /api, al servidor de datos, quitándole el /api.
     // changeOrigin: false → el nombre de la dirección pasa intacto (trabajo 3).
-    '/v1': { target: 'http://localhost:8080', changeOrigin: false },
+    '/api': {
+      target: 'http://localhost:8080',
+      changeOrigin: false,
+      rewrite: (path) => path.replace(/^\/api/, ''),
+    },
   },
 },
 ```
@@ -232,11 +236,11 @@ Tres cosas que conviene tener claras:
 
 - **Son los mismos ficheros para todos los clubes y todos los usuarios.** No hay una copia por club: la web,
   ya en el navegador, mira en qué dirección está abierta y pide los datos de ese club.
-- **No llevan datos dentro.** Ni un jugador ni un partido. Los datos llegan después, pidiéndolos a `/v1`.
+- **No llevan datos dentro.** Ni un jugador ni un partido. Los datos llegan después, pidiéndolos a `/api/v1`.
 - **Son públicos.** Cualquiera puede descargarlos sin iniciar sesión, igual que puede ver el código de
   cualquier web. Por eso **no puede ir nada secreto** en ellos. La clave pública de Supabase sí puede ir,
   porque está pensada para eso; la clave de servicio de Supabase y las contraseñas de la base, **jamás**.
-  Los datos de los menores solo viajan tras iniciar sesión, por `/v1`, y eso lo controla el servidor.
+  Los datos de los menores solo viajan tras iniciar sesión, por `/api/v1`, y eso lo controla el servidor.
 
 ### Dónde se fabrican
 
@@ -266,7 +270,7 @@ encuentra y responde "no encontrado". La regla dice que, cuando no sea un ficher
 la aplicación arranca, mira el camino y pinta la pantalla correcta. En Caddy es la línea
 `try_files {path} /index.html`; en Netlify y compañía, una regla de su fichero de configuración.
 
-La regla vale para **todo menos `/v1`**: una petición de datos mal escrita tiene que dar el error del
+La regla vale para **todo menos `/api`**: una petición de datos mal escrita tiene que dar el error del
 servidor, no la página de la web.
 
 **Regla 2 · `index.html` nunca se guarda en caché; lo demás, para siempre.**

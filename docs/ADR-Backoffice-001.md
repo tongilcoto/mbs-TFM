@@ -95,7 +95,7 @@ Cucumber)** contra un servidor real de pruebas, con **accesibilidad** comprobada
 **Consecuencia que hay que resolver, y cómo:** con A, la web está en el navegador y pide datos al servidor.
 Si los dos estuvieran en direcciones distintas, el navegador exigiría un permiso previo en cada petición
 (CORS) y una lista de clubes permitidos que mantener. **Se evita poniendo web y servidor bajo la misma
-dirección de cada club** y repartiendo por el principio del camino (`/v1/…` al servidor, lo demás a la web),
+dirección de cada club** y repartiendo por el principio del camino (`/api/…` al servidor, lo demás a la web; el prefijo, en el LLD §1.3),
 con un «recepcionista» en la puerta. Explicado en
 [CORS explicado sencillo](./lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md)
 y, con el detalle técnico, en
@@ -179,6 +179,10 @@ se generan al compilar, y `Run serve` ya no mira el catálogo.
    servidor tiene activadas** (hoy, 6). Cada pantalla usa solo las que su rebanada activó; si usara otra, el
    servidor respondería «no encontrado». Eso lo controla el plan de rebanadas, no esta decisión.
 
+**Ampliada en el [LLD §5.1](./Backoffice%20LLD-001.md):** además de la forma de los datos, la web usa las
+**reglas de cada campo** del catálogo (obligatorio, longitud, mínimo…) para avisar de todos los fallos a la
+vez antes de enviar. Las lee **Ajv** directamente del catálogo, sin generar código nuevo.
+
 ## 6. Decisión 4 — El aspecto visual
 
 **Qué se decide:** de dónde salen los botones, tablas, formularios, calendarios y menús, y cómo se les da un
@@ -235,7 +239,7 @@ secciones 5 y 6.
 |---|---|---|---|---|
 | **A. Todo en una máquina** | Caddy, ficheros y `Run serve` en la misma máquina | 0 $ | La más barata | Cambiar la web obliga a recompilar y subir el servidor Swift. Dos programas en un contenedor |
 | **B. Dos máquinas en Fly.io** | «web»: Caddy y los ficheros, única dirección pública, con el certificado. «api»: `Run serve`, **sin dirección pública**, solo por la red privada | +2,19 $/mes | Cada pieza se publica por su lado. El servidor queda escondido tras una única puerta. El nombre llega intacto sin tocar el servidor | Una máquina más que vigilar |
-| **C. Web en un servicio externo gratuito** (Cloudflare Pages, Netlify) que reenvía `/v1` a Fly.io | Ficheros repartidos por el mundo | 0 $ | Gratis y rápida | Estos servicios suelen cambiar el nombre al reenviar: habría que leer `X-Forwarded-Host` en el servidor (código de seguridad nuevo). Dos proveedores |
+| **C. Web en un servicio externo gratuito** (Cloudflare Pages, Netlify) que reenvía `/api` a Fly.io | Ficheros repartidos por el mundo | 0 $ | Gratis y rápida | Estos servicios suelen cambiar el nombre al reenviar: habría que leer `X-Forwarded-Host` en el servidor (código de seguridad nuevo). Dos proveedores |
 | **D. Sin recepcionista** | `Run serve` entrega también la web | 0 $ | Un solo programa | Como la A, y además las dos reglas de los ficheros habría que programarlas en Swift |
 
 **Decisión: B.**
@@ -245,7 +249,7 @@ navegador / apps ──https──► entrada de Fly.io (*.miapp.com, certificad
                                    │
                                    ▼
                       máquina «web»: Caddy
-                      ├─ /v1/*  ──http, red privada──► máquina «api»: Run serve ──► Supabase (Postgres)
+                      ├─ /api/* ──http, red privada──► máquina «api»: Run serve ──► Supabase (Postgres)
                       └─ lo demás ─► ficheros de la web (dist/)
 ```
 
@@ -348,6 +352,7 @@ idea que `Tools/Mutate` en el servidor.
 - **El reparto de carpetas** dentro de `backoffice/` y cómo se arranca en local (Vite, con su recepcionista
   hacia `Run serve`; nota de CORS, sección 5).
 - **El prefijo**: `/v1` tal cual o `/api/v1` con el recepcionista quitando `/api` (nota de CORS, sección 5).
+  **Resuelto en el [LLD §1.3](./Backoffice%20LLD-001.md): `/api/v1`.**
 - **El tema de PrimeVue**: colores, idioma de las piezas (fechas `dd/mm/aaaa`, semana desde el lunes) y si
   hay modo claro.
 - **Cómo arrancan las pruebas su propio servidor y su club** (puerto, alta y baja del club de pruebas).

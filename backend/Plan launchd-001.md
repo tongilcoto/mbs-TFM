@@ -401,6 +401,42 @@ domingo 23:30 ya había recogido la jornada.
 `── estado al disparar · capacidades: … · ruta por defecto: sí/no`, **sin cambiar todavía la espera**. El
 próximo disparo con la tapa cerrada dirá qué ve el Mac en ese momento, y con eso se decide la señal.
 
+**La sonda de `L-L.6`, programada para la noche del 12 al 13 de octubre (2026-10-12).** Para no esperar al
+disparo del sábado, una sonda aparte, que **no lanza la ingesta ni toca la base**. `launchd` la dispara una
+vez a la **01:00** (agente `local.tfm.sonda`) y dura **8 h**. Cada minuto de su reloj escribe una línea con
+las capacidades de `pmset`, si hay ruta por defecto y si llega **de verdad** a internet. Con la tapa cerrada
+solo avanza en los despertares en segundo plano, así que cada línea es la foto de uno; al abrir el portátil,
+las de "despierto" quedan en el mismo fichero para comparar. Lo que se versiona es el guion, aquí, y las
+cifras cuando las haya; el fichero no (como las sondas de A-11):
+
+```bash
+#!/bin/bash
+# Sonda de L-L.6: qué ve el Mac en cada despertar. NO ejecuta la ingesta.
+LOG="$(dirname "$0")/sonda.log"
+HORAS="${1:-3}"
+fin=$(( $(date +%s) + HORAS * 3600 ))
+while [ "$(date +%s)" -lt "$fin" ]; do
+    caps="$(pmset -g systemstate | sed -n 's/^Current System Capabilities are: *//p' | sed 's/ *$//')"
+    route -n get default >/dev/null 2>&1 && ruta=sí || ruta=no
+    code="$(curl -s -o /dev/null -m 5 -w '%{http_code}' https://www.apple.com/library/test/success.html 2>/dev/null)"
+    [ "$code" = "200" ] && red=sí || red="no ($code)"
+    echo "$(date '+%Y-%m-%dT%H:%M:%S') · capacidades: ${caps:-?} · ruta: $ruta · internet: $red" >> "$LOG"
+    sleep 60
+done
+echo "$(date '+%Y-%m-%dT%H:%M:%S') · fin de la sonda" >> "$LOG"
+```
+
+- **Dónde está**: en el *scratch* de la sesión que la programó (`…/scratchpad/sonda/`), con su `sonda.log`
+  al lado. El agente apunta a esa ruta y lleva `ProgramArguments` = `/bin/bash sonda.sh 8` y
+  `StartCalendarInterval` = 01:00.
+- **Condición**: la tapa cerrada **antes** de la 01:00; si no, mide "despierto" y no dice nada nuevo.
+- **Cómo se lee**: cruzando sus horas con `pmset -g log | grep -E "DarkWake|Wake "`.
+- **Cómo se quita, siempre, tras leerla**:
+  `launchctl bootout gui/$(id -u)/local.tfm.sonda; rm ~/Library/LaunchAgents/local.tfm.sonda.plist`.
+- **Qué decide**: si en segundo plano falta `Graphics` y no hay internet, el envoltorio esperará a
+  `Graphics` o a una petición real (lo que la sonda muestre más fiable). Si `Graphics` no distingue, otra
+  señal.
+
 **Bloques M y R, aplazados al despliegue el 2026-10-10, por decisión del desarrollador.** En una base de
 desarrollo, perder de vez en cuando una clasificación no cuesta nada real; en producción, con clubes de
 verdad, sí. Además, la medida del `null` y la decisión de dónde reintentar (`DL-4`) son de lo que **se lleva
