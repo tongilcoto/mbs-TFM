@@ -28,9 +28,11 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
 - [backoffice/Plan backoffice-001.md](./backoffice/Plan%20backoffice-001.md) — **la web del backoffice,
-  rebanada a rebanada**, abierto el 2026-10-14: el mapa de las diez rebanadas con las operaciones que activa
-  cada una, y el detalle del andamiaje (bloques W y E), la portada y el alta de equipo. Cinco decisiones
-  pendientes del desarrollador (`DBO-1`…`DBO-5`), con su evidencia.
+  rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
+  desarrollador: por ahora, los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos) y el mapa de
+  pantallas, pendiente de revisar. El primer intento, con fichas y decisiones sin revisar, queda como material
+  de partida en [Plan backoffice-001-borrador](./backoffice/Plan%20backoffice-001-borrador.md): **no se ejecuta
+  nada desde él**.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
