@@ -309,7 +309,7 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | 🔨 en curso | 6/13 | desde 2026-10-16 |
+| **0** · El andamiaje | 🔨 en curso | 7/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -323,6 +323,7 @@ su comprobación.
 | `R0.4` | 2026-10-16 | **Ciclo TDD**, 3 pruebas en `src/api/client.test.ts`, cada una con su rojo de aserción: (1) esqueleto sin `/api` → *expected `['/v1/club']` to deeply equal `['/api/v1/club']`*; (2) esqueleto sin reloj → a los 30 s, *expected 'waiting' to be 'failed'* (y a los 29,999 s sigue esperando); (3) esqueleto que se olvida de la cancelación de quien pide → *expected 'answered' to be 'failed'*. Antes del primer rojo bueno salieron dos que no lo eran: Node no acepta direcciones a medias (`/v1/club`), y `openapi-fetch` se quedaba con el `fetch` de verdad al cargar; por eso la dirección se completa con la de la página y el `fetch` se busca en cada petición. **A mano**, con `Run serve` en el 8080: `5173/api/v1/club` devuelve el club y `8080/api/v1/club` da 404. Quitado `passWithNoTests` |
 | `R0.5` | 2026-10-16 | `npm run lint` (ESLint 10, `eslint-plugin-vue`, `typescript-eslint` y `eslint-plugin-vuejs-accessibility`). Una pieza de mentira en `components/` da **error** al usar `../api/client` (*Una pieza de components/ no puede usar api/…*), con una imagen sin `alt` y con un campo sin etiqueta; borrada después. **El botón sin nombre, no**: el paquete no tiene esa regla (sí la de enlaces y encabezados vacíos), aunque el ADR lo ponía de ejemplo. Lo cazará axe en los escenarios (`button-name`), y conviene que el escenario de prueba de `R0.13` lo incluya |
 | `R0.6` | 2026-10-16 | **PrimeVue 4.5.5 y `@primeuix/themes` 2.0.3, fijas**: la 5 cambió de licencia (nota en el ADR, decisión 4); todo lo que entra con ellas es MIT. Textos en español con `primelocale`, y `lang="es"`. La prueba del calendario (`src/theme/primevue.test.ts`) dio su rojo sin el idioma: *`['Su','Mo','Tu',…]` to deeply equal `['L','M','X','J','V','S','D']`*; con él, verde. Para montarlo hizo falta un `matchMedia` mínimo en `test-setup.ts` (jsdom no lo trae). El modo se elige en `index.html` antes de pintar: `tema` guardado, o el del sistema. **A mano**: sin destello blanco en modo oscuro, y `tema = claro` manda sobre el sistema (visto bueno del desarrollador) |
+| `R0.7` | 2026-10-16 | Las órdenes en `package.json` y en `backoffice/README.md`: `dev`, `test` (y `test:watch`), `typecheck`, `lint` y `build`. Cada una ejecutada tal cual la dice el README, también `nvm use` y el `curl` a `5173/api/v1/club` con `Run serve` en marcha. **Fin de la primera parte**; `AGENTS.md`, al día |
 
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 
