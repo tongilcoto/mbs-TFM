@@ -309,6 +309,12 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | ⏳ por empezar | 0/13 | — |
+| **0** · El andamiaje | 🔨 en curso | 1/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
+
+**Rebanada 0, paso a paso:**
+
+| Paso | Hecho | Lo que se comprobó |
+|---|---|---|
+| `R0.1` | 2026-10-16 | `npm run build` sin errores; `celtic-castilla.localhost:5173` contesta (`curl`) y enseña la página en blanco, con Vue montado, en Chrome y en **Safari**, que abre las direcciones `*.localhost` sin ajustes (no hace falta nota en el README). Versiones: Vite 8, Vue 3.5 y `vue-router` 5 |
