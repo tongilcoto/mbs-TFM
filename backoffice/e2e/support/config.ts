@@ -25,6 +25,8 @@ export const config = {
   serverBinary: here('../../../backend/.build/debug/Run'),
   /** Las respuestas grabadas de la federación, las mismas que usa el backend. */
   fixtures: here('../../../backend/Tests/FederationTests/Fixtures'),
+  /** Las que se grabaron solo para los escenarios, porque el backend no las necesitaba. */
+  recordings: here('../federation-recordings'),
   /** Dónde deja cada proceso lo que escribe, para mirarlo si algo falla. */
   logs: here('../../e2e-results'),
 

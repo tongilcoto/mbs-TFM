@@ -6,8 +6,9 @@
 // clasificación y los goleadores) o con un calendario vacío (el calendario). Así la ingesta ve lo mismo
 // que vería en producción.
 //
-// Si un escenario necesita una respuesta que no está grabada, se graba una nueva: un `.txt` con la
-// dirección pedida en la primera línea y la respuesta debajo, como los que ya hay.
+// Si un escenario necesita una respuesta que no está grabada, se graba una nueva en
+// e2e/federation-recordings/: un `.txt` con la dirección pedida en una línea y la respuesta debajo, como
+// los que ya hay. Ojo con el `null` pasajero de la RFFM (H-61): si llega, se vuelve a pedir.
 import { readdirSync, readFileSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -64,7 +65,7 @@ export interface FakeFederation {
 }
 
 export async function startFakeFederation(port = config.federationPort): Promise<FakeFederation> {
-  const answers = readRecordedAnswers(config.fixtures)
+  const answers = new Map([...readRecordedAnswers(config.fixtures), ...readRecordedAnswers(config.recordings)])
   const requests: string[] = []
 
   const server = http.createServer((request, response) => {
