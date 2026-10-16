@@ -319,3 +319,14 @@ su comprobación.
 |---|---|---|
 | `R0.1` | 2026-10-16 | `npm run build` sin errores; `celtic-castilla.localhost:5173` contesta (`curl`) y enseña la página en blanco, con Vue montado, en Chrome y en **Safari**, que abre las direcciones `*.localhost` sin ajustes (no hace falta nota en el README). Versiones: Vite 8, Vue 3.5 y `vue-router` 5 |
 | `R0.2` | 2026-10-16 | `npm test` (Vitest 5, Testing Library para Vue 8.1, jsdom). Una prueba que espera «Adiós, Celtic» donde la pieza dice «Hola, Celtic» **falla** enseñando lo esperado, lo recibido y la línea; con el texto bueno, pasa; borrada después. `passWithNoTests` mientras no haya pruebas, **hasta `R0.4`** |
+
+**Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
+
+- **Testing Library para Vue trae una versión vieja de su parte común** (2026-10-16, en `R0.2`). La 8.1, la
+  última, trae dentro `@testing-library/dom` 9.3, que no conoce algunos papeles de accesibilidad: buscar un
+  párrafo por su papel (`getByRole('paragraph')`) fallaba antes de comparar nada. Como buscar por papel y
+  nombre es la forma de escribir pruebas que además comprueban la accesibilidad, se le obliga a usar la 10.4
+  (`overrides` en `package.json`), la misma que ya usa jest-dom. Comprobado: el párrafo y un botón se
+  encuentran por su papel, y el `package-lock.json` solo pierde los 67 paquetes de la copia vieja, sin añadir
+  ni cambiar ninguno. **Si algún día da problemas**, se quita el `overrides` y se busca por texto cuando un
+  papel no se reconozca.

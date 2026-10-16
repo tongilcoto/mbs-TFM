@@ -25,5 +25,10 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.5",
     "vue-tsc": "^3.3.11"
+  },
+  "overrides": {
+    "@testing-library/vue": {
+      "@testing-library/dom": "^10.4.0"
+    }
   }
 }
