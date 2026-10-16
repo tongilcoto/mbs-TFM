@@ -19,7 +19,7 @@ export async function startApiServer(): Promise<Started> {
     env: {
       DB_NAME: config.database.name,
       API_PORT: String(config.apiPort),
-      RFFM_BASE_URL: `http://localhost:${config.federationPort}`,
+      RFFM_BASE_URL: `http://127.0.0.1:${config.federationPort}`,
     },
   })
   // Cualquier respuesta vale, también «este club no existe»: lo que se mira es que escucha.
