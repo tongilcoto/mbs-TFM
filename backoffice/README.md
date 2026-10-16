@@ -27,6 +27,7 @@ Todas las órdenes de abajo se escriben **dentro de `backoffice/`**.
 | **Arrancar** la web | `npm run dev` | La sirve en **`http://celtic-castilla.localhost:5173`**. Se recarga sola al guardar un cambio. `Ctrl+C` la para |
 | **Probar** las piezas | `npm test` | Pasa todas las pruebas de Vitest una vez y dice cuántas pasan y cuáles fallan |
 | Probar mientras se escribe | `npm run test:watch` | Igual, pero se queda atento y repite las pruebas al guardar. `q` lo para |
+| **Probar los escenarios** de punta a punta | `npm run e2e` | Compila el servidor, arranca su propia copia de todo y pasa los escenarios en Chromium. Ver [abajo](#los-escenarios-de-punta-a-punta) |
 | **Comprobar los tipos** | `npm run typecheck` | Comprueba que cada petición y cada dato encajan con el catálogo. No ejecuta nada |
 | **Revisar** el código | `npm run lint` | El revisor de código: avisa si una pieza de `components/` usa `api/` y de los fallos de accesibilidad que se ven sin ejecutar (imagen sin texto alternativo, campo sin etiqueta…) |
 | **Fabricar** la web para publicarla | `npm run build` | Comprueba los tipos y deja la web lista en `dist/` |
@@ -34,6 +35,24 @@ Todas las órdenes de abajo se escriben **dentro de `backoffice/`**.
 **Los tipos del catálogo se fabrican solos** antes de `dev`, `typecheck` y `build`, en
 `src/api/schema.d.ts`. Ese fichero no se toca a mano ni se guarda en git: si el catálogo cambia, la próxima
 orden lo vuelve a fabricar.
+
+## Los escenarios de punta a punta
+
+`npm run e2e` pasa los escenarios de `e2e/features/` en un navegador de verdad (Chromium), contra un servidor y
+una base de verdad. **Arranca su propia copia de todo** y la para al terminar; lo tuyo no se toca:
+
+| Pieza | Dónde | La tuya, que no se toca |
+|---|---|---|
+| El servidor de pruebas | puerto **8081**, base `tfm_test` | el 8080 y la base `tfm` |
+| La web de pruebas | puerto **5174** | el 5173 |
+| La federación falsa, con respuestas grabadas | puerto **8090**, en el lugar de rffm.es | — |
+
+- **Antes, una vez:** `npx playwright install chromium`, que descarga el navegador de los escenarios. Docker
+  tiene que estar en marcha, porque la base de pruebas vive en el mismo Postgres.
+- **Si una pieza no arranca, la pasada falla enseguida diciendo cuál**, por ejemplo si el 8081 está ocupado.
+  Lo que escribe cada pieza queda en `e2e-results/` (`servidor.log`, `web.log`).
+- **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
+  viejo probaría código que ya no es el tuyo.
 
 ## Para ver datos, el servidor tiene que estar en marcha
 

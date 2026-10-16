@@ -8,8 +8,9 @@ export default defineConfig({
     proxy: {
       // El recepcionista (LLD-B §1.3): lo que empiece por /api, al servidor, quitándole el /api.
       // changeOrigin: false → el nombre de la dirección (el club) pasa intacto.
+      // BACKOFFICE_API_URL solo la ponen los escenarios, para hablar con el servidor de pruebas (8081).
       '/api': {
-        target: 'http://localhost:8080',
+        target: process.env.BACKOFFICE_API_URL ?? 'http://localhost:8080',
         changeOrigin: false,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
