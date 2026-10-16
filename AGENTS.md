@@ -27,13 +27,20 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   con `launchd` y contra la base local de desarrollo. **Cerrado el 2026-10-11**: el agente dispara
   sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
+- [backoffice/Plan backoffice-001.md](./backoffice/Plan%20backoffice-001.md) — **la web del backoffice,
+  rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
+  desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
+  revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 83, repartidas). La
+  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Las fichas, por escribir. El primer intento, con fichas y decisiones sin revisar, queda como material
+  de partida en [Plan backoffice-001-borrador](./backoffice/Plan%20backoffice-001-borrador.md): **no se ejecuta
+  nada desde él**.
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
 | Módulo | ADR | LLD | Docs |
 |--------|-----|-----|------|
 | **API backend + Base de datos** | [ADR-API_y_BBDD-001](./docs/ADR-API_y_BBDD-001.md) — tecnología BD/API y despliegue (ver resumen abajo) | [API_y_BBDD LLD-001](./docs/API_y_BBDD%20LLD-001.md) — arquitectura Clean/Hexagonal/DDD, modelo de datos, ORM, contrato API · Anexos: [Decisiones de diseño — bitácora](./docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) · [Federación de Madrid (RFFM)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · [Federación de Cataluña (FCF)](./docs/API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md) | [mockups móvil](./docs/design-assets/mobile/) · [OpenAPI](./backend/Sources/APIContract/openapi.yaml) · [Guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md) — qué implementa el adaptador, con qué datos y qué promete, para las tres ingestas y el enganche (A-9) |
-| **Web backoffice** | [ADR-Backoffice-001](./docs/ADR-Backoffice-001.md) — **cerrado el 2026-10-12**: web que se descarga al navegador, Vue + TypeScript, descripciones de datos generadas del catálogo, PrimeVue, dos máquinas en Fly.io (Caddy + web, y la API sin dirección pública) y pruebas con Vitest y BDD (Playwright + Cucumber) con accesibilidad · [CORS explicado sencillo](./docs/lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md) | [Backoffice LLD-001](./docs/Backoffice%20LLD-001.md) — **cerrado el 2026-10-14** (§1–§11; el inicio de sesión, reservado para el final): cómo se organiza y se comporta la web en todas sus pantallas (carpetas, `/api/v1`, peticiones, errores, formularios, mapa de pantallas, datos de la federación, club, tema, accesibilidad y pruebas); las fichas de cada pantalla van en el plan de desarrollo | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
+| **Web backoffice** | [ADR-Backoffice-001](./docs/ADR-Backoffice-001.md) — **cerrado el 2026-10-12**: web que se descarga al navegador, Vue + TypeScript, descripciones de datos generadas del catálogo, PrimeVue, dos máquinas en Fly.io (Caddy + web, y la API sin dirección pública) y pruebas con Vitest y BDD (Playwright + Cucumber) con accesibilidad · [CORS explicado sencillo](./docs/lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md) | [Backoffice LLD-001](./docs/Backoffice%20LLD-001.md) — **cerrado el 2026-10-14** (§1–§11; el inicio de sesión, reservado para el final): cómo se organiza y se comporta la web en todas sus pantallas (carpetas, `/api/v1`, peticiones, errores, formularios, mapa de pantallas, datos de la federación, club, tema, accesibilidad y pruebas); las fichas de cada pantalla van en el plan de desarrollo · Anexo: [Decisiones de diseño — bitácora](./docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md) — el porqué de cada regla del LLD (`DW-nn`); lo que cambia lo que responde el servidor va en la bitácora del backend | [Borrador inicial](./docs/backoffice_initial_draft.md) — el encuadre acordado antes de abrir el módulo: rebanadas verticales (pantalla + sus endpoints), la ingesta en local con `launchd` como prerrequisito, y la autenticación al final |
 | **App iOS** | *(pendiente)* | *(pendiente)* | — |
 | **App Android** | *(pendiente)* | *(pendiente)* | — |
 
@@ -378,7 +385,8 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**604 tests.** Lo siguiente es **abrir el backoffice**. **Web backoffice, app iOS y app Android siguen sin
+**604 tests.** Lo siguiente es **abrir el backoffice**, con su
+[plan](./backoffice/Plan%20backoffice-001.md) escrito el 2026-10-14. **Web backoffice, app iOS y app Android siguen sin
 empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`

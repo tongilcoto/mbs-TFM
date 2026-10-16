@@ -4,7 +4,7 @@
   final. Lo que se descubra en una rebanada y valga para todas las pantallas se añade aquí (parte E).
 - **Fecha de apertura:** 2026-10-12
 - **Decisores:** desarrollador único (+ Claude Code)
-- **Relacionado:** [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
+- **Relacionado:** [Anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md) · [ADR-Backoffice-001](./ADR-Backoffice-001.md) · [Borrador inicial del backoffice](./backoffice_initial_draft.md) ·
   [LLD de API y BD](./API_y_BBDD%20LLD-001.md) · [CORS explicado sencillo](./lessonsToLearn/CORS%20explicado%20sencillo%20-%20la%20web%20y%20la%20API%20en%20la%20misma%20direcci%C3%B3n.md)
 
 > **Cómo leer este LLD.** El [ADR](./ADR-Backoffice-001.md) decidió **con qué** se hace la web: Vue con
@@ -17,6 +17,8 @@
 > - **El detalle campo a campo de los datos**: está en el catálogo `backend/Sources/APIContract/openapi.yaml`.
 >   Copiarlo aquí sería tener dos verdades (`D-25`).
 > - **El orden de trabajo, los pasos y la ficha de cada pantalla**: van en el plan de desarrollo (parte E).
+> - **El porqué de cada regla** —qué alternativa se descartó y qué se asume a cambio—: está en el
+>   [anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md), con enlaces `[DW-nn]` desde aquí.
 
 ---
 
@@ -68,24 +70,16 @@ prepararla para publicar, igual que el servidor genera sus descripciones al comp
 | **Piezas** | `components/` | Pinta lo que recibe y avisa cuando el usuario hace algo («han pulsado *Dar de baja* sobre este jugador») | Hablar con el servidor: no puede usar `api/` |
 | **Conexión** | `api/` | Hace las peticiones y traduce las respuestas y los errores | Saber nada de pantallas ni de piezas |
 
-Es la misma idea que las capas del servidor (LLD del backend, §2.2): **las dependencias van en un solo
-sentido**. Y, como allí, **la regla la comprueba una herramienta, no la buena voluntad**: el revisor de código
-(ESLint) da error si un fichero de `components/` usa algo de `api/`, antes de ejecutar nada.
-
-**Por qué este reparto, visto desde las pruebas** (ADR, decisión 6): las **piezas** se prueban con Vitest
-pasándoles datos, como a una función; las **pantallas**, en los escenarios BDD contra el servidor real. No
-queda nada a medio camino que obligue a simular el servidor.
+**Las dependencias van en un solo sentido, y la regla la comprueba el revisor de código** (ESLint): da error
+si un fichero de `components/` usa algo de `api/`, antes de ejecutar nada. Por qué este reparto: [DW-01].
 
 #### 1.3 El prefijo: `/api/v1`
 
 **Desde el navegador, los datos se piden siempre en `/api/v1/…`**. El recepcionista quita el `/api` al
 pasarle la petición al servidor, que sigue contestando en `/v1/…` como hasta ahora: el servidor no cambia.
 
-**Por qué:** al leer una dirección se tiene que saber a la primera si es de datos o de la web.
-`https://celtic-castilla.miapp.com/api/v1/teams` se lee como datos sin conocer el proyecto; `/v1/teams`, no.
-
-**El precio, y la regla que lo controla:** la misma petición tiene dos formas de escribirse, según por
-dónde entre.
+Por qué, y lo que se asume a cambio: [DW-02]. **La misma petición se escribe de dos formas, según por dónde
+entre:**
 
 | Quién pide | Por dónde entra | Cómo escribe la dirección |
 |---|---|---|
@@ -173,26 +167,9 @@ menores (requisito 7, RGPD).
 
 #### 2.4 Los datos se piden cada vez que se entra en una pantalla
 
-**Decisión: cada pantalla pide sus datos al entrar**, también al volver a una que ya se había visto, y no se
-guarda nada en memoria entre pantallas. Tras guardar un cambio, la pantalla vuelve a pedir lo que enseña.
-
-**La alternativa descartada:** una herramienta que guarda en memoria lo ya descargado (Pinia Colada,
-TanStack Query) y, al volver a una pantalla, enseña al momento lo que tenía mientras lo actualiza por
-detrás.
-
-**Razones:**
-
-- **Siempre se ve lo que hay en el servidor**, también lo que acaba de cambiar un compañero. Lo grave en
-  esta web no es esperar un momento, sino corregir un acta mirando datos viejos.
-- **No hay que acordarse de nada después de guardar.** Con datos guardados, cada cambio obliga a decir qué
-  otros datos ya no valen; si se olvida, la pantalla enseña algo que ya no es verdad.
-- **Las pruebas ven lo que respondió el servidor**, sin una pantalla que cambia sola después de aparecer y
-  pasos que tienen que esperar a que se asiente.
-- **El coste es pequeño:** pocos usuarios, un servidor que responde rápido y pantallas que piden poco. El
-  precio es un «cargando…» corto al entrar en cada pantalla (§3).
-
-**Cuándo se revisa:** si una pantalla **se mide** lenta. Entonces se añade la memoria solo donde haga falta.
-Es barato porque todas las peticiones salen de `api/` (§1.2).
+**Cada pantalla pide sus datos al entrar**, también al volver a una que ya se había visto, y no se guarda
+nada en memoria entre pantallas. Tras guardar un cambio, la pantalla vuelve a pedir lo que enseña. Por qué, lo
+que cuesta y cuándo se revisa: [DW-03].
 
 ### 3. El recorrido de una petición
 
@@ -256,18 +233,14 @@ sus datos (§2.4); si termina mal, el error se enseña como dice el §4 y el bot
 Pasados **30 segundos** sin respuesta, la web deja de esperar y avisa de que el servidor no responde. **Un
 solo límite para todas las peticiones.**
 
-**Por qué 30 y no menos:** la vista previa del enganche con la federación
-(`POST /v1/teams/{id}/federation-link/preview`) pregunta **en directo** a la federación, y el servidor espera
-hasta **20 segundos** antes de dar su propio error (`backend/Sources/Federation/HTTPFederationTransport.swift`,
-LLD del backend §2.3-c). Ese error dice más («la federación no responde») que el de la web («el servidor no
-responde»). Si la web se rindiera antes de los 20 s, ese mensaje no llegaría nunca. **Si alguna vez se sube
-el límite del servidor, hay que subir este por encima.**
+Está por encima de los **20 segundos** que el servidor espera a la federación, para que su error («la
+federación no responde») llegue siempre antes que el de la web. **Si alguna vez se sube el límite del
+servidor, hay que subir este por encima.** Por qué: [DW-04].
 
 #### 3.5 El «cargando…» se enseña desde el primer momento
 
-Se enseña **en cuanto se pide**, sin esperar unos milisegundos a ver si la respuesta llega antes. Puede
-parpadear un instante con un servidor rápido, a cambio de que **la pantalla se comporte siempre igual** y
-de que el escenario que comprueba el estado *cargando* no dependa de la velocidad del servidor.
+Se enseña **en cuanto se pide**, sin esperar unos milisegundos a ver si la respuesta llega antes. Por qué, y
+el parpadeo que se acepta: [DW-05].
 
 **Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
 «cargando…» a un lector de pantalla (§10).
@@ -356,15 +329,11 @@ primer `": "`: lo de delante es el campo y lo de detrás el motivo, que **sí** 
 porque el servidor lo escribe en español y para el usuario. Si el texto no sigue el formato, o el campo no
 está en el formulario, el error sale en el aviso de arriba (§4.3).
 
-- **Es un acuerdo publicado, no un truco.** El catálogo ya dice que `detail` «nombra el campo, para que la
-  UI pueda señalarlo» (`openapi.yaml`, respuesta 422 de `PATCH /club`), pero no dice el formato exacto.
-  **Pendiente con la portada:** escribir en el catálogo el formato `<campo>: <motivo>`, para que la web
+- **Pendiente con la portada:** escribir en el catálogo el formato `<campo>: <motivo>`, para que la web
   dependa de algo escrito.
 - **Lo vigila una prueba**: un escenario BDD que provoca un error de valor y comprueba que sale junto a su
   campo. Si el servidor cambia el formato, ese escenario falla.
-- **Por qué no un campo `field` ahora:** el servidor comprueba **un campo cada vez** (el Dominio se para en
-  el primer error). Lo que de verdad hace falta es que devuelva **todos los errores a la vez** (*c*), y con
-  ese cambio se decidirá cómo viaja el campo. Añadir `field` antes sería tocar el error dos veces.
+- Por qué así y no con un campo `field`: [DW-06].
 
 **c. Todos los errores a la vez.** Hoy el servidor avisa del primer campo mal y se para. En la web, las
 reglas que están escritas en el catálogo ya salen todas a la vez (§5.1); las que solo conoce el Dominio
@@ -419,9 +388,7 @@ describir. Que ya exista un equipo igual, que la temporada no exista, o un nombr
 **de uno en uno** hasta que el servidor sepa devolverlos todos (§4.5 *c*). **El servidor sigue siendo quien
 manda**: la comprobación de la web solo ahorra un viaje y deja ver todos los fallos juntos.
 
-**Amplía la decisión 3 del ADR**, que generaba del catálogo «solo las descripciones de los datos». La idea
-es la misma —una sola fuente de verdad, sin copias a mano— y sin código generado nuevo: Ajv usa la
-descripción que ya está en el catálogo.
+Por qué así, y cómo amplía la decisión 3 del ADR: [DW-07].
 
 #### 5.2 Cada dato con la pieza que le corresponde
 
@@ -455,9 +422,8 @@ cambios sin guardar. ¿Salir sin guardar?».
 
 #### 5.6 Límite conocido: dos personas editando lo mismo
 
-**Si dos personas editan lo mismo a la vez, se queda lo último que se guardó**, sin aviso. El servidor no
-detecta ese choque. **Se acepta**: los usuarios son pocos y rara vez tocarán lo mismo a la vez. Si algún día
-molesta, se resuelve en el servidor, no en la web.
+**Si dos personas editan lo mismo a la vez, se queda lo último que se guardó**, sin aviso: el servidor no
+detecta ese choque. Por qué se acepta y cuándo se revisa: [DW-08].
 
 ### 6. El mapa de pantallas
 
@@ -490,10 +456,8 @@ escribir y copiar sin que el navegador los convierta en códigos raros.
 
 #### 6.3 Lo que identifica a cada cosa en el camino es su código interno
 
-`:id` es **el identificador que da el servidor** (un UUID): `/equipos/3f2a91c4-…/plantilla`. Es largo, pero
-no pide nada al servidor. **La alternativa descartada**, un nombre legible (`/equipos/cadete-a`), exigiría
-añadir ese dato al servidor y mantener que no se repita, para una herramienta interna en la que casi nadie
-escribe los caminos a mano.
+`:id` es **el identificador que da el servidor** (un UUID): `/equipos/3f2a91c4-…/plantilla`. Por qué no un
+nombre legible: [DW-09].
 
 #### 6.4 Cada pestaña tiene su propio camino
 
@@ -562,10 +526,10 @@ sigue siendo quien manda**: si la web se equivoca, responde con un error del §4
 
 - **Lo que no se permite nunca, no aparece.** En un partido no hay botón «Borrar».
 - **Lo que se permite a veces aparece desactivado y con el motivo escrito a la vista**, por ejemplo: «No se
-  puede borrar: el equipo está enganchado a la federación. Para dejar de gestionarlo, libéralo». Así el
-  usuario sabe que la acción existe y qué le falta para poder hacerla. **El motivo va escrito en la
-  pantalla, no solo en un globo al pasar el ratón**: un globo no lo ve quien usa el teclado o un lector de
-  pantalla (§10).
+  puede borrar: el equipo está enganchado a la federación. Para dejar de gestionarlo, libéralo». **El motivo
+  va escrito en la pantalla, no solo en un globo al pasar el ratón.**
+
+Por qué: [DW-10].
 
 #### 7.5 La etiqueta «Federación»
 
@@ -600,8 +564,8 @@ marco vacío con «cargando…»: **no se pinta ninguna pantalla hasta saber de 
 #### 8.2 Un club por dirección
 
 **No hay forma de cambiar de club dentro de la web.** Cambiar de club es abrir otra dirección, y eso arranca
-la web desde cero, con la memoria vacía: **los datos de dos clubes no se pueden mezclar nunca**. Si algún día
-una persona trabaja para dos clubes, lo resolverá el inicio de sesión (§12).
+la web desde cero, con la memoria vacía. Si algún día una persona trabaja para dos clubes, lo resolverá el
+inicio de sesión (§12). Por qué: [DW-11].
 
 #### 8.3 Si el club no se puede cargar, una página entera
 
@@ -654,8 +618,7 @@ tiene dos valores, uno por modo** (§9.3).
 
 #### 9.3 Dos modos, claro y oscuro, con un interruptor
 
-**Por qué los dos:** el fondo oscuro de los bocetos va bien en el móvil, pero en el ordenador, que es donde
-más se usará el backoffice (ADR §1), el contexto cambia: oficinas con luz, pantallas grandes, ratos largos.
+Por qué los dos, si los bocetos son solo oscuros: [DW-12].
 
 - **La primera vez, sigue la preferencia del sistema** (del ordenador o del móvil). Cuando el usuario toca
   el interruptor, **manda su elección**.
@@ -819,9 +782,7 @@ Cada escenario crea su propio club, así ninguno ve lo que dejó otro.
 swift run Run provision-tenant <slug> --schema bo_<slug>     # el mismo camino que en producción
 ```
 
-- **`bo_`, no `e2e_` ni `test_`**: las pruebas del backend borran al arrancar los *schemas* con esos dos
-  prefijos (`TestEnvironment.swift`, `disposableSchemaPrefixes`), y se llevarían los de un escenario a
-  medias. Al revés, el barrido de los escenarios solo toca `bo_`.
+- **El barrido de los escenarios solo toca `bo_`.** Por qué ese prefijo y no `e2e_` ni `test_`: [DW-13].
 - **El barrido borra las dos cosas**: el *schema* `bo_…` y su fila en `public.tenants`.
 - **`KEEP_TEST_DATA=1` deja los datos**, como en el backend, para mirarlos en TablePlus sobre `tfm_test`.
 - **Se mide cuánto cuesta** crear un club por escenario. Si resultara lento, se revisa con números.
@@ -841,12 +802,9 @@ navegador → web → Run serve → tfm_test
                        └──→ federación falsa      ← en lugar de rffm.es
 ```
 
-- **No sustituye a nada nuestro**: se pone detrás del servidor, en el lugar de rffm.es. Por eso no
-  contradice el «sin simulacros» del ADR, que hablaba de nuestro servidor. Es lo mismo que hacen las
-  pruebas del backend, que nunca llaman a la federación de verdad.
-- **Una sola técnica para todo**: sirve igual para los `Given` de la portada que para las pantallas que
-  hacen que el servidor llame a la federación en ese momento (el enganche). Cada escenario elige su
-  `Given`; por debajo, siempre la misma pieza.
+- **Se pone detrás del servidor**, en el lugar de rffm.es, y **es la única técnica** para todo lo de la
+  federación: los `Given` de la portada y las pantallas en las que el servidor llama a la federación en ese
+  momento (el enganche). Por qué no contradice el «sin simulacros» del ADR: [DW-14].
 - **Es un servidor pequeño que devuelve las respuestas grabadas** que ya usa el backend
   (`backend/Tests/*/Fixtures/`): calendario jugado y sin jugar, goleadores, clasificación y los casos de
   «no existe». Si un escenario necesita algo que no está grabado, se graba una respuesta nueva.
@@ -895,3 +853,18 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 | Poder cambiar la dirección de la federación con una variable de entorno; sin ella, rffm.es | `Sources/Federation/RFFMEndpoints.swift:13` (§11.3) | Con la portada |
 | Que `ProblemMiddleware` use la lista de códigos generada | `ProblemMiddleware.swift` (§4.5 *b*, paso 2) | Sin prisa |
 | Devolver todos los errores de valor a la vez | Dominio y `ProblemMiddleware` (§4.5 *c*) | Sin prisa; entonces se revisa §4.5 *a* |
+
+[DW-01]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-02]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-03]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-04]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-05]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-06]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-07]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-08]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-09]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-10]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-11]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-12]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-13]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
