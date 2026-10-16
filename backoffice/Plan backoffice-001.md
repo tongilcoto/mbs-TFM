@@ -309,7 +309,7 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | 🔨 en curso | 1/13 | desde 2026-10-16 |
+| **0** · El andamiaje | 🔨 en curso | 2/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -318,3 +318,4 @@ su comprobación.
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
 | `R0.1` | 2026-10-16 | `npm run build` sin errores; `celtic-castilla.localhost:5173` contesta (`curl`) y enseña la página en blanco, con Vue montado, en Chrome y en **Safari**, que abre las direcciones `*.localhost` sin ajustes (no hace falta nota en el README). Versiones: Vite 8, Vue 3.5 y `vue-router` 5 |
+| `R0.2` | 2026-10-16 | `npm test` (Vitest 5, Testing Library para Vue 8.1, jsdom). Una prueba que espera «Adiós, Celtic» donde la pieza dice «Hola, Celtic» **falla** enseñando lo esperado, lo recibido y la línea; con el texto bueno, pasa; borrada después. `passWithNoTests` mientras no haya pruebas, **hasta `R0.4`** |
