@@ -298,7 +298,7 @@ su comprobación.
 |---|---|---|
 | El interruptor para cambiar de modo claro a oscuro | Rebanada 1 | Es parte del marco (cabecera y menú), que se construye con la portada |
 | Los mensajes de cada código de error (`errors.ts`) | Rebanada 1 | Necesita antes la lista cerrada de códigos en el catálogo, que es un paso del servidor de esa rebanada |
-| Cómo se prueba el estado «cargando» sin simulacros | Rebanada 1, antes de su primer escenario | Es la primera pantalla con un «cargando». Se decide con ella y se escribe como `DW-15` |
+| Cómo se prueba el estado «cargando» sin simulacros | Rebanada 1, antes de su primer escenario | Es la primera pantalla con un «cargando». Se decide con ella y se escribe como `DW-16` |
 | Ajv, las reglas de los formularios leídas del catálogo | Rebanada 2 | Es para formularios, y el primero es el alta de equipo |
 | La fecha sin hora y su prueba en otra zona horaria (`format.ts`) | Rebanada 4 | Es para las fechas de los partidos, y la portada base no enseña ninguna |
 | Que los escudos de los escenarios no se bajen de internet | Rebanada 4 | Es la primera pantalla que enseña escudos de rivales |
@@ -322,11 +322,5 @@ su comprobación.
 
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 
-- **Testing Library para Vue trae una versión vieja de su parte común** (2026-10-16, en `R0.2`). La 8.1, la
-  última, trae dentro `@testing-library/dom` 9.3, que no conoce algunos papeles de accesibilidad: buscar un
-  párrafo por su papel (`getByRole('paragraph')`) fallaba antes de comparar nada. Como buscar por papel y
-  nombre es la forma de escribir pruebas que además comprueban la accesibilidad, se le obliga a usar la 10.4
-  (`overrides` en `package.json`), la misma que ya usa jest-dom. Comprobado: el párrafo y un botón se
-  encuentran por su papel, y el `package-lock.json` solo pierde los 67 paquetes de la copia vieja, sin añadir
-  ni cambiar ninguno. **Si algún día da problemas**, se quita el `overrides` y se busca por texto cuando un
-  papel no se reconozca.
+- **Testing Library para Vue trae una versión vieja de su parte común** (`R0.2`, 2026-10-16): no reconocía
+  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
