@@ -1,7 +1,7 @@
 # Plan backoffice-001 · La web del club, rebanada a rebanada
 
 > Rehecho desde cero el **2026-10-15**, revisando pantalla por pantalla con el desarrollador. El primer
-> intento queda como material de partida en [Plan backoffice-001-borrador](./Plan%20backoffice-001-borrador.md).
+> intento se borró el 2026-10-16; queda en la historia de git (commit `d6a16e6`).
 >
 > Parte de: el [ADR](../docs/ADR-Backoffice-001.md), cerrado el 2026-10-12; el
 > [LLD](../docs/Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su
@@ -298,7 +298,7 @@ su comprobación.
 |---|---|---|
 | El interruptor para cambiar de modo claro a oscuro | Rebanada 1 | Es parte del marco (cabecera y menú), que se construye con la portada |
 | Los mensajes de cada código de error (`errors.ts`) | Rebanada 1 | Necesita antes la lista cerrada de códigos en el catálogo, que es un paso del servidor de esa rebanada |
-| Cómo se prueba el estado «cargando» sin simulacros | Rebanada 1, antes de su primer escenario | Es la primera pantalla con un «cargando». Se decide con ella y se escribe como `DW-15` |
+| Cómo se prueba el estado «cargando» sin simulacros | Rebanada 1, antes de su primer escenario | Es la primera pantalla con un «cargando». Se decide con ella y se escribe como `DW-17` |
 | Ajv, las reglas de los formularios leídas del catálogo | Rebanada 2 | Es para formularios, y el primero es el alta de equipo |
 | La fecha sin hora y su prueba en otra zona horaria (`format.ts`) | Rebanada 4 | Es para las fechas de los partidos, y la portada base no enseña ninguna |
 | Que los escudos de los escenarios no se bajen de internet | Rebanada 4 | Es la primera pantalla que enseña escudos de rivales |
@@ -309,6 +309,26 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | ⏳ por empezar | 0/13 | — |
+| **0** · El andamiaje | 🔨 en curso | 7/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
+
+**Rebanada 0, paso a paso:**
+
+| Paso | Hecho | Lo que se comprobó |
+|---|---|---|
+| `R0.1` | 2026-10-16 | `npm run build` sin errores; `celtic-castilla.localhost:5173` contesta (`curl`) y enseña la página en blanco, con Vue montado, en Chrome y en **Safari**, que abre las direcciones `*.localhost` sin ajustes (no hace falta nota en el README). Versiones: Vite 8, Vue 3.5 y `vue-router` 5 |
+| `R0.2` | 2026-10-16 | `npm test` (Vitest 5, Testing Library para Vue 8.1, jsdom). Una prueba que espera «Adiós, Celtic» donde la pieza dice «Hola, Celtic» **falla** enseñando lo esperado, lo recibido y la línea; con el texto bueno, pasa; borrada después. `passWithNoTests` mientras no haya pruebas, **hasta `R0.4`** |
+| `R0.3` | 2026-10-16 | `npm run dev` (y `build` y `typecheck`) fabrica antes `src/api/schema.d.ts` del `openapi.yaml`, con `openapi-typescript` 7.13; git no lo guarda. `client.GET('/equiposs', {})` hace **fallar** `npm run typecheck`: *`'/equiposs'` is not assignable to `PathsWithMethod<paths, "get">`*; `/club`, en la línea de al lado, pasa. Sin el segundo argumento también falla, pero con un mensaje confuso (*Expected 2 arguments*). `openapi-fetch` se instala ya, para esta comprobación; `client.ts` llega en `R0.4` |
+| `R0.4` | 2026-10-16 | **Ciclo TDD**, 3 pruebas en `src/api/client.test.ts`, cada una con su rojo de aserción: (1) esqueleto sin `/api` → *expected `['/v1/club']` to deeply equal `['/api/v1/club']`*; (2) esqueleto sin reloj → a los 30 s, *expected 'waiting' to be 'failed'* (y a los 29,999 s sigue esperando); (3) esqueleto que se olvida de la cancelación de quien pide → *expected 'answered' to be 'failed'*. Antes del primer rojo bueno salieron dos que no lo eran: Node no acepta direcciones a medias (`/v1/club`), y `openapi-fetch` se quedaba con el `fetch` de verdad al cargar; por eso la dirección se completa con la de la página y el `fetch` se busca en cada petición. **A mano**, con `Run serve` en el 8080: `5173/api/v1/club` devuelve el club y `8080/api/v1/club` da 404. Quitado `passWithNoTests` |
+| `R0.5` | 2026-10-16 | `npm run lint` (ESLint 10, `eslint-plugin-vue`, `typescript-eslint` y `eslint-plugin-vuejs-accessibility`). Una pieza de mentira en `components/` da **error** al usar `../api/client` (*Una pieza de components/ no puede usar api/…*), con una imagen sin `alt` y con un campo sin etiqueta; borrada después. **El botón sin nombre, no**: el paquete no tiene esa regla (sí la de enlaces y encabezados vacíos), aunque el ADR lo ponía de ejemplo. Lo cazará axe en los escenarios (`button-name`), y conviene que el escenario de prueba de `R0.13` lo incluya |
+| `R0.6` | 2026-10-16 | **PrimeVue 4.5.5 y `@primeuix/themes` 2.0.3, fijas**: la 5 cambió de licencia (nota en el ADR, decisión 4); todo lo que entra con ellas es MIT. Textos en español con `primelocale`, y `lang="es"`. La prueba del calendario (`src/theme/primevue.test.ts`) dio su rojo sin el idioma: *`['Su','Mo','Tu',…]` to deeply equal `['L','M','X','J','V','S','D']`*; con él, verde. Para montarlo hizo falta un `matchMedia` mínimo en `test-setup.ts` (jsdom no lo trae). El modo se elige en `index.html` antes de pintar: `tema` guardado, o el del sistema. **A mano**: sin destello blanco en modo oscuro, y `tema = claro` manda sobre el sistema (visto bueno del desarrollador) |
+| `R0.7` | 2026-10-16 | Las órdenes en `package.json` y en `backoffice/README.md`: `dev`, `test` (y `test:watch`), `typecheck`, `lint` y `build`. Cada una ejecutada tal cual la dice el README, también `nvm use` y el `curl` a `5173/api/v1/club` con `Run serve` en marcha. **Fin de la primera parte**; `AGENTS.md`, al día |
+
+**Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
+
+- **Testing Library para Vue trae una versión vieja de su parte común** (`R0.2`, 2026-10-16): no reconocía
+  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+- **`openapi-typescript` no acepta TypeScript 6** (`R0.3`, 2026-10-16): la plantilla de Vite lo trajo, y la
+  herramienta que fabrica los tipos del catálogo solo acepta TypeScript 5. Se baja a la 5.9.3 →
+  [DW-16](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).

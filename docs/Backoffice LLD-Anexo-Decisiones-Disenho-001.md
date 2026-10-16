@@ -44,6 +44,8 @@
 | **Las pruebas** | | |
 | **DW-13** | Los clubs de los escenarios llevan el prefijo `bo_` | §11.2 |
 | **DW-14** | La federación falsa va detrás del servidor, y eso no es un simulacro | §11.3 |
+| **DW-15** | Las pruebas de piezas buscan por papel y nombre, y por eso Testing Library usa la versión 10 de su parte común | §11 |
+| **DW-16** | TypeScript 5.9 y no 6, para que los tipos se fabriquen del catálogo sin forzar nada | §1.1 |
 
 ---
 
@@ -327,6 +329,52 @@ siempre la misma pieza.
 
 **Lo que se asume a cambio.** Si un escenario necesita algo que no está grabado, hay que grabar una respuesta
 nueva.
+
+---
+
+### DW-15 · Las pruebas de piezas buscan por papel y nombre, y por eso Testing Library usa la versión 10 de su parte común
+
+**Qué hay que decidir.** El ADR eligió Testing Library porque busca las cosas como lo haría un usuario
+(decisión 6): «el botón que dice *Dar de alta*». Eso es buscar por **papel** (botón, párrafo, encabezado…) y
+**nombre**, y es lo que hace que una prueba de piezas compruebe de paso la accesibilidad: si la búsqueda no
+encuentra el botón, un lector de pantalla tampoco. Al montar las pruebas (`R0.2`, 2026-10-16) apareció que
+Testing Library para Vue, en su última versión (8.1), trae dentro una versión vieja (9.3) de
+`@testing-library/dom`, la parte que hace las búsquedas. Esa versión no conoce algunos papeles: buscar un
+párrafo por su papel fallaba antes de comparar nada.
+
+**La alternativa descartada: dejarla y buscar por texto cuando un papel no se reconozca.** No cuesta nada
+hoy, pero una búsqueda por papel que falla sin motivo a la vista es justo el rojo que no prueba nada
+(Plan backoffice §2.3), y cada vez habría que averiguar si falla la pieza o la herramienta.
+
+**Decisión.** Obligar a Testing Library para Vue a usar la **10.4**, la misma que ya usa jest-dom, con
+`overrides` en `package.json`. Comprobado: el párrafo y un botón se encuentran por su papel, y el
+`package-lock.json` solo pierde los 67 paquetes de la copia vieja, sin añadir ni cambiar ninguno.
+
+**Lo que se asume a cambio.** Testing Library para Vue no está hecho para la 10, aunque funciona. Si algún
+día da problemas, se quita el `overrides` y se vuelve a buscar por texto donde un papel no se reconozca. Y
+cuando salga una versión de Testing Library para Vue que traiga la 10, el `overrides` sobra.
+
+---
+
+### DW-16 · TypeScript 5.9 y no 6, para que los tipos se fabriquen del catálogo sin forzar nada
+
+**Qué hay que decidir.** El ADR decidió que la web saca sus tipos de datos del catálogo (decisión 3), y la
+herramienta que los fabrica es `openapi-typescript` (LLD-B §1.1). Al montarla (`R0.3`, 2026-10-16), su última
+versión (7.13, de junio de 2026) **no se dejaba instalar**: solo acepta TypeScript 5, y la plantilla de Vite
+había traído TypeScript 6.
+
+**La alternativa descartada: instalarla ignorando el aviso** (`--legacy-peer-deps`). Se instala, pero nadie
+garantiza que fabrique bien los tipos con TypeScript 6, y un tipo mal fabricado es un error que el editor no
+avisaría: la herramienta que tiene que vigilar el catálogo sería la primera sin vigilar. Además, el aviso se
+queda apagado para todos los paquetes, no solo para este.
+
+**Decisión.** **TypeScript 5.9.3**, la última de la serie 5. Con ella encaja todo sin forzar nada: Vue,
+`vue-tsc` y la configuración de Vue aceptan cualquier versión desde la 5.8. Comprobado: en el
+`package-lock.json` solo cambia TypeScript, y los tipos, las pruebas y la fabricación de la web siguen en
+verde.
+
+**Lo que se asume a cambio.** La web va una versión de TypeScript por detrás de la que trae Vite. Cuando salga
+una versión de `openapi-typescript` que acepte TypeScript 6 (o 7), se puede subir.
 
 ---
 
