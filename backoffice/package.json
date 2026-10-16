@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "pretypecheck": "npm run gen:api",
     "typecheck": "vue-tsc -b",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -21,14 +22,20 @@
     "vue-router": "^5.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/vue": "^8.1.0",
     "@types/node": "^24.13.3",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/tsconfig": "^0.9.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "eslint-plugin-vuejs-accessibility": "^2.6.2",
+    "globals": "^17.13.0",
     "jsdom": "^29.1.1",
     "openapi-typescript": "^7.13.0",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.5",
     "vue-tsc": "^3.3.11"
