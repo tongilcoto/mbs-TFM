@@ -1,0 +1,76 @@
+{
+  "title": "R0.8 · la dirección de la RFFM, configurable con RFFM_BASE_URL",
+  "filter": "RFFMFederationClientTests|RFFMCalendarURLTests|FederationCatalogTests",
+  "mutations": [
+    {
+      "id": "M1-init-ignora",
+      "description": "la dirección que le dan se ignora",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "self.baseURL = baseURL",
+      "replace": "self.baseURL = Self.defaultBaseURL"
+    },
+    {
+      "id": "M2-calendario-fijo",
+      "description": "el calendario vuelve a la RFFM fija",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "\"\\(baseURL)/competicion/calendario\"",
+      "replace": "\"\\(Self.defaultBaseURL)/competicion/calendario\""
+    },
+    {
+      "id": "M3-clasificacion-fija",
+      "description": "la clasificación vuelve a la RFFM fija",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "\"\\(baseURL)/api/standings\"",
+      "replace": "\"\\(Self.defaultBaseURL)/api/standings\""
+    },
+    {
+      "id": "M4-goleadores-fijo",
+      "description": "los goleadores vuelven a la RFFM fija",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "\"\\(baseURL)/api/scorers\"",
+      "replace": "\"\\(Self.defaultBaseURL)/api/scorers\""
+    },
+    {
+      "id": "M5-por-defecto",
+      "description": "la dirección por defecto deja de ser la de la RFFM",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "public static let defaultBaseURL = \"https://www.rffm.es\"",
+      "replace": "public static let defaultBaseURL = \"https://rffm.es\""
+    },
+    {
+      "id": "M6-variable",
+      "description": "se lee otra variable",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "environment[\"RFFM_BASE_URL\"]",
+      "replace": "environment[\"RFFM_URL\"]"
+    },
+    {
+      "id": "M7-vacia",
+      "description": "la variable vacía deja de caer a la RFFM",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "environment[\"RFFM_BASE_URL\"], !value.isEmpty",
+      "replace": "environment[\"RFFM_BASE_URL\"]"
+    },
+    {
+      "id": "M8-barra",
+      "description": "la barra final se queda",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "if value.hasSuffix(\"/\") { value.removeLast() }",
+      "replace": "_ = value"
+    },
+    {
+      "id": "M9-cliente",
+      "description": "el cliente ignora la dirección que le dan",
+      "file": "Sources/Federation/RFFMFederationClient.swift",
+      "find": "self.endpoints = endpoints",
+      "replace": "self.endpoints = RFFMEndpoints()"
+    },
+    {
+      "id": "M10-raiz",
+      "description": "la raíz de composición no pasa el entorno",
+      "file": "Sources/App/FederationCatalog.swift",
+      "find": "endpoints: RFFMEndpoints(environment: environment))",
+      "replace": "endpoints: RFFMEndpoints())"
+    }
+  ]
+}

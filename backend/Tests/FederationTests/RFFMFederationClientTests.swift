@@ -38,7 +38,7 @@ struct RFFMFederationClientTests {
     /// `codgrupo`).
     @Test("construye la URL del calendario tal y como la documenta §F.1")
     func buildsCalendarURL() {
-        #expect(RFFMEndpoints.calendar(for: Self.coordinate) ==
+        #expect(RFFMEndpoints().calendar(for: Self.coordinate) ==
             "https://www.rffm.es/competicion/calendario"
             + "?temporada=22&tipojuego=1&competicion=26737701&grupo=26737702")
     }
@@ -53,7 +53,7 @@ struct RFFMFederationClientTests {
     /// devolviendo un `codigo_competicion` que nadie le envió (§F.18).
     @Test("construye la URL de la clasificación tal y como la documenta §F.8")
     func buildsStandingsURL() {
-        #expect(RFFMEndpoints.standings(for: Self.coordinate, round: 30) ==
+        #expect(RFFMEndpoints().standings(for: Self.coordinate, round: 30) ==
             "https://www.rffm.es/api/standings?idGroup=26737702&round=30")
     }
 
@@ -67,7 +67,7 @@ struct RFFMFederationClientTests {
     /// lo quite "porque en `standings` no está" convierte la ruta en un silencio.
     @Test("construye la URL de goleadores tal y como la documenta §F.19")
     func buildsScorersURL() {
-        #expect(RFFMEndpoints.scorers(for: Self.coordinate) ==
+        #expect(RFFMEndpoints().scorers(for: Self.coordinate) ==
             "https://www.rffm.es/api/scorers?idGroup=26737702&idCompetition=26737701")
     }
 
@@ -78,10 +78,67 @@ struct RFFMFederationClientTests {
     /// distingue.
     @Test("y no cruza grupo con competición, que no daría error sino silencio (§F.19)")
     func theScorersURLDoesNotSwapTheTwoCodes() {
-        let url = RFFMEndpoints.scorers(for: Self.coordinate)
+        let url = RFFMEndpoints().scorers(for: Self.coordinate)
         #expect(url.contains("idGroup=\(Self.coordinate.federationGroupID)"))
         #expect(url.contains("idCompetition=\(Self.coordinate.federationCompetitionID)"))
         #expect(Self.coordinate.federationGroupID != Self.coordinate.federationCompetitionID)
+    }
+
+    /// `R0.8` del plan del backoffice: los escenarios ponen una federación falsa
+    /// en el sitio de la RFFM. **Cambia dónde, y solo dónde**: las tres rutas,
+    /// con sus tres juegos de nombres, siguen siendo las de arriba.
+    @Test("con otra dirección, las tres rutas cuelgan de ella y no de la RFFM (R0.8)")
+    func routesHangFromTheConfiguredBaseURL() {
+        let endpoints = RFFMEndpoints(baseURL: "http://localhost:8090")
+
+        #expect(endpoints.calendar(for: Self.coordinate) ==
+            "http://localhost:8090/competicion/calendario"
+            + "?temporada=22&tipojuego=1&competicion=26737701&grupo=26737702")
+        #expect(endpoints.standings(for: Self.coordinate, round: 30) ==
+            "http://localhost:8090/api/standings?idGroup=26737702&round=30")
+        #expect(endpoints.scorers(for: Self.coordinate) ==
+            "http://localhost:8090/api/scorers?idGroup=26737702&idCompetition=26737701")
+    }
+
+    /// De dónde sale la dirección: `RFFM_BASE_URL`. **Sin ella, todo sigue como
+    /// antes**, que es lo que de verdad hay que proteger: la ingesta de `launchd`
+    /// no la tiene puesta y tiene que seguir yendo a la RFFM real.
+    @Test("sin RFFM_BASE_URL, o vacía, la RFFM de verdad (R0.8)")
+    func withoutTheVariableItIsTheRealRFFM() {
+        #expect(RFFMEndpoints(environment: [:]).baseURL == "https://www.rffm.es")
+        #expect(RFFMEndpoints(environment: ["RFFM_BASE_URL": ""]).baseURL == "https://www.rffm.es")
+    }
+
+    @Test("RFFM_BASE_URL fija la dirección (R0.8)")
+    func theVariableSetsTheBaseURL() {
+        #expect(RFFMEndpoints(environment: ["RFFM_BASE_URL": "http://localhost:8090"]).baseURL
+            == "http://localhost:8090")
+    }
+
+    /// Con la barra final, la ruta saldría `…:8090//competicion/calendario`, y un
+    /// servidor que busca `/competicion/calendario` no la reconoce: el escenario
+    /// fallaría sin que nada en el error hablara de la barra.
+    @Test("la barra final de RFFM_BASE_URL se quita, o las rutas saldrían con dos (R0.8)")
+    func aTrailingSlashIsDropped() {
+        let endpoints = RFFMEndpoints(environment: ["RFFM_BASE_URL": "http://localhost:8090/"])
+        #expect(endpoints.scorers(for: Self.coordinate) ==
+            "http://localhost:8090/api/scorers?idGroup=26737702&idCompetition=26737701")
+    }
+
+    /// Y el adaptador **pide** ahí: no basta con que las rutas sepan colgar de otra
+    /// dirección si el cliente sigue construyendo las suyas con la de la RFFM.
+    @Test("el cliente pide sus tres rutas a la dirección que le dan (R0.8)")
+    func theClientAsksTheConfiguredBaseURL() async throws {
+        let transport = SpyTransport(returning: .success("null"))
+        let client = RFFMFederationClient(
+            transport: transport, endpoints: RFFMEndpoints(baseURL: "http://localhost:8090"))
+
+        _ = try? await client.fetchCalendar(Self.coordinate)
+        _ = try? await client.fetchStandings(Self.coordinate, round: 30)
+        _ = try? await client.fetchScorers(Self.coordinate)
+
+        #expect(transport.requested.count == 3)
+        #expect(transport.requested.allSatisfy { $0.hasPrefix("http://localhost:8090/") })
     }
 
     /// Los goleadores **no llevan jornada**, y el puerto lo dice en la firma: son
@@ -181,7 +238,7 @@ struct RFFMFederationClientTests {
 
         let calendar = try await client.fetchCalendar(Self.coordinate)
 
-        #expect(transport.requested == [RFFMEndpoints.calendar(for: Self.coordinate)])
+        #expect(transport.requested == [RFFMEndpoints().calendar(for: Self.coordinate)])
         #expect(calendar.rounds.count == 34)
         #expect(calendar.seasonLabel?.value == "2026/27")
     }

@@ -5,7 +5,7 @@ import Testing
 
 @testable import Federation
 
-/// Nivel 1: **la inversa de `RFFMEndpoints.calendar(for:)`**, sin red.
+/// Nivel 1: **la inversa de `RFFMEndpoints().calendar(for:)`**, sin red.
 ///
 /// Existe por `D-22`: la mitigación contra el dígito mal tecleado es **pegar la
 /// URL entera**, porque copiar de la barra de direcciones no admite errata. Si
@@ -33,7 +33,7 @@ struct RFFMCalendarURLTests {
     @Test("la ida y la vuelta se cierran")
     func theRoundTripCloses() throws {
         let coordinate = try RFFMEndpoints.coordinate(fromCalendarURL: Self.url)
-        #expect(RFFMEndpoints.calendar(for: coordinate) == Self.url)
+        #expect(RFFMEndpoints().calendar(for: coordinate) == Self.url)
     }
 
     @Test("`tipojuego` 3 es fútbol sala y 4 es fútbol-5, no al revés (Anexo RFFM §F.9)")

@@ -309,7 +309,7 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | 🔨 en curso | 7/13 | desde 2026-10-16 |
+| **0** · El andamiaje | 🔨 en curso | 8/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -324,6 +324,7 @@ su comprobación.
 | `R0.5` | 2026-10-16 | `npm run lint` (ESLint 10, `eslint-plugin-vue`, `typescript-eslint` y `eslint-plugin-vuejs-accessibility`). Una pieza de mentira en `components/` da **error** al usar `../api/client` (*Una pieza de components/ no puede usar api/…*), con una imagen sin `alt` y con un campo sin etiqueta; borrada después. **El botón sin nombre, no**: el paquete no tiene esa regla (sí la de enlaces y encabezados vacíos), aunque el ADR lo ponía de ejemplo. Lo cazará axe en los escenarios (`button-name`), y conviene que el escenario de prueba de `R0.13` lo incluya |
 | `R0.6` | 2026-10-16 | **PrimeVue 4.5.5 y `@primeuix/themes` 2.0.3, fijas**: la 5 cambió de licencia (nota en el ADR, decisión 4); todo lo que entra con ellas es MIT. Textos en español con `primelocale`, y `lang="es"`. La prueba del calendario (`src/theme/primevue.test.ts`) dio su rojo sin el idioma: *`['Su','Mo','Tu',…]` to deeply equal `['L','M','X','J','V','S','D']`*; con él, verde. Para montarlo hizo falta un `matchMedia` mínimo en `test-setup.ts` (jsdom no lo trae). El modo se elige en `index.html` antes de pintar: `tema` guardado, o el del sistema. **A mano**: sin destello blanco en modo oscuro, y `tema = claro` manda sobre el sistema (visto bueno del desarrollador) |
 | `R0.7` | 2026-10-16 | Las órdenes en `package.json` y en `backoffice/README.md`: `dev`, `test` (y `test:watch`), `typecheck`, `lint` y `build`. Cada una ejecutada tal cual la dice el README, también `nvm use` y el `curl` a `5173/api/v1/club` con `Run serve` en marcha. **Fin de la primera parte**; `AGENTS.md`, al día |
+| `R0.8` | 2026-10-16 | **Mini-fase**, con su renglón en el Plan de desarrollo. `RFFMEndpoints` pasa a tener su dirección (`baseURL`), leída de `RFFM_BASE_URL` por la raíz de composición; sin ella, o vacía, `https://www.rffm.es`. Una barra final se quita, porque si no las rutas salían con dos (`…:8090//competicion/…`). **Cuatro ciclos**, cada uno con su rojo de aserción: las rutas cuelgan de la dirección, el cliente pide ahí, la variable se lee, y la raíz de composición se la pasa al adaptador. **10/10 mutaciones** (`Catalogs/R0-8.json`); 604 → **611 tests**. **A mano:** sin la variable, `ingest -t celtic-castilla --force` pide a la RFFM real y actualiza las dos competiciones; con `RFFM_BASE_URL=http://localhost:8090`, sobre un club de usar y tirar en `tfm_test` (borrado después), el calendario se pide a `localhost:8090`. Variable apuntada en `backend/README.md` §2 |
 
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 

@@ -1,6 +1,7 @@
 import Application
 import Domain
 import Federation
+import Foundation
 
 /// El catálogo de adaptadores de `D-17`, resuelto en la **raíz de composición**.
 ///
@@ -22,8 +23,17 @@ public struct CatalogFederationClientProvider: FederationClientProvider {
     /// - Parameter rffm: se inyecta para que los tests puedan poner un doble en
     ///   su sitio **sin red**. En producción es el adaptador de verdad sobre el
     ///   transporte HTTP con su *timeout* corto (§2.3-c).
-    public init(rffm: any FederationClient = RFFMFederationClient(transport: HTTPFederationTransport())) {
+    public init(rffm: any FederationClient = Self.rffm(environment: ProcessInfo.processInfo.environment)) {
         self.rffm = rffm
+    }
+
+    /// El adaptador de producción de la RFFM, con su dirección sacada del entorno
+    /// (`RFFM_BASE_URL`, `R0.8`): la RFFM de verdad si no está puesta, o la
+    /// federación falsa de los escenarios del backoffice si lo está.
+    public static func rffm(environment: [String: String]) -> any FederationClient {
+        RFFMFederationClient(
+            transport: HTTPFederationTransport(),
+            endpoints: RFFMEndpoints(environment: environment))
     }
 
     public func client(for code: FederationCode) -> (any FederationClient)? {
