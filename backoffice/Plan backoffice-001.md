@@ -194,7 +194,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 
 | Rebanada | Pantalla afectada | Endpoints afectados |
 |---|---|---|
-| **0** · Andamiaje | Ninguna: la web arranca con una página en blanco (§5) | Ninguno nuevo |
+| **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
 | **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos, competición y estado de la ingesta | `getClub` ● · `listSeasons` · `listTeams` ⚠️ — su respuesta no dice en qué competición juega cada equipo · `listCompetitions` |
 | **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
@@ -237,7 +237,12 @@ de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
 Cada rebanada se detalla aquí **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
 `R<rebanada>.<paso>`.
 
-### Rebanada 0 · La web vacía que arranca
+### Rebanada 0 · El andamiaje
+
+Dos partes: **la web vacía que arranca** (`R0.1`–`R0.7`) y **el arnés de los escenarios** (`R0.8`–`R0.13`).
+La segunda necesita que la web arranque, pero `R0.8`, que es del servidor, puede hacerse en cualquier momento.
+
+#### Primera parte · La web vacía que arranca
 
 **Leer antes:** LLD-B §1 (carpetas, las tres partes y el prefijo `/api/v1`), §2.3 (qué se guarda en el
 navegador), §3.2 y §3.4 (cancelar y esperar 30 s) y §9 (tema e idioma); `DW-01`, `DW-02`, `DW-04` y `DW-12`.
@@ -259,14 +264,44 @@ pantalla**: la primera llega con la rebanada 1.
 | `R0.6` | **PrimeVue** con el tema Aura, los textos de sus piezas en español, la semana desde el lunes y `lang="es"` en la página (LLD-B §9.5, §10.6). El **modo claro u oscuro se aplica antes de pintar**, siguiendo al sistema, o la elección guardada si existe (`tema`, la única excepción del LLD-B §2.3). Los colores, todavía los de Aura: se miden de los bocetos en la rebanada 1 | Con el Mac en modo oscuro, al abrir la web **no hay destello blanco**. Una prueba de Vitest monta un calendario de PrimeVue con esta configuración y comprueba que los meses salen en español y la semana empieza en lunes |
 | `R0.7` | **Las órdenes del día a día**, en `package.json` y en `backoffice/README.md`: arrancar (`dev`), probar (`test`), comprobar tipos (`typecheck`), revisar (`lint`) y fabricar (`build`) | Cada orden del README se ejecuta tal cual y hace lo que dice |
 
-**Lo que no está en la rebanada 0, y dónde va:**
+#### Segunda parte · El arnés de los escenarios
+
+**Leer antes:** LLD-B §11 entera; ADR-B, decisión 6; `DW-13` y `DW-14`; `backend/README.md` §2 (variables del
+servidor); `backend/Tests/FederationTests/Fixtures/README.md` (qué respuestas de la federación hay grabadas).
+
+**Qué se tiene al terminar:** con una sola orden se arrancan un servidor y una web **solo para las pruebas**
+(puertos 8081 y 5174, base `tfm_test`), detrás una federación falsa, y un escenario de humo pasa en verde con
+axe en los dos modos. Cada escenario tiene su propio club. **El servidor del 8080 y la base `tfm` del
+desarrollador no se tocan.**
+
+**Tres cosas comprobadas al revisar esta parte (2026-10-16):** la base `tfm_test` **no existe** hasta que la
+crean las pruebas del backend (`backend/Sources/TestSupport/TestEnvironment.swift:88`); las respuestas grabadas
+son siete —tres calendarios y la clasificación y los goleadores de **un solo grupo**, el Cadete G1 2025-26—; y
+los escudos que trae el calendario apuntan a la RFFM de verdad (`appweb.rffm.es`), porque esa dirección la
+publica la propia respuesta.
+
+**`R0.8` es código del servidor**: ciclo TDD y mutación, como en el backend. Los demás son pasos de montaje con
+su comprobación.
+
+| Paso | Qué | Comprobación |
+|---|---|---|
+| `R0.8` | **Servidor: la dirección de la RFFM, configurable.** Hoy está fija en `backend/Sources/Federation/RFFMEndpoints.swift:13`. Pasa a leerse de la variable de entorno **`RFFM_BASE_URL`**; sin ella, sigue siendo `https://www.rffm.es`. Lleva el nombre de la RFFM y no uno genérico porque cada adaptador es dueño de sus direcciones (`D-97`). Toca dos partes del servidor (`Federation` y la raíz de composición), así que **es mini-fase**, con su renglón en el Plan de desarrollo. **Nota: al hacerlo, se añade la variable a la documentación del backend** (`backend/README.md` §2, la lista de variables) | Rojo de aserción → verde; mutación; `REQUIRE_DB=1 swift test` en verde. **Y sin la variable, todo sigue como antes**: una `ingest` a mano sobre `celtic-castilla` trae datos de la RFFM real |
+| `R0.9` | **El servidor de pruebas en marcha**: el binario ya compilado, no `swift run` (que comprueba la compilación cada vez), con `DB_NAME=tfm_test API_PORT=8081`. Si `tfm_test` no existe, se crea, igual que hacen las pruebas del backend. Es la comprobación que el LLD-B §11.1 dejó pendiente | `curl -s http://bo-humo.localhost:8081/v1/club` contesta (aunque sea «este club no existe»). El `curl` al 8080 sigue como estaba, y `docker ps` sigue enseñando el Postgres en marcha |
+| `R0.10` | **La federación falsa** (`DW-14`): un servidor pequeño en **Node**, en `backoffice/e2e/support/`, que devuelve las respuestas grabadas según la dirección que le pidan. Si un escenario necesita un caso que no está grabado, se graba uno nuevo | Con el servidor de pruebas apuntando a ella (`RFFM_BASE_URL`), en un club de pruebas con equipo y competición sembrados (`seed-team`, `seed-competition`), `ingest` trae los 240 partidos del calendario jugado |
+| `R0.11` | **Cucumber + Playwright** con el arranque del LLD-B §11.1: servidor de pruebas, web en el 5174 con su recepcionista apuntando al 8081, y federación falsa. **Si alguno no arranca, la pasada falla enseguida diciendo cuál.** Al empezar se barren los restos `bo_` de una pasada cortada; con `KEEP_TEST_DATA=1` se dejan para mirarlos en TablePlus. Navegador de los escenarios: **Chromium**; Safari y Firefox, en la revisión a mano de cada rebanada | Con el 8081 ocupado, la pasada falla en segundos diciendo cuál. Sin nada ocupado, un escenario de humo («la web arranca») en verde |
+| `R0.12` | **Un club por escenario**, con el prefijo `bo_` (`DW-13`), creado con `provision-tenant` del binario compilado. El barrido borra el *schema* y su fila en `public.tenants`. **Se mide cuánto tarda** | Dos escenarios seguidos no ven los datos del otro. La cifra, apuntada en §6. Si pasa de unos segundos por escenario, se para y se decide con el número delante |
+| `R0.13` | **axe en los dos modos** al final de cada escenario (LLD-B §9.4) | Un escenario de prueba con una imagen sin texto alternativo **falla**, en los dos modos. Se borra después |
+
+#### Lo que no está en la rebanada 0, y dónde va
 
 | Qué | Va a | Por qué |
 |---|---|---|
 | El interruptor para cambiar de modo claro a oscuro | Rebanada 1 | Es parte del marco (cabecera y menú), que se construye con la portada |
 | Los mensajes de cada código de error (`errors.ts`) | Rebanada 1 | Necesita antes la lista cerrada de códigos en el catálogo, que es un paso del servidor de esa rebanada |
-| La fecha sin hora y su prueba en otra zona horaria (`format.ts`) | Rebanada 4 | Es para las fechas de los partidos, y la portada base no enseña ninguna |
+| Cómo se prueba el estado «cargando» sin simulacros | Rebanada 1, antes de su primer escenario | Es la primera pantalla con un «cargando». Se decide con ella y se escribe como `DW-15` |
 | Ajv, las reglas de los formularios leídas del catálogo | Rebanada 2 | Es para formularios, y el primero es el alta de equipo |
+| La fecha sin hora y su prueba en otra zona horaria (`format.ts`) | Rebanada 4 | Es para las fechas de los partidos, y la portada base no enseña ninguna |
+| Que los escudos de los escenarios no se bajen de internet | Rebanada 4 | Es la primera pantalla que enseña escudos de rivales |
 
 ---
 
@@ -274,6 +309,6 @@ pantalla**: la primera llega con la rebanada 1.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · La web vacía que arranca | ⏳ por empezar | 0/7 | — |
+| **0** · El andamiaje | ⏳ por empezar | 0/13 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
