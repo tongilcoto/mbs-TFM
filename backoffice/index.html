@@ -1,9 +1,27 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Backoffice</title>
+    <script>
+      // Modo claro u oscuro, ANTES de pintar nada, para que no haya destello blanco (LLD-B §9.3).
+      // Manda la elección guardada (`tema`, la única excepción del LLD-B §2.3); si no hay, el sistema.
+      ;(function () {
+        var saved = null
+        try {
+          saved = localStorage.getItem('tema')
+        } catch (e) {}
+        var dark = saved ? saved === 'oscuro' : matchMedia('(prefers-color-scheme: dark)').matches
+        if (dark) document.documentElement.classList.add('app-dark')
+      })()
+    </script>
+    <style>
+      /* El fondo y el texto de la página siguen al modo desde el primer pintado. */
+      html { color-scheme: light; }
+      html.app-dark { color-scheme: dark; }
+      body { margin: 0; background: Canvas; color: CanvasText; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
