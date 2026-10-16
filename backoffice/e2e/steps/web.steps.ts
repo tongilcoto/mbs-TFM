@@ -3,8 +3,8 @@ import { Then, When } from '@cucumber/cucumber'
 import assert from 'node:assert/strict'
 import type { ScenarioWorld } from '../support/world.ts'
 
-When('abro la web del club {string}', async function (this: ScenarioWorld, slug: string) {
-  await this.page.goto(this.clubUrl(slug))
+When('abro la web de mi club', async function (this: ScenarioWorld) {
+  await this.page.goto(this.clubUrl())
 })
 
 Then('veo la zona principal de la página', async function (this: ScenarioWorld) {

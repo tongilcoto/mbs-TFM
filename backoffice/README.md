@@ -51,6 +51,8 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
   tiene que estar en marcha, porque la base de pruebas vive en el mismo Postgres.
 - **Si una pieza no arranca, la pasada falla enseguida diciendo cuál**, por ejemplo si el 8081 está ocupado.
   Lo que escribe cada pieza queda en `e2e-results/` (`servidor.log`, `web.log`).
+- **Cada escenario tiene su propio club**, `bo-…`, que se borra al acabar. Para conservarlos y mirarlos en
+  TablePlus (base `tfm_test`): `KEEP_TEST_DATA=1 npm run e2e`. La pasada siguiente los barre.
 - **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
   viejo probaría código que ya no es el tuyo.
 
