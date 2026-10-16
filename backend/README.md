@@ -386,7 +386,7 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 611 tests, ~30 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 611 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -874,6 +874,7 @@ despista (`missing required module '_NumericsShims'`).
 | `23514` al ingerir | Un `CHECK` del *schema* que se quedó atrás — ver el aviso de [§6.1](#provision) |
 | Los tests se caen con **señal 5** | Una `Application` destruida sin esperar a que se cierre. Usa `TestEnvironment.withApp` |
 | Los tests fallan **la primera vez** y pasan a la segunda | Dos *suites* en paralelo inicializando lo mismo a la vez. Esa inicialización va en `TestEnvironment.bootstrap()` |
+| `too many clients already` (`53300`) en los tests | Más de 100 conexiones a Postgres a la vez. Las pruebas abren como mucho **4** `Application` a la vez (`AppSlots`, en `TestSupport`); si vuelve a salir, mira cuántas conexiones tienes abiertas tú (`pg_stat_activity`) antes de subir el número |
 | `PSQLError – Generic description…` | PostgresNIO oculta el detalle; `String(reflecting:)` lo muestra |
 | `Address already in use` (errno 48) al hacer `serve` | Ya hay un `Run serve` vivo: `lsof -nP -iTCP:8080 -sTCP:LISTEN` y `kill <PID>` |
 | `Test Suite … Executed 0 tests` de XCTest | No hay tests de XCTest en el proyecto (`D-70`), pero SwiftPM lanza también su ejecutor, que no encuentra nada. `--disable-xctest` lo quita |

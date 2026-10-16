@@ -343,3 +343,10 @@ su comprobación.
   comprobado con el desarrollador. Fue, por tanto, el **`null` pasajero de H-61**, que duró al menos tres minutos;
   su reintento (H-92) sigue aplazado al despliegue. **No es del cambio**: sin la variable, la petición fue a
   `www.rffm.es`. Sin cambio de código.
+- **Las pruebas del backend pasaban de las 100 conexiones de Postgres** (`R0.10`, 2026-10-16): unas veces sí y
+  otras no, algunas suites fallaban al arrancar con *"too many clients already"*, también sin ningún cambio de
+  esta rebanada (una de dos pasadas). Las suites corren en paralelo y cada una abre sus conexiones: el pico
+  medido rondaba las **90**, más las que el desarrollador tiene abiertas (su servidor, TablePlus). Elegido con
+  el desarrollador **limitar las pruebas** en vez de subir `max_connections`, que obligaba a reiniciar su
+  Postgres: `TestEnvironment.withApp` deja **4** `Application` abiertas a la vez (`AppSlots`), y las demás
+  esperan turno. Pico, **36**; la batería, de ~30 s a ~40 s; tres pasadas seguidas en verde.
