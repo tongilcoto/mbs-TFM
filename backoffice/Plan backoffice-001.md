@@ -194,6 +194,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 
 | Rebanada | Pantalla afectada | Endpoints afectados |
 |---|---|---|
+| **0** · Andamiaje | Ninguna: la web arranca con una página en blanco (§5) | Ninguno nuevo |
 | **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos, competición y estado de la ingesta | `getClub` ● · `listSeasons` · `listTeams` ⚠️ — su respuesta no dice en qué competición juega cada equipo · `listCompetitions` |
 | **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
@@ -228,3 +229,51 @@ activa con la rebanada que la usa**.
 
 **Pendiente de confirmar:** si la salida a la primera temporada (rebanada 2) es crearla desde la web, una parte
 de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
+
+---
+
+## 5. Las rebanadas, en detalle
+
+Cada rebanada se detalla aquí **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
+`R<rebanada>.<paso>`.
+
+### Rebanada 0 · La web vacía que arranca
+
+**Leer antes:** LLD-B §1 (carpetas, las tres partes y el prefijo `/api/v1`), §2.3 (qué se guarda en el
+navegador), §3.2 y §3.4 (cancelar y esperar 30 s) y §9 (tema e idioma); `DW-01`, `DW-02`, `DW-04` y `DW-12`.
+
+**Qué se tiene al terminar:** la web arranca en `celtic-castilla.localhost:5173` y enseña una página en blanco,
+en el modo claro u oscuro del sistema. Por detrás ya están listos los tipos de datos sacados del catálogo, la
+conexión con el servidor, el revisor de código, PrimeVue y las pruebas de piezas. Todavía **no hay ninguna
+pantalla**: la primera llega con la rebanada 1.
+
+**Solo `R0.4` es un ciclo TDD.** Los demás son pasos de montaje, cada uno con su comprobación escrita.
+
+| Paso | Qué | Comprobación |
+|---|---|---|
+| `R0.1` | **El proyecto.** La web vacía en `backoffice/`, con Vite, Vue, TypeScript y el mapa de pantallas (`router.ts`) con una sola página en blanco. Las carpetas del LLD-B §1.1: `api/`, `screens/`, `components/` y `theme/`. La versión de Node fijada en `.nvmrc` (22). En el `.gitignore`: el comentario de `backoffice/` pasa de «React» a «Vue», y se ignora lo que se fabrica (`node_modules/`, `dist/`, `src/api/schema.d.ts`). Se quita el `.gitkeep` | `npm run dev` arranca, y `http://celtic-castilla.localhost:5173` enseña la página en blanco. Se comprueba también en Safari: si no abre las direcciones `*.localhost`, se apunta en el README |
+| `R0.2` | **Las pruebas de piezas**: Vitest con Testing Library | `npm test` se ejecuta. Una prueba que compara mal a propósito **falla** con un mensaje que se entiende, y se borra después |
+| `R0.3` | **Los tipos sacados del catálogo**: `openapi-typescript` lee `backend/Sources/APIContract/openapi.yaml` y fabrica `src/api/schema.d.ts` cada vez que se arranca o se fabrica la web | El fichero aparece tras `npm run dev`. Una petición a una dirección que no existe en el catálogo (`client.GET('/equiposs')`) hace **fallar** `npm run typecheck` |
+| `R0.4` | **La conexión con el servidor** (`src/api/client.ts`), con `openapi-fetch`: toda petición empieza por `/api/v1`, la web deja de esperar a los **30 s** y una petición se puede cancelar (LLD-B §3.2, §3.4). Y el **recepcionista de Vite**, que pasa lo que empieza por `/api` al servidor del 8080 quitándole el `/api` (LLD-B §1.3) | **Ciclo TDD con Vitest**, una regla cada vez: (1) pedir el club sale a `/api/v1/club`; (2) sin respuesta en 30 s, llega el error «el servidor no responde», probado con un reloj de mentira y sin esperar de verdad; (3) una petición cancelada no entrega nada. Cada una: esqueleto que hace mal → rojo de aserción → verde. **Y a mano**, con `Run serve` en el 8080: `curl -s http://celtic-castilla.localhost:5173/api/v1/club` devuelve el club, y `curl -s http://celtic-castilla.localhost:8080/api/v1/club` da «no encontrado» |
+| `R0.5` | **El revisor de código** (ESLint), con dos reglas que importan: un fichero de `components/` no puede usar `api/` (`DW-01`), y las reglas de accesibilidad de Vue (ADR-B, decisión 6) | Un fichero de prueba que incumple cada regla da **error**. Se borra después |
+| `R0.6` | **PrimeVue** con el tema Aura, los textos de sus piezas en español, la semana desde el lunes y `lang="es"` en la página (LLD-B §9.5, §10.6). El **modo claro u oscuro se aplica antes de pintar**, siguiendo al sistema, o la elección guardada si existe (`tema`, la única excepción del LLD-B §2.3). Los colores, todavía los de Aura: se miden de los bocetos en la rebanada 1 | Con el Mac en modo oscuro, al abrir la web **no hay destello blanco**. Una prueba de Vitest monta un calendario de PrimeVue con esta configuración y comprueba que los meses salen en español y la semana empieza en lunes |
+| `R0.7` | **Las órdenes del día a día**, en `package.json` y en `backoffice/README.md`: arrancar (`dev`), probar (`test`), comprobar tipos (`typecheck`), revisar (`lint`) y fabricar (`build`) | Cada orden del README se ejecuta tal cual y hace lo que dice |
+
+**Lo que no está en la rebanada 0, y dónde va:**
+
+| Qué | Va a | Por qué |
+|---|---|---|
+| El interruptor para cambiar de modo claro a oscuro | Rebanada 1 | Es parte del marco (cabecera y menú), que se construye con la portada |
+| Los mensajes de cada código de error (`errors.ts`) | Rebanada 1 | Necesita antes la lista cerrada de códigos en el catálogo, que es un paso del servidor de esa rebanada |
+| La fecha sin hora y su prueba en otra zona horaria (`format.ts`) | Rebanada 4 | Es para las fechas de los partidos, y la portada base no enseña ninguna |
+| Ajv, las reglas de los formularios leídas del catálogo | Rebanada 2 | Es para formularios, y el primero es el alta de equipo |
+
+---
+
+## 6. Estado
+
+| Rebanada | Estado | Pasos | Fecha |
+|---|---|---|---|
+| **0** · La web vacía que arranca | ⏳ por empezar | 0/7 | — |
+
+**Punto de partida: 604 tests en el backend, 0 en la web.**
