@@ -388,8 +388,11 @@ despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.
 [plan](./backoffice/Plan%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
-[backoffice/README.md](./backoffice/README.md). Del arnés de los escenarios (`R0.8`–`R0.13`), hecho `R0.8`:
-la dirección de la RFFM se lee de `RFFM_BASE_URL` (mini-fase; sin ella, la de verdad). Lo siguiente, `R0.9`.
+[backoffice/README.md](./backoffice/README.md). Y la segunda, el arnés de los escenarios (`R0.8`–`R0.13`),
+**cerrada el 2026-10-16, y con ella la rebanada 0**: `npm run e2e` arranca su propio servidor (8081, `tfm_test`),
+su web (5174) y una federación falsa (8090) con las respuestas grabadas, crea un club `bo_` por escenario y pasa
+axe en los dos modos al final de cada uno. Para eso, la dirección de la RFFM se lee de `RFFM_BASE_URL`
+(mini-fase `R0.8`; sin ella, la de verdad). Lo siguiente, la ficha de la rebanada 1.
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
