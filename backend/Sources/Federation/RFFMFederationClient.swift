@@ -21,9 +21,15 @@ import enum Domain.DomainError
 /// filtrar porque no hay nada que recordar.
 public struct RFFMFederationClient: FederationClient {
     private let transport: any FederationTransport
+    /// Interna y no privada: la raíz de composición tiene un test que mira que
+    /// el adaptador de producción se monta con la dirección del entorno (`R0.8`).
+    let endpoints: RFFMEndpoints
 
-    public init(transport: any FederationTransport) {
+    /// - Parameter endpoints: dónde está la RFFM. La de verdad salvo que la raíz
+    ///   de composición diga otra cosa (`RFFM_BASE_URL`, `R0.8`).
+    public init(transport: any FederationTransport, endpoints: RFFMEndpoints = RFFMEndpoints()) {
         self.transport = transport
+        self.endpoints = endpoints
     }
 
     /// Una petición, el calendario entero (§5.6, [Anexo RFFM §F.1]).
@@ -32,7 +38,7 @@ public struct RFFMFederationClient: FederationClient {
     /// que la fuente dijo, con sus huecos intactos — que es la materia prima sobre
     /// la que `D-56` decide qué se escribe y qué no.
     public func fetchCalendar(_ coordinate: FederationCoordinate) async throws -> FederationCalendar {
-        let page = try await transport.get(RFFMEndpoints.calendar(for: coordinate))
+        let page = try await transport.get(endpoints.calendar(for: coordinate))
         return try RFFMCalendarParser.parse(page)
     }
 
@@ -51,7 +57,7 @@ public struct RFFMFederationClient: FederationClient {
         _ coordinate: FederationCoordinate, round: Int
     ) async throws -> FederationStanding {
         let body = try await transport.get(
-            RFFMEndpoints.standings(for: coordinate, round: round))
+            endpoints.standings(for: coordinate, round: round))
         return try RFFMStandingsParser.parse(body)
     }
 
@@ -69,7 +75,7 @@ public struct RFFMFederationClient: FederationClient {
     public func fetchScorers(
         _ coordinate: FederationCoordinate
     ) async throws -> FederationScorerTable {
-        let body = try await transport.get(RFFMEndpoints.scorers(for: coordinate))
+        let body = try await transport.get(endpoints.scorers(for: coordinate))
         return try RFFMScorersParser.parse(body)
     }
 

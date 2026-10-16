@@ -152,6 +152,27 @@ public enum TestEnvironment {
         _ body: (Application) async throws -> Void
     ) async throws {
         try await bootstrap()
+        // Una plaza de las pocas que hay, para no pasar del límite de conexiones
+        // de Postgres (`AppSlots`). Se suelta pase lo que pase.
+        await AppSlots.shared.acquire()
+        do {
+            try await withAppHoldingASlot(
+                federationClients: federationClients, background: background,
+                clock: clock, actors: actors, body)
+        } catch {
+            await AppSlots.shared.release()
+            throw error
+        }
+        await AppSlots.shared.release()
+    }
+
+    private static func withAppHoldingASlot(
+        federationClients: (any FederationClientProvider)?,
+        background: (any BackgroundWork)?,
+        clock: (any Clock)?,
+        actors: (any ActorResolver)?,
+        _ body: (Application) async throws -> Void
+    ) async throws {
         let app = try await Application.make(.testing)
         applyLogLevel(to: app)
         do {

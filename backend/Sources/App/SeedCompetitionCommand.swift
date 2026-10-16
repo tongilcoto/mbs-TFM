@@ -58,7 +58,15 @@ public struct SeedCompetitionCommand: AsyncCommand {
         "Da de alta una competición desde la URL de su calendario (herramienta, no contrato)."
     }
 
-    public init() {}
+    /// De dónde sale el adaptador de la RFFM: el mismo catálogo que usa la
+    /// ingesta, inyectado desde `configure`. Montar uno propio aquí hacía que este
+    /// comando no se enterara de `RFFM_BASE_URL` y fuera a la RFFM de verdad
+    /// aunque la variable estuviera puesta (hallazgo de `R0.10`).
+    private let federationClients: any FederationClientProvider
+
+    public init(federationClients: any FederationClientProvider = CatalogFederationClientProvider()) {
+        self.federationClients = federationClients
+    }
 
     public func run(using context: CommandContext, signature: Signature) async throws {
         let app = context.application
@@ -84,8 +92,12 @@ public struct SeedCompetitionCommand: AsyncCommand {
 
         // ── Se pregunta a la federación ANTES de escribir ────────────────────
         context.console.info("→ consultando la federación…")
-        let calendar = try await RFFMFederationClient(transport: HTTPFederationTransport())
-            .fetchCalendar(coordinate)
+        // La URL es de la RFFM (lo acaba de comprobar `coordinate(fromCalendarURL:)`),
+        // así que el adaptador es el de la RFFM, pedido al catálogo.
+        guard let rffm = federationClients.client(for: .rffm) else {
+            throw SeedError.noAdapter
+        }
+        let calendar = try await rffm.fetchCalendar(coordinate)
 
         context.console.info("""
               temporada:   \(calendar.seasonLabel?.value ?? "«sin etiqueta»")  (temporada=\(coordinate.federationSeasonID))
@@ -168,6 +180,7 @@ public struct SeedCompetitionCommand: AsyncCommand {
         case missing(String)
         case unknown(String, String, [String])
         case seasonLabelUnavailable(String)
+        case noAdapter
 
         var description: String {
             switch self {
@@ -182,6 +195,8 @@ public struct SeedCompetitionCommand: AsyncCommand {
                 Créala antes (con su etiqueta, p. ej. 2026/27) y repite el comando: \
                 esta herramienta la reutilizará por su federationSeasonId.
                 """
+            case .noAdapter:
+                "El catálogo no tiene adaptador para la RFFM."
             }
         }
     }

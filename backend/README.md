@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **604 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md). La
+(`D-95`). **612 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -109,6 +109,7 @@ base de datos.**
 | `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos |
 | `LOG_LEVEL` | `info` | `debug` muestra cada petición y cada SQL. Vale también en `swift test` |
 | `HTTP_TRACE` | apagado | `1` vuelca los **cuerpos** HTTP. Solo en `.development` / `.testing` |
+| `RFFM_BASE_URL` | `https://www.rffm.es` | Dónde pide la ingesta los datos de la RFFM. Solo para pruebas: los escenarios del backoffice ponen aquí una federación falsa. **La URL que se pega en el enganche sigue siendo la de la RFFM de verdad** |
 | `REQUIRE_DB` | apagado | `1` hace **fallar** los tests de BD en vez de omitirlos ([§5](#5-los-tests)). `CI` la activa sola |
 | `KEEP_TEST_DATA` | apagado | `1` conserva los *schemas* de test. **Solo la mira `swift test`** |
 
@@ -385,7 +386,7 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 604 tests, ~30 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 612 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -873,6 +874,7 @@ despista (`missing required module '_NumericsShims'`).
 | `23514` al ingerir | Un `CHECK` del *schema* que se quedó atrás — ver el aviso de [§6.1](#provision) |
 | Los tests se caen con **señal 5** | Una `Application` destruida sin esperar a que se cierre. Usa `TestEnvironment.withApp` |
 | Los tests fallan **la primera vez** y pasan a la segunda | Dos *suites* en paralelo inicializando lo mismo a la vez. Esa inicialización va en `TestEnvironment.bootstrap()` |
+| `too many clients already` (`53300`) en los tests | Más de 100 conexiones a Postgres a la vez. Las pruebas abren como mucho **4** `Application` a la vez (`AppSlots`, en `TestSupport`); si vuelve a salir, mira cuántas conexiones tienes abiertas tú (`pg_stat_activity`) antes de subir el número |
 | `PSQLError – Generic description…` | PostgresNIO oculta el detalle; `String(reflecting:)` lo muestra |
 | `Address already in use` (errno 48) al hacer `serve` | Ya hay un `Run serve` vivo: `lsof -nP -iTCP:8080 -sTCP:LISTEN` y `kill <PID>` |
 | `Test Suite … Executed 0 tests` de XCTest | No hay tests de XCTest en el proyecto (`D-70`), pero SwiftPM lanza también su ejecutor, que no encuentra nada. `--disable-xctest` lo quita |

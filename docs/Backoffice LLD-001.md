@@ -813,9 +813,9 @@ navegador → web → Run serve → tfm_test
 - **Es un servidor pequeño que devuelve las respuestas grabadas** que ya usa el backend
   (`backend/Tests/*/Fixtures/`): calendario jugado y sin jugar, goleadores, clasificación y los casos de
   «no existe». Si un escenario necesita algo que no está grabado, se graba una respuesta nueva.
-- **Pendiente del backend, con la portada:** hoy la dirección de la federación está fija en
-  `Sources/Federation/RFFMEndpoints.swift:13` (`https://www.rffm.es`). Tiene que poder cambiarse con una
-  variable de entorno; si no se pone, sigue siendo rffm.es.
+- **La dirección de la federación se cambia con `RFFM_BASE_URL`** (hecho en `R0.8`, 2026-10-16); si no se
+  pone, sigue siendo rffm.es. Solo cambia adónde pide la ingesta: la URL que se pega en el enganche sigue
+  siendo la de la RFFM de verdad.
 
 #### 11.4 Cómo se escriben los pasos
 
@@ -855,7 +855,7 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 |---|---|---|
 | La lista cerrada de códigos de error (`enum` de `code`) | `openapi.yaml`, esquema `Problem` (§4.5 *b*, paso 1) | Con la portada |
 | El formato `<campo>: <motivo>` de `detail` en los errores de valor | `openapi.yaml` (§4.5 *a*) | Con la portada |
-| Poder cambiar la dirección de la federación con una variable de entorno; sin ella, rffm.es | `Sources/Federation/RFFMEndpoints.swift:13` (§11.3) | Con la portada |
+| ~~Poder cambiar la dirección de la federación con una variable de entorno; sin ella, rffm.es~~ | `RFFM_BASE_URL` (§11.3) | **Hecho** en `R0.8`, 2026-10-16 |
 | Que `ProblemMiddleware` use la lista de códigos generada | `ProblemMiddleware.swift` (§4.5 *b*, paso 2) | Sin prisa |
 | Devolver todos los errores de valor a la vez | Dominio y `ProblemMiddleware` (§4.5 *c*) | Sin prisa; entonces se revisa §4.5 *a* |
 

@@ -1,0 +1,20 @@
+{
+  "title": "R0.10 · seed-competition pide el adaptador al catálogo",
+  "filter": "SeedCompetitionCommandTests",
+  "mutations": [
+    {
+      "id": "S1-adaptador-propio",
+      "description": "seed-competition vuelve a montarse su propio adaptador",
+      "file": "Sources/App/SeedCompetitionCommand.swift",
+      "find": "let calendar = try await rffm.fetchCalendar(coordinate)",
+      "replace": "_ = rffm; let calendar = try await RFFMFederationClient(transport: HTTPFederationTransport()).fetchCalendar(coordinate)"
+    },
+    {
+      "id": "S2-configure",
+      "description": "configure no le pasa el catálogo a seed-competition",
+      "file": "Sources/App/Configure.swift",
+      "find": "SeedCompetitionCommand(federationClients: federationClients)",
+      "replace": "SeedCompetitionCommand()"
+    }
+  ]
+}

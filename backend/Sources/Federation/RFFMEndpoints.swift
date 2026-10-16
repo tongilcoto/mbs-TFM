@@ -9,16 +9,49 @@ public import enum Domain.Modality
 /// `codgrupo`, y `idGroup` —el de la clasificación— es **el único en *camelCase***
 /// de toda la API. Tenerlos dispersos por el adaptador es pedir que alguien
 /// "corrija" uno por simetría.
-public enum RFFMEndpoints {
-    static let host = "https://www.rffm.es"
+///
+/// # La dirección de la RFFM, configurable (`R0.8` del plan del backoffice)
+///
+/// Lo que va detrás de cada ruta es de aquí; **dónde está la RFFM**, no siempre:
+/// los escenarios del backoffice ponen una federación falsa en su sitio, con las
+/// respuestas grabadas, para no depender de internet ni de los datos del día.
+/// Por eso las rutas cuelgan de `baseURL`, que por defecto es la de verdad.
+///
+/// **Solo cambia lo que se pide, no lo que se lee.** La URL que pega el
+/// administrador sigue siendo de la RFFM real —`coordinate(fromCalendarURL:)`
+/// comprueba su *host* contra `rffm.es`—: la federación falsa sustituye a la
+/// fuente, no a la barra de direcciones del administrador.
+public struct RFFMEndpoints: Sendable, Equatable {
+    public static let defaultBaseURL = "https://www.rffm.es"
+
+    /// Dónde está la RFFM: la de verdad, o la que diga quien monta el adaptador.
+    public let baseURL: String
+
+    public init(baseURL: String = Self.defaultBaseURL) {
+        self.baseURL = baseURL
+    }
+
+    /// La dirección, leída de **`RFFM_BASE_URL`**. Lleva el nombre de la RFFM y no
+    /// uno genérico porque cada adaptador es dueño de sus direcciones (`D-97`): la
+    /// federación que venga traerá la suya.
+    ///
+    /// Sin la variable, o vacía, la de verdad: **lo de siempre no cambia**.
+    public init(environment: [String: String]) {
+        guard var value = environment["RFFM_BASE_URL"], !value.isEmpty else {
+            self.init()
+            return
+        }
+        if value.hasSuffix("/") { value.removeLast() }
+        self.init(baseURL: value)
+    }
 
     /// El calendario completo de un grupo: **una sola petición** (§5.6).
     ///
     /// Los cuatro parámetros de §F.1 son **jerárquicos y descompuestos**, no un
     /// identificador opaco. Tres salen de la coordenada del modelo (`D-74`) y el
     /// `tipojuego` se deriva de la modalidad, que no se almacena (§3.2, `D-07`).
-    public static func calendar(for coordinate: FederationCoordinate) -> String {
-        "\(host)/competicion/calendario"
+    public func calendar(for coordinate: FederationCoordinate) -> String {
+        "\(baseURL)/competicion/calendario"
             + "?temporada=\(coordinate.federationSeasonID)"
             + "&tipojuego=\(RFFMGameType.code(for: coordinate.modality))"
             + "&competicion=\(coordinate.federationCompetitionID)"
@@ -39,8 +72,8 @@ public enum RFFMEndpoints {
     /// un descuido**: el puerto pasa la coordenada entera porque es la unidad que
     /// el modelo tiene, y cada endpoint coge lo suyo. Añadirlos "por simetría"
     /// con el calendario es justo lo que el encabezado de este fichero avisa.
-    public static func standings(for coordinate: FederationCoordinate, round: Int) -> String {
-        "\(host)/api/standings"
+    public func standings(for coordinate: FederationCoordinate, round: Int) -> String {
+        "\(baseURL)/api/standings"
             + "?idGroup=\(coordinate.federationGroupID)"
             + "&round=\(round)"
     }
@@ -76,8 +109,8 @@ public enum RFFMEndpoints {
     /// determina. Que la coordenada los traiga y aquí no se usen no es descuido —
     /// el puerto pasa la coordenada entera porque es la unidad que el modelo
     /// tiene, y cada endpoint coge lo suyo.
-    public static func scorers(for coordinate: FederationCoordinate) -> String {
-        "\(host)/api/scorers"
+    public func scorers(for coordinate: FederationCoordinate) -> String {
+        "\(baseURL)/api/scorers"
             + "?idGroup=\(coordinate.federationGroupID)"
             + "&idCompetition=\(coordinate.federationCompetitionID)"
     }
