@@ -333,3 +333,8 @@ su comprobación.
 - **`openapi-typescript` no acepta TypeScript 6** (`R0.3`, 2026-10-16): la plantilla de Vite lo trajo, y la
   herramienta que fabrica los tipos del catálogo solo acepta TypeScript 5. Se baja a la 5.9.3 →
   [DW-16](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+- **La RFFM contesta `null` a los goleadores de PRIMERA ALEVIN** (`R0.8`, 2026-10-16): al comprobar la ingesta
+  real sin la variable, las dos pasadas seguidas fallaron en los goleadores de esa competición, y un `curl`
+  directo a la RFFM con sus códigos (`idGroup=27325582&idCompetition=26737859`) devuelve `null`. El 9 y el 11
+  de octubre funcionó. **No es del cambio**: es la fuente. Es el caso de H-61, cuyo reintento (H-92) se
+  aplazó al despliegue; mientras dure, `launchd` avisará de fallo en cada disparo. Sin cambio de código.
