@@ -59,7 +59,7 @@ plan.
 | 1 | Qué tipo de web | ✅ Decidido (2026-10-12) | **Se descarga entera al navegador y después solo pide datos** al servidor que ya existe |
 | 2 | Con qué herramienta se construye | ✅ Decidido (2026-10-12) | **Vue, escrito en TypeScript** |
 | 3 | Cómo sabe la web qué datos manda y recibe | ✅ Decidido (2026-10-12) | **Se generan del catálogo `openapi.yaml` solo las descripciones de los datos**; las peticiones, con una pieza pequeña que las usa |
-| 4 | El aspecto visual | ✅ Decidido (2026-10-12) | **PrimeVue**, con un tema oscuro inspirado en los bocetos del móvil |
+| 4 | El aspecto visual | ✅ Decidido (2026-10-12) | **PrimeVue**, con un tema oscuro inspirado en los bocetos del móvil. **Versión 4.5.5, fija**: la 5 cambió de licencia (nota del 2026-10-16, §6) |
 | 5 | Dónde se publica y cuánto cuesta | ✅ Decidido (2026-10-12) | **Dos máquinas en Fly.io**: «web» (Caddy + ficheros, única puerta pública) y «api» (`Run serve`, solo red privada). ~3 $/mes |
 | 6 | Cómo se prueba | ✅ Decidido (2026-10-12) | **Piezas con Vitest + Testing Library; punta a punta en BDD con Playwright + Cucumber contra el servidor real**, sin simulacros, y **accesibilidad automática desde el principio** |
 
@@ -217,6 +217,15 @@ backoffice se le parezca, sin que sea obligatorio.
 
 **Detalles que quedan para el LLD:** los colores exactos del tema, el idioma de las piezas (fechas en
 `dd/mm/aaaa`, calendario empezando en lunes, textos en español) y si se ofrece también un modo claro.
+
+> **Nota (2026-10-16): se usa PrimeVue 4.5.5, fija, porque la 5 cambió de licencia.** Al instalarla
+> (Plan backoffice, `R0.6`) apareció que **PrimeVue 5** (julio de 2026) y su tema (`@primeuix/themes` 3) ya no
+> son MIT: llevan una licencia comercial que es gratis para estudiantes y empresas pequeñas, pero **pide una
+> clave**, se renueva **cada año** y pasa a ser de pago si el negocio crece. La **4.5.5** (abril de 2026) y
+> su tema (`@primeuix/themes` 2.0.3) siguen siendo **MIT**. La decisión no cambia: es la misma librería, con
+> las mismas razones. **Lo que se asume:** la 4 puede no recibir más actualizaciones; si un día hace falta la
+> 5, se pide o se compra la licencia entonces. Las versiones se fijan exactas en `backoffice/package.json`
+> para que una actualización no traiga la licencia nueva sin que nadie lo note.
 
 ## 7. Decisión 5 — Dónde se publica y cuánto cuesta
 
