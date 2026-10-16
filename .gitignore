@@ -2,7 +2,7 @@
 # Estructura prevista (una carpeta por artefacto):
 #   db/         · esquema y migraciones
 #   backend/    · API — Swift (Vapor + Fluent)
-#   backoffice/ · web backoffice — TypeScript/React
+#   backoffice/ · web backoffice — TypeScript/Vue
 #   ios/        · app iOS nativa — Swift/SwiftUI (Xcode)
 #   android/    · app Android nativa — Kotlin/Jetpack Compose (Gradle)
 #
@@ -58,9 +58,10 @@ ios/**/Carthage/Build/
 ios/**/*.mobileprovision
 ios/**/GoogleService-Info.plist
 
-# ═════════════════════════ backoffice/ (TypeScript · React) ═════════════════════════
+# ═════════════════════════ backoffice/ (TypeScript · Vue) ═════════════════════════
 backoffice/node_modules/
 backoffice/dist/
+backoffice/src/api/schema.d.ts
 backoffice/build/
 backoffice/.next/
 backoffice/out/
