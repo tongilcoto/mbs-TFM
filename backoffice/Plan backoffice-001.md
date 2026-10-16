@@ -94,27 +94,31 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
 
 ## 3. El mapa de pantallas
 
-> ⏳ **Por revisar, pantalla por pantalla.** Es el punto de partida: el del LLD-B §6.1 en versión de escritorio,
-> con un menú lateral fijo en vez de la flecha «atrás» de los bocetos del móvil (`docs/design-assets/mobile/`).
-> La rebanada de cada pantalla es **provisional** hasta que se revise.
+Es el del LLD-B §6.1 en versión de escritorio, con un menú lateral fijo en vez de la flecha «atrás» de los
+bocetos del móvil (`docs/design-assets/mobile/`), **revisado contra el catálogo el 2026-10-16**: cada operación
+del catálogo tiene su pantalla, y de ahí salieron la pantalla de Competiciones y el menú ⋮ del equipo. Cada
+pantalla lleva la rebanada (§4) que la construye; **una pantalla puede llegar en varias rebanadas**, como la
+portada, que empieza sencilla y se completa cuando el servidor sirve partidos y clasificación. El detalle de
+cada pantalla se revisa al escribir su ficha (§2.2).
 
-**Al cerrar cada rebanada, sus pantallas pasan a la clase `hecha`**; la que esté en marcha, a `enCurso`.
+**Al cerrar cada rebanada, lo que construye pasa a la clase `hecha`**; lo que esté en marcha, a `enCurso`.
 
 ```mermaid
 flowchart LR
     subgraph MENU["Menú lateral · cada entrada llega con su rebanada (LLD-B §6.6)"]
         direction TB
         mEq["Equipos · R1"]
-        mTem["Temporadas · R8"]
-        mRiv["Rivales · R8"]
-        mPer["Personal · R9"]
-        mIng["Ingesta · R8"]
-        mClub["Club · R8"]
+        mTem["Temporadas · R11"]
+        mCom["Competiciones · R9"]
+        mRiv["Rivales · R12"]
+        mIng["Ingesta · R14"]
+        mClub["Club · R14"]
+        mPer["Personal · R15"]
     end
 
     subgraph EQUIPOS["Equipos"]
         direction TB
-        P["<b>Portada</b> · R1<br/>/<br/>equipos, competición y estado de la ingesta<br/><i>boceto 1</i>"]
+        P["<b>Portada</b> · R1, R5<br/>/<br/>R1: equipos, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
         A["<b>Alta de equipo</b> · R2<br/>/equipos/nuevo"]
         F["<b>Enganche con la federación</b> · R3<br/>/equipos/:id/federacion"]
     end
@@ -122,41 +126,45 @@ flowchart LR
     subgraph FICHA["Ficha del equipo · cabecera: temporada, competición, posición · ?temporada=2025-26"]
         direction TB
         R["<b>Resultados</b> · R4<br/>/equipos/:id/resultados<br/><i>boceto 2</i>"]
-        E["<b>Estadísticas</b> · R7<br/>/equipos/:id/estadisticas<br/><i>boceto 4</i>"]
-        PL["<b>Plantilla</b> · R5<br/>/equipos/:id/plantilla<br/><i>boceto 5</i>"]
+        E["<b>Estadísticas</b> · R10<br/>/equipos/:id/estadisticas<br/><i>boceto 4</i>"]
+        PL["<b>Plantilla</b> · R6, R8, R10<br/>/equipos/:id/plantilla<br/>R6: lista · R8: disponibilidad · R10: cifras<br/><i>boceto 5</i>"]
+        AX["<b>Menú ⋮ del equipo</b> · R13<br/>corregir, borrar, liberar, reclamar"]
     end
 
-    J["<b>Jornada + clasificación</b> · R4?<br/>sin camino en el LLD-B<br/><i>boceto 3</i>"]
-    ACTA["<b>Acta del partido</b> · R6<br/>/partidos/:id"]
-    JUG["<b>Ficha del jugador</b> · R5?<br/>/jugadores/:id"]
+    J["<b>Jornada + clasificación</b> · R4<br/>sin camino en el LLD-B<br/><i>boceto 3</i>"]
+    ACTA["<b>Acta del partido</b> · R7<br/>/partidos/:id"]
+    JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
 
     subgraph GESTION["Gestión"]
         direction TB
-        GT["/temporadas · R8"]
-        GR["/rivales · R8"]
-        GP["/personal · R9"]
-        GI["/ingesta · R8"]
-        GC["/club · R8"]
+        GT["/temporadas · R11"]
+        GCo["<b>/competiciones</b> · R9<br/>corregir y tramos de sanción"]
+        GR["/rivales · R12"]
+        GI["/ingesta · R14"]
+        GC["/club · R14"]
+        GP["/personal · R15"]
     end
 
     NF["<b>Esta página no existe</b> · R1<br/>enlace a la portada (LLD-B §6.7)"]
 
     mEq --> P
     mTem --> GT
+    mCom --> GCo
     mRiv --> GR
-    mPer --> GP
     mIng --> GI
     mClub --> GC
+    mPer --> GP
 
     P -->|"Dar de alta un equipo"| A
     A -->|"al guardar"| P
-    A -.->|"cuando exista R3"| F
+    A -.->|"al guardar, cuando exista R3 (por decidir)"| F
+    P -->|"equipo sin enganchar"| F
     P -->|"clic en un equipo"| R
     R <--> E
     E <--> PL
-    R -.->|"menú ⋮ (por decidir)"| F
+    R --> AX
     R -->|"clic en un partido"| ACTA
-    R -.->|"icono de lista del boceto (por decidir)"| J
+    R -.->|"icono de lista del boceto (camino por decidir)"| J
     PL --> JUG
     NF --> P
 
@@ -164,10 +172,59 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,mTem,mRiv,mPer,mIng,mClub,P,A,F,R,E,PL,ACTA,JUG,GT,GR,GP,GI,GC,NF pendiente
+    class mEq,mTem,mCom,mRiv,mIng,mClub,mPer,P,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP,NF pendiente
     class J hueco
 ```
 
 Colores: **verde** = hecha · **ámbar** = en curso · **gris** = pendiente · **borde discontinuo** = sale en un
-boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún sin decidir. Un `?` tras la
-rebanada = asignación probable.
+boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún sin decidir.
+
+---
+
+## 4. Las rebanadas
+
+**Leyenda de los endpoints:**
+
+| Marca | Qué significa |
+|---|---|
+| *(sin marca)* | Está descrito en el catálogo, pero **no programado**: hay que hacerlo en las cuatro capas del servidor (catálogo activado, Aplicación, Persistencia y HTTP) |
+| ● | Ya programado y activo en el servidor |
+| ⚠️ | Hay que **cambiar su descripción en el catálogo** antes de programarlo; la celda dice qué le falta |
+| 🆕 | **No existe en el catálogo**: hay que diseñarlo desde cero |
+
+| Rebanada | Pantalla afectada | Endpoints afectados |
+|---|---|---|
+| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos, competición y estado de la ingesta | `getClub` ● · `listSeasons` · `listTeams` ⚠️ — su respuesta no dice en qué competición juega cada equipo · `listCompetitions` |
+| **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
+| **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
+| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `listRounds` · `getRound` · `listMatches` · `getStanding` |
+| **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
+| **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
+| **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
+| **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
+| **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
+| **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
+| **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
+| **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` |
+| **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` |
+| **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
+| **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
+| **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
+| — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
+
+Están las **83 operaciones** del catálogo: 81 repartidas y 2 sin pantalla a propósito. Una operación **solo se
+activa con la rebanada que la usa**.
+
+**Por qué este orden:**
+
+- **Cada rebanada usa datos que ya existen.** El acta (7) va antes que las estadísticas (10), porque las
+  estadísticas se calculan con lo que se apunta en el acta; y las competiciones (9) también, porque las
+  amarillas pendientes dependen de sus tramos de sanción.
+- **La 10 es la única con diseño grande en el servidor**: el LLD del backend diseña las estadísticas por dentro
+  (§3.4, §4.5) pero **nunca llegaron al catálogo**.
+- **Lo que se pide por partes**: la portada del boceto (5) y las posiciones de cada partido en Resultados (4)
+  salen de pedir la clasificación por jornada y los partidos por equipo. Se decide al escribir sus fichas si
+  se acepta o si se diseña una petición que lo junte.
+
+**Pendiente de confirmar:** si la salida a la primera temporada (rebanada 2) es crearla desde la web, una parte
+de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.

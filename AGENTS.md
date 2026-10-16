@@ -29,8 +29,9 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
 - [backoffice/Plan backoffice-001.md](./backoffice/Plan%20backoffice-001.md) — **la web del backoffice,
   rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
-  desarrollador: por ahora, los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos) y el mapa de
-  pantallas, pendiente de revisar. El primer intento, con fichas y decisiones sin revisar, queda como material
+  desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
+  revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 83, repartidas). La
+  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Las fichas, por escribir. El primer intento, con fichas y decisiones sin revisar, queda como material
   de partida en [Plan backoffice-001-borrador](./backoffice/Plan%20backoffice-001-borrador.md): **no se ejecuta
   nada desde él**.
 
