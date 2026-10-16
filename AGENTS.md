@@ -384,7 +384,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**611 tests.** Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests.** Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./backoffice/Plan%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en

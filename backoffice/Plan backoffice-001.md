@@ -350,3 +350,11 @@ su comprobación.
   el desarrollador **limitar las pruebas** en vez de subir `max_connections`, que obligaba a reiniciar su
   Postgres: `TestEnvironment.withApp` deja **4** `Application` abiertas a la vez (`AppSlots`), y las demás
   esperan turno. Pico, **36**; la batería, de ~30 s a ~40 s; tres pasadas seguidas en verde.
+- **`seed-competition` no se enteraba de `RFFM_BASE_URL`** (`R0.10`, 2026-10-16): un hueco de `R0.8`. El comando
+  se montaba su propio adaptador de la RFFM en vez de pedírselo al catálogo de `configure`, así que con la
+  variable puesta la ingesta iba a la federación falsa y `seed-competition` a la RFFM de verdad. En `R0.8` se
+  buscó quién usaba las direcciones (`RFFMEndpoints`), no quién **creaba el adaptador**; buscado ahora, era el
+  único. Ahora recibe el catálogo, como `provision-tenant`. Una prueba con un adaptador de mentira
+  (`SeedCompetitionCommandTests`), con su rojo de aserción: el esqueleto fue a la RFFM real en vez de preguntarle
+  al doble. **2/2 mutaciones** (`Catalogs/R0-10-seed.json`); 611 → **612 tests**. Un solo *target* (`App`): no
+  es mini-fase.
