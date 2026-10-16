@@ -7,7 +7,7 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist/', 'src/api/schema.d.ts'] },
+  { ignores: ['dist/', 'src/api/schema.d.ts', 'e2e-results/'] },
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -18,6 +18,11 @@ export default tseslint.config(
   },
   {
     languageOptions: { globals: { ...globals.browser } },
+  },
+  // Los escenarios y su arnés corren en Node, no en el navegador.
+  {
+    files: ['e2e/**'],
+    languageOptions: { globals: { ...globals.node } },
   },
 
   // La accesibilidad, mientras se escribe: imagen sin texto alternativo, botón sin nombre,

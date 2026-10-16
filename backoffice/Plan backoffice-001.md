@@ -309,7 +309,7 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | 🔨 en curso | 8/13 | desde 2026-10-16 |
+| **0** · El andamiaje | 🔨 en curso | 9/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -325,6 +325,7 @@ su comprobación.
 | `R0.6` | 2026-10-16 | **PrimeVue 4.5.5 y `@primeuix/themes` 2.0.3, fijas**: la 5 cambió de licencia (nota en el ADR, decisión 4); todo lo que entra con ellas es MIT. Textos en español con `primelocale`, y `lang="es"`. La prueba del calendario (`src/theme/primevue.test.ts`) dio su rojo sin el idioma: *`['Su','Mo','Tu',…]` to deeply equal `['L','M','X','J','V','S','D']`*; con él, verde. Para montarlo hizo falta un `matchMedia` mínimo en `test-setup.ts` (jsdom no lo trae). El modo se elige en `index.html` antes de pintar: `tema` guardado, o el del sistema. **A mano**: sin destello blanco en modo oscuro, y `tema = claro` manda sobre el sistema (visto bueno del desarrollador) |
 | `R0.7` | 2026-10-16 | Las órdenes en `package.json` y en `backoffice/README.md`: `dev`, `test` (y `test:watch`), `typecheck`, `lint` y `build`. Cada una ejecutada tal cual la dice el README, también `nvm use` y el `curl` a `5173/api/v1/club` con `Run serve` en marcha. **Fin de la primera parte**; `AGENTS.md`, al día |
 | `R0.8` | 2026-10-16 | **Mini-fase**, con su renglón en el Plan de desarrollo. `RFFMEndpoints` pasa a tener su dirección (`baseURL`), leída de `RFFM_BASE_URL` por la raíz de composición; sin ella, o vacía, `https://www.rffm.es`. Una barra final se quita, porque si no las rutas salían con dos (`…:8090//competicion/…`). **Cuatro ciclos**, cada uno con su rojo de aserción: las rutas cuelgan de la dirección, el cliente pide ahí, la variable se lee, y la raíz de composición se la pasa al adaptador. **10/10 mutaciones** (`Catalogs/R0-8.json`); 604 → **611 tests**. **A mano:** sin la variable, `ingest -t celtic-castilla --force` pide a la RFFM real y actualiza las dos competiciones; con `RFFM_BASE_URL=http://localhost:8090`, sobre un club de usar y tirar en `tfm_test` (borrado después), el calendario se pide a `localhost:8090`. Variable apuntada en `backend/README.md` §2 |
+| `R0.9` | 2026-10-16 | En `backoffice/e2e/support/`: `test-database.ts` crea `tfm_test` si no existe (con `pg`, igual que `TestEnvironment.swift`) y le pasa `migrate --yes`; `api-server.ts` arranca `backend/.build/debug/Run serve` con `DB_NAME=tfm_test`, `API_PORT=8081` y `RFFM_BASE_URL` apuntando a la federación falsa, y espera a que conteste; lo que escribe queda en `e2e-results/servidor.log`. Si el binario no está compilado o el 8081 está ocupado, lo dice. **Comprobado** borrando antes `tfm_test`: se crea con sus migraciones, el servidor contesta en **0,25 s** y `curl bo-humo.localhost:8081/v1/club` da «Club desconocido» (404 `UNKNOWN_TENANT`); al pararlo, el 8081 queda libre. El 8080 sigue como estaba (apagado) y el Postgres, en marcha. `DB_NAME=tfm_test` funciona tal cual: queda hecha la comprobación pendiente del LLD-B §11.1. `e2e/` entra en `typecheck` (`tsconfig.e2e.json`) y en `lint` |
 
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 

@@ -72,6 +72,7 @@ backoffice/*.tsbuildinfo
 backoffice/npm-debug.log*
 backoffice/yarn-error.log*
 backoffice/pnpm-debug.log*
+backoffice/e2e-results/
 
 # ═════════════════════════ android/ (Kotlin · Gradle) ═════════════════════════
 android/**/build/
