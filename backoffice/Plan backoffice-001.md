@@ -309,7 +309,7 @@ su comprobación.
 
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
-| **0** · El andamiaje | 🔨 en curso | 2/13 | desde 2026-10-16 |
+| **0** · El andamiaje | 🔨 en curso | 3/13 | desde 2026-10-16 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -319,6 +319,7 @@ su comprobación.
 |---|---|---|
 | `R0.1` | 2026-10-16 | `npm run build` sin errores; `celtic-castilla.localhost:5173` contesta (`curl`) y enseña la página en blanco, con Vue montado, en Chrome y en **Safari**, que abre las direcciones `*.localhost` sin ajustes (no hace falta nota en el README). Versiones: Vite 8, Vue 3.5 y `vue-router` 5 |
 | `R0.2` | 2026-10-16 | `npm test` (Vitest 5, Testing Library para Vue 8.1, jsdom). Una prueba que espera «Adiós, Celtic» donde la pieza dice «Hola, Celtic» **falla** enseñando lo esperado, lo recibido y la línea; con el texto bueno, pasa; borrada después. `passWithNoTests` mientras no haya pruebas, **hasta `R0.4`** |
+| `R0.3` | 2026-10-16 | `npm run dev` (y `build` y `typecheck`) fabrica antes `src/api/schema.d.ts` del `openapi.yaml`, con `openapi-typescript` 7.13; git no lo guarda. `client.GET('/equiposs', {})` hace **fallar** `npm run typecheck`: *`'/equiposs'` is not assignable to `PathsWithMethod<paths, "get">`*; `/club`, en la línea de al lado, pasa. Sin el segundo argumento también falla, pero con un mensaje confuso (*Expected 2 arguments*). `openapi-fetch` se instala ya, para esta comprobación; `client.ts` llega en `R0.4` |
 
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 
