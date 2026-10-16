@@ -1,7 +1,7 @@
 # Plan backoffice-001 · La web del club, rebanada a rebanada
 
 > Rehecho desde cero el **2026-10-15**, revisando pantalla por pantalla con el desarrollador. El primer
-> intento queda como material de partida en [Plan backoffice-001-borrador](./Plan%20backoffice-001-borrador.md).
+> intento se borró el 2026-10-16; queda en la historia de git (commit `d6a16e6`).
 >
 > Parte de: el [ADR](../docs/ADR-Backoffice-001.md), cerrado el 2026-10-12; el
 > [LLD](../docs/Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su

@@ -31,9 +31,8 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
   desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
   revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 83, repartidas). La
-  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Las fichas, por escribir. El primer intento, con fichas y decisiones sin revisar, queda como material
-  de partida en [Plan backoffice-001-borrador](./backoffice/Plan%20backoffice-001-borrador.md): **no se ejecuta
-  nada desde él**.
+  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Las fichas, por escribir. El primer intento, con fichas y decisiones sin revisar, se borró el
+  2026-10-16; queda en la historia de git (commit `d6a16e6`).
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
 
