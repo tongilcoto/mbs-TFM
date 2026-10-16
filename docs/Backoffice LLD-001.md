@@ -97,9 +97,14 @@ contesta «no encontrado». Es la pista de que alguien se saltó el recepcionist
   Así el editor sigue comprobando cada camino contra el catálogo.
 
   ```ts
-  const client = createClient<paths>({ baseUrl: '/api/v1' })
-  client.GET('/teams')   // el navegador pide /api/v1/teams
+  const api = createClient<paths>({ baseUrl: `${location.origin}/api/v1`, fetch: send })
+  api.GET('/teams')   // el navegador pide /api/v1/teams
   ```
+
+  Dos detalles que piden las pruebas de piezas, sin cambiar nada en el navegador: la dirección se completa
+  con la de la página (`location.origin`), porque en las pruebas corre Node, que no acepta direcciones a
+  medias; y cada petición pasa por una función propia (`send`, la del límite de 30 s, §3.4) que busca el
+  `fetch` en ese momento, para que las pruebas puedan poner uno de mentira.
 
 - **En local** (`vite.config.ts`):
 
