@@ -362,3 +362,12 @@ su comprobación.
   (`SeedCompetitionCommandTests`), con su rojo de aserción: el esqueleto fue a la RFFM real en vez de preguntarle
   al doble. **2/2 mutaciones** (`Catalogs/R0-10-seed.json`); 611 → **612 tests**. Un solo *target* (`App`): no
   es mini-fase.
+- **La web del 5173 apuntaba al 8080 y el servidor del desarrollador está en el 8765** (2026-10-17, al repasar el
+  documento de estudio de la rebanada): el 8080 de `R0.4` era el valor por defecto, y nadie lo usa. Decidido con el
+  desarrollador, sin poner `API_PORT` en su perfil, porque es un nombre demasiado genérico: el puerto va en
+  **`backend/.env.development`** (de cada Mac; git no lo guarda), que Vapor ya lee al arrancar en desarrollo y que
+  ahora lee también `vite.config.ts`. Orden: `BACKOFFICE_API_URL` (solo los escenarios), después ese fichero y por
+  último el 8080. Comprobado en un puerto aparte (5199): con el fichero, el club de su 8765; sin él, `502` del
+  8080 vacío; con `BACKOFFICE_API_URL`, manda la variable. Los escenarios, en verde. **Y su web del 5173 llevaba
+  arrancada desde antes de `R0.4`**: a `/api/v1/club` contestaba con la página, sin recepcionista; hay que
+  reiniciarla.

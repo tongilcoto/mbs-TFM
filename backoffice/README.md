@@ -60,20 +60,34 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
 
 ## Para ver datos, el servidor tiene que estar en marcha
 
-La web pide los datos en `/api/v1/…`, y Vite se los pasa al servidor del puerto **8080** quitándoles el
-`/api` (LLD-B §1.3). Sin el servidor, la web arranca igual, pero no tiene datos que enseñar. Para arrancarlo,
-en otra terminal:
+La web pide los datos en `/api/v1/…`, y Vite se los pasa al servidor quitándoles el `/api` (LLD-B §1.3). Sin
+el servidor, la web arranca igual, pero no tiene datos que enseñar. Para arrancarlo, en otra terminal:
 
 ```sh
 cd backend
 swift run Run serve
 ```
 
+**El puerto del servidor se elige en un fichero, `backend/.env.development`**, y lo leen los dos: el servidor al
+arrancar y la web para saber adónde mandar las peticiones. Así no hay que acordarse de ponerlo en dos sitios.
+Es de cada Mac (git no lo guarda) y basta con una línea:
+
+```sh
+echo "API_PORT=8765" > backend/.env.development
+```
+
+Sin el fichero, los dos usan el **8080**. Si cambias el puerto con la web ya arrancada, Vite se reinicia solo al
+cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl+C` y vuelve a lanzar
+`npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
+
 Una forma rápida de ver que los dos se hablan:
 
 ```sh
 curl -s http://celtic-castilla.localhost:5173/api/v1/club    # el club, pasando por Vite
 ```
+
+Si en vez del club sale la página HTML, la web que está en marcha no tiene el recepcionista activo: párala y
+vuelve a arrancarla.
 
 ## La dirección lleva el nombre del club
 

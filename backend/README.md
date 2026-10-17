@@ -106,7 +106,7 @@ base de datos.**
 | `DB_HOST` / `DB_PORT` | `localhost` / `5434` | `db` / `5432` dentro de compose |
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm` | |
 | `DOMAIN_SUFFIX` | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
-| `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos |
+| `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos. **Mejor en `backend/.env.development`** que en el perfil del shell: Vapor lo lee solo al arrancar desde `backend/`, vale únicamente para este proyecto, y la web lo lee también para saber adónde mandar sus peticiones ([README de la web](../backoffice/README.md#para-ver-datos-el-servidor-tiene-que-estar-en-marcha)) |
 | `LOG_LEVEL` | `info` | `debug` muestra cada petición y cada SQL. Vale también en `swift test` |
 | `HTTP_TRACE` | apagado | `1` vuelca los **cuerpos** HTTP. Solo en `.development` / `.testing` |
 | `RFFM_BASE_URL` | `https://www.rffm.es` | Dónde pide la ingesta los datos de la RFFM. Solo para pruebas: los escenarios del backoffice ponen aquí una federación falsa. **La URL que se pega en el enganche sigue siendo la de la RFFM de verdad** |
