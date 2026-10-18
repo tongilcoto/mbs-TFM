@@ -18,8 +18,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
 > **Estado del documento: decisiones revisadas.** Las siete de la §4 se revisaron una a una con el desarrollador
-> el 2026-10-18, y las secciones 2 a 5 están escritas con lo acordado. **Faltan la §6 (escenarios) y la §7
-> (pasos)**, que se escriben más adelante. Nada se construye hasta que estén.
+> el 2026-10-18, y las secciones 2 a 5 están escritas con lo acordado. La §6 (escenarios) es una **lista
+> provisional**; **falta la §7 (pasos)**, que se escribe más adelante. Nada se construye hasta que esté.
 
 ---
 
@@ -502,7 +502,45 @@ escriben sus tests o se apuntan en `known-gaps.json` con su motivo, como dice su
 
 ## 6. Los escenarios
 
-*Pendiente: se escribe más adelante.*
+**Lista provisional.** Lo que hay que probar de punta a punta, sacado de la ficha (§3) y de las decisiones (§4).
+Los `.feature` **se escriben al final**, con la *skill* de escenarios del desarrollador, porque la lista irá
+cambiando mientras se construye. Al final de cada escenario, axe en los dos modos, como ya hace el arnés.
+
+**El marco** (§3.1)
+
+- Se ve el nombre del club en la cabecera y en la pestaña del navegador.
+- El interruptor cambia de modo, y la elección se recuerda al volver a abrir la web.
+- «Saltar al contenido» lleva el foco a la tabla.
+- Un camino que la web no conoce enseña «Esta página no existe», con un enlace a la portada (§3.3).
+
+**El club que falla: la página entera** (§3.1)
+
+- El club no existe.
+- Falta el club en la dirección.
+- El club no está preparado.
+- El servidor está parado: «No se ha podido conectar con el servidor», con Reintentar (decisión 4).
+
+**La portada** (§3.2)
+
+- Con datos: un equipo con su competición, su estado de ingesta y su fecha de sincronización.
+- Un equipo inscrito sin competición sale con «Sin competición».
+- Un escenario por estado de la ingesta: «Al día», «Con fallos», «En marcha», «En marcha» con «La anterior tuvo
+  fallos», «Sin datos todavía» y «Desactualizada» (decisión 2).
+- Cargando: se retiene la petición y se ve «Cargando equipos…» (decisión 4).
+- Error en la tabla: falla la portada con el club ya cargado, y Reintentar con el servidor de vuelta enseña los
+  equipos (decisión 4).
+
+**La temporada** (decisión 5)
+
+- Sin `?temporada=`, la portada enseña la temporada en curso.
+- Sin ninguna en curso, enseña la más reciente con su rótulo.
+- Cambiar el selector cambia la dirección, y «Atrás» vuelve a la temporada anterior.
+- Una temporada de la dirección que no existe enseña su error, con el enlace a la temporada en curso.
+
+**Vacío** (decisión 6)
+
+- El club sin temporadas: su mensaje, y sin selector.
+- La temporada sin equipos: su mensaje.
 
 ## 7. Los pasos
 
