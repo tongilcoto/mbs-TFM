@@ -342,8 +342,10 @@ opcional (§3.5).
 ### 3.4 Vistas derivadas (agregaciones, no tablas base)
 
 Calculadas por consulta o vistas materializadas:
-- **Estado de la sincronización de una competición** — `ingestionHealth` y `lastIngestionAt`, derivados de la
-  **última fila** de `ingestion_runs` de esa competición ([D-89]). **No es tabla ni columna**: materializarlo
+- **Estado de la sincronización de una competición** — `ingestionHealth`, `previousIngestionHealth` y
+  `lastIngestionAt`, derivados de **la última fila de cada clase** de `ingestion_runs` de esa competición, con la
+  peor de las tres, y de la hora de la última pasada del club que acabó, que decide si una pasada pedida sigue
+  en marcha ([D-89] y su enmienda). **No es tabla ni columna**: materializarlo
   en `competitions` metería un segundo escritor que sincronizar en cada pasada ([D-18]). `last_synced_at` sí
   es columna, pero **no sirve para esto**: una pasada fallida hace `rollback` sin tocarla ([D-83]), así que
   una competición rota y una sana tienen el mismo valor.
@@ -1127,6 +1129,7 @@ Tres lecturas que no son evidentes en la tabla:
 | **DELETE** | `/v1/seasons/{id}?cascade=true` | `PurgeSeason` | **204** | 404, **403** (rol), **428** (falta confirmación), **412** (confirmación caducada/inválida) — **operación protegida** (§5.4) |
 | **PUT** | `/v1/seasons/{id}/archive` | `ArchiveSeason` | **204** (idempotente) | 404 |
 | **DELETE** | `/v1/seasons/{id}/archive` | `RestoreSeason` | **204** (idempotente) | 404 |
+| **GET** | `/v1/seasons/{id}/registrations` | `ListSeasonRegistrations` | **200** + `[TeamRegistrationResponse]` | 404 |
 
 - **`GET /v1/seasons`** excluye archivadas por defecto; **`?includeArchived=true`** las incluye. Orden por
   `end_date` descendente (más reciente primero).
@@ -1175,6 +1178,7 @@ Tres lecturas que no son evidentes en la tabla:
 | **DELETE** | `/v1/teams/{id}/ownership` | `ReleaseTeam` | **204** (idempotente) | 404, **403** (rol) |
 | **PUT** | `/v1/teams/{id}/registrations/{seasonId}` | `RegisterTeamInSeason` | **204** (idempotente) | 404, **403** (rol), **409** (equipo rival) |
 | **DELETE** | `/v1/teams/{id}/registrations/{seasonId}` | `UnregisterTeamFromSeason` | **204** (idempotente) | 404, **403** (rol) |
+| **GET** | `/v1/teams/{id}/registrations/{seasonId}` | `GetTeamRegistration` | **200** + `TeamRegistrationResponse` | 404 |
 
 - **`Team` tiene `POST` porque el equipo es del club, no de la federación** ([D-66]). Se crea con datos del
   club —`category`, `letter`, `gender`, `modality`— y **sin un solo dato de federación**. Es lo que permite
@@ -1212,6 +1216,11 @@ Tres lecturas que no son evidentes en la tabla:
   `{registrationId}` que exponer. **409 si el equipo es rival**: un `OpponentClub` no se inscribe, participa
   (§3.4). El enganche de [D-67] la crea también en su cascada, así que **todo equipo propio con calendario
   está inscrito por construcción** y las dos mitades del filtro no pueden contradecirse.
+- **Y la pareja se lee como recurso propio** ([D-102]): `GET /v1/seasons/{id}/registrations` da los equipos
+  propios de una temporada y `GET /v1/teams/{id}/registrations/{seasonId}` uno, los dos con la misma forma
+  —el equipo, la temporada y sus competiciones con el código de la federación en cada una ([D-101])—. Las
+  competiciones salen **solo de la inscripción**. `TeamResponse` no cambia de forma: lo de la temporada viaja
+  en la pareja.
 - **`displayName` se compone en el servidor** y solo aparece en las **respuestas**: no se envía en el `POST`,
   no se almacena en BD. Se forma con el nombre del club (`Club.name` si es propio, `OpponentClub.name` si es
   rival) + `category` + `letter`. Mismo patrón que `isCurrent` en `Season`: **derivado en lectura**.
@@ -1719,8 +1728,8 @@ real ocurre siempre en el caso de uso (§7.4).
 - **Los descartes viajan dentro de cada fila** y no como recurso aparte ([D-85]): se leen enteros junto a su
   pasada.
 - **Este recurso es el detalle, no la lista** ([D-89]). El **resumen** —*«¿está al día esta competición?»*—
-  viaja con la competición (`ingestionHealth`, `lastIngestionAt`), para que la portada del backoffice sea una
-  petición y no una por competición. Por eso `competitionId` sigue siendo obligatorio aquí: relajarlo
+  viaja con la competición (`ingestionHealth`, `lastIngestionAt`), para que la portada del backoffice no pida
+  una por competición. Por eso `competitionId` sigue siendo obligatorio aquí: relajarlo
   convertiría este endpoint en un segundo endpoint disfrazado, con otra consulta y otro orden.
 
 
@@ -2628,10 +2637,15 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     explican **por qué** la salida no era servir mejor la derivación, sino admitir que hay un hecho que la
     derivación no puede contener.
 
+    > **Y en el contrato, con la salida (c)** ([D-102], 2026-10-18): la pareja (equipo, temporada) tiene su
+    > propia lectura, `GET /v1/seasons/{id}/registrations`, con sus competiciones dentro. La (a) se descartó
+    > porque `TeamResponse` cambiaría de forma según cómo se le pregunte. La portada son **tres** peticiones
+    > —temporadas, parejas y competiciones de la temporada—, cruzadas por identificador.
+
     > **Y sus otras dos columnas —estado y fecha de la ingesta— se resolvieron aparte, en [D-89]**: la fecha
     > ya estaba (`lastSyncedAt`), y el estado viaja con la competición como derivado de lectura, no pidiéndolo
-    > al registro de pasadas competición por competición. Con las dos piezas, **la portada entera es una sola
-    > petición**.
+    > al registro de pasadas competición por competición. *(Decía que con las dos piezas la portada era una sola
+    > petición; con la salida (c) son tres, [D-102].)*
 
     > **Lo que la desatascó fue mirar *cuándo* falla, no *cuánto cuesta*.** La consulta sobre `Match` es
     > rápida —está medido abajo— y aun así estaba mal: entre el `202` del enganche y la primera pasada, el
@@ -2697,7 +2711,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
     implicara ya"*. Allí se descartó además la variante *"conservarla como caché materializada"*, por meter un
     **segundo escritor** que sincronizar con `Match` en cada pasada. **Esta cuestión no reabre aquello.**
 
-    Tres salidas, todas de **lectura** y ninguna decidida todavía, aunque la primera es la que se propone:
+    Tres salidas, todas de **lectura**. *(Se eligió la (c), [D-102]; las otras dos se conservan con su
+    razón de descarte en la bitácora.)*
 
     - **(a) `TeamResponse` gana sus competiciones cuando la petición trae `?seasonId=`.** Una petición, filas
       = equipos —que es como piensa el backoffice—, y un equipo puede traer **dos** (liga y copa, [D-12]).
@@ -2786,6 +2801,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-65]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-66]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

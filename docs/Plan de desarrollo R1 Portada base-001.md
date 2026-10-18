@@ -285,7 +285,8 @@ sale «Con fallos», que es la verdad.)*
 
 **Lo que se escribe**: una enmienda fechada a `D-89` en la bitácora del backend, con el orden nuevo y el reloj
 que vuelve a cero; `pending` y `previousIngestionHealth` en el catálogo, y la descripción de `IngestionHealth`
-rehecha; y H-58, cerrado en la auditoría con un enlace aquí. **Es mini-fase**: cambia el catálogo.
+rehecha; y H-58, decidido en la auditoría con un enlace aquí, que se cierra al programarlo (`R1.8`). **Es
+mini-fase**: cambia el catálogo.
 
 **Cómo verlo**:
 
@@ -554,7 +555,7 @@ Antes del código, para que el código se escriba contra algo ya escrito.
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
-| **R1.1** | Backend: `D-102` (decisión 1), la enmienda de `D-89` (decisión 2), H-58 cerrado en la auditoría con un enlace aquí, y el LLD §9.12 *resuelta* | El desarrollador lo revisa | Un commit |
+| **R1.1** | Backend: `D-102` (decisión 1), la enmienda de `D-89` (decisión 2), H-58 decidido en la auditoría con un enlace aquí, y el LLD (§3.4, las tablas de rutas de `Season` y `Team`, la nota de `/ingestion-runs` y §9.12 *resuelta*) | El desarrollador lo revisa | Un commit |
 | **R1.2** | Web: `DW-17` y `DW-18` (decisión 4), y el LLD-B §4.1 (el 502 sin código), §4.5 *b* (sí toca Swift), §6.5 (la portada) y §11 (retener la petición y parar el servidor de pruebas) | El desarrollador lo revisa | Un commit aparte (LLD-B §E.1) |
 | **R1.3** | El plan del backoffice (§4): `listTeams` a la rebanada 12, **85** operaciones, y la paleta por club como pendiente | El desarrollador lo revisa | Un commit |
 
@@ -573,7 +574,7 @@ Con el método del backend (§5): prueba → esqueleto → rojo de aserción →
 |---|---|---|---|
 | **R1.6** | `listSeasons`, con su filtro | Tests de los niveles que toque, mutación con su catálogo, y `curl` contra la base de trabajo | Un commit |
 | **R1.7** | `listCompetitions`, con sus cuatro filtros, **sin** el estado de la ingesta | Lo mismo | Un commit |
-| **R1.8** | **El estado de la ingesta**: la regla de la decisión 2 entera (cada clase, el reloj que vuelve a cero, `pending`, `previousIngestionHealth`, el orden). Va en un paso propio porque es la parte más delicada | Un test por caso del orden, con valores distintos entre sí; mutación con su catálogo; y la base de trabajo mirada en TablePlus contra lo que dice `curl` (el Alevín) | Un commit |
+| **R1.8** | **El estado de la ingesta**: la regla de la decisión 2 entera (cada clase, el reloj que vuelve a cero, `pending`, `previousIngestionHealth`, el orden). Va en un paso propio porque es la parte más delicada. Al acabar, H-58 se cierra en la auditoría | Un test por caso del orden, con valores distintos entre sí; mutación con su catálogo; y la base de trabajo mirada en TablePlus contra lo que dice `curl` (el Alevín) | Un commit |
 | **R1.9** | `listSeasonRegistrations`, con la lectura por temporada del repositorio de inscripciones | Tests, mutación y `curl` | Un commit |
 | **R1.10** | Cierre del servidor: el recuento leído del XML, el censo con las tres operaciones (huecos nuevos con su test o en `known-gaps.json`), y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 

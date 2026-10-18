@@ -115,6 +115,7 @@
 | **D-53**               | El marcador manda y los goles no lo contradicen: sin validación de cuadre                                                     | §3.6, §5.1                         |
 | **D-54**               | La denormalización de `Goal` no llega al DTO: se escribe quién marca                                                          | §3.2, §5.1, §5.2                   |
 | **D-99**               | Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`                                       | §5.4                               |
+| **D-102**              | El equipo en una temporada tiene su propia lectura, y sus competiciones salen solo de la inscripción                          | §3.4, §5.1, §9.12                  |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -2692,6 +2693,10 @@ de firma. §3.4 conserva la composición de la competición como vista derivada,
 
 No hay `GET` propio: la lectura es `GET /v1/teams?seasonId=`, que ya existe.
 
+> **Enmendado por [D-102].** Ahora sí lo hay: la pareja se lee como recurso propio
+> (`GET /v1/seasons/{seasonId}/registrations` y `GET /v1/teams/{teamId}/registrations/{seasonId}`), porque
+> `?seasonId=` dice qué equipos hay, pero no con qué competición. El filtro de `listTeams` sigue igual.
+
 **Alternativa descartada: ampliar la derivación a `Player` y `StaffAssignment`.** No tocaba el esquema —los
 dos llevan ya `season_id` como identidad ([D-05], [D-62])—, así que un equipo con plantilla cargada
 aparecería solo. Se rechaza por **circularidad**: el equipo sería invisible hasta tener fichas, y se entra
@@ -2778,6 +2783,11 @@ sistema de tipos, no en la disciplina.
   literalmente el de esta misma decisión.
 - **`Team` no se toca.** Ni `season_id` ni `competition_id` dentro ([D-28]): la competición se afirma
   *sobre* el equipo, no *dentro* de él, y "Infantil A" sigue siendo la misma entidad año tras año.
+
+> **Enmendado por [D-102].** Lo que sigue dejó de poder pasar con [D-101]: la pasada reconoce al equipo propio
+> solo por el código de su inscripción **en la competición que recorre**, así que en una competición sin
+> inscripción el equipo sale como rival y sus partidos quedan a nombre de ese rival. La lectura de la pareja
+> sale **solo de la inscripción**, sin unión.
 
 **Lo que se asume.** Un equipo puede jugar una competición que nadie enganchó —la ingesta trae partidos de
 una competición sin inscripción—. La portada seguiría sin verla. Es el caso simétrico del último punto de
@@ -3468,6 +3478,11 @@ de la FCF no se puede pedir hacia atrás—. Calculado en el cliente, lo reimple
 iOS y Android, y se desincronizarían el día que el tope cambie. **Una regla de negocio no se reparte entre
 clientes.**
 
+> **Enmendado por [D-102].** La salida §9.12(a) se descartó: el equipo no cambia de forma según cómo se le
+> pregunte. La portada son **tres** peticiones —temporadas, parejas de la temporada y competiciones de la
+> temporada—, tenga el club los equipos que tenga. El argumento de este párrafo sigue: nunca una por equipo
+> ni por competición.
+
 **Consecuencia buena: la portada es UNA petición.** Con §9.12(a) —`GET /teams?seasonId=` devolviendo cada
 equipo con sus competiciones— y estos dos campos dentro de cada competición, las cuatro columnas de la tabla
 salen de un viaje. Por dentro cuesta **una consulta más** —`DISTINCT ON (competition_id) … ORDER BY
@@ -3482,6 +3497,65 @@ demostrado que en este modelo la intuición de coste falla por dos órdenes de m
 **Lo que no trae.** Ningún cambio en `ingestion_runs` ni en el modelo. Y ningún código: `/competitions` y
 `/teams` no están generados todavía ([D-69]), así que esto es diseño — que es justo por lo que sale gratis
 hacerlo ahora.
+
+#### Enmienda · las tres clases, la pasada en marcha y el reloj que vuelve a cero
+
+*Añadida el 2026-10-18, con la portada del backoffice delante ([Plan R1, decisión 2](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
+Contesta las cinco preguntas de la auditoría 002 (A-11·H-58), que esta entrada no sabía contestar: se escribió
+cuando una pasada dejaba una fila, y desde F7, F8 y [D-96] deja varias, de tres clases, y una de ellas puede estar
+sin cerrar.*
+
+**«La última pasada» es la última de cada clase, y la competición toma la peor.** Un disparo deja una fila de
+calendario, una por jornada de clasificación y una de goleadores. Si solo contara el calendario, una competición
+con los goleadores rotos saldría al día: es el Alevín de Celtic Castilla el 17/10, con el `null` pasajero de la
+RFFM (H-61). La clase que la federación no publica no tiene filas y no cuenta. Y la clasificación no engaña con
+sus varias filas: su pasada **se para en la primera jornada que falla** (`IngestStandings`), así que su última
+fila es la del fallo.
+
+**Se ordena por `startedAt`, no por `finished_at`.** Es el eje del registro desde `C-D.6`. Con `finished_at DESC`,
+Postgres pone primero los nulos, y los dos ejes dan respuestas distintas justo para la fila `accepted`. La
+consulta de arriba (`DISTINCT ON … ORDER BY finished_at DESC`) queda así: por competición **y clase**, por
+`started_at`. Y la pregunta de la fila adoptada, que conserva la hora a la que se pidió, deja de importar: solo se
+compara con otras de calendario.
+
+**Un valor nuevo, `pending`, para la pasada pedida que no ha acabado.** Hoy una `accepted` no es `failed`, y se lee
+`ok` si el último éxito es de esta semana; una huérfana (H-27, H-57) quedaba escondida. Se vuelve sospechosa
+—y cuenta como `failing`— cuando pasan **15 minutos sin que acabe ninguna pasada del club**, contando desde la
+hora a la que se pidió o desde la última que acabó, la más reciente de las dos.
+
+| Opción | Por qué no |
+|---|---|
+| 15 minutos desde que se pidió | El `202` de una temporada escribe una `accepted` **por competición, todas con la misma hora**, y las pasa **una detrás de otra**. Con veinte competiciones y la federación lenta, la última sigue esperando su turno a los 15 minutos sin que nada haya fallado: una falsa alarma |
+| Un umbral que cubra la temporada entera | Casi cuatro horas con veinte competiciones; una huérfana de verdad saldría «en marcha» toda la tarde |
+| Preguntar a `IngestionsInFlight` qué tiene en cola | Es memoria del proceso del servidor, vive en el adaptador HTTP y no ve el `ingest` del cron |
+
+**Lo que hace sospechosa a una fila no es que espere, sino que la cola esté parada.** Por eso el reloj vuelve a
+cero con **cualquier** pasada del club que acabe, bien o mal: si una competición falla, el recorrido sigue con la
+siguiente ([D-86]) y la cola avanza. Cuesta una consulta, `max(finished_at)` sobre la tabla del club, que es de
+un solo club por construcción (§6). Y cubre el cron, cuyas pasadas escriben su fin en la misma tabla. Los 15
+minutos tienen holgura: el hueco entre dos filas que acaban es, como mucho, el de una o dos peticiones a la
+federación (20 s cada una).
+
+**`pending` va por delante del fallo anterior, y el fallo viaja aparte.** Una pasada pedida rehace las tres
+clases: el calendario y los goleadores enteros, y la clasificación de las jornadas que no tienen su foto, que
+incluyen la que falló. Mientras dura, lo que pasa de verdad es que se está reintentando. Para no perder lo
+anterior, la competición gana **`previousIngestionHealth`**: el estado que tendría sin la pasada en marcha. Solo
+viene con `pending`.
+
+**El orden queda así:**
+
+| Orden | Valor | Cuándo |
+|---|---|---|
+| 1 | `failing` | hay una `accepted`, y lleva 15 minutos sin acabar ninguna pasada del club |
+| 2 | `pending` | hay una `accepted`, y la cola avanza |
+| 3 | `failing` | la última fila de alguna clase falló |
+| 4 | `never` | nunca hubo una pasada con éxito |
+| 5 | `stale` | el último éxito es de hace más de una semana (§5.6) |
+| 6 | `ok` | el resto |
+
+**Lo que se asume.** Mientras otras pasadas del club vayan acabando, una huérfana sigue `pending`: se ve 15
+minutos después de que pare la cola. Es un retraso con límite, no un escondite. Y lo que sigue sin traer: ningún
+cambio en `ingestion_runs` ni columnas nuevas; es otra vez un derivado de lectura.
 
 ---
 
@@ -4401,6 +4475,56 @@ de la inscripción, y se quitó.
 tampoco es [D-28]»). Las tres primeras dijeron «estable entre temporadas»; lo que es estable es la plaza de
 la federación, no el equipo del club.
 
+---
+
+### D-102 · El equipo en una temporada tiene su propia lectura, y sus competiciones salen solo de la inscripción
+
+**Lo que lo obligó a decidirse** (2026-10-18, al revisar la ficha de la rebanada 1 del backoffice con el
+desarrollador). El **equipo** dura para siempre —el «Cadete B» es el mismo año tras año ([D-28])—, y **el equipo
+en una temporada** es otra cosa: dura esa temporada y apunta a las competiciones en las que juega, con el código
+de la federación de cada una ([D-101]). La segunda ya es un recurso para escribir
+(`PUT`/`DELETE /v1/teams/{teamId}/registrations/{seasonId}`, [D-68]), y **no se puede leer**: `?seasonId=` dice
+qué equipos hay, no con qué competición. Es la cuestión §9.12 del LLD, que dejó tres salidas sin decidir.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) `TeamResponse` gana sus competiciones cuando se pide con `?seasonId=` | Una petición, filas = equipos | Descartada: el mismo recurso cambiaría de forma según cómo se le pregunte, y lo de la temporada se mezclaría con lo permanente |
+| (b) `CompetitionResponse` gana sus equipos propios | El mismo dato visto del otro lado | Descartada: la portada piensa por equipo, no por competición, y un equipo sin competición (junio) no saldría |
+| **(c) La pareja tiene su propia lectura** | Dos operaciones `GET` sobre el recurso que ya existe | **Elegida** |
+
+**Decisión: (c).**
+
+1. **Dos operaciones nuevas**: `GET /v1/seasons/{seasonId}/registrations` (`listSeasonRegistrations`, los
+   equipos del club en esa temporada) y `GET /v1/teams/{teamId}/registrations/{seasonId}`
+   (`getTeamRegistration`, una pareja). El catálogo pasa de 83 a **85** operaciones.
+2. **La forma**: `{ team, seasonId, competitions: [ { competitionId, federationTeamId } ] }`. `team` es la
+   respuesta de un equipo, que **no cambia nunca de forma**. `competitions` es una lista: hoy cada equipo juega
+   una por temporada, pero la lista deja sitio a la copa ([D-12]) y va vacía en la fila de junio.
+   `federationTeamId` es el código de la inscripción en esa competición, que es como [D-101] dijo que se leería.
+3. **Sigue sin identificador propio**: la pareja se nombra por (equipo, temporada), como en [D-68].
+4. **Solo equipos propios**. Los rivales no se inscriben, y su temporada se sigue leyendo con
+   `GET /v1/teams?seasonId=`, que no cambia.
+5. **Las competiciones salen solo de la inscripción.** [D-68] pedía la **unión** con las que derivan de `Match`,
+   para la competición que la ingesta trajera sin que nadie la inscribiera. **Con [D-101] ese caso no existe**:
+   la pasada reconoce al equipo propio solo por el código de su inscripción en la competición que recorre
+   (`CalendarPass`, `ownCodes`), así que sin inscripción el equipo sale como rival —la ingesta no crea equipos
+   propios, [D-66]— y los partidos quedan a nombre de ese rival. La unión no encontraría nunca nada.
+
+**Por qué la portada no es una «adivinanza».** Son tres peticiones —temporadas, parejas y competiciones de la
+temporada— y el nombre y el estado de cada competición se cruzan **por identificador**. Lo que §9.12 rechazaba era
+cruzar por categoría y género, que falla con el A y el B en el mismo grupo ([D-77]).
+
+**Lo que se asume a cambio.**
+
+- **Una competición jugada sin enganchar deja un «rival» con el código del equipo propio.** Engancharla después
+  da `FEDERATION_TEAM_ID_TAKEN`: es el enganche tarde de `C-E.10`, y lo resuelve quien programe
+  `PUT /v1/teams/{teamId}/ownership` ([D-101], «Lo que se asume»).
+- **Una lectura más que mantener por cada dato de la pareja.** Es el precio de que el equipo no cambie de forma, y
+  es pequeño: la pareja es una fila de una tabla pequeña.
+
+**Enmienda** a [D-68] («No hay `GET` propio» y «Lo que se asume» de su enmienda) y a [D-89] («la portada es UNA
+petición»). Y resuelve §9.12 del LLD con la salida (c).
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4539,5 +4663,6 @@ la federación, no el equipo del club.
 [D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
