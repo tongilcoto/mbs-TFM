@@ -4207,9 +4207,11 @@ components:
           type: boolean
           readOnly: true
           description: |
-            **Derivada en lectura, no almacenada** (§3.2): es la temporada con el `endDate`
-            más próximo que aún es ≥ hoy. Como el tiempo no retrocede, hay exactamente una
-            y no queda invariante que mantener. La resuelve `CurrentSeasonQuery` (§4.5).
+            **Derivada en lectura, no almacenada** (§3.2, D-103): es la temporada que **contiene el día
+            de hoy**, del 1 de julio al 30 de junio, contado en hora de Madrid. Las temporadas no se
+            solapan, así que hay **como mucho una**, y no queda invariante que mantener. **Puede no haber
+            ninguna**: de julio a que se crea la del año, o con la siguiente creada por adelantado, que no
+            está en curso hasta su 1 de julio. Una archivada nunca lo está (§3.5).
         archivedAt:
           type: [string, 'null']
           format: date-time
@@ -5250,8 +5252,9 @@ components:
           readOnly: true
           description: |
             **Derivado en lectura, no almacenado**: es la jornada de **esta competición** con el `endDate`
-            más próximo que aún es ≥ hoy. Mismo criterio que `Season.isCurrent` (§3.2), aplicado dentro de
-            la competición → **como mucho una** por competición.
+            más próximo que aún es ≥ hoy → **como mucho una** por competición. *(No es el criterio de
+            `Season.isCurrent`, que desde D-103 es «la que contiene hoy»: entre dos jornadas hay días que
+            no son de ninguna, y entonces la que cuenta es la próxima.)*
 
             **Puede no haber ninguna**: si la competición ya terminó, todas las jornadas quedan con
             `false`. El cliente debe contemplar ese caso y caer en la última jornada.

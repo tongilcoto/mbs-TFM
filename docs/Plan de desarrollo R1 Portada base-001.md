@@ -618,3 +618,11 @@ De las piezas comunes a la pantalla.
   en vez de 31, daba 15 huecos nuevos falsos y salía con `1`. R1.4 no pasaba el censo en su «Cómo se comprueba».
   Se arregla en el propio censo, antes de R1.5: reconoce `code: .X` en `Sources/` y `.X` en `Tests/`. Tests del
   censo: 17 → 20; mutación: K15–K17 nuevos, y K1 y K3 al día porque sus líneas cambiaron, **17/17**.
+
+- **El catálogo y el plan decían cosas distintas de la temporada en curso** (se vio al empezar R1.6). El LLD
+  §3.2 y el catálogo: «la de `endDate` más próximo que aún es ≥ hoy»; la decisión 5: «si no hay ninguna en
+  curso, la más reciente, con *todavía no ha empezado* si se creó por adelantado», que con esa regla no podía
+  salir nunca. El desarrollador eligió la del plan: **`D-103`**. Al cambiarla salió además un fallo pequeño de la
+  vieja: comparaba la hora de ahora con el 30 de junio a las 00:00, así que desde el mediodía del 30 daba la
+  temporada siguiente. La regla la usa también la ingesta, que cambia solo en el caso de la temporada creada por
+  adelantado. `Round.isCurrent` no cambia, y el catálogo y el LLD dejan de decir que es el mismo criterio.
