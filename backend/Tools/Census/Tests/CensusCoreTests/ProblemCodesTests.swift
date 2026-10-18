@@ -72,4 +72,22 @@ struct ProblemCodesTests {
         #expect(filesMentioning(code: "TEAM", in: tests).isEmpty)
     }
 
+    // ── La lista del catálogo (R1.5) ──────────────────────────────────────
+
+    @Test("la lista se lee del `enum` del esquema `ProblemCode`; sin él, no hay lista")
+    func contractListIsReadFromTheSpec() {
+        let spec: [String: Any] = ["components": ["schemas": [
+            "ProblemCode": ["type": "string", "enum": ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND"]],
+        ]]]
+        #expect(contractProblemCodes(spec: spec) == ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND"])
+        #expect(contractProblemCodes(spec: ["components": ["schemas": [:]]]) == nil)
+    }
+
+    @Test("un código emitido que no está en la lista sale; los de la lista sin emitir, no")
+    func missingFromContract() {
+        let missing = codesMissingFromContract(
+            emitted: ["TEAM_NOT_FOUND", "INVALID_LIMIT", "SEASON_NOT_FOUND"],
+            contract: ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND", "NOT_FOUND"])
+        #expect(missing == ["INVALID_LIMIT"])
+    }
 }

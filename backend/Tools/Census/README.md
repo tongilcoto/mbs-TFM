@@ -2,7 +2,8 @@
 
 Cuenta dos cosas de la frontera HTTP y las compara con los huecos que ya se saben:
 
-1. **Códigos `Problem`**: cada `code: "X"` y `code: .X` de `Sources/`, y qué ficheros de `Tests/` lo nombran.
+1. **Códigos `Problem`**: cada `code: "X"` y `code: .X` de `Sources/`, qué ficheros de `Tests/` lo nombran, y
+   si está en **la lista cerrada del catálogo** (`ProblemCode`, desde R1.5).
 2. **Campos del contrato**: los que un cliente alcanza desde las respuestas **2xx** de las operaciones del
    `filter` del generador, y cuáles nombra algún test de `Tests/APITests/`.
 
@@ -20,9 +21,21 @@ Tools/Census/.build/debug/census            # el censo por stdout
 swift test --package-path Tools/Census      # los tests del censo
 ```
 
-**Código de salida**: `0` los huecos de hoy son exactamente los de `known-gaps.json` · `1` hay un hueco nuevo, o
-una entrada de la lista ya no es hueco · `3` no se pudo hacer el censo (un fichero que falta, o una operación
-del `filter` que no está en el *spec*).
+**Código de salida**: `0` los huecos de hoy son exactamente los de `known-gaps.json`, y cada código emitido está en
+la lista del catálogo · `1` hay un hueco nuevo, una entrada de la lista ya no es hueco, o **el servidor emite un
+código que no está en `ProblemCode`** · `3` no se pudo hacer el censo (un fichero que falta, una operación del
+`filter` que no está en el *spec*, o el *spec* sin la lista de códigos).
+
+## La lista de códigos del catálogo
+
+Desde R1.4, `code` tiene una lista cerrada en el catálogo: el esquema `ProblemCode`. La web genera de ella sus
+tipos y exige un mensaje para cada código. Los *handlers* ya construyen el error con esa lista, así que un código
+que no esté en ella no compila; pero `ProblemMiddleware` escribe el código como texto, y uno nuevo que se olvide en
+el catálogo compilaría igual. **El censo lo vigila**: si un código emitido no está en la lista, lo dice y sale con
+`1`. Se arregla añadiéndolo al `enum` de `ProblemCode` en `openapi.yaml`.
+
+Al revés no es un fallo: un código de la lista que el censo no ve emitido se enseña como información. Hoy es
+`NOT_FOUND`, que sale de una condición en `ProblemMiddleware` y no de un `code: …` que el censo pueda leer.
 
 ## El trinquete: `known-gaps.json`
 
@@ -40,6 +53,7 @@ tres de nueve motivos estaban mal, porque se escribieron de memoria.
 |---|---|---|
 | Código emitido | `code: "[A-Z_]+"` o `code: .[A-Z_]+` en `Sources/`, línea a línea | Es el `grep` de A-14 (H-72), más la forma de los *handlers* desde R1.4, que reciben el código de la lista. Un código interpolado o sacado de una condición no saldría: hoy, solo `NOT_FOUND` |
 | Código nombrado | `"X"` **entre comillas**, o `.X` con borde de identificador, en `Tests/` | Las comillas son el borde: `"NOT_FOUND"` no está dentro de `"TEAM_NOT_FOUND"`. Con `.X`, el punto es el de delante y el de un identificador de Swift el de detrás: `.TEAM_NOT_FOUND` no nombra ni `NOT_FOUND` ni `TEAM` |
+| En la lista | el `enum` de `components.schemas.ProblemCode` del *spec* | Es la lista que leen los clientes generados. Sin ella, el censo no se puede hacer (`3`) |
 | Operaciones | `filter.operations` de `openapi-generator-config.yaml` | Es el alcance entregado. Una operación que no está en el *spec* es **error**, no un censo más corto |
 | Respuestas | toda clave que empieza por `2` (el enganche y el disparador responden **202**), resolviendo `components/responses` | Las de error tienen forma `Problem`, y lo que se censa de ellas es el código |
 | Recorrido | `$ref`, `allOf`/`oneOf`/`anyOf`, `properties`, `items`, `additionalProperties`, en profundidad | |
@@ -59,6 +73,6 @@ tres de nueve motivos estaban mal, porque se escribieron de memoria.
 
 ## Los tests del censo
 
-20 tests en `Tests/CensusCoreTests/`, uno por regla. `Tools/Mutate/Catalogs/census.json` rompe cada regla en el
-código del censo y exige que caiga su test: **17/17** (eran 14/14 hasta el arreglo de R1.4). **No entran en la batería del backend**, por lo mismo que
+22 tests en `Tests/CensusCoreTests/`, uno por regla. `Tools/Mutate/Catalogs/census.json` rompe cada regla en el
+código del censo y exige que caiga su test: **19/19** (17/17 antes de R1.5). **No entran en la batería del backend**, por lo mismo que
 los de `Tools/Mutate`.

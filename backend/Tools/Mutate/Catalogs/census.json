@@ -119,6 +119,20 @@
       "file": "Sources/CensusCore/ProblemCodes.swift",
       "find": "Regex(\"\\\\.\\(code)(?![A-Za-z0-9_])\")",
       "replace": "Regex(\"\\\\.\\(code)\")"
+    },
+    {
+      "id": "K18-contract-key",
+      "description": "la lista se busca en otro esquema: el catálogo parece no tenerla (R1.5)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "schemas?[\"ProblemCode\"]",
+      "replace": "schemas?[\"Problem\"]"
+    },
+    {
+      "id": "K19-contract-missing",
+      "description": "el censo deja de ver los códigos emitidos que faltan en la lista (R1.5)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "Set(emitted).subtracting(contract).sorted()",
+      "replace": "[String]()"
     }
   ]
 }

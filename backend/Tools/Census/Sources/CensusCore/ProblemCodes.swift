@@ -61,3 +61,19 @@ public func filesMentioning(code: String, in tests: [SourceFile]) -> [String] {
     return tests.filter { $0.text.contains("\"\(code)\"") || $0.text.contains(member) }.map(\.path)
 }
 
+/// La lista cerrada de códigos del catálogo: el `enum` del esquema `ProblemCode`
+/// (R1.4, decisión 3 del plan R1). `nil` si el catálogo no la tiene.
+public func contractProblemCodes(spec: [String: Any]) -> [String]? {
+    let schemas = (spec["components"] as? [String: Any])?["schemas"] as? [String: Any]
+    return (schemas?["ProblemCode"] as? [String: Any])?["enum"] as? [String]
+}
+
+/// Los códigos que el servidor emite y **no están en la lista** del catálogo.
+///
+/// Es la mitad de la garantía que el compilador no da (LLD-B §4.5 *b*): los
+/// *handlers* ya construyen el error con la lista, pero `ProblemMiddleware`
+/// escribe el código como texto, y uno nuevo que se olvide en el catálogo
+/// compilaría igual. Una web generada del catálogo no tendría mensaje para él.
+public func codesMissingFromContract(emitted: [String], contract: [String]) -> [String] {
+    Set(emitted).subtracting(contract).sorted()
+}

@@ -525,7 +525,8 @@ swift test --package-path Tools/Census    # los tests del censo
 
 **Pásalo al añadir un endpoint.** Busca en el *spec* los códigos de error y los campos que ningún test
 menciona, y sale con `1` si aparece alguno nuevo, o si alguno de los apuntados en
-`Tools/Census/known-gaps.json` ya tiene test. **Que un test mencione algo no significa que lo compruebe**
+`Tools/Census/known-gaps.json` ya tiene test. **También sale con `1` si el servidor emite un código de error que
+no está en la lista del catálogo** (`ProblemCode`, en `openapi.yaml`): se añade allí. **Que un test mencione algo no significa que lo compruebe**
 (H-47): el censo encuentra huecos, pero no garantiza cobertura; para eso está la mutación. El método y sus
 límites, en [su README](./Tools/Census/README.md).
 
