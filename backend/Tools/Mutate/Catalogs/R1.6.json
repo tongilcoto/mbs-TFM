@@ -1,0 +1,109 @@
+{
+  "title": "R1.6 · listSeasons y la temporada en curso (Plan R1, decisión 5)",
+  "mutations": [
+    {
+      "id": "D1-start",
+      "description": "sin el límite de inicio: una temporada creada por adelantado sale en curso (la regla vieja)",
+      "file": "Sources/Domain/Season.swift",
+      "find": "$0.startDate <= today && ",
+      "replace": "",
+      "filter": "SeasonTests"
+    },
+    {
+      "id": "D2-end",
+      "description": "sin el límite de fin: sale en curso la primera que ya empezó, aunque terminara",
+      "file": "Sources/Domain/Season.swift",
+      "find": " && today <= $0.endDate",
+      "replace": "",
+      "filter": "SeasonTests"
+    },
+    {
+      "id": "D3-archived",
+      "description": "una archivada puede estar en curso",
+      "file": "Sources/Domain/Season.swift",
+      "find": "!$0.isArchived && ",
+      "replace": "",
+      "filter": "SeasonTests"
+    },
+    {
+      "id": "D4-utc",
+      "description": "el día se cuenta en UTC y no en Madrid",
+      "file": "Sources/Domain/Season.swift",
+      "find": "TimeZone(identifier: \"Europe/Madrid\")!",
+      "replace": "TimeZone(identifier: \"UTC\")!",
+      "filter": "SeasonTests"
+    },
+    {
+      "id": "D5-instant",
+      "description": "se compara el instante y no el día: el 30 de junio por la tarde ya es la siguiente",
+      "file": "Sources/Domain/Season.swift",
+      "find": "let today = Self.madridDay(of: instant)",
+      "replace": "let today = instant",
+      "filter": "SeasonTests"
+    },
+    {
+      "id": "A1-filter",
+      "description": "el caso de uso no pasa el filtro de las archivadas",
+      "file": "Sources/Application/ListSeasons.swift",
+      "find": "seasons.list(includingArchived: includingArchived)",
+      "replace": "seasons.list(includingArchived: false)",
+      "filter": "ListSeasonsTests"
+    },
+    {
+      "id": "A2-current",
+      "description": "el caso de uso no marca ninguna en curso",
+      "file": "Sources/Application/ListSeasons.swift",
+      "find": "currentID: list.current(on: clock.now())?.id",
+      "replace": "currentID: nil",
+      "filter": "ListSeasonsTests"
+    },
+    {
+      "id": "H1-default",
+      "description": "sin includeArchived salen también las archivadas",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "input.query.includeArchived ?? false",
+      "replace": "input.query.includeArchived ?? true",
+      "filter": "SeasonEndpointTests"
+    },
+    {
+      "id": "H2-is-current",
+      "description": "isCurrent al revés",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "$0.id == listing.currentID",
+      "replace": "$0.id != listing.currentID",
+      "filter": "SeasonEndpointTests"
+    },
+    {
+      "id": "H3-archived-at",
+      "description": "archivedAt no viaja",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "archivedAt: archivedAt,",
+      "replace": "archivedAt: nil,",
+      "filter": "SeasonEndpointTests"
+    },
+    {
+      "id": "H4-date-zone",
+      "description": "las fechas se escriben en un huso al oeste: el 1 de julio sale 30 de junio",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "timeZone: .gmt",
+      "replace": "timeZone: TimeZone(identifier: \"America/New_York\")!",
+      "filter": "SeasonEndpointTests"
+    },
+    {
+      "id": "H5-start-date",
+      "description": "startDate lleva la fecha de fin",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "startDate: startDate.formatted",
+      "replace": "startDate: endDate.formatted",
+      "filter": "SeasonEndpointTests"
+    },
+    {
+      "id": "P1-order",
+      "description": "la base las devuelve de la más antigua a la más reciente",
+      "file": "Sources/Persistence/FluentSeasonRepository.swift",
+      "find": "query.sort(\\.$endDate, .descending)",
+      "replace": "query.sort(\\.$endDate, .ascending)",
+      "filter": "SeasonEndpointTests"
+    }
+  ]
+}

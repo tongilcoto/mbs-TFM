@@ -14,6 +14,8 @@
     "ClubResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "ClubResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "ClubResponse.settings": "obligatorio y sin propiedades propias (ClubSettings): no hay valor que afirmar (H-72)",
-    "IngestionRunResponse.startedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
+    "IngestionRunResponse.startedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "SeasonResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "SeasonResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
   }
 }

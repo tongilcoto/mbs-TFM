@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **632 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **640 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -36,7 +36,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/club` · `PATCH /v1/club`                                                     | F0                                |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
 | `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
-| Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
+| Las otras 78 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -384,6 +385,23 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
   *spec* lo lee siempre (`D-65`). Para «todo», `{}`.
 - **Las pasadas que fallan también quedan registradas**: el `POST` da **502** y el `GET` enseña la fila con
   su `outcome` y su motivo, con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
+
+<a id="temporadas"></a>
+### 4.3 Las temporadas
+
+**Las temporadas del club, de la más reciente a la más antigua.** Es lo que usa el selector de temporada de la
+portada del backoffice (rebanada 1).
+
+```sh
+curl -s http://atleti.localhost:8080/v1/seasons | jq                        # sin las archivadas
+curl -s "http://atleti.localhost:8080/v1/seasons?includeArchived=true" | jq  # con ellas
+```
+
+- **`isCurrent: true` marca la temporada en curso**: la que contiene el día de hoy, del 1 de julio al 30 de
+  junio, contado en hora de Madrid (`D-103`). **Puede no haber ninguna**: en julio, antes de crear la del año,
+  o si la siguiente se creó por adelantado, que no está en curso hasta su 1 de julio.
+- `startDate` y `endDate` son días sin hora (`2026-07-01`), y salen de la etiqueta.
+- **`archivedAt` no viene si la temporada no está archivada**: el campo falta, no llega como `null`.
 
 ---
 

@@ -199,10 +199,10 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | Rebanada | Pantalla afectada | Endpoints afectados |
 |---|---|---|
 | **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
-| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` · 🆕 `listSeasonRegistrations` — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ⚠️ — le faltan `pending` y `previousIngestionHealth` (enmienda de `D-89`) |
+| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` ● · `listSeasonRegistrations` — el equipo en una temporada, con sus competiciones (`D-102`; en el catálogo desde R1.4) · `listCompetitions` — con `pending` y `previousIngestionHealth` (enmienda de `D-89`; en el catálogo desde R1.4) |
 | **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
-| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | 🆕 `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
+| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
@@ -325,7 +325,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
-| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 3/18 | 2026-10-18 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 6/18 | 2026-10-18 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
