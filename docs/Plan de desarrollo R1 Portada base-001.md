@@ -603,7 +603,8 @@ De las piezas comunes a la pantalla.
 
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
-| — | — | — |
+| **R1.1** | ✅ 2026-10-18 (`771b490`) | `D-102` y la enmienda de `D-89` en la bitácora, con sus notas «Enmendado por» en `D-68` y `D-89`; el LLD con las dos lecturas en las tablas de `Season` y `Team`, el estado por clase en §3.4 y §9.12 resuelta; H-58 decidido. Revisado por el desarrollador. Al leer salió que `POST /seasons` ya está en el catálogo: corregida la decisión 6 aparte (`51e7017`) |
+| **R1.2** | ✅ 2026-10-18 | `DW-17` y `DW-18` en el anexo; el LLD-B §4.1 y §4.4 (el 502, 503 o 504 sin código), §4.5 *b* (sí toca Swift, y el censo), §6.5 (la portada y la temporada más reciente), §11.5 nuevo y §E.2. Revisado por el desarrollador |
 
 **Punto de partida: 632 tests en el backend, 4 en la web.**
 

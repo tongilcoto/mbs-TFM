@@ -36,6 +36,7 @@
 | **DW-07** | Las reglas de los formularios se leen del catálogo con Ajv | §5.1 |
 | **DW-08** | Dos personas editando lo mismo: se queda lo último que se guardó | §5.6 |
 | **DW-09** | En el camino va el identificador del servidor, no un nombre legible | §6.3 |
+| **DW-18** | Un 502, 503 o 504 sin código es «no se ha podido conectar»: es el recepcionista, no el servidor | §4.1, §4.4 |
 | **Las reglas del negocio en la pantalla** | | |
 | **DW-10** | Lo que no se permite nunca se oculta; lo que se permite a veces se desactiva con el motivo a la vista | §7.4, §10 |
 | **Lo transversal** | | |
@@ -46,6 +47,7 @@
 | **DW-14** | La federación falsa va detrás del servidor, y eso no es un simulacro | §11.3 |
 | **DW-15** | Las pruebas de piezas buscan por papel y nombre, y por eso Testing Library usa la versión 10 de su parte común | §11 |
 | **DW-16** | TypeScript 5.9 y no 6, para que los tipos se fabriquen del catálogo sin forzar nada | §1.1 |
+| **DW-17** | «Cargando» y «error» se prueban reteniendo la petición y parando el servidor de pruebas, sin simulacros | §11.5 |
 
 ---
 
@@ -378,6 +380,69 @@ una versión de `openapi-typescript` que acepte TypeScript 6 (o 7), se puede sub
 
 ---
 
+### DW-17 · «Cargando» y «error» se prueban reteniendo la petición y parando el servidor de pruebas, sin simulacros
+
+**Qué hay que decidir.** Cada pantalla tiene cuatro estados (LLD-B §3.1), y los escenarios tienen que probar
+los cuatro. Pero el ADR no admite simulacros (decisión 6), y el servidor de pruebas contesta en milisegundos:
+«cargando» dura demasiado poco para verlo, y el servidor no falla si nadie lo tumba. Se decidió con la portada
+([Plan R1, decisión 4](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
+
+| Opción | Por qué no |
+|---|---|
+| Un retraso de mentira en el servidor | Sería código del servidor que solo existe para las pruebas |
+| Probar «cargando» solo con Vitest | La pantalla entera quedaría sin probar en ese estado |
+| Que Playwright guarde la respuesta y la entregue más tarde | Funciona, pero Playwright tendría que coger la respuesta y volver a servirla él. Retener la petición es más sencillo y no toca la respuesta |
+
+**Decisión.**
+
+- **Cargando: se retiene la petición.** Playwright la para antes de que salga, el escenario comprueba el
+  «cargando» y luego la suelta tal cual. Llega al servidor de verdad y la respuesta vuelve sin que nadie la
+  toque. Solo cambia **cuándo** sale.
+- **Error de servidor: se para el servidor de pruebas** (el 8081) y se vuelve a arrancar al acabar, que cuesta
+  0,25 s (medido en `R0.9`). Nunca se toca el servidor del desarrollador ni su Postgres.
+- **Hay dos errores de servidor, y se prueban por separado.** Lo primero que pide la web es el club: con el
+  servidor parado antes de abrir, sale **la página entera** (LLD-B §8). Para el error **dentro de la
+  pantalla**, se retiene su petición, se para el servidor y se suelta: va a un servidor parado y falla de
+  verdad. Después se arranca otra vez y *Reintentar* tiene que traer los datos.
+
+**Por qué no es un simulacro.** Es el argumento de [DW-14]: todo es de verdad salvo lo que no se puede
+controlar. La petición y la respuesta son las del servidor; el fallo es un servidor parado de verdad. El
+escenario solo elige el momento.
+
+**Lo que se asume a cambio.** Parar el servidor de pruebas solo es seguro porque **los escenarios se ejecutan
+de uno en uno** (`cucumber.mjs` no pide ejecución en paralelo). Si algún día se ejecutan en paralelo, estos
+escenarios necesitarán su propio servidor.
+
+---
+
+### DW-18 · Un 502, 503 o 504 sin código es «no se ha podido conectar»: es el recepcionista, no el servidor
+
+**Qué hay que decidir.** Qué enseña la web cuando el servidor está caído. La web no habla con él directamente:
+pasa por el recepcionista (Vite en desarrollo, Caddy en producción, LLD-B §1.3). Medido el 2026-10-18, con la
+web apuntando a un servidor que no existe:
+
+```
+HTTP/1.1 502 Bad Gateway
+Content-Type: text/plain
+(cuerpo vacío)
+```
+
+Así que la web **no ve un fallo de conexión**: ve un error **sin código**. Con la regla del LLD-B §4.1, el
+número elige un mensaje genérico de su familia, y saldría «error del servidor» **sin** *Reintentar*. Es justo
+el fallo pasajero para el que existe el botón.
+
+**Decisión.** Un **502, 503 o 504 sin código** es «No se ha podido conectar con el servidor», **con
+*Reintentar***. Los 502 y 504 que manda el propio servidor (los de la federación, `INGESTION_FAILED`) traen su
+`code`, así que no se confunden: sin código solo puede venir del recepcionista.
+
+**Lo que se asume a cambio.** Si algún día delante del servidor hubiera otra pieza que contestara con su propio
+cuerpo de error (un balanceador con página HTML, por ejemplo), seguiría sin traer `code` y caería en esta
+regla, que es lo correcto. Lo que no cubre es un recepcionista que contestara 500: ése seguiría siendo «error
+del servidor».
+
+---
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-01]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
