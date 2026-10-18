@@ -394,7 +394,7 @@ struct FederationLinkTests {
                     actor: Self.actor)
         }
         #expect(await store.writes == 0)
-        #expect(await store.teams.first?.federationTeamID == nil)
+        #expect(await store.teamRegistrations.isEmpty)
 
         // **La otra mitad**: cualquiera de los del calendario vale, juegue en casa
         // o fuera. `3349087` solo aparece como visitante en el *fixture*, y una
@@ -404,7 +404,9 @@ struct FederationLinkTests {
                 try Self.request(teamID: team.id, ownTeamFederationID: "3349087"),
                 actor: Self.actor)
         #expect(result.teamID == team.id)
-        #expect(await store.teams.first?.federationTeamID == "3349087")
+        // El código va a la inscripción de esa competición, no al equipo (`D-101`).
+        #expect(await store.teamRegistrations.first?.federationTeamID == "3349087")
+        #expect(await store.teams.first?.federationTeamID == nil)
     }
 
     // ── A-12·H-73 · el equipo se decide con lo que hay DESPUÉS de la red ─────
@@ -448,8 +450,17 @@ struct FederationLinkTests {
         let store = IngestionStore()
         await store.seed(club: try Fixture.club())
         await store.seed(teams: [team])
-        let elsewhere = try team.linked(toFederationTeamID: "3349087")
+        // El otro enganche, entero: la temporada, la competición y la
+        // inscripción con **su** código (`D-101`).
+        let season = try Fixture.season(federationSeasonID: "21")
+        let competition = try Fixture.competition(seasonID: season.id)
+        let elsewhere = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season.id,
+            competitionID: competition.id, federationTeamID: "3349087",
+            createdAt: Fixture.now, updatedAt: Fixture.now)
         let client = InterleavingClient(calendar: Fixture.calendar()) {
+            await store.save(season)
+            await store.save(competition)
             await store.save(elsewhere)
         }
 
@@ -458,12 +469,12 @@ struct FederationLinkTests {
             try await Self.useCase(store: store, federation: client)
                 .execute(try Self.request(teamID: team.id), actor: Self.actor)
         }
-        // Se para **antes** de escribir nada de la cascada, y el equipo queda con
-        // lo que escribió el otro.
-        #expect(await store.seasons.isEmpty)
-        #expect(await store.teamRegistrations.isEmpty)
+        // Se para **antes** de escribir nada de la cascada, y la inscripción queda
+        // con lo que escribió el otro.
+        #expect(await store.seasons.count == 1)
+        #expect(await store.competitions.count == 1)
+        #expect(await store.teamRegistrations == [elsewhere])
         #expect(await store.ingestionRuns.isEmpty)
-        #expect(await store.teams.first?.federationTeamID == "3349087")
         // Y lo releyó **bloqueándolo**, que es lo que lo mantiene cierto el día
         // que dos ámbitos puedan estar abiertos a la vez (`D-100`, opción B de H-77).
         #expect(await store.teamLocks == [team.id])
@@ -546,7 +557,7 @@ struct FederationLinkTests {
                 .execute(try Self.request(teamID: team.id), actor: Self.actor)
         }
         // El equipo **no queda enganchado**: la guarda va antes de escribir.
-        #expect(await store.teams.first?.federationTeamID == nil)
+        #expect(await store.teamRegistrations.isEmpty)
 
         // La otra mitad: el mismo nombre no para nada.
         let agreeing = Self.client(Fixture.calendar(competitionName: "PRIMERA INFANTIL"))
@@ -603,7 +614,7 @@ struct FederationLinkTests {
             try await Self.useCase(store: store, federation: lastYear)
                 .execute(try Self.request(teamID: team.id), actor: Self.actor)
         }
-        #expect(await store.teams.first?.federationTeamID == nil)
+        #expect(await store.teamRegistrations.isEmpty)
 
         // La otra mitad: el calendario de esta temporada pasa, **y pasa con un
         // aplazado fuera de la ventana** — que es lo que la mediana compra
@@ -657,11 +668,142 @@ struct FederationLinkTests {
                 .execute(try Self.request(teamID: cadete.id), actor: Self.actor)
         }
         // Y no queda enganchado a medias: la guarda va antes de escribir.
-        #expect(await store.teams.first?.federationTeamID == nil)
+        #expect(await store.teamRegistrations.isEmpty)
         #expect(await store.ingestionRuns.isEmpty)
     }
 
     /// Un partido con fecha y nada más: lo que la guarda de `D-91` mira.
+    // ── D-101 · el código es de la inscripción en cada competición ───────────
+
+    /// **El caso que obligó a `D-101`**, medido en Granollers ([Anexo FCF
+    /// §C.13]): el «Juvenil A» de un club es el `33710` una temporada y el
+    /// `33712` la siguiente, porque el número es la plaza en la división y la
+    /// letra la reparte el club. Con el código en `Team`, el segundo enganche
+    /// daba **409 `ALREADY_LINKED_TO_FEDERATION`** y el club no podía pasar de
+    /// temporada.
+    @Test("la temporada siguiente, el mismo equipo se engancha con otro código (D-101)")
+    func nextSeasonTheSameTeamLinksWithAnotherCode() async throws {
+        let team = try Fixture.team()
+        let lastSeason = try Fixture.season("2024/25", federationSeasonID: "20")
+        let lastCompetition = try Fixture.competition(
+            seasonID: lastSeason.id, federationGroupID: "11111111")
+        let lastYear = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: lastSeason.id,
+            competitionID: lastCompetition.id, federationTeamID: "1111111",
+            createdAt: Fixture.now, updatedAt: Fixture.now)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(
+            seasons: [lastSeason], competitions: [lastCompetition], teams: [team])
+        await store.seed(teamRegistrations: [lastYear])
+
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        let registrations = await store.teamRegistrations
+        let thisYear = registrations.first { $0.competitionID == result.competitionID }
+        #expect(registrations.count == 2)
+        #expect(registrations.contains(lastYear))
+        #expect(thisYear?.federationTeamID == "3349086")
+        #expect(await store.teams.first?.federationTeamID == nil)
+    }
+
+    /// **Y la copa, en la misma temporada, tampoco se compara** (`D-12`): es
+    /// otra competición y otra fila. Que liga y copa usen el mismo número no
+    /// está medido en ninguna federación, así que no se supone.
+    @Test("en otra competición de la misma temporada, otro código no choca (D-101, D-12)")
+    func anotherCompetitionTakesItsOwnCode() async throws {
+        let team = try Fixture.team()
+        let season = try Fixture.season(federationSeasonID: "21")
+        let cup = try Fixture.competition(seasonID: season.id, federationGroupID: "99999999")
+        let inTheCup = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season.id,
+            competitionID: cup.id, federationTeamID: "7777777",
+            createdAt: Fixture.now, updatedAt: Fixture.now)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [season], competitions: [cup], teams: [team])
+        await store.seed(teamRegistrations: [inTheCup])
+
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        let registrations = await store.teamRegistrations
+        let league = registrations.first { $0.competitionID == result.competitionID }
+        #expect(league?.federationTeamID == "3349086")
+        #expect(registrations.count == 2)
+    }
+
+    /// **En la misma competición, otro código se para** — la regla de `D-67`,
+    /// ahora por competición. Y se para antes de escribir nada.
+    @Test("en la misma competición, otro código se para con 409 (D-67, D-101)")
+    func theSameCompetitionRefusesAnotherCode() async throws {
+        let team = try Fixture.team()
+        let season = try Fixture.season(federationSeasonID: "21")
+        let competition = try Fixture.competition(seasonID: season.id)
+        let linked = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season.id,
+            competitionID: competition.id, federationTeamID: "3349087",
+            createdAt: Fixture.now, updatedAt: Fixture.now)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [season], competitions: [competition], teams: [team])
+        await store.seed(teamRegistrations: [linked])
+
+        await #expect(throws: DomainError.alreadyLinkedToFederation(
+            existing: "3349087", incoming: "3349086")) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+        #expect(await store.writes == 0)
+    }
+
+    /// **Otro equipo propio con ese código en esa competición: 409** (`C-E.10`,
+    /// `D-101`). Es el `UNIQUE (competition_id, federation_team_id)` dicho con el
+    /// código que el contrato declara, y no con un `23505` dentro de un 500.
+    @Test("el código de otro equipo propio en esa competición se rechaza (C-E.10, D-101)")
+    func anotherOwnTeamsCodeInTheCompetitionIsTaken() async throws {
+        let team = try Fixture.team()
+        let other = try Fixture.team()
+        let season = try Fixture.season(federationSeasonID: "21")
+        let competition = try Fixture.competition(seasonID: season.id)
+        let others = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: other, seasonID: season.id,
+            competitionID: competition.id, federationTeamID: "3349086",
+            createdAt: Fixture.now, updatedAt: Fixture.now)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(
+            seasons: [season], competitions: [competition], teams: [team, other])
+        await store.seed(teamRegistrations: [others])
+
+        await #expect(throws: DomainError.federationTeamIDTaken(
+            code: "3349086", owner: "\(other.id)")) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+    }
+
+    /// **Y el rival que ya lleva ese código, también** (`C-E.10`): es el
+    /// desenlace normal de enganchar tarde, y no cambia con `D-101`.
+    @Test("el código de un rival se rechaza, como antes (C-E.10)")
+    func anOpponentsCodeIsTaken() async throws {
+        let team = try Fixture.team()
+        let rival = try Team(
+            id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
+            category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
+            federationTeamID: "3349086", createdAt: Fixture.now, updatedAt: Fixture.now)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(teams: [team, rival])
+
+        await #expect(throws: DomainError.federationTeamIDTaken(
+            code: "3349086", owner: "\(rival.id)")) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+    }
+
     static func match(_ id: String, date: Date) -> FederationMatch {
         FederationMatch(
             federationMatchID: id,

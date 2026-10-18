@@ -310,14 +310,17 @@ struct MigrationIntegrityTests {
     /// no una** porque no son la misma razón, y una migración que hace dos cosas
     /// no se revierte a medias.
     ///
+    /// **17 con `D-101`**: el código del equipo propio pasa de `teams` a
+    /// `team_registrations`, con sus dos `CHECK` y su `UNIQUE`.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 16, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 17, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 16,
+        #expect(nombres.count == 17,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -454,7 +457,11 @@ struct MigrationIntegrityTests {
             // **no** suma: se rehizo, no se añadió, que es justo la distinción que
             // el párrafo de arriba aprendió en F8 y la razón de que este recuento
             // por sí solo no baste.
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 19,
+            //
+            // **21 con `D-101`**: `chk_teams_own_without_code` —un propio no lleva
+            // código— y `chk_team_registrations_code_needs_competition` —la fila
+            // de junio tampoco—.
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 21,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")
@@ -680,6 +687,114 @@ struct MigrationIntegrityTests {
                     "el motivo verdadero no sobrevive al envoltorio")
 
             try await Self.cleanUp(["fail"], on: app)
+        }
+    }
+
+    // ── D-101 · el código del equipo propio pasa a su inscripción ───────────
+
+    /// Un club **de antes de `D-101`**: migrado hasta la migración anterior, con
+    /// un equipo propio enganchado —código en `teams`, una inscripción con
+    /// competición y otra de junio en otra temporada— y un rival con el suyo.
+    static func seedBeforeD101(schema: String, ownLinked: Bool, on app: Application)
+        async throws -> (own: UUID, rival: UUID, linked: UUID, june: UUID)
+    {
+        let sql = app.db(.control) as! any SQLDatabase
+        try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+        let all = TenantMigrations.all()
+        let cut = try #require(
+            all.firstIndex { $0.name.hasSuffix("MoveOwnTeamCodeToRegistration") },
+            "MoveOwnTeamCodeToRegistration no está en la lista: el corte no significa nada")
+        try await MigrateTenantsCommand.migrate(
+            schema: schema, migrations: Array(all.prefix(cut)), on: app)
+
+        let (season, nextSeason, competition, club) = (UUID(), UUID(), UUID(), UUID())
+        let (own, rival, linked, june) = (UUID(), UUID(), UUID(), UUID())
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).seasons (id, label, federation_season_id, start_date, end_date)
+            VALUES (\(bind: season), '2025/26', '21', '2025-07-01', '2026-06-30'),
+                   (\(bind: nextSeason), '2026/27', '22', '2026-07-01', '2027-06-30')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).competitions (id, season_id, modality, gender, age_category,
+                federation_competition_id, federation_group_id, division_label, group_label)
+            VALUES (\(bind: competition), \(bind: season), 'futbol_11', 'masculino', 'juvenil',
+                '54322950', '54695794', 'Preferent', 'Grup 1')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).opponent_clubs (id, name, short_name, slug)
+            VALUES (\(bind: club), 'GIRONA, F.C.', 'Girona', 'girona-f-c')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).teams (id, opponent_club_id, category, letter, gender, modality, federation_team_id)
+            VALUES (\(bind: own), NULL, 'juvenil', 'A', 'masculino', 'futbol_11', '33710'),
+                   (\(bind: rival), \(bind: club), 'juvenil', 'C', 'masculino', 'futbol_11', '468')
+            """).run()
+        if ownLinked {
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).team_registrations (id, team_id, season_id, competition_id)
+                VALUES (\(bind: linked), \(bind: own), \(bind: season), \(bind: competition)),
+                       (\(bind: june), \(bind: own), \(bind: nextSeason), NULL)
+                """).run()
+        }
+        return (own, rival, linked, june)
+    }
+
+    /// **La migración de `D-101` no pierde un solo código.** El del equipo
+    /// propio pasa a sus inscripciones con competición y se borra del equipo; la
+    /// fila de junio se queda sin código (no tiene competición), y el rival
+    /// conserva el suyo, que sigue siendo de `teams`.
+    @Test("la migración pasa el código del propio a su inscripción, y el rival lo conserva (D-101)")
+    func theOwnCodeMovesToItsRegistration() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d101"
+            let ids = try await Self.seedBeforeD101(schema: schema, ownLinked: true, on: app)
+
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let teams = try await sql.raw("""
+                SELECT id::text || '=' || coalesce(federation_team_id, '-') AS line
+                FROM \(ident: schema).teams
+                """).all(decodingColumn: "line", as: String.self)
+            #expect(Set(teams) == [
+                "\(ids.own.uuidString.lowercased())=-",
+                "\(ids.rival.uuidString.lowercased())=468",
+            ])
+            let registrations = try await sql.raw("""
+                SELECT id::text || '=' || coalesce(federation_team_id, '-') AS line
+                FROM \(ident: schema).team_registrations
+                """).all(decodingColumn: "line", as: String.self)
+            #expect(Set(registrations) == [
+                "\(ids.linked.uuidString.lowercased())=33710",
+                "\(ids.june.uuidString.lowercased())=-",
+            ])
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// **Y si un propio tiene código y ninguna inscripción con competición, se
+    /// para** en vez de perderlo: no hay fila a la que llevarlo, y borrarlo
+    /// dejaría al equipo sin el enganche que el club hizo.
+    @Test("con un código sin inscripción a la que llevarlo, la migración se para (D-101)")
+    func anOrphanOwnCodeStopsTheMigration() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d101orphan"
+            let ids = try await Self.seedBeforeD101(schema: schema, ownLinked: false, on: app)
+
+            await #expect(throws: (any Error).self) {
+                try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            }
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let code = try await sql.raw("""
+                SELECT federation_team_id AS code FROM \(ident: schema).teams
+                WHERE id = \(bind: ids.own)
+                """).first(decodingColumn: "code", as: String.self)
+            #expect(code == "33710", "la migración se llevó el código antes de pararse")
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
         }
     }
 }

@@ -20,10 +20,10 @@ public import Vapor
 ///
 /// - **`opponentClubID` nulo ⇒ equipo propio** (§3.6, `D-03`): no hay columna
 ///   `is_own`, se deriva.
-/// - **`federationTeamID` nulo ⇒ sin emparejar**, que es la mitad de `D-66` sin
-///   la cual el enganche no se sostiene: una fila con la clave nula **no tiene
-///   segundo escritor**, así que el club puede crearla y borrarla. En cuanto se
-///   engancha, deja de ser suya del todo.
+/// - **Sin código de federación**, como todo equipo propio desde `D-101`: el
+///   código es de cada inscripción, y lo pone el enganche. Sin inscripción
+///   enganchada la fila **no tiene segundo escritor**, que es la mitad de `D-66`
+///   sin la cual el enganche no se sostiene.
 ///
 /// Y **no lleva ningún dato de federación**, exactamente como `CreateTeamRequest`:
 /// el equipo se forma, se inscribe, y **solo entonces** la federación publica
@@ -115,9 +115,7 @@ public struct SeedTeamCommand: AsyncCommand {
                     && $0.gender == gender && $0.modality == modality
             }
             if let existing {
-                throw SeedTeamError.duplicate(
-                    id: "\(existing.id)",
-                    linked: existing.federationTeamID)
+                throw SeedTeamError.duplicate(id: "\(existing.id)")
             }
 
             let team = try Team(
@@ -128,8 +126,8 @@ public struct SeedTeamCommand: AsyncCommand {
                 letter: signature.letter,
                 gender: gender,
                 modality: modality,
-                // Nulo: **sin enganchar**, que es el estado desde el que `D-67`
-                // engancha y el único en el que esta fila no tiene dos escritores.
+                // Nulo **siempre**: un equipo propio no lleva código (`D-101`);
+                // va en su inscripción de cada competición.
                 federationTeamID: nil,
                 createdAt: now, updatedAt: now)
             try await repositories.teams.save(team)
@@ -151,7 +149,9 @@ public struct SeedTeamCommand: AsyncCommand {
     enum SeedTeamError: Error, CustomStringConvertible {
         case missing(String)
         case unknown(String, String, [String])
-        case duplicate(id: String, linked: String?)
+        /// Sin decir si está enganchado: desde `D-101` eso es de cada
+        /// inscripción, no del equipo, y aquí no se leen.
+        case duplicate(id: String)
 
         var description: String {
             switch self {
@@ -159,10 +159,9 @@ public struct SeedTeamCommand: AsyncCommand {
                 "Falta \(option)."
             case .unknown(let option, let value, let valid):
                 "\(option) no admite '\(value)'. Valores: \(valid.joined(separator: ", "))."
-            case .duplicate(let id, let linked):
+            case .duplicate(let id):
                 """
-                Ya existe un equipo propio con esa identidad: \(id) \
-                (\(linked.map { "enganchado a '\($0)'" } ?? "sin enganchar")). \
+                Ya existe un equipo propio con esa identidad: \(id). \
                 La clave única de §3.5 son categoría + letra + género + modalidad, \
                 y la letra nula ES un valor —«el único equipo»—, no un comodín.
                 """

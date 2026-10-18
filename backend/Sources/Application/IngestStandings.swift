@@ -288,10 +288,16 @@ public struct IngestStandings: Sendable {
                 competition: competition,
                 steps: steps,
                 fixtures: fixtures,
+                // Los rivales por el código de su fila, y los propios por el de
+                // su inscripción **en esta competición** (`D-101`): igual que la
+                // pasada del calendario, o la tabla casaría con otro número.
                 teamsByFederationID: Dictionary(
                     try await repositories.teams.list().compactMap { team in
                         team.federationTeamID.map { ($0, team.id) }
-                    }, uniquingKeysWith: { first, _ in first }),
+                    }
+                        + repositories.teamRegistrations.list(competitionID: competitionID)
+                        .compactMap { row in row.federationTeamID.map { ($0, row.teamID) } },
+                    uniquingKeysWith: { first, _ in first }),
                 previousOfFirstStep: previous)
         }
     }

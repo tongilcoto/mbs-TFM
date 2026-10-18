@@ -96,4 +96,7 @@ public enum PersistenceError: Error, Equatable, Sendable {
     /// `NULLS NOT DISTINCT`— (`A-5`, H-35). **Lanza en vez de callarse**: un
     /// esquema sin sus `CHECK` no falla, acepta lo que el Dominio rechaza.
     case schemaHelperNeedsSQL(helper: String, object: String)
+    /// Una migración que mueve datos encontró filas que **no sabe adónde
+    /// llevar**, y se para antes de tocar nada en vez de perderlas (`D-101`).
+    case migrationWouldLoseData(migration: String, reason: String)
 }

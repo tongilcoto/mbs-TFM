@@ -38,7 +38,7 @@ struct TeamTests {
     /// diciendo que ese `codigo_equipo` pertenece a ese club.
     @Test("la ingesta no devuelve a rival un equipo ya reclamado (§3.7, D-20)")
     func ownershipIsNeverReassigned() throws {
-        let claimed = try Self.team(opponentClubID: nil, federationTeamID: "821")
+        let claimed = try Self.team(opponentClubID: nil)
 
         let merged = try claimed.merging(
             opponentClubID: OpponentClubID(raw: UUID()), federationTeamID: nil)
@@ -69,23 +69,37 @@ struct TeamTests {
     /// tiene un código distinto en cada categoría (§3.7).
     @Test("un codigo_equipo distinto no reescribe el que ya emparejaba (§3.7)")
     func federationTeamKeyIsNotOverwritten() throws {
-        let matched = try Self.team(federationTeamID: "821")
+        let matched = try Self.team(
+            opponentClubID: OpponentClubID(raw: UUID()), federationTeamID: "821")
 
         let merged = try matched.merging(opponentClubID: nil, federationTeamID: "304468")
 
         #expect(merged.federationTeamID == "821")
     }
 
-    /// `D-76` en el sitio donde más importa: es exactamente lo que le pasa a un
-    /// equipo **propio** entre que el club lo crea (`D-66`) y el administrador lo
-    /// engancha (`D-67`). Nace sin clave; la recibe.
-    @Test("un equipo sin codigo_equipo lo recibe cuando la fuente lo publica (D-76)")
+    /// `D-76`: un rival que nació sin código —la fuente no lo publicó esa vez—
+    /// lo recibe en cuanto la fuente lo publica.
+    @Test("un rival sin codigo_equipo lo recibe cuando la fuente lo publica (D-76)")
     func federationTeamKeyFillsTheGap() throws {
-        let unlinked = try Self.team(federationTeamID: nil)
+        let unlinked = try Self.team(
+            opponentClubID: OpponentClubID(raw: UUID()), federationTeamID: nil)
 
         let merged = try unlinked.merging(opponentClubID: nil, federationTeamID: "821")
 
         #expect(merged.federationTeamID == "821")
+    }
+
+    /// **Y a un equipo propio no se lo escribe nunca** (`D-101`). Su código es
+    /// el de su inscripción en cada competición: el «Juvenil A» puede ser el
+    /// `33710` un año y el `33712` el siguiente ([Anexo FCF §C.13]). Si la
+    /// pasada se lo pegara al equipo, la temporada siguiente no casaría.
+    @Test("la ingesta no le escribe código a un equipo propio (D-101)")
+    func anOwnTeamNeverTakesTheIncomingCode() throws {
+        let own = try Self.team(opponentClubID: nil)
+
+        let merged = try own.merging(opponentClubID: nil, federationTeamID: "821")
+
+        #expect(merged.federationTeamID == nil)
     }
 
     // ── Proyección a la cadena de §3.7 (Plan §4.6) ──────────────────────────
@@ -99,7 +113,7 @@ struct TeamTests {
         let team = try Self.team(opponentClubID: OpponentClubID(raw: UUID()))
 
         let candidate = try team.candidate(
-            opponentClubName: NormalizedName("CELTIC CASTILLA C.F."))
+            opponentClubName: NormalizedName("CELTIC CASTILLA C.F."), ownCode: nil)
 
         // Las dos grafías —la de la fuente y la que corregiría el
         // administrador— dan la misma clave. Eso es `NormalizedName`, y se
@@ -114,9 +128,34 @@ struct TeamTests {
     func ownTeamProjectsAsOwn() throws {
         let team = try Self.team(opponentClubID: nil)
 
-        let candidate = try team.candidate(opponentClubName: nil)
+        let candidate = try team.candidate(opponentClubName: nil, ownCode: nil)
 
         #expect(candidate.ownership == .own)
+    }
+
+    /// **El código del propio llega de fuera**, de su inscripción en la
+    /// competición que se está pasando (`D-101`): es lo que el paso 1 de la
+    /// cadena compara.
+    @Test("un equipo propio se proyecta con el código de su inscripción (D-101)")
+    func ownTeamProjectsWithItsRegistrationCode() throws {
+        let team = try Self.team(opponentClubID: nil)
+
+        let candidate = try team.candidate(opponentClubName: nil, ownCode: "33712")
+
+        #expect(candidate.federationTeamID == "33712")
+    }
+
+    /// Un rival no tiene inscripción (`D-68`): su código es el suyo. Pasarle
+    /// otro es un error del llamante, y se para en vez de elegir uno.
+    @Test("a un rival no se le pasa código de inscripción: se para (D-101)")
+    func opponentRefusesARegistrationCode() throws {
+        let team = try Self.team(
+            opponentClubID: OpponentClubID(raw: UUID()), federationTeamID: "821")
+
+        #expect(throws: DomainError.self) {
+            try team.candidate(
+                opponentClubName: NormalizedName("CELTIC CASTILLA C.F."), ownCode: "33712")
+        }
     }
 
     /// Y el caso que **no** puede degradar en silencio: un rival cuyo club no
@@ -127,61 +166,20 @@ struct TeamTests {
         let team = try Self.team(opponentClubID: OpponentClubID(raw: UUID()))
 
         #expect(throws: DomainError.self) {
-            try team.candidate(opponentClubName: nil)
+            try team.candidate(opponentClubName: nil, ownCode: nil)
         }
     }
 
-    // ── C-A.2 · enganchar es una transición, no un `merging` (D-67) ──────────
+    // ── D-101 · un equipo propio no lleva código ────────────────────────────
 
-    /// El camino feliz de `D-67`, y el único estado desde el que sale: el equipo
-    /// que el club creó **sin ningún dato de federación** —el que `seed-team`
-    /// siembra— recibe su `codigo_equipo`.
-    @Test("el equipo sin enganchar recibe su código (D-67)")
-    func anUnlinkedTeamTakesItsFederationCode() throws {
-        let team = try Self.team(federationTeamID: nil)
-
-        let linked = try team.linked(toFederationTeamID: "3349086")
-
-        #expect(linked.federationTeamID == "3349086")
-        #expect(linked.id == team.id)
-    }
-
-    /// **Por qué esto no puede ser `merging`, que es la regla de este ciclo.**
-    ///
-    /// `UpsertPolicy.matching` rellena hueco y **calla** cuando ya hay valor
-    /// (`D-76`), que es exactamente lo que la ingesta necesita: un `codigo_equipo`
-    /// distinto llegando en la pasada del lunes no debe pisar el que ya está. Pero
-    /// el enganche **no es la ingesta**: es un administrador afirmando *"este es
-    /// mi equipo"*, y callar ahí le devolvería un `202` mientras el equipo se
-    /// queda enganchado a otro sitio. La ingesta no puede fallar por un dato de
-    /// la fuente; el enganche **tiene** que fallar por un dato del usuario.
-    @Test("un equipo ya enganchado a otro código no se re-engancha: se para (D-67)")
-    func aTeamAlreadyLinkedElsewhereRefuses() throws {
-        let team = try Self.team(federationTeamID: "821")
-
-        #expect(throws: DomainError.alreadyLinkedToFederation(
-            existing: "821", incoming: "3349086"
-        )) {
-            try team.linked(toFederationTeamID: "3349086")
+    /// El código del equipo propio es de su **inscripción** en cada competición
+    /// (`D-101`), y el enganche ya no lo escribe aquí. Que un propio lo lleve es
+    /// el modelo de antes, y el `CHECK` del esquema dice lo mismo.
+    @Test("un equipo propio con código de federación no existe (D-101)")
+    func anOwnTeamWithAFederationCodeIsInvalid() throws {
+        #expect(throws: DomainError.self) {
+            try Self.team(opponentClubID: nil, federationTeamID: "821")
         }
-    }
-
-    /// **Y el mismo código NO es conflicto, que es la mitad que se olvida.**
-    ///
-    /// El enganche es **aditivo**: un equipo juega liga *y* copa (`D-12`), así que
-    /// se engancha una vez por competición — y su `codigo_equipo` identifica al
-    /// **equipo**, no a la competición (§3.7), de modo que el segundo enganche
-    /// llega con el mismo valor. Tratarlo como 409 dejaría la copa inenganchable.
-    ///
-    /// Mismo criterio que `Competition.requireUnchanged`: reenviar lo que ya hay
-    /// es idempotente, no un conflicto.
-    @Test("re-enganchar con el mismo código es idempotente: la copa se engancha aparte (D-12)")
-    func relinkingWithTheSameCodeIsIdempotent() throws {
-        let team = try Self.team(federationTeamID: "3349086")
-
-        let relinked = try team.linked(toFederationTeamID: "3349086")
-
-        #expect(relinked.federationTeamID == "3349086")
     }
 
     // ── C-A.3 · la identidad tiene que cuadrar (D-66, D-58) ──────────────────

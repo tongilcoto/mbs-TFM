@@ -291,6 +291,38 @@ struct IngestStandingsTests {
         #expect(await fixture.store.standingRows.count == 1)
     }
 
+    /// **El equipo propio casa por el código de su inscripción en ESTA
+    /// competición** (`D-101`), igual que en la pasada del calendario. El de
+    /// otra competición —la temporada pasada, la copa— no vale aquí: el
+    /// «Juvenil A» puede llevar otro número en cada una ([Anexo FCF §C.13]).
+    @Test("el equipo propio casa por su inscripción en esta competición, no en otra (D-101)")
+    func theOwnTeamMatchesByItsRegistrationHere() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        let own = try Team(
+            id: TeamID(raw: UUID()), opponentClubID: nil, category: .cadete,
+            letter: "A", gender: .masculino, modality: .futbol11,
+            createdAt: Self.now, updatedAt: Self.now)
+        let here = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: own, seasonID: SeasonID(raw: UUID()),
+            competitionID: fixture.competition, federationTeamID: "333",
+            createdAt: Self.now, updatedAt: Self.now)
+        let elsewhere = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: own, seasonID: SeasonID(raw: UUID()),
+            competitionID: CompetitionID(raw: UUID()), federationTeamID: "444",
+            createdAt: Self.now, updatedAt: Self.now)
+        await fixture.store.seed(teams: [own])
+        await fixture.store.seed(teamRegistrations: [here, elsewhere])
+        let client = StandingsClient([1: Self.table(["111", "333", "444"])])
+
+        let runs = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+
+        let written = await fixture.store.standingRows
+        #expect(written.first { $0.position == 2 }?.teamID == own.id)
+        #expect(written.count == 2)
+        #expect(runs.first?.skipped.map(\.reason) == [.unknownStandingTeam])
+    }
+
     // ── El registro ──────────────────────────────────────────────────────────
 
     @Test("la pasada deja su fila con la jornada y los contadores (D-85)")

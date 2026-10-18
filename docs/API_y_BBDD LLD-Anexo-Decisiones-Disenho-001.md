@@ -4387,6 +4387,11 @@ La FCF no lo ha confirmado, y en la RFFM no está medido.
 - **`Team.federationTeamId` del contrato** vale siempre `null` en un equipo propio. El código del equipo
   propio, cuando se lea, viene con la inscripción ([D-68]).
 
+**Hecho el mismo día** (2026-10-18), antes de la rebanada 1: migración `MoveOwnTeamCodeToRegistration`,
+enganche, pasada del calendario y de la clasificación. 612 → **632 tests**; **23/23 mutaciones**
+(`Tools/Mutate/Catalogs/D-101.json`). La mutación tumbó una comprobación del enganche que repetía la del paso
+de la inscripción, y se quitó.
+
 **Enmienda** a [D-27] (punto 1), [D-28] (fila `Team`), [D-67] (paso 3 de la cascada) y [D-68] («Por qué
 tampoco es [D-28]»). Las tres primeras dijeron «estable entre temporadas»; lo que es estable es la plaza de
 la federación, no el equipo del club.

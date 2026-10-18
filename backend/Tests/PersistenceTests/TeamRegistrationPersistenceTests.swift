@@ -226,4 +226,91 @@ struct TeamRegistrationPersistenceTests {
             }
         }
     }
+
+    // ── D-101 · el código del equipo, en la inscripción ─────────────────────
+
+    /// **El código va y vuelve, y `list(competitionID:)` trae las de esa
+    /// competición**, de todos los equipos propios: es lo que la pasada lee para
+    /// reconocerlos (`D-101`). La de otra competición no sale.
+    @Test("el código va y vuelve, y list por competición trae solo las suyas (D-101)")
+    func theCodeRoundTripsAndListsByCompetition() async throws {
+        try await Self.withFixture("treg-code") { team, vigente, anterior, liga, tenant in
+            let previa = try Competition(
+                id: CompetitionID(raw: UUID()), seasonID: anterior,
+                modality: .futbol11, gender: .masculino,
+                federationCompetitionID: "20000000", federationGroupID: "20000001",
+                ageCategory: .cadete, divisionLabel: "Preferente", groupLabel: "Grupo 2",
+                createdAt: Date(), updatedAt: Date())
+            let aqui = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: team, seasonID: vigente,
+                competitionID: liga, federationTeamID: "33712",
+                createdAt: Date(), updatedAt: Date())
+            let elAnho = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: team, seasonID: anterior,
+                competitionID: previa.id, federationTeamID: "33710",
+                createdAt: Date(), updatedAt: Date())
+
+            let stored = try await tenant.scope { repositories -> [TeamRegistration] in
+                try await repositories.competitions.save(previa)
+                try await repositories.teamRegistrations.save(aqui)
+                try await repositories.teamRegistrations.save(elAnho)
+                return try await repositories.teamRegistrations.list(competitionID: liga)
+            }
+
+            #expect(stored.map(\.id) == [aqui.id])
+            #expect(stored.first?.federationTeamID == "33712")
+        }
+    }
+
+    /// **`UNIQUE (competition_id, federation_team_id)`**: en una competición, un
+    /// código es de un solo equipo propio. El caso de uso lo pregunta antes
+    /// (`C-E.10`); esto es lo que lo hace imposible.
+    @Test("dos equipos propios con el mismo código en una competición no caben (D-101)")
+    func twoOwnTeamsCannotShareACodeInACompetition() async throws {
+        try await Self.withFixture("treg-uq") { team, vigente, _, liga, tenant in
+            let otro = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: nil,
+                category: .cadete, letter: "B", gender: .masculino,
+                modality: .futbol11, createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.teams.save(otro)
+                try await $0.teamRegistrations.save(try TeamRegistration(
+                    id: TeamRegistrationID(raw: UUID()), team: team, seasonID: vigente,
+                    competitionID: liga, federationTeamID: "33712",
+                    createdAt: Date(), updatedAt: Date()))
+            }
+
+            await #expect(throws: (any Error).self) {
+                try await tenant.scope {
+                    try await $0.teamRegistrations.save(try TeamRegistration(
+                        id: TeamRegistrationID(raw: UUID()), team: otro, seasonID: vigente,
+                        competitionID: liga, federationTeamID: "33712",
+                        createdAt: Date(), updatedAt: Date()))
+                }
+            }
+        }
+    }
+
+    /// **Los dos `CHECK` de `D-101`, contra el esquema y no contra el
+    /// Dominio**: el Dominio ya los rechaza, así que se escriben con SQL crudo,
+    /// que es por donde entrarían un *script* o una migración descuidada.
+    @Test("ni un propio con código ni una fila de junio con código caben en la tabla (D-101)")
+    func theSchemaRejectsCodesWhereTheyDoNotBelong() async throws {
+        try await Self.withFixture("treg-chk") { team, vigente, _, _, tenant in
+            let schema = tenant.schema
+            await #expect(throws: (any Error).self) {
+                try await tenant.raw.raw("""
+                    UPDATE \(ident: schema).teams SET federation_team_id = '33712'
+                    WHERE id = \(bind: team.id.raw)
+                    """).run()
+            }
+            await #expect(throws: (any Error).self) {
+                try await tenant.raw.raw("""
+                    INSERT INTO \(ident: schema).team_registrations
+                        (id, team_id, season_id, competition_id, federation_team_id)
+                    VALUES (\(bind: UUID()), \(bind: team.id.raw), \(bind: vigente.raw), NULL, '33712')
+                    """).run()
+            }
+        }
+    }
 }

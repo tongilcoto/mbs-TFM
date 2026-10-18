@@ -717,6 +717,29 @@ public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
         return try rows.map { try $0.toDomain(team: team) }
     }
 
+    /// Las de **esa competición**, de todos los equipos propios (`D-101`): la
+    /// pasada reconoce a los propios por el código de estas filas. Aquí sí hay
+    /// equipos distintos, así que se leen todos de una vez y no uno por fila.
+    public func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
+        let rows = try await TeamRegistrationRecord.query(on: database)
+            .filter(\.$competition.$id == competitionID.raw)
+            .all()
+        guard !rows.isEmpty else { return [] }
+
+        let teamIDs = Set(rows.map { $0.$team.id })
+        let teams = Dictionary(
+            uniqueKeysWithValues: try await TeamRecord.query(on: database)
+                .filter(\.$id ~~ teamIDs)
+                .all()
+                .map { ($0.id, try $0.toDomain()) })
+        return try rows.map { row in
+            guard let team = teams[row.$team.id] else {
+                throw PersistenceError.notFound(table: TeamRecord.schema)
+            }
+            return try row.toDomain(team: team)
+        }
+    }
+
     public func save(_ registration: TeamRegistration) async throws {
         if let existing = try await TeamRegistrationRecord.find(
             registration.id.raw, on: database
@@ -749,6 +772,7 @@ extension TeamRegistrationRecord {
             team: team,
             seasonID: SeasonID(raw: $season.id),
             competitionID: $competition.id.map { CompetitionID(raw: $0) },
+            federationTeamID: federationTeamID,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -760,5 +784,6 @@ extension TeamRegistrationRecord {
         self.$team.id = registration.teamID.raw
         self.$season.id = registration.seasonID.raw
         self.$competition.id = registration.competitionID?.raw
+        self.federationTeamID = registration.federationTeamID
     }
 }

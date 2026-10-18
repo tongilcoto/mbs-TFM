@@ -1,5 +1,6 @@
 import Domain
 public import Fluent
+import SQLKit
 import Foundation
 
 /// Modelo de persistencia de la inscripción (§4.4, [D-68]).
@@ -25,6 +26,9 @@ public final class TeamRegistrationRecord: Model, @unchecked Sendable {
     /// No es un atributo suelto — **entra en la clave**, que es lo que obliga al
     /// `NULLS NOT DISTINCT` de `C-D.3`.
     @OptionalParent(key: "competition_id") public var competition: CompetitionRecord?
+
+    /// El código del equipo **en esta competición** (`D-101`).
+    @OptionalField(key: "federation_team_id") public var federationTeamID: String?
 
     @Timestamp(key: "created_at", on: .create) public var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) public var updatedAt: Date?
@@ -129,5 +133,107 @@ public struct CreateTeamRegistration: AsyncMigration {
         for lado in ["home_team_id", "away_team_id"] {
             try await database.dropIndex(name: "idx_matches_competition_\(lado)")
         }
+    }
+}
+
+/// **`D-101`: el código del equipo propio pasa de `teams` a su inscripción.**
+///
+/// El número de la federación es la **plaza** del club en la división, no su
+/// «Juvenil A»: el A de una temporada puede llevar otro número la siguiente
+/// ([Anexo FCF §C.13]). Por eso va en la fila de cada competición.
+///
+/// # Qué hace, en este orden
+///
+/// 1. **Se para si hay un código que no tiene adónde ir**: un equipo propio con
+///    código y ninguna inscripción con competición. Borrarlo sería perder el
+///    enganche que el club hizo, sin aviso. Va **antes** de tocar nada.
+/// 2. Añade la columna y copia el código a cada inscripción **con
+///    competición** del equipo. Antes de `D-101` el código valía para todas, así
+///    que todas lo reciben; la de junio no, porque no tiene grupo.
+/// 3. Lo borra de los equipos propios y deja los dos `CHECK` y el `UNIQUE`.
+///
+/// **Una migración nueva y no una edición**: `CreateTeam` y
+/// `CreateTeamRegistration` ya están aplicadas en los clubes vivos ([D-90]).
+public struct MoveOwnTeamCodeToRegistration: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "MoveOwnTeamCodeToRegistration", object: TeamRegistrationRecord.schema)
+        }
+
+        // 1. La guarda, antes de escribir nada.
+        let orphans = try await sql.raw("""
+            SELECT count(*) AS n FROM \(ident: TeamRecord.schema) t
+            WHERE t.opponent_club_id IS NULL AND t.federation_team_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM \(ident: TeamRegistrationRecord.schema) r
+                WHERE r.team_id = t.id AND r.competition_id IS NOT NULL)
+            """).first(decodingColumn: "n", as: Int.self) ?? 0
+        guard orphans == 0 else {
+            throw PersistenceError.migrationWouldLoseData(
+                migration: "MoveOwnTeamCodeToRegistration",
+                reason: "\(orphans) equipo(s) propio(s) con código de federación y sin "
+                    + "inscripción con competición a la que llevarlo (D-101)")
+        }
+
+        // 2. La columna, y los datos.
+        try await database.schema(TeamRegistrationRecord.schema)
+            .field("federation_team_id", .string)
+            .update()
+        try await sql.raw("""
+            UPDATE \(ident: TeamRegistrationRecord.schema) r
+            SET federation_team_id = t.federation_team_id
+            FROM \(ident: TeamRecord.schema) t
+            WHERE r.team_id = t.id AND t.opponent_club_id IS NULL
+              AND r.competition_id IS NOT NULL
+            """).run()
+        try await sql.raw("""
+            UPDATE \(ident: TeamRecord.schema) SET federation_team_id = NULL
+            WHERE opponent_club_id IS NULL
+            """).run()
+
+        // 3. Las reglas, bajadas al esquema.
+        try await database.checkConstraint(
+            table: TeamRecord.schema, name: "chk_teams_own_without_code",
+            expression: "opponent_club_id IS NOT NULL OR federation_team_id IS NULL")
+        try await database.checkConstraint(
+            table: TeamRegistrationRecord.schema,
+            name: "chk_team_registrations_code_needs_competition",
+            expression: "competition_id IS NOT NULL OR federation_team_id IS NULL")
+        try await database.uniqueConstraint(
+            table: TeamRegistrationRecord.schema, name: "uq_team_registrations_code",
+            columns: ["competition_id", "federation_team_id"])
+    }
+
+    /// Devuelve el código a los equipos propios —el de cualquiera de sus
+    /// inscripciones, que antes de `D-101` era el mismo para todas— y quita lo
+    /// que `prepare` puso. **Si un equipo tiene dos códigos distintos**, que es
+    /// justo lo que `D-101` permite, el esquema de antes no lo puede guardar y el
+    /// `UNIQUE` de `teams` o la elección pierden uno: el `revert` es para
+    /// desarrollo, no para un club vivo.
+    public func revert(on database: any Database) async throws {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "MoveOwnTeamCodeToRegistration", object: TeamRegistrationRecord.schema)
+        }
+        try await database.dropConstraint(
+            table: TeamRegistrationRecord.schema, name: "uq_team_registrations_code")
+        try await database.dropConstraint(
+            table: TeamRegistrationRecord.schema,
+            name: "chk_team_registrations_code_needs_competition")
+        try await database.dropConstraint(
+            table: TeamRecord.schema, name: "chk_teams_own_without_code")
+        try await sql.raw("""
+            UPDATE \(ident: TeamRecord.schema) t
+            SET federation_team_id = (
+                SELECT min(r.federation_team_id) FROM \(ident: TeamRegistrationRecord.schema) r
+                WHERE r.team_id = t.id)
+            WHERE t.opponent_club_id IS NULL
+            """).run()
+        try await database.schema(TeamRegistrationRecord.schema)
+            .deleteField("federation_team_id")
+            .update()
     }
 }

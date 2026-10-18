@@ -102,6 +102,10 @@ public enum TenantMigrations {
             // medias. Al final de lo que altera, que es su único requisito de
             // orden ([D-90]).
             DropFinishedAtIngestionRunIndex(),
+            // `D-101`: el código del equipo propio pasa de `teams` a
+            // `team_registrations`, con sus `CHECK`, su `UNIQUE` y los datos. Al
+            // final de lo que altera, que es su único requisito de orden ([D-90]).
+            MoveOwnTeamCodeToRegistration(),
         ]
     }
 }

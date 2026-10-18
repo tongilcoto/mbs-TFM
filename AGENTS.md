@@ -56,7 +56,9 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - **`Team` es la excepción, y es deliberada** (`D-66`): el club forma el equipo, lo inscribe en la
   federación y **solo entonces** la federación publica calendario — es fuente de verdad del *calendario*,
   no del *equipo*. Así que `Team` tiene `POST` (sin ningún dato de federación) y `DELETE` **mientras no
-  esté emparejado**; una fila con `federationTeamId` nulo no tiene segundo escritor. La otra mitad de la
+  esté emparejado**; un equipo sin código en ninguna inscripción no tiene segundo escritor. **El código de
+  la federación de un equipo propio va en su inscripción de cada competición, no en `Team`** (`D-101`): el
+  número es la plaza del club en la división, y la letra puede pasar a otro número de un año a otro. La otra mitad de la
   regla, sin la cual esto no se sostiene: **la ingesta no crea equipos propios**, así que todo lo que
   encuentra y no reconoce es de un `OpponentClub`. `gender` y `modality` pasan a ser identidad de alta:
   van en `CreateTeamRequest`, nunca en el `PATCH`.
@@ -378,14 +380,14 @@ Y la [auditoría 002](./backend/Plan%20de%20auditor%C3%ADa-002.md), **cerrada el
 con éxito (H-53) y dos enganches a la vez dejaban dos cascadas (H-73)—, y **las tres puertas abiertas**:
 `launchd`, la rebanada 1 y la rebanada 2. Lo abierto tiene dueño: H-58 en la rebanada 1, y H-59, H-85 y H-92
 al montar `launchd`. Su último bloque, A-9, dejó la
-[guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md), con las seis
-promesas que el puerto no puede imponer.
+[guía de alta de una federación nueva](./docs/API_y_BBDD%20Guia-Alta-Federacion-001.md), con las siete
+promesas que el puerto no puede imponer (la séptima, de `D-101`).
 Y **`launchd` está montado** ([su plan](./backend/Plan%20launchd-001.md), 2026-10-11): la ingesta corre sola
 en el Mac contra la base de desarrollo, con un binario instalado desde un commit (H-85) y un aviso cuando
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests.** Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18). Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
