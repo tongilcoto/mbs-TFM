@@ -4,7 +4,7 @@ import Testing
 /// Nivel 1 (§8.1): **las convenciones del *spec* que el compilador no ve**.
 ///
 /// El generador solo traduce las operaciones del `filter` (`D-69`), así que una
-/// regla que deban cumplir **las 83** no la vigila el *build*: la operación que
+/// regla que deban cumplir **las 85** no la vigila el *build*: la operación que
 /// la incumpla compila igual, porque no se genera. Esto lee el YAML tal cual.
 ///
 /// Se recorre **como texto** y no con un parser de YAML a propósito: el *spec*
@@ -54,7 +54,7 @@ struct SpecConventionTests {
     func everyOperationDeclaresTheDefaultProblem() throws {
         let blocks = try Self.responseBlocks()
         // Si el recorrido no encontrara nada, el test aprobaría por vacío.
-        #expect(blocks.count >= 83, "bloques de respuestas encontrados: \(blocks.count)")
+        #expect(blocks.count >= 85, "bloques de respuestas encontrados: \(blocks.count)")
 
         let missing = blocks.filter { block in
             !block.body.contains("        default: { $ref: '#/components/responses/DefaultProblem' }")

@@ -578,6 +578,42 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/DefaultProblem' }
 
+  /seasons/{seasonId}/registrations:
+    parameters:
+      - $ref: '#/components/parameters/SeasonId'
+
+    get:
+      tags: [Teams]
+      operationId: listSeasonRegistrations
+      summary: Lista los equipos del club en una temporada, con sus competiciones
+      description: |
+        **El equipo en una temporada, leído** (D-102). La inscripción (D-68) ya se escribía con `PUT` y
+        `DELETE /teams/{teamId}/registrations/{seasonId}`, y no se podía leer: `GET /teams?seasonId=` dice
+        **qué** equipos hay, no **con qué competición**. Es lo que necesita la portada del backoffice.
+
+        **Un elemento por equipo**, con sus competiciones dentro (`competitions`, una lista). Hoy cada equipo
+        juega una por temporada, pero la lista deja sitio a la copa (D-12). Un equipo inscrito **sin
+        competición todavía** —el estado de junio— sale con la lista vacía: no desaparece.
+
+        **Las competiciones salen solo de la inscripción**, sin buscar en los partidos (D-102, punto 5).
+
+        **Solo equipos propios**: los rivales no se inscriben (D-68), y su temporada se sigue leyendo con
+        `GET /teams?seasonId=`.
+
+        Colección pequeña por club → **sin paginación** (§5.3).
+      responses:
+        '200':
+          description: Los equipos inscritos en la temporada.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamRegistrationResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
   # ─────────────────────── Competitions (§5.1) ───────────────────────
   /competitions/preview:
     post:
@@ -926,6 +962,10 @@ paths:
 
         Los dos conjuntos son **disjuntos** —un rival no se inscribe— así que no hay contradicción posible.
         El significado del filtro **no ha cambiado**; cambió de dónde sale la respuesta.
+
+        **El filtro dice qué equipos hay, no con qué competición**, y `TeamResponse` no cambia de forma
+        según cómo se le pregunte. Para los equipos propios con sus competiciones,
+        `GET /seasons/{seasonId}/registrations` (D-102).
       parameters:
         - name: isOwn
           in: query
@@ -1331,6 +1371,33 @@ paths:
       - $ref: '#/components/parameters/TeamId'
       - $ref: '#/components/parameters/SeasonId'
 
+    get:
+      tags: [Teams]
+      operationId: getTeamRegistration
+      summary: Obtiene la inscripción del equipo en una temporada
+      description: |
+        **Una sola pareja (equipo, temporada)**, con la misma forma que cada elemento de
+        `GET /seasons/{seasonId}/registrations` (D-102). Es la lectura que le faltaba a este recurso, que
+        ya tenía su escritura (`PUT` y `DELETE`, D-68). La necesita la ficha del equipo del backoffice, que
+        enseña el código de la federación de cada competición.
+      responses:
+        '200':
+          description: La inscripción, con sus competiciones.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRegistrationResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El equipo o la temporada no existen, **o el equipo no está inscrito en esa temporada**. Un rival
+            nunca lo está (D-68).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
     put:
       tags: [Teams]
       operationId: registerTeamInSeason
@@ -1400,8 +1467,8 @@ paths:
         fuente es el club y el club no tiene estado federativo que registrar (D-68).
 
         **No borra el equipo** ni sus jugadores: `Team` es estable entre temporadas (§3.2) y `Player` lleva
-        su propia `seasonId` (D-05). Retirar la inscripción solo lo saca de `GET /teams?seasonId=` para
-        **esa** temporada.
+        su propia `seasonId` (D-05). Retirar la inscripción solo lo saca de `GET /teams?seasonId=` y de
+        `GET /seasons/{seasonId}/registrations` para **esa** temporada.
 
         **Idempotente**. Requiere **rol elevado** (§7.3).
       responses:
@@ -3893,11 +3960,64 @@ components:
           examples: [409]
         detail:
           type: string
-          description: Explicación concreta de **esta** ocurrencia.
+          description: |
+            Explicación concreta de **esta** ocurrencia, pensada para quien desarrolla. El cliente **no la
+            enseña ni decide por ella**, con una excepción:
+
+            **En los errores de valor** —`INVALID_VALUE` y `NOT_EDITABLE_AFTER_SYNC`— tiene siempre la forma
+            `<campo>: <motivo>`, separados por el primer `": "`. Lo de delante es el nombre del campo tal como
+            va en el cuerpo de la petición, y lo de detrás, el motivo en español y para el usuario. Así el
+            cliente puede enseñar el motivo junto a su campo.
+          examples: ['name: no puede estar vacío']
         code:
-          type: string
-          description: Código de error interno, estable, para que el cliente ramifique.
-          examples: ['SEASON_LABEL_TAKEN']
+          $ref: '#/components/schemas/ProblemCode'
+
+    ProblemCode:
+      type: string
+      description: |
+        Código de error interno, estable, para que el cliente ramifique. **El cliente decide por el `code`,
+        nunca por `title` ni `detail`.**
+
+        **Lista cerrada**: los códigos que el servidor emite hoy. Un cliente generado del catálogo puede
+        exigir un mensaje para cada uno. Un código que el cliente no conozca —un servidor más nuevo que él—
+        se trata por la familia de su `status`.
+
+        **Al emitir un código nuevo, se añade aquí.** El censo (`backend/Tools/Census`) comprueba que cada
+        código que emite el servidor está en esta lista.
+      enum:
+        - ALREADY_LINKED_TO_FEDERATION
+        - BAD_REQUEST
+        - COMPETITION_IDENTITY_MISMATCH
+        - COMPETITION_NOT_FOUND
+        - DATABASE_UNAVAILABLE
+        - EMPTY_PATCH
+        - EMPTY_SELECTION
+        - FEDERATION_ADAPTER_MISSING
+        - FEDERATION_COORDINATE_NOT_FOUND
+        - FEDERATION_MALFORMED_RESPONSE
+        - FEDERATION_SEASON_MISMATCH
+        - FEDERATION_SOURCE_MISMATCH
+        - FEDERATION_TEAM_ID_TAKEN
+        - FEDERATION_UNEXPECTED_STATUS
+        - FEDERATION_UNREACHABLE
+        - INGESTION_FAILED
+        - INTERNAL
+        - INVALID_LIMIT
+        - INVALID_UUID
+        - INVALID_VALUE
+        - NOT_EDITABLE_AFTER_SYNC
+        - NOT_FOUND
+        - OWN_TEAM_NOT_IN_CALENDAR
+        - RUN_NOT_RECORDED
+        - SEASON_LABEL_UNAVAILABLE
+        - SEASON_NOT_FOUND
+        - TEAM_NOT_FOUND
+        - TENANT_MISMATCH
+        - TENANT_NOT_PROVISIONED
+        - TENANT_NOT_RESOLVED
+        - UNKNOWN_TENANT
+        - UNREADABLE_FEDERATION_URL
+      examples: ['SEASON_NOT_FOUND']
 
     # ────────────────────────────── Club (§5.2) ──────────────────────────────
     ClubSettings:
@@ -4609,6 +4729,14 @@ components:
             Iguales ⇒ la última pasada fue bien.
         ingestionHealth:
           $ref: '#/components/schemas/IngestionHealth'
+        previousIngestionHealth:
+          allOf:
+            - $ref: '#/components/schemas/IngestionHealth'
+          readOnly: true
+          description: |
+            **Solo viene cuando `ingestionHealth` es `pending`** (D-89, enmienda): el estado que tendría la
+            competición **sin la pasada en marcha**. Una pasada pedida rehace todo lo que estaba mal, así que
+            `pending` va por delante del fallo anterior; esto es para no perderlo. Nunca vale `pending`.
         createdAt:
           type: string
           format: date-time
@@ -4765,7 +4893,8 @@ components:
             **Solo lo llevan los rivales (D-101). En un equipo propio vale siempre `null`.** El número es
             estable para la federación, pero designa la **plaza** del club en la división, no su «Infantil
             A»: el A de una temporada puede llevar otro número la siguiente. Por eso el código del equipo
-            propio va en su **inscripción** de cada competición, y lo escribe el enganche (D-67).
+            propio va en su **inscripción** de cada competición, y lo escribe el enganche (D-67). Se lee con
+            `GET /teams/{teamId}/registrations/{seasonId}` (D-102).
 
             **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno.
 
@@ -4822,6 +4951,53 @@ components:
           description: |
             Competiciones de **esa** temporada. Varias son legítimas: un equipo juega liga y copa (D-12), y
             cada una es una `Competition` distinta. Una competición de otra temporada da **409**.
+
+    TeamRegistrationResponse:
+      type: object
+      description: |
+        **El equipo en una temporada** (D-102): la inscripción (D-68) leída. El equipo dura para siempre
+        (D-28); esto dura una temporada y dice en qué competiciones juega.
+
+        **`team` no cambia nunca de forma**: es la misma `TeamResponse` de `GET /teams/{teamId}`. Todo lo de
+        la temporada viaja aquí, fuera del equipo.
+
+        **Sin identificador propio**: la pareja se nombra por (equipo, temporada), como en D-68.
+      required: [team, seasonId, competitions]
+      properties:
+        team:
+          $ref: '#/components/schemas/TeamResponse'
+        seasonId:
+          type: string
+          format: uuid
+          readOnly: true
+        competitions:
+          type: array
+          readOnly: true
+          description: |
+            Las competiciones de esa temporada en las que está inscrito el equipo. **Vacía ⇒ inscrito sin
+            competición todavía**, el estado de junio (D-68). Hoy tiene como mucho una; la lista deja sitio a
+            la copa (D-12).
+          items:
+            $ref: '#/components/schemas/TeamRegistrationCompetition'
+
+    TeamRegistrationCompetition:
+      type: object
+      description: Una competición de la inscripción, con el código del equipo en ella (D-101).
+      required: [competitionId, federationTeamId]
+      properties:
+        competitionId:
+          type: string
+          format: uuid
+          readOnly: true
+        federationTeamId:
+          type: [string, 'null']
+          readOnly: true
+          description: |
+            `codigo_equipo` del equipo **en esta competición** (D-101): el número designa la plaza del club
+            en la división, así que vive en la inscripción y no en el equipo. Lo escribe el enganche (D-67).
+            **Nulo ⇒ la competición se inscribió a mano** (`PUT .../registrations/{seasonId}`) y el equipo
+            todavía no está enganchado en ella.
+          examples: ['3349086']
 
     CreateTeamRequest:
       type: object
@@ -6675,15 +6851,28 @@ components:
         reimplementarían por separado la web, iOS y Android, y se desincronizarían el día que el tope
         cambie.
 
+        **«La última pasada» es la última fila de cada clase** (`calendar`, `standings`, `scorers`), ordenadas
+        por `startedAt`, **y la competición toma la peor** (D-89, enmienda). Un disparo deja varias filas, y
+        si solo contara el calendario, una competición con los goleadores rotos saldría al día. La clase que
+        la federación no publica no tiene filas y no cuenta.
+
+        **Una pasada pedida que no ha acabado** (`accepted`) es `pending`, **salvo que la cola esté parada**:
+        si pasan **15 minutos sin que acabe ninguna pasada del club** —contando desde la hora a la que se
+        pidió o desde la última que acabó, la más reciente de las dos—, cuenta como `failing`. El reloj
+        vuelve a cero con cualquier pasada del club que acabe, bien o mal, porque las de una temporada
+        corren una detrás de otra y la última puede esperar su turno mucho rato sin que nada falle.
+
         **Los casos se evalúan en este orden**, porque se solapan:
 
-        | Valor | Cuándo |
-        |---|---|
-        | `failing` | la **última pasada falló** — hay algo que mirar, y su motivo está en `/ingestion-runs` |
-        | `never` | nunca hubo una pasada con éxito (recién enganchada, o la primera aún encolada) |
-        | `stale` | el último éxito es de hace **más de una semana**: §5.6 dice que eso no debe pasar |
-        | `ok` | el resto |
-      enum: [ok, failing, stale, never]
+        | Orden | Valor | Cuándo |
+        |---|---|---|
+        | 1 | `failing` | hay una pasada `accepted`, y lleva **15 minutos sin acabar ninguna pasada del club** |
+        | 2 | `pending` | hay una pasada `accepted`, y la cola avanza. Lo que había antes viaja en `previousIngestionHealth` |
+        | 3 | `failing` | la **última fila de alguna clase falló** — hay algo que mirar, y su motivo está en `/ingestion-runs` |
+        | 4 | `never` | nunca hubo una pasada con éxito (recién enganchada) |
+        | 5 | `stale` | el último éxito es de hace **más de una semana**: §5.6 dice que eso no debe pasar |
+        | 6 | `ok` | el resto |
+      enum: [ok, failing, stale, never, pending]
 
     IngestionOutcome:
       type: string

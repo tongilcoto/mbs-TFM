@@ -107,7 +107,7 @@ struct ClubEndpointTests {
                 #expect(response.status == .badRequest, "sin club identificable")
                 let problem = try JSONDecoder().decode(
                     Components.Schemas.Problem.self, from: Data(response.body.readableBytesView))
-                #expect(problem.code == "TENANT_NOT_RESOLVED")
+                #expect(problem.code == .TENANT_NOT_RESOLVED)
             }
             try await app.testing().test(
                 .GET, "/v1/club",
@@ -118,7 +118,7 @@ struct ClubEndpointTests {
                 #expect(response.status == .notFound)
                 let problem = try JSONDecoder().decode(
                     Components.Schemas.Problem.self, from: Data(response.body.readableBytesView))
-                #expect(problem.code == "UNKNOWN_TENANT")
+                #expect(problem.code == .UNKNOWN_TENANT)
                 #expect(problem.detail == "no-existe")
             }
         }

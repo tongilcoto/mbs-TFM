@@ -621,7 +621,7 @@ docker compose down -v
   `INVALID_UUID`, `NOT_EDITABLE_AFTER_SYNC` y `RUN_NOT_RECORDED`.
 - **Los errores que no son de la ruta sino de todas los cubre el `default` de cada operación** (`D-99`,
   `A-14`·H-67). El middleware decide el código por el **tipo** de error, no por la ruta, así que el club
-  desconocido, la petición sin club o la base caída pueden salir por cualquiera. Las 83 operaciones del
+  desconocido, la petición sin club o la base caída pueden salir por cualquiera. Las 85 operaciones del
   *spec* declaran `default: DefaultProblem`, y `SpecConventionTests` lo exige **sobre el YAML**, porque el
   compilador solo ve las del `filter`. Al añadir una operación al *spec*: su `default`, y en la ruta solo los
   códigos **propios** de ella.

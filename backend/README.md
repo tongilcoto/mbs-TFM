@@ -827,7 +827,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **6.860 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **7.054 líneas, 85 operaciones en 46 rutas y las 21 entidades de §3.2**.
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh
