@@ -33,6 +33,7 @@
 | **D-92**               | El orden del *fallback* calculado: puntos, diferencia, goles a favor — y el enfrentamiento directo fuera                      | §3.2, §4.5, F7                     |
 | **D-93**               | La clave de *upsert* de `LeagueScorer` es el identificador del jugador en la federación                                        | §3.2, §3.5, §4.6, F8               |
 | **D-94**               | `LeagueScorer` es la única salida de la ingesta que borra filas, y `synced_at` es cómo                                         | §3.2, §3.7, §4.3, F8               |
+| **D-100**              | El acceso a los datos de tenant tiene una sola conexión, a propósito                                                          | §6.4                               |
 | **Modelo de datos**    |                                                                                                                               |                                    |
 | **D-03**               | `Team` no lleva identidad de club: se extrae `OpponentClub`                                                                   | §3.2, §3.6                         |
 | **D-04**               | `Goal` denormaliza equipo que marca y equipo que encaja                                                                       | §3.2, §3.4                         |
@@ -89,6 +90,8 @@
 | **D-88**               | La ingesta asoma dos endpoints: el registro se lee y la pasada se dispara — y el disparador responde 200 o 202 según el coste | §5.1, §5.6, §2.3                   |
 | **D-89**               | El estado de la sincronización viaja con la competición; el registro de pasadas es el detalle, no la lista                    | §3.4, §5.1, §5.2, §5.6             |
 | **D-95**               | La FCF queda fuera del alcance: su fuente no está en condiciones de ingeniería inversa                                        | §3.6, §5.6, F9, F10                |
+| **D-96**               | La pasada aceptada deja fila desde el instante del `202`, con un desenlace `accepted`                                         | §3.2, §5.1, §5.6                   |
+| **D-97**               | El adaptador es dueño del universo de datos de su federación, y leer su URL es parte de ese universo                          | §2.2, §3.6                         |
 | **Contrato de la API** |                                                                                                                               |                                    |
 | **D-21**               | El BFF corrige lo que la ingesta trae; nunca lo crea ni lo borra                                                              | §5.1                               |
 | **D-22**               | `Competition` es entrada de la ingesta: tiene `POST`, y el alta es en dos pasos                                               | §5.1                               |
@@ -111,6 +114,7 @@
 | **D-51**               | El cuerpo son umbrales, no tramos: lo derivable es la relación entre filas                                                    | §3.2, §5.1, §5.2, §5.3             |
 | **D-53**               | El marcador manda y los goles no lo contradicen: sin validación de cuadre                                                     | §3.6, §5.1                         |
 | **D-54**               | La denormalización de `Goal` no llega al DTO: se escribe quién marca                                                          | §3.2, §5.1, §5.2                   |
+| **D-99**               | Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`                                       | §5.4                               |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -118,6 +122,7 @@
 | **D-62**               | El permiso se evalúa por asignación, nunca por persona colapsada                                                              | §3.2, §3.5, §7.3                   |
 | **D-63**               | La autorización se comprueba en el caso de uso, no en RLS                                                                     | §2.2, §4, §7.4, §7.6, §8.1         |
 | **D-64**               | Escribir fuera de ámbito es 403, no 404: el 404 solo miente si la lectura es abierta                                          | §5.1, §7.5                         |
+| **D-98**               | El actor lleva lo que dice el token; la plantilla y sus asignaciones se cargan dentro del caso de uso                         | §6.1, §6.2, §7.4                   |
 | **Documentación**      |                                                                                                                               |                                    |
 | **D-25**               | El *spec* OpenAPI es la fuente de verdad campo a campo; el LLD no lo duplica                                                  | §5.2, §5.5                         |
 | **D-26**               | El LLD se queda con lo normativo; deliberación y evidencia van a anexos                                                       | —                                  |
