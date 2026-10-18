@@ -68,6 +68,7 @@
 | **D-81**               | Las fechas de la jornada no se leen: se derivan de las de sus partidos                                                        | §3.2, §3.7                         |
 | **D-82**               | El slug del club rival se deriva del nombre, mecánicamente y sin diccionario                                                  | §3.2, §3.5                         |
 | **D-85**               | El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción                                      | §3.2, §3.3, §3.5, §5.6             |
+| **D-101**              | El código de la federación es de la inscripción del equipo en la competición, no del equipo                                   | §3.2, §3.5, §3.7, §5.1             |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -606,6 +607,10 @@ era el filtro `?seasonId=` de `GET /v1/teams`.
 1. **No tenía atributos propios.** Solo las dos FK. La única columna que la habría justificado —el
    `codigo_equipo`— se le negó explícitamente al comprobar que es **estable entre temporadas** y por tanto
    pertenece a `Team` ([Anexo RFFM §F.3]).
+
+   > **Enmendado por [D-101].** El código es estable para la **federación** (es su plaza en una división), no
+   > para el equipo del club: el «Juvenil A» puede llevar un código distinto cada temporada. Ha vuelto a una
+   > tabla de inscripción, pero no a este pivote: a `team_registrations` ([D-68]), que sí tiene datos propios.
 2. **La ingesta descubre los equipos *desde* el calendario** (§3.7). Un equipo entra en el sistema porque
    aparece en un `Match`; no hay ninguna otra puerta. Así que `Participation` no podía contener una sola fila
    que `Match` no implicara ya: era un **índice de `Match`** mantenido a mano, con el coste de consistencia
@@ -668,6 +673,9 @@ esquema.
 | `Team`, `OpponentClub` | **sería un error** | Son **estables entre temporadas** a propósito (§3.2): "Infantil A" es la misma entidad año tras año. Una columna ahí obligaría a duplicar filas por temporada y rompería el filtro `?seasonId=`, que es una **derivación por participación** ([D-27]) |
 | `Goal`, `Card`, `Appearance` | **innecesaria** | Se consultan siempre vía `Player` o vía `Match`; y como `Player` ya es por temporada, **un `player_id` ya fija la temporada**. La estadística de jugador (§3.4) sale sin tocar `Season` |
 | `Round`, `Match`, `StandingRow` | **defendible, pero no** | Ahorraría **un** *join* indexado contra `Competition`, tabla diminuta (una decena de filas por temporada) |
+
+> **Enmendado por [D-101].** La razón de la fila `Team` se queda —el equipo no lleva `season_id`—, pero el
+> código de la federación ya no vive en él: es de la inscripción del equipo en cada competición.
 
 **Por qué el último caso no es [D-04].** Allí se denormalizaron los `team_id` de `Goal` porque el *join* era
 contra la tabla **grande** y estaba en el camino caliente de **todas** las consultas de desglose. Aquí el
@@ -2540,6 +2548,9 @@ dejar abierta una cuestión pendiente y **dejarla en el camino feliz**.
    columna en §3.2, no vuelve en `CompetitionResponse`). Era una instrucción de un solo uso. Mientras la
    ingesta creaba los propios daba igual —el primer barrido dejaba la marca—, pero con [D-66] ese instante
    es el **único** en que el enganche puede establecerse, así que tiene que quedar escrito.
+
+   > **Enmendado por [D-101].** Sigue escrito, pero en la inscripción del paso 2.b, no en `Team`: el código
+   > es el del equipo **en esa competición**, y el mismo equipo puede llevar otro la temporada siguiente.
 4. **`Round`, `Match`, `OpponentClub` y sus `Team`** — los trae la primera ingesta.
 
 **Por qué 202 y no 201.** Porque la primera ingesta **no puede ser síncrona**. En la RFFM el calendario es
@@ -2631,6 +2642,10 @@ que no ha cambiado: `federation_team_id` es **estable entre temporadas** —el m
 26/27 ([Anexo RFFM §F.3])—, así que duplicar la fila del equipo por temporada rompería la clave de
 emparejamiento de la ingesta. "Infantil A" tiene que seguir siendo la misma entidad año tras año. **Una
 tabla aparte deja `Team` intacto**: la temporada se afirma *sobre* el equipo, no *dentro* de él.
+
+> **Enmendado por [D-101].** El razonamiento sobre `Team.season_id` sigue en pie; la premisa del código no.
+> El número es estable, pero es la plaza de la federación, no el equipo del club. El código pasa a esta
+> tabla, a la fila de cada competición.
 
 **Decisión.** Entra la entidad **`TeamRegistration`** (tabla `team_registrations`), con `team_id` y
 `season_id` y **nada más**. Alcance: **solo equipos propios** (`Team.opponent_club_id IS NULL`) — un rival
@@ -4303,6 +4318,79 @@ escrituras dentro del servidor: con diez, una petición podría esperar varios s
 número**, como [D-67] pidió para su `202`, y por la opción B: primero las tres carreras seguras, después la
 cifra, y este test cambiado con ello.
 
+### D-101 · El código de la federación es de la inscripción del equipo en la competición, no del equipo
+
+**Lo que lo obligó a decidirse** (2026-10-18, al escribir la ficha de la rebanada 1 del backoffice). Tres
+decisiones daban por hecho que el `codigo_equipo` **no cambia de una temporada a otra**, y por eso lo ponían
+en `Team`: [D-27] le negó la columna al pivote, [D-28] se la negó a la temporada y [D-68] dejó `Team`
+«intacto» por la misma razón. Medido con la federación en directo, **la premisa es cierta para la federación
+y falsa para el club**:
+
+- **El número no cambia.** RFFM: tres equipos de Celtic en 25/26 y 26/27, con el mismo código aunque
+  subieron o bajaron ([Anexo RFFM §F.3.1]). FCF: 247 códigos juveniles que salen en las dos temporadas, y
+  los 247 son del mismo club ([Anexo FCF §C.13]).
+- **Pero el número no es «el Juvenil A».** Es **la plaza del club en una división**: la que se gana o se
+  pierde jugando. Los chicos cambian dentro del mismo código, y la letra la reparte el club cada año. Ejemplo
+  de Granollers: en 25/26, el A (`33710`) baja y el B (`33712`) se mantiene en Preferent. En 26/27, el
+  `33712` pasa a ser **el A** y el `33710` es **el B** de Primera.
+
+Con el código dentro de `Team`, el «Juvenil A» de ese club queda atado al `33710` para siempre. Cuando la
+temporada siguiente se engancha a la URL donde su A es el `33712`, el servidor contesta **409
+`ALREADY_LINKED_TO_FEDERATION`**. El club no podría pasar de temporada.
+
+**Qué es el equipo para nosotros.** El equipo es **del club**, y el club lo entiende como lo enseña la
+pantalla. El código de la federación es un **dato de fuera**, útil pero no necesario. La web no depende de
+él: nombre y letra son los del club, y la federación aporta partidos, clasificación y estado de ingesta.
+
+**La ventaja que lo hace sencillo.** **Dentro de una competición, el código no cambia en toda la temporada.**
+Se apunta una vez, en el enganche (que es lo que lanza la primera ingesta), y ya vale para toda la pasada.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **A — El código va en la inscripción** (`team_registrations`) | Una por (equipo, temporada, competición), la fila que el enganche ya crea ([D-68]) | **Elegida** |
+| B — El equipo **es** la plaza de la federación | Sin cambio de modelo, pero la letra se haría editable y el historial del «Juvenil A» mezclaría plazas distintas | Descartada: el equipo pasaría a ser de la federación, contra [D-66] |
+| C — Una tabla aparte (equipo, temporada, código) | Una fila por temporada, con su `UNIQUE` | Descartada: asume que liga y copa llevan el mismo código, que no está medido; y duplica la pareja que la inscripción ya tiene |
+
+**Decisión: A.**
+
+1. **`team_registrations.federation_team_id`**, texto y anulable. Es el código que el equipo lleva **en esa
+   competición**. La fila de junio, sin competición, no lo puede tener: `CHECK (competition_id IS NOT NULL OR
+   federation_team_id IS NULL)`.
+2. **`UNIQUE (competition_id, federation_team_id)`**: dentro de una competición, un código es de un solo
+   equipo propio. Entre competiciones o temporadas no se compara nada.
+3. **Un equipo propio no lleva código en `Team`**: `CHECK (opponent_club_id IS NOT NULL OR federation_team_id
+   IS NULL)`, y la misma regla en el `init` del Dominio. **Los rivales sí lo siguen llevando en `Team`**: no
+   se inscriben ([D-68]), y para nosotros un rival es exactamente la plaza que publica la federación. Su
+   `UNIQUE` se queda.
+4. **El enganche** escribe el código en la inscripción de esa competición, no en el equipo. La regla de
+   [D-67] se mantiene, pero **por competición**: otro código en la **misma** competición sigue siendo **409
+   `ALREADY_LINKED_TO_FEDERATION`**; en otra competición o en otra temporada, no. `FEDERATION_TEAM_ID_TAKEN`
+   salta si el código lo tiene un rival, como hasta ahora, o si lo tiene otro equipo propio **en esa
+   competición**.
+5. **La ingesta** reconoce al equipo propio por el código de su inscripción **en la competición que está
+   pasando**, y nunca le escribe código al equipo. Lo mismo para la clasificación.
+6. **La migración** pasa el código de cada equipo propio a sus inscripciones con competición, y lo borra del
+   equipo. Si un equipo propio tiene código y ninguna inscripción con competición, la migración **se para**
+   en vez de perderlo ([D-90]: va en una migración nueva).
+
+**Por qué por competición y no por temporada.** Es lo que la pasada necesita (recorre **una** competición) y
+lo que el esquema ya tiene como fila. Además, no hace falta suponer que liga y copa usan el mismo código.
+La FCF no lo ha confirmado, y en la RFFM no está medido.
+
+**Lo que se asume a cambio.**
+
+- **Un equipo rival al que la federación cambia la letra se queda con la vieja**, porque la letra es
+  identidad ([D-77]) y la ingesta no la toca. No rompe el emparejamiento, que va por código. **Queda
+  abierto**, y no es de esta decisión.
+- **Reclamar un rival como propio** (`PUT /teams/{teamId}/ownership`, sin fase) tendrá que mover su código
+  a la inscripción. Lo hará quien programe esa operación; el `CHECK` le obliga a no olvidarlo.
+- **`Team.federationTeamId` del contrato** vale siempre `null` en un equipo propio. El código del equipo
+  propio, cuando se lea, viene con la inscripción ([D-68]).
+
+**Enmienda** a [D-27] (punto 1), [D-28] (fila `Team`), [D-67] (paso 3 de la cascada) y [D-68] («Por qué
+tampoco es [D-28]»). Las tres primeras dijeron «estable entre temporadas»; lo que es estable es la plaza de
+la federación, no el equipo del club.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4440,3 +4528,6 @@ cifra, y este test cambiado con ello.
 [D-98]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-99]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

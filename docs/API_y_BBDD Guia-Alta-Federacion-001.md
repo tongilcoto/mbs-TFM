@@ -222,7 +222,7 @@ equivoque de número.
 
 ## 5. Lo que cada adaptador promete
 
-Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las seis están
+Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las siete están
 también en la cabecera de `FederationClient.swift`.
 
 | # | Promesa | Si no se cumple |
@@ -233,6 +233,7 @@ también en la cabecera de `FederationClient.swift`.
 | 4 | **Un `String` obligatorio que falte se entrega como `""`, no inventado** | `"Desconocido"` pasaría el Dominio como si fuera un dato (H-99) |
 | 5 | **La URL que no es suya se rechaza** | El enganche lee una coordenada de otra federación |
 | 6 | **El ranking de goleadores es completo**: todo el que ha marcado, sin *top-N*. Si la fuente pagina, el adaptador junta las páginas | La guarda de H-53 da por hecho que el total no baja nunca. Con un *top-N*, quien sale del corte **se retira** de la tabla o la pasada falla cada semana. **La FCF incumple esta premisa** (su lista es un *top*-50), y la propia guarda lo avisa: hay que revisarla antes de reutilizarla |
+| 7 | **Dentro de una competición, un equipo lleva el mismo `federationTeamID` toda la temporada.** Entre temporadas **no** se exige nada: el número es la plaza del club en la división, y la letra del club puede pasar a otro número ([D-101], [Anexo FCF §C.13]) | El enganche apunta un código que deja de salir: la pasada no reconoce al equipo propio y lo da de alta como rival |
 
 ---
 

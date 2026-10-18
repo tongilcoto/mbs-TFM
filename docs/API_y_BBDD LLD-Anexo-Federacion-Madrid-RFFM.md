@@ -167,12 +167,46 @@ Tres conclusiones, y las tres tienen consecuencia directa en el modelo:
    independiente de la temporada y el código lo acompaña toda su vida. Esta observación dejó a la antigua
    tabla pivote `Participation` sin la única columna que la habría justificado, y acabó motivando su
    eliminación ([D-27]).
+
+   > **Enmendado por [D-101]** (2026-10-18). El número es estable, pero designa la **plaza** del club en la
+   > división, no su «Juvenil A»: la letra puede pasar a otro número de un año a otro ([Anexo FCF §C.13]). El
+   > código ya no acompaña al equipo toda su vida: va en su inscripción de cada competición.
 3. **No depende de la competición.** `821` se repite aunque el equipo **cambió de división** entre campañas.
    Es identidad de equipo pura. → la división es atributo de *dónde compite*, no de *quién es* ([D-13]).
 
 **Corolario: casar por nombre no era solo frágil, era incorrecto.** Como el nombre es idéntico en ambas
 categorías, un emparejamiento por nombre habría **fusionado dos equipos distintos en uno**. Queda descartado
 como estrategia de ingesta, no meramente desaconsejado.
+
+### F.3.1 Comprobado otra vez, con tres equipos y en directo (2026-10-18)
+
+*Al escribir la ficha de la rebanada 1 del backoffice: si el código cambiara cada temporada, sería de la pareja
+(equipo, temporada) y no del equipo.* El número resultó estable, pero no basta: lo estable es la **plaza** del
+club en la división, no su «Juvenil A». Lo midió la FCF ([Anexo FCF §C.13]) y lo decide [D-101].
+
+**Cómo se midió**: `GET /api/competitions?temporada=NN&tipojuego=1` para las dos temporadas, después
+`/api/groups?competicion=…` de cada competición de **cadete y alevín masculino**, y el calendario de cada grupo
+(24 competiciones, todos sus grupos). En cada calendario, los `codigo_equipo_*` cuyo `equipo_*` dice CELTIC:
+
+| `codigo_equipo` | 2025/26 (`temporada=21`) | 2026/27 (`temporada=22`) | Qué cambió |
+|---|---|---|---|
+| **821** | PRIMERA DIVISION AUTONOMICA CADETE, Grupo 1 · `CELTIC CASTILLA C.F. 'A'` | PREFERENTE CADETE, Grupo 2 · `CELTIC CASTILLA C.F. 'A'` | **Bajó** de división |
+| **820** | SEGUNDA CADETE, Grupo 31 · `CELTIC CASTILLA C.F. 'B'` | PRIMERA CADETE, Grupo 4 · `CELTIC CASTILLA C.F. 'B'` | **Subió** de división |
+| **824** | PREFERENTE ALEVIN, Grupo 4 · `CELTIC CASTILLA C.F.` | PRIMERA ALEVIN, Grupo 8 · `CELTIC CASTILLA C.F. 'A'` | **Bajó**, y **el nombre ganó la letra** |
+
+(Salió también `26882347`, «CDE CELTIC TORREJON», en SEGUNDA CADETE de la 26/27: es otro club.)
+
+**Lo que confirma**: la conclusión 2 de arriba, ahora con **tres** equipos y no dos, y la 3 en los dos sentidos
+—subiendo y bajando—. Los códigos de competición y de grupo, en cambio, **sí** son de cada temporada: el mismo
+Cadete A juega en `24037548`/`24037549` en una y en `26737742`/`26737744` en la otra.
+
+**Lo que añade**: **la RFFM no siempre escribe la letra en el nombre del equipo**. El `824` era `CELTIC CASTILLA
+C.F.`, a secas, en la 25/26, y `… 'A'` en la 26/27, con el mismo código. No toca al emparejamiento normal, que va
+por código; sí al de reserva por nombre y categoría (§3.7 del LLD), que con ese nombre no encontraría la letra.
+
+**Para verlo**, el `820` en sus dos temporadas:
+`https://www.rffm.es/competicion/calendario?temporada=21&tipojuego=1&competicion=24037579&grupo=24037609` y
+`https://www.rffm.es/competicion/calendario?temporada=22&tipojuego=1&competicion=26737751&grupo=26737755`.
 
 ---
 
@@ -796,6 +830,8 @@ variables — con **`.JPG` en mayúsculas**, que una comparación sensible a caj
 [D-57]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-58]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo FCF]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo FCF §C.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
