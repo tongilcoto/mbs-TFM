@@ -9,7 +9,7 @@
 | cómo se arranca, qué comando hay, por qué falla algo | **este fichero** |
 | qué hace cada capa y por qué | [AGENTS.md](../AGENTS.md) · [LLD-001](../docs/API_y_BBDD%20LLD-001.md) |
 | por qué se decidió así | [bitácora `D-nn`](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) |
-| qué entregó cada fase y qué midió | [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) §4 |
+| qué entregó cada fase y qué midió | [Plan de desarrollo](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) §4 |
 
 Convención: **`§x` sin enlace se refiere al LLD**, y `D-nn` a la bitácora de decisiones. Las referencias a
 secciones de *este* fichero van siempre como enlace, para no confundirlas con las del LLD.
@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **612 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md). La
+(`D-95`). **612 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 

@@ -1,7 +1,7 @@
 # Backoffice · la web del club
 
 La web con la que el club gestiona sus equipos. Se construye pantalla a pantalla siguiendo su
-[plan](./Plan%20backoffice-001.md); cómo está hecha por dentro, en el
+[plan](../docs/Plan%20de%20desarrollo%20backoffice-001.md); cómo está hecha por dentro, en el
 [LLD del backoffice](../docs/Backoffice%20LLD-001.md).
 
 Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al servidor del backend

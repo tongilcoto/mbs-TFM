@@ -14,7 +14,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 
 - [docs/Project Seed.md](./docs/Project%20Seed.md) — origen y reglas del proyecto.
 - [docs/Project HLD-001.md](./docs/Project%20HLD-001.md) — diseño de alto nivel (artefactos y relaciones).
-- [docs/Plan de desarrollo-001.md](./docs/Plan%20de%20desarrollo-001.md) — **cómo se construye**: los dos
+- [docs/Plan de desarrollo backend pre backoffice-001.md](./docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) — **cómo se construye**: los dos
   bucles (alcance y TDD) y las fases **F0–F10**: andamiaje primero, después la ingesta.
 - [backend/Plan F10-001.md](./backend/Plan%20F10-001.md) — **la última fase, entregada el 2026-09-24,
   troceada en ciclos**: qué quedó decidido, el «Leer antes» de cada bloque y lo que se midió.
@@ -27,11 +27,12 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   con `launchd` y contra la base local de desarrollo. **Cerrado el 2026-10-11**: el agente dispara
   sábado, domingo y lunes y avisa si falla. La medida del `null` y el reintento (bloques M y R), **aplazados
   al despliegue**. Su manual de uso: [README §6.5](./backend/README.md#ingesta-programada).
-- [backoffice/Plan backoffice-001.md](./backoffice/Plan%20backoffice-001.md) — **la web del backoffice,
+- [docs/Plan de desarrollo backoffice-001.md](./docs/Plan%20de%20desarrollo%20backoffice-001.md) — **la web del backoffice,
   rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
   desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
   revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 83, repartidas). La
-  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Las fichas, por escribir. El primer intento, con fichas y decisiones sin revisar, se borró el
+  10, Estadísticas, necesita peticiones que **no están en el catálogo**. Desde la rebanada 1, cada una tiene
+  su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó. El primer intento, con fichas y decisiones sin revisar, se borró el
   2026-10-16; queda en la historia de git (commit `d6a16e6`).
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
@@ -347,7 +348,7 @@ Los tres primeros artefactos (base de datos, API backend y web backoffice) se al
 ## Estado actual
 
 Las **decisiones tecnológicas de BD/API y despliegue están tomadas** (ver ADR y resumen arriba) y el
-**backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo-001.md) están entregadas **F0**
+**backend camina**: del [Plan de desarrollo](./docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) están entregadas **F0**
 —`GET /v1/club` responde de HTTP a Postgres contra tenants aislados—, **F1**, que añade `Season` y
 `Competition` en dominio y persistencia, **F2**, el puerto `FederationClient` con el adaptador del
 calendario de la RFFM contra volcados reales (Plan §4.3), **F3**, la **política de *upsert*** de §3.7
@@ -385,7 +386,7 @@ falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al d
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
 **612 tests.** Y el **backoffice, empezado** el 2026-10-16 con su
-[plan](./backoffice/Plan%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
+[plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
 [backoffice/README.md](./backoffice/README.md). Y la segunda, el arnés de los escenarios (`R0.8`–`R0.13`),
@@ -603,7 +604,7 @@ docker compose down -v
   conformarlo y ponerle su renglón en `IdentifierTextTests`, que los enumera a mano porque Swift no deja
   recorrer los tipos que cumplen un protocolo.
 - **Lo que se queda sin arnés no es lo complicado: es lo que ningún montaje llega a ejercer** (medido el
-  2026-09-25, [Plan de desarrollo §4.1](./docs/Plan%20de%20desarrollo-001.md), detalle bajo `F10-ter`). Los
+  2026-09-25, [Plan de desarrollo §4.1](./docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md), detalle bajo `F10-ter`). Los
   cuatro campos que cruzaban la frontera sin una sola aserción eran **un anulable que todas las *fixtures*
   dejaban en nulo** —el escudo del `/preview`, el del club— y **un camino que la batería no provoca** —el
   `roundId`, que solo existe en la pasada de clasificación, y ésa no ocurre con un calendario vacío—. Ninguno
@@ -654,7 +655,7 @@ de tenant, porque es un dato que controla el cliente por completo.
 *claim* firmado. §6.1 dice que el *claim* es autoritativo, el subdominio solo enrutado, y que una discrepancia
 **se rechaza**; `TenantResolutionMiddleware` es el sitio donde eso se corregirá.
 
-Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo-001](./docs/Plan%20de%20desarrollo-001.md)**
+Próximos pasos: **el orden y el método los fija ahora el [Plan de desarrollo backend pre backoffice-001](./docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md)**
 (**F0** = esqueleto que camina con `GET /v1/club`; **F1** = `Season` y `Competition`, la *entrada* de la
 ingesta; **F2–F10** = la ingesta propiamente dicha).
 Con F0–F6, **F6-bis**, **F6-ter**, **F7**, **F8**, **F9-bis**, **F10-bis**, **F10** y **F10-ter**

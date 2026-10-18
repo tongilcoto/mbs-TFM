@@ -3,7 +3,7 @@
 > Un documento de estudio, no de referencia: explica **qué se montó en la rebanada 0 de la web y por qué**,
 > de lo general a lo concreto, para quien no viene del desarrollo web. Las reglas en sí están en el
 > [LLD del backoffice](../Backoffice%20LLD-001.md) y lo que se hizo paso a paso, en el
-> [plan](../../backoffice/Plan%20backoffice-001.md) (`R0.1`–`R0.13`).
+> [plan](../Plan%20de%20desarrollo%20backoffice-001.md) (`R0.1`–`R0.13`).
 >
 > Escrito el 2026-10-17, al cerrar la rebanada 0. Cada sección empieza con un resumen de dos líneas: se puede
 > leer solo eso y volver luego.

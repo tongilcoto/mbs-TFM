@@ -4,7 +4,7 @@
 >
 > Convención, la misma del resto del proyecto: **`§x` remite al [LLD-001](../docs/API_y_BBDD%20LLD-001.md)**,
 > `D-nn` a la [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md), y `Plan §x`
-> al [Plan de desarrollo-001](../docs/Plan%20de%20desarrollo-001.md). Las remisiones a **este** fichero van
+> al [Plan de desarrollo backend pre backoffice-001](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). Las remisiones a **este** fichero van
 > como `A-n` (bloque) o `H-nn` (hallazgo).
 >
 > **Este fichero es plan y libro a la vez**: los bloques de §5 se ejecutan de uno en uno y cada uno escribe

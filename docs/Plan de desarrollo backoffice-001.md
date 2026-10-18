@@ -1,20 +1,20 @@
-# Plan backoffice-001 · La web del club, rebanada a rebanada
+# Plan de desarrollo backoffice-001 · La web del club, rebanada a rebanada
 
 > Rehecho desde cero el **2026-10-15**, revisando pantalla por pantalla con el desarrollador. El primer
 > intento se borró el 2026-10-16; queda en la historia de git (commit `d6a16e6`).
 >
-> Parte de: el [ADR](../docs/ADR-Backoffice-001.md), cerrado el 2026-10-12; el
-> [LLD](../docs/Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su
-> [anexo de decisiones](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); la ingesta corriendo sola en
+> Parte de: el [ADR](./ADR-Backoffice-001.md), cerrado el 2026-10-12; el
+> [LLD](./Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su
+> [anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); la ingesta corriendo sola en
 > el Mac ([Plan launchd-001](../backend/Plan%20launchd-001.md)); y **604 tests** en el backend.
 >
-> **Convención de remisiones.** `LLD-B §x` es el [LLD del backoffice](../docs/Backoffice%20LLD-001.md) y
-> `DW-nn`, su [anexo de decisiones](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); `LLD §x`, el
-> [LLD del backend](../docs/API_y_BBDD%20LLD-001.md) y `D-nn`, su
-> [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md); `ADR-B`, el
-> [ADR del backoffice](../docs/ADR-Backoffice-001.md); `H-nn`, la
+> **Convención de remisiones.** `LLD-B §x` es el [LLD del backoffice](./Backoffice%20LLD-001.md) y
+> `DW-nn`, su [anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); `LLD §x`, el
+> [LLD del backend](./API_y_BBDD%20LLD-001.md) y `D-nn`, su
+> [bitácora de decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md); `ADR-B`, el
+> [ADR del backoffice](./ADR-Backoffice-001.md); `H-nn`, la
 > [auditoría 002](../backend/Plan%20de%20auditor%C3%ADa-002.md); y «el borrador», el
-> [borrador inicial](../docs/backoffice_initial_draft.md).
+> [borrador inicial](./backoffice_initial_draft.md).
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 
@@ -47,7 +47,8 @@ web y servidor funcionan en local, con el club sacado de la dirección (el borra
 
 | Qué | Dónde |
 |---|---|
-| **Qué se hace, en qué orden y cómo se comprueba**: el mapa, la ficha de cada pantalla, los pasos y su estado | Aquí |
+| **Qué se hace, en qué orden y cómo se comprueba**, para todo el backoffice: el mapa, las rebanadas y el estado de cada una | Aquí |
+| **La ficha de una rebanada, sus pasos y lo que se comprobó en cada uno**, en la web y en el servidor | Su propio plan, desde la rebanada 1: `docs/Plan de desarrollo R<n> <nombre>-001.md` |
 | Una regla que vale para **todas** las pantallas | LLD-B, en su apartado y en un commit aparte (LLD-B §E.1) |
 | El **porqué** de una decisión que solo afecta a la web | Anexo de decisiones del backoffice (`DW-nn`) |
 | El **porqué** de una decisión que cambia **lo que responde el servidor**, aunque la pida una pantalla | Bitácora del backend (`D-nn`), porque las apps del móvil usarán las mismas respuestas |
@@ -68,7 +69,7 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
 
 1. **Los escenarios de la ficha, escritos y en rojo.** Rojo **porque falta la pantalla**, no porque el arnés
    no arranque: un escenario que falla al levantar el servidor no ha probado nada (H-07).
-2. **Lo que le falta al servidor**, con el método del backend de siempre (Plan de desarrollo §5.1): prueba →
+2. **Lo que le falta al servidor**, con el método del backend de siempre (plan de desarrollo backend pre backoffice, §5.1): prueba →
    esqueleto que devuelve **mal a propósito** → rojo de aserción → implementación → mutación con
    `Tools/Mutate`. `REQUIRE_DB=1 swift test`, nunca `swift test` a secas.
 3. **Las piezas de la web, con Vitest**, con el mismo bucle: prueba → **esqueleto que pinta mal a
@@ -86,8 +87,10 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
 3. **Un escenario que no pudo arrancar falla; nunca se salta** (ADR-B, decisión 6).
 4. **Lo que se descubre y no venía en la ficha va en su propio commit**, y cada commit deja el árbol en verde
    por sí mismo.
-5. **Si un cambio del servidor toca más de un *target* o cambia el catálogo, es mini-fase**, con su renglón
-   en el [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) (regla 2 de la auditoría).
+5. **Si un cambio del servidor toca más de un *target* o cambia el catálogo, es mini-fase** (regla 2 de la
+   auditoría), y se apunta **solo en el plan de su rebanada**. Hasta la rebanada 0 llevaba además su renglón en
+   el [plan de desarrollo backend pre backoffice](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md),
+   que es donde está `R0.8`; desde la rebanada 1, ya no (decidido con el desarrollador el 2026-10-18).
 6. **Explicar en lenguaje llano**: quien revisa es ingeniero de pruebas, no desarrollador web.
 
 ---
@@ -234,8 +237,13 @@ de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
 
 ## 5. Las rebanadas, en detalle
 
-Cada rebanada se detalla aquí **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
+Cada rebanada se detalla **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
 `R<rebanada>.<paso>`.
+
+**Desde la rebanada 1, cada una tiene su propio plan** (decidido con el desarrollador el 2026-10-18): toca la
+web y también el servidor, y su ficha, sus pasos y su registro no caben aquí sin enterrar el mapa. Se llama
+`docs/Plan de desarrollo R<n> <nombre>-001.md`, y aquí queda un renglón con su enlace y su estado (§6). La
+rebanada 0 se quedó escrita aquí abajo, tal como se hizo.
 
 ### Rebanada 0 · El andamiaje
 
@@ -334,10 +342,10 @@ su comprobación.
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 
 - **Testing Library para Vue trae una versión vieja de su parte común** (`R0.2`, 2026-10-16): no reconocía
-  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
 - **`openapi-typescript` no acepta TypeScript 6** (`R0.3`, 2026-10-16): la plantilla de Vite lo trajo, y la
   herramienta que fabrica los tipos del catálogo solo acepta TypeScript 5. Se baja a la 5.9.3 →
-  [DW-16](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+  [DW-16](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
 - **La RFFM contestó `null` a los goleadores de PRIMERA ALEVIN durante unos minutos** (`R0.8`, 2026-10-16): al
   comprobar la ingesta real sin la variable, las dos pasadas seguidas (22:09 y 22:11) fallaron en los goleadores
   de esa competición, y un `curl` directo a la RFFM a las 22:12 también devolvió `null`. **Poco después la misma

@@ -1741,7 +1741,7 @@ toda la estadística.
 
 ### D-74 · La coordenada de la FCF deja de ser un problema: su web nueva tiene la forma de la RFFM
 
-**Contexto.** El [Plan de desarrollo](./Plan%20de%20desarrollo-001.md) §7.2 y §10 dejaron abierta una
+**Contexto.** El [Plan de desarrollo](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) §7.2 y §10 dejaron abierta una
 cuestión que había que resolver en **F2**, antes de escribir el segundo adaptador: **cómo encaja la
 coordenada de la FCF en `federation_competition_id` y `federation_group_id`**, dos columnas cuya forma se
 diseñó mirando a Madrid, donde la URL del calendario son cuatro parámetros sueltos ([Anexo RFFM §F.1]).
@@ -1805,7 +1805,7 @@ escribir un adaptador, revalidar su anexo** — cuesta media hora y aquí ha evi
 
 **Esta entrada es la revisión que [D-74] dejó apuntada, y toca hacerla ahora**: F3 es la fase que implementa
 [D-56], y el plan es explícito en que una regla no se da por buena con una razón caducada
-([Plan §10](./Plan%20de%20desarrollo-001.md), cuestión 1).
+([Plan §10](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md), cuestión 1).
 
 **Lo que se cayó.** [D-56] construyó la regla sobre un caso concreto: *«cuando un partido se juega, la página
 de la FCF deja de publicar la fecha y la hora»* ([Anexo FCF §C.6]), de donde salía que pisar «siempre»

@@ -13,7 +13,7 @@
 >
 > Convención, la misma del resto del proyecto: **`§x` remite al [LLD-001](../docs/API_y_BBDD%20LLD-001.md)**,
 > `D-nn` a la [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md), `Plan §x`
-> al [Plan de desarrollo-001](../docs/Plan%20de%20desarrollo-001.md) y `C-n.m` al
+> al [Plan de desarrollo backend pre backoffice-001](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) y `C-n.m` al
 > [Plan F10-001](./Plan%20F10-001.md). **La numeración sigue la de 001 y no se reinicia**: los bloques de este
 > fichero van de **A-8** en adelante y los hallazgos de **H-51** en adelante, para que `A-3` o `H-23` sigan
 > significando una sola cosa en todo el repositorio.
