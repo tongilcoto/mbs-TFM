@@ -421,9 +421,10 @@ Y en TablePlus, sobre `club_celtic-castilla`: `select label, start_date, end_dat
 
 - **No son errores** (LLD-B §3.1): no van en rojo ni con icono de aviso.
 - **El primer mensaje no promete cómo nace una temporada.** El borrador decía «Se crea al dar de alta el primer
-  equipo», y hoy no es así: `POST /teams` exige la temporada (`D-68`, punto 2) y las temporadas nacen del
-  enganche (`D-67`), que necesita un equipo. Cómo se rompe ese círculo lo decide la rebanada 2 (plan del
-  backoffice, §4), que añadirá a este mensaje el botón y su explicación.
+  equipo», y no es así: `POST /teams` exige la temporada (`D-68`, punto 2), así que la temporada tiene que
+  existir antes. Hoy solo la crea la cascada del enganche (`D-67`), que necesita un equipo; el catálogo tiene
+  además `POST /seasons` (`createSeason`), sin activar. Cómo nace la primera temporada lo decide la rebanada 2
+  (plan del backoffice, §4), que añadirá a este mensaje el botón y su explicación.
 - **El segundo no dice «todavía»**: con el selector se puede elegir una temporada terminada. Es raro que pase,
   porque el enganche crea la temporada y la inscripción a la vez; pasa si se retira la inscripción
   (`DELETE /teams/{teamId}/registrations/{seasonId}`) o si la temporada se creó con `seed-competition`.
