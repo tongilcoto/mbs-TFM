@@ -19,7 +19,7 @@
 >
 > **Estado del documento: decisiones revisadas.** Las siete de la §4 se revisaron una a una con el desarrollador
 > el 2026-10-18, y las secciones 2 a 5 están escritas con lo acordado. La §6 (escenarios) es una **lista
-> provisional**; **falta la §7 (pasos)**, que se escribe más adelante. Nada se construye hasta que esté.
+> provisional**, y la §7 (pasos), revisada el mismo día. Se empieza por `R1.1`.
 
 ---
 
@@ -544,7 +544,58 @@ cambiando mientras se construye. Al final de cada escenario, axe en los dos modo
 
 ## 7. Los pasos
 
-*Pendiente: se escribe más adelante.*
+Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cada uno se para** y se espera el visto
+bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
+solo, y lo que no venga en el plan va en su propio commit.
+
+### A · Los documentos de las decisiones
+
+Antes del código, para que el código se escriba contra algo ya escrito.
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **R1.1** | Backend: `D-102` (decisión 1), la enmienda de `D-89` (decisión 2), H-58 cerrado en la auditoría con un enlace aquí, y el LLD §9.12 *resuelta* | El desarrollador lo revisa | Un commit |
+| **R1.2** | Web: `DW-17` y `DW-18` (decisión 4), y el LLD-B §4.1 (el 502 sin código), §4.5 *b* (sí toca Swift), §6.5 (la portada) y §11 (retener la petición y parar el servidor de pruebas) | El desarrollador lo revisa | Un commit aparte (LLD-B §E.1) |
+| **R1.3** | El plan del backoffice (§4): `listTeams` a la rebanada 12, **85** operaciones, y la paleta por club como pendiente | El desarrollador lo revisa | Un commit |
+
+### B · El catálogo (la mini-fase)
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **R1.4** | `openapi.yaml`: las dos lecturas de la pareja, `pending` y `previousIngestionHealth` con la descripción rehecha, la lista cerrada de códigos y el formato de `detail`. Y en el mismo paso, la función `problem(...)` y sus 8 llamadas, porque sin ellas no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, y los tipos de la web regenerados (`schema.d.ts`) con `npm run build` en verde | Un commit |
+| **R1.5** | El censo comprueba que cada código que emite el servidor está en la lista | Sus tests (`swift test --package-path Tools/Census`), y un código quitado a propósito de la lista lo hace salir con `1` | Un commit |
+
+### C · El servidor
+
+Con el método del backend (§5): prueba → esqueleto → rojo de aserción → implementación → mutación.
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **R1.6** | `listSeasons`, con su filtro | Tests de los niveles que toque, mutación con su catálogo, y `curl` contra la base de trabajo | Un commit |
+| **R1.7** | `listCompetitions`, con sus cuatro filtros, **sin** el estado de la ingesta | Lo mismo | Un commit |
+| **R1.8** | **El estado de la ingesta**: la regla de la decisión 2 entera (cada clase, el reloj que vuelve a cero, `pending`, `previousIngestionHealth`, el orden). Va en un paso propio porque es la parte más delicada | Un test por caso del orden, con valores distintos entre sí; mutación con su catálogo; y la base de trabajo mirada en TablePlus contra lo que dice `curl` (el Alevín) | Un commit |
+| **R1.9** | `listSeasonRegistrations`, con la lectura por temporada del repositorio de inscripciones | Tests, mutación y `curl` | Un commit |
+| **R1.10** | Cierre del servidor: el recuento leído del XML, el censo con las tres operaciones (huecos nuevos con su test o en `known-gaps.json`), y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
+
+### D · La web
+
+De las piezas comunes a la pantalla.
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **R1.11** | `src/api/errors.ts`: un mensaje para cada código de la lista, el genérico por familia y la regla del 502/503/504 sin código | Vitest; y un código quitado de la tabla hace fallar `npm run build` | Un commit |
+| **R1.12** | La paleta (`src/theme/palette.ts`), Aura con la paleta encima y el interruptor de modo | Vitest, y la web abierta en los dos modos | Un commit |
+| **R1.13** | El marco: el club al arrancar, la cabecera, el menú, la página entera de error, «Esta página no existe» y «Saltar al contenido» | Vitest, y la web abierta contra el servidor del desarrollador | Un commit |
+| **R1.14** | `src/theme/format.ts`: la fecha y la hora de un instante | Vitest | Un commit |
+| **R1.15** | La portada: la tabla, los cuatro estados y el selector de temporada | Vitest, y la web abierta con el club del desarrollador | Un commit |
+| **R1.16** | El arnés: retener una petición, y parar y arrancar el servidor de pruebas (8081) | Un escenario de prueba que lo use, y el 8080 del desarrollador sin tocar | Un commit |
+
+### E · Los escenarios y el cierre
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **R1.17** | Los `.feature` de la §6, con la *skill* de escenarios del desarrollador | `npm run e2e` en verde, con axe en los dos modos | Un commit |
+| **R1.18** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
 
 ## 8. Estado
 
