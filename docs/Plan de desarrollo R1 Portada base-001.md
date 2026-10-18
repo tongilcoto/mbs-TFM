@@ -564,7 +564,7 @@ Antes del código, para que el código se escriba contra algo ya escrito.
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
-| **R1.4** | `openapi.yaml`: las dos lecturas de la pareja, `pending` y `previousIngestionHealth` con la descripción rehecha, la lista cerrada de códigos y el formato de `detail`. Y en el mismo paso, la función `problem(...)` y sus 8 llamadas, porque sin ellas no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, y los tipos de la web regenerados (`schema.d.ts`) con `npm run build` en verde | Un commit |
+| **R1.4** | `openapi.yaml`: las dos lecturas de la pareja, `pending` y `previousIngestionHealth` con la descripción rehecha, la lista cerrada de códigos y el formato de `detail`. Y en el mismo paso, la función `problem(...)` y sus 8 llamadas, porque sin ellas no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, y los tipos de la web regenerados (`schema.d.ts`) con `npm run build` en verde. Y las cifras de **83 operaciones** que describen el catálogo de hoy pasan a 85 (`AGENTS.md`, el README del backend, `SpecConventionTests` y el comentario de `openapi-generator-config.yaml`), buscadas por el número | Un commit |
 | **R1.5** | El censo comprueba que cada código que emite el servidor está en la lista | Sus tests (`swift test --package-path Tools/Census`), y un código quitado a propósito de la lista lo hace salir con `1` | Un commit |
 
 ### C · El servidor
@@ -590,7 +590,7 @@ De las piezas comunes a la pantalla.
 | **R1.13** | El marco: el club al arrancar, la cabecera, el menú, la página entera de error, «Esta página no existe» y «Saltar al contenido» | Vitest, y la web abierta contra el servidor del desarrollador | Un commit |
 | **R1.14** | `src/theme/format.ts`: la fecha y la hora de un instante | Vitest | Un commit |
 | **R1.15** | La portada: la tabla, los cuatro estados y el selector de temporada | Vitest, y la web abierta con el club del desarrollador | Un commit |
-| **R1.16** | El arnés: retener una petición, y parar y arrancar el servidor de pruebas (8081) | Un escenario de prueba que lo use, y el 8080 del desarrollador sin tocar | Un commit |
+| **R1.16** | El arnés: retener una petición, y parar y arrancar el servidor de pruebas (8081) | Un escenario de prueba que lo use, y el servidor del desarrollador (8765) sin tocar | Un commit |
 
 ### E · Los escenarios y el cierre
 
@@ -604,7 +604,8 @@ De las piezas comunes a la pantalla.
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
 | **R1.1** | ✅ 2026-10-18 (`771b490`) | `D-102` y la enmienda de `D-89` en la bitácora, con sus notas «Enmendado por» en `D-68` y `D-89`; el LLD con las dos lecturas en las tablas de `Season` y `Team`, el estado por clase en §3.4 y §9.12 resuelta; H-58 decidido. Revisado por el desarrollador. Al leer salió que `POST /seasons` ya está en el catálogo: corregida la decisión 6 aparte (`51e7017`) |
-| **R1.2** | ✅ 2026-10-18 | `DW-17` y `DW-18` en el anexo; el LLD-B §4.1 y §4.4 (el 502, 503 o 504 sin código), §4.5 *b* (sí toca Swift, y el censo), §6.5 (la portada y la temporada más reciente), §11.5 nuevo y §E.2. Revisado por el desarrollador |
+| **R1.2** | ✅ 2026-10-18 (`856408d`) | `DW-17` y `DW-18` en el anexo; el LLD-B §4.1 y §4.4 (el 502, 503 o 504 sin código), §4.5 *b* (sí toca Swift, y el censo), §6.5 (la portada y la temporada más reciente), §11.5 nuevo y §E.2. Revisado por el desarrollador |
+| **R1.3** | ✅ 2026-10-18 | El plan del backoffice: la fila de la rebanada 1 con `listSeasonRegistrations` 🆕 y `listCompetitions` ⚠️; `getTeamRegistration` 🆕 en la 4; `listTeams` a la 12; **85** operaciones (83 repartidas), también en `AGENTS.md`; la paleta por club como pendiente; la portada en ámbar en el mapa, y la rebanada 1 en §6 con su enlace. Revisado por el desarrollador |
 
 **Punto de partida: 632 tests en el backend, 4 en la web.**
 

@@ -26,7 +26,7 @@
 necesita** (el borrador, §2). No se hace «todo el servidor y luego toda la web»: cada unidad de trabajo es una
 **rebanada**, que entrega una pantalla funcionando de punta a punta.
 
-Hoy el servidor sirve **6 de las 83 operaciones** del catálogo. Cada rebanada activa las suyas, y una operación
+Hoy el servidor sirve **6 de las 85 operaciones** del catálogo (las dos de `D-102` entran en él con `R1.4`). Cada rebanada activa las suyas, y una operación
 **solo se activa con la rebanada que la usa**.
 
 **Cada rebanada se da por terminada cuando:**
@@ -121,7 +121,7 @@ flowchart LR
 
     subgraph EQUIPOS["Equipos"]
         direction TB
-        P["<b>Portada</b> · R1, R5<br/>/<br/>R1: equipos, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
+        P["<b>Portada</b> · R1, R5<br/>/ · ?temporada=2025-26<br/>R1: equipos de una temporada, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
         A["<b>Alta de equipo</b> · R2<br/>/equipos/nuevo"]
         F["<b>Enganche con la federación</b> · R3<br/>/equipos/:id/federacion"]
     end
@@ -175,7 +175,8 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,mTem,mCom,mRiv,mIng,mClub,mPer,P,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP,NF pendiente
+    class mEq,P,NF enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
 
@@ -198,10 +199,10 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | Rebanada | Pantalla afectada | Endpoints afectados |
 |---|---|---|
 | **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
-| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos, competición y estado de la ingesta | `getClub` ● · `listSeasons` · `listTeams` ⚠️ — su respuesta no dice en qué competición juega cada equipo · `listCompetitions` |
+| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` · 🆕 `listSeasonRegistrations` — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ⚠️ — le faltan `pending` y `previousIngestionHealth` (enmienda de `D-89`) |
 | **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
-| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `listRounds` · `getRound` · `listMatches` · `getStanding` |
+| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | 🆕 `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
@@ -209,14 +210,15 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
 | **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
-| **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` |
+| **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
 | **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` |
 | **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
 | **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
 | — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
 
-Están las **83 operaciones** del catálogo: 81 repartidas y 2 sin pantalla a propósito. Una operación **solo se
+Están las **85 operaciones** del catálogo: 83 repartidas y 2 sin pantalla a propósito. *(Eran 83 hasta `D-102`, que
+añadió las dos lecturas del equipo en una temporada.)* Una operación **solo se
 activa con la rebanada que la usa**.
 
 **Por qué este orden:**
@@ -232,6 +234,11 @@ activa con la rebanada que la usa**.
 
 **Pendiente de confirmar:** si la salida a la primera temporada (rebanada 2) es crearla desde la web, una parte
 de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
+
+**Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
+La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
+bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
+elige el club puede no llegar al contraste mínimo**: habrá que comprobarla al guardarla, no al pintarla.
 
 ---
 
@@ -318,6 +325,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 3/18 | 2026-10-18 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

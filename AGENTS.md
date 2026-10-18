@@ -30,7 +30,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
 - [docs/Plan de desarrollo backoffice-001.md](./docs/Plan%20de%20desarrollo%20backoffice-001.md) — **la web del backoffice,
   rebanada a rebanada**, **rehecho desde cero el 2026-10-15** revisando pantalla por pantalla con el
   desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
-  revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 83, repartidas). La
+  revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 85, repartidas; eran 83 hasta `D-102`). La
   10, Estadísticas, necesita peticiones que **no están en el catálogo**. Desde la rebanada 1, cada una tiene
   su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó. El primer intento, con fichas y decisiones sin revisar, se borró el
   2026-10-16; queda en la historia de git (commit `d6a16e6`).
