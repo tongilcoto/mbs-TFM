@@ -2,7 +2,7 @@
 
 Cuenta dos cosas de la frontera HTTP y las compara con los huecos que ya se saben:
 
-1. **Códigos `Problem`**: cada `code: "X"` de `Sources/`, y qué ficheros de `Tests/` lo nombran entre comillas.
+1. **Códigos `Problem`**: cada `code: "X"` y `code: .X` de `Sources/`, y qué ficheros de `Tests/` lo nombran.
 2. **Campos del contrato**: los que un cliente alcanza desde las respuestas **2xx** de las operaciones del
    `filter` del generador, y cuáles nombra algún test de `Tests/APITests/`.
 
@@ -38,8 +38,8 @@ tres de nueve motivos estaban mal, porque se escribieron de memoria.
 
 | Qué | Cómo | Por qué así |
 |---|---|---|
-| Código emitido | `code: "[A-Z_]+"` en `Sources/`, línea a línea | Es el `grep` de A-14 (H-72). Un código interpolado o sacado de una tabla no saldría; hoy los 31 son literales |
-| Código nombrado | `"X"` **entre comillas** en `Tests/` | Las comillas son el borde: `"NOT_FOUND"` no está dentro de `"TEAM_NOT_FOUND"` |
+| Código emitido | `code: "[A-Z_]+"` o `code: .[A-Z_]+` en `Sources/`, línea a línea | Es el `grep` de A-14 (H-72), más la forma de los *handlers* desde R1.4, que reciben el código de la lista. Un código interpolado o sacado de una condición no saldría: hoy, solo `NOT_FOUND` |
+| Código nombrado | `"X"` **entre comillas**, o `.X` con borde de identificador, en `Tests/` | Las comillas son el borde: `"NOT_FOUND"` no está dentro de `"TEAM_NOT_FOUND"`. Con `.X`, el punto es el de delante y el de un identificador de Swift el de detrás: `.TEAM_NOT_FOUND` no nombra ni `NOT_FOUND` ni `TEAM` |
 | Operaciones | `filter.operations` de `openapi-generator-config.yaml` | Es el alcance entregado. Una operación que no está en el *spec* es **error**, no un censo más corto |
 | Respuestas | toda clave que empieza por `2` (el enganche y el disparador responden **202**), resolviendo `components/responses` | Las de error tienen forma `Problem`, y lo que se censa de ellas es el código |
 | Recorrido | `$ref`, `allOf`/`oneOf`/`anyOf`, `properties`, `items`, `additionalProperties`, en profundidad | |
@@ -59,6 +59,6 @@ tres de nueve motivos estaban mal, porque se escribieron de memoria.
 
 ## Los tests del censo
 
-17 tests en `Tests/CensusCoreTests/`, uno por regla. `Tools/Mutate/Catalogs/census.json` rompe cada regla en el
-código del censo y exige que caiga su test: **14/14**. **No entran en la batería del backend**, por lo mismo que
+20 tests en `Tests/CensusCoreTests/`, uno por regla. `Tools/Mutate/Catalogs/census.json` rompe cada regla en el
+código del censo y exige que caiga su test: **17/17** (eran 14/14 hasta el arreglo de R1.4). **No entran en la batería del backend**, por lo mismo que
 los de `Tools/Mutate`.

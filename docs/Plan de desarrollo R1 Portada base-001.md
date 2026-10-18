@@ -610,4 +610,10 @@ De las piezas comunes a la pantalla.
 
 **Punto de partida: 632 tests en el backend, 4 en la web.**
 
-**Hallazgos de la rebanada 1** (no venían en el plan; cada uno en su commit): ninguno todavía.
+**Hallazgos de la rebanada 1** (no venían en el plan; cada uno en su commit):
+
+- **R1.4 rompió el censo, y no se vio en R1.4** (se vio al empezar R1.5). Los *handlers* pasaron a escribir
+  `code: .X` y los tests a comparar con `.X`, y el censo solo reconocía `code: "X"` y `"X"`: contaba 25 códigos
+  en vez de 31, daba 15 huecos nuevos falsos y salía con `1`. R1.4 no pasaba el censo en su «Cómo se comprueba».
+  Se arregla en el propio censo, antes de R1.5: reconoce `code: .X` en `Sources/` y `.X` en `Tests/`. Tests del
+  censo: 17 → 20; mutación: K15–K17 nuevos, y K1 y K3 al día porque sus líneas cambiaron, **17/17**.

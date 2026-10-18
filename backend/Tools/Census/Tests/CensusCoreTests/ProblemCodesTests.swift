@@ -43,4 +43,33 @@ struct ProblemCodesTests {
         let tests = [SourceFile(path: "T.swift", text: #"#expect(code == "TEAM_NOT_FOUND")"#)]
         #expect(filesMentioning(code: "NOT_FOUND", in: tests).isEmpty)
     }
+
+    // ── Desde R1.4: el código como caso de la lista del catálogo (`.X`) ──────
+
+    @Test("`code: .X` también es un código emitido: las llamadas a `problem(...)` de los handlers (R1.4)")
+    func emittedAsContractCase() {
+        let handler = SourceFile(path: "Sources/HTTPAdapter/IngestionHandler.swift", text: """
+            return .badRequest(.init(body: .application_problem_plus_json(
+                Self.problem(status: 400, code: .INVALID_LIMIT, title: "…"))))
+            """)
+        #expect(emittedProblemCodes(in: [handler]) == [CodeEmission(
+            code: "INVALID_LIMIT", file: "Sources/HTTPAdapter/IngestionHandler.swift", line: 2)])
+    }
+
+    @Test("un test nombra el código si lo escribe como caso de la lista (`.X`)")
+    func mentionedAsContractCase() {
+        let tests = [
+            SourceFile(path: "Tests/APITests/A.swift", text: "#expect(problem.code == .TEAM_NOT_FOUND)"),
+            SourceFile(path: "Tests/APITests/B.swift", text: "// TEAM_NOT_FOUND sin punto ni comillas no cuenta"),
+        ]
+        #expect(filesMentioning(code: "TEAM_NOT_FOUND", in: tests) == ["Tests/APITests/A.swift"])
+    }
+
+    @Test("con `.X`, ni la cola ni la cabeza de otro código cuentan (`.NOT_FOUND` y `.TEAM` en `.TEAM_NOT_FOUND`)")
+    func memberHasBothBorders() {
+        let tests = [SourceFile(path: "T.swift", text: "#expect(problem.code == .TEAM_NOT_FOUND)")]
+        #expect(filesMentioning(code: "NOT_FOUND", in: tests).isEmpty)
+        #expect(filesMentioning(code: "TEAM", in: tests).isEmpty)
+    }
+
 }
