@@ -242,7 +242,7 @@ struct FederationLinkEndpointTests {
         category: TeamCategory = .cadete,
         gender: Gender = .masculino,
         modality: Modality = .futbol11,
-        federationTeamID: String? = nil,
+        linkedInTheGroup: String? = nil,
         federation: FederationCode = .rffm,
         federationFailure: FederationError? = nil,
         unreadableURL: Bool = false,
@@ -271,8 +271,25 @@ struct FederationLinkEndpointTests {
                     try Team(
                         id: teamID, opponentClubID: nil,
                         category: category, letter: "A", gender: gender, modality: modality,
-                        federationTeamID: federationTeamID,
                         createdAt: now, updatedAt: now))
+            }
+
+            // **Ya enganchado** es, desde `D-101`, una inscripción con código en
+            // la competición del grupo que la URL apunta — no un código en el
+            // equipo.
+            if let code = linkedInTheGroup {
+                let competitionID = try await seedExistingCompetition(
+                    ageCategory: category, gender: gender, modality: modality, on: app)
+                try await unitOfWork(app).withRepositories(actor: actor()) { repositories in
+                    let team = try #require(try await repositories.teams.find(teamID))
+                    let competition = try #require(
+                        try await repositories.competitions.find(competitionID))
+                    try await repositories.teamRegistrations.save(
+                        try TeamRegistration(
+                            id: TeamRegistrationID(raw: UUID()), team: team,
+                            seasonID: competition.seasonID, competitionID: competitionID,
+                            federationTeamID: code, createdAt: now, updatedAt: now))
+                }
             }
 
             try await body(app, teamID)
@@ -577,10 +594,14 @@ extension FederationLinkEndpointTests {
                     #expect(group?.federationGroupID == "24037549")
                     #expect(group?.seasonID.raw == season)
 
-                    // El enganche propiamente dicho: el equipo sale de aquí con
-                    // el código que el administrador reconoció en `teams[]`.
+                    // El enganche propiamente dicho: la inscripción de esa
+                    // competición sale de aquí con el código que el administrador
+                    // reconoció en `teams[]`, y el equipo sin él (`D-101`).
                     let team = try await repositories.teams.find(teamID)
-                    #expect(team?.federationTeamID == "3349086")
+                    #expect(team?.federationTeamID == nil)
+                    let linked = try await repositories.teamRegistrations
+                        .list(competitionID: CompetitionID(raw: competition))
+                    #expect(linked.map(\.federationTeamID) == ["3349086"])
 
                     // Y la inscripción de [D-68], que la cascada escribe para que
                     // **todo equipo propio con calendario esté inscrito por
@@ -760,7 +781,7 @@ extension FederationLinkEndpointTests {
     /// URL antes de confirmar.
     @Test("enganchar un equipo ya emparejado es 409 (D-66 · C-E.5)")
     func relinkingIsRejected() async throws {
-        try await Self.withSeededTeam(federationTeamID: "1111111") { app, teamID in
+        try await Self.withSeededTeam(linkedInTheGroup: "1111111") { app, teamID in
             try await app.testing().test(
                 .POST,
                 "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
@@ -779,8 +800,11 @@ extension FederationLinkEndpointTests {
                 #expect(problem.detail?.contains("3349086") == true)
             }
 
-            // Y no se ha escrito nada: el 409 llega **antes** de la cascada.
-            #expect(try await Self.rowCount("seasons", on: app) == 0)
+            // Y no se ha escrito nada: el 409 llega **antes** de la cascada. La
+            // temporada, la competición y la inscripción son las sembradas.
+            #expect(try await Self.rowCount("seasons", on: app) == 1)
+            #expect(try await Self.rowCount("team_registrations", on: app) == 1)
+            #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }
 }
@@ -1160,16 +1184,22 @@ extension FederationLinkEndpointTests {
     @Test("un código que ya es de otro equipo es 409, no un 23505 (D-67 · C-E.10)")
     func aTakenFederationCodeIsRejected() async throws {
         try await Self.withSeededTeam { app, teamID in
-            // El vecino que ya tiene el código. En la base de trabajo era un
-            // **rival** creado por la pasada; aquí basta otro equipo del club,
-            // que choca contra el mismo `uq:teams.federation_team_id`.
+            // El vecino que ya tiene el código: un **rival** creado por la
+            // pasada, como en la base de trabajo. Desde `D-101` un equipo propio
+            // no lleva código en `teams`, así que es el único que choca contra
+            // `uq:teams.federation_team_id`.
             let neighbour = TeamID(raw: UUID())
             try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) {
                 repositories in
+                let club = try OpponentClub(
+                    id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR",
+                    shortName: "Galapagar", slug: try Slug("c-d-galapagar"),
+                    createdAt: Self.now, updatedAt: Self.now)
+                try await repositories.opponentClubs.save(club)
                 try await repositories.teams.save(
                     try Team(
-                        id: neighbour, opponentClubID: nil,
-                        category: .infantil, letter: "A",
+                        id: neighbour, opponentClubID: club.id,
+                        category: .cadete, letter: "A",
                         gender: .masculino, modality: .futbol11,
                         federationTeamID: "3349086",
                         createdAt: Self.now, updatedAt: Self.now))
@@ -1234,7 +1264,7 @@ extension FederationLinkEndpointTests {
     /// un reenganche idempotente.
     @Test("pero reenganchar al MISMO código sigue siendo idempotente (C-E.10)")
     func relinkingToTheSameCodeIsIdempotent() async throws {
-        try await Self.withSeededTeam(federationTeamID: "3349086") { app, teamID in
+        try await Self.withSeededTeam(linkedInTheGroup: "3349086") { app, teamID in
             try await app.testing().test(
                 .POST,
                 "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
@@ -1245,6 +1275,59 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .accepted)
             }
+        }
+    }
+}
+
+extension FederationLinkEndpointTests {
+
+    /// **El caso que obligó a `D-101`, contra Postgres y por HTTP.** El equipo
+    /// se enganchó la temporada pasada con un código, y en ésta su plaza es otra
+    /// ([Anexo FCF §C.13], Granollers). Antes daba **409
+    /// `ALREADY_LINKED_TO_FEDERATION`**; ahora es otra inscripción con su código,
+    /// y ningún `UNIQUE` del esquema lo impide.
+    @Test("la temporada siguiente se engancha con otro código: 202 (D-101)")
+    func nextSeasonLinksWithAnotherCode() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) {
+                repositories in
+                let team = try #require(try await repositories.teams.find(teamID))
+                let lastSeason = try Season(
+                    id: SeasonID(raw: UUID()), label: try SeasonLabel("2024/25"),
+                    federationSeasonID: "20", createdAt: Self.now, updatedAt: Self.now)
+                let lastCompetition = try Competition(
+                    id: CompetitionID(raw: UUID()), seasonID: lastSeason.id,
+                    modality: .futbol11, gender: .masculino,
+                    federationCompetitionID: "20000000", federationGroupID: "20000001",
+                    ageCategory: .cadete, divisionLabel: "Preferente", groupLabel: "Grupo 2",
+                    createdAt: Self.now, updatedAt: Self.now)
+                try await repositories.seasons.save(lastSeason)
+                try await repositories.competitions.save(lastCompetition)
+                try await repositories.teamRegistrations.save(
+                    try TeamRegistration(
+                        id: TeamRegistrationID(raw: UUID()), team: team,
+                        seasonID: lastSeason.id, competitionID: lastCompetition.id,
+                        federationTeamID: "1111111", createdAt: Self.now, updatedAt: Self.now))
+            }
+
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request, ownTeamFederationID: "3349086")
+                }
+            ) { response async throws in
+                #expect(response.status == .accepted)
+            }
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let codes = try await sql.raw("""
+                SELECT federation_team_id AS code
+                FROM \(ident: "\(Self.prefix)\(Self.slug)").team_registrations
+                ORDER BY federation_team_id
+                """).all(decodingColumn: "code", as: String.self)
+            #expect(codes == ["1111111", "3349086"])
         }
     }
 }

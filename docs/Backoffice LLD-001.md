@@ -283,7 +283,8 @@ En `src/api/errors.ts` hay **una tabla: a cada código, su mensaje en español**
 ni `detail` para decidir qué hacer, **con una sola excepción**: el campo al que pertenece un error de valor
 (§4.5 *a*). El número (`status`) solo se usa como red cuando llega un código que la
 tabla no tiene, para elegir un mensaje genérico de su familia: «no se ha encontrado» (404), «no se ha podido
-guardar» (409, 422), «error del servidor» (5xx).
+guardar» (409, 422), «error del servidor» (5xx). **Salvo un 502, 503 o 504 sin código**, que es el
+recepcionista diciendo que el servidor no está: ése es «No se ha podido conectar con el servidor» ([DW-18]).
 
 #### 4.2 Los mensajes los escribe la web
 
@@ -316,6 +317,7 @@ El botón *Reintentar* aparece **solo cuando el fallo puede ser pasajero**:
 | Situación | Cómo se reconoce | ¿Reintentar? |
 |---|---|---|
 | El servidor no responde en 30 s, o no se puede conectar | Sin respuesta (§3.4) | ✅ Sí |
+| El servidor está caído detrás del recepcionista | 502, 503 o 504 **sin código** ([DW-18]) | ✅ Sí |
 | La base de datos está caída | `DATABASE_UNAVAILABLE` (503) | ✅ Sí |
 | La federación no responde | `FEDERATION_UNREACHABLE` (504) | ✅ Sí |
 | Todo lo demás: «ya existe», «no encontrado», «valor no válido»… | El resto de códigos | ❌ No: daría lo mismo |
@@ -350,7 +352,7 @@ lista entera de errores de valor. Ese cambio es el momento de revisar la *a*.
 
 | Paso | Qué se toca | Qué se gana | Cuándo |
 |---|---|---|---|
-| **1. La lista en el catálogo** | `openapi.yaml`: `code` pasa a tener la lista cerrada de códigos (`enum`). Ni una línea de Swift | **En la web, la garantía completa**: la tabla de `errors.ts` se declara como «un mensaje para cada código de la lista», y si falta uno **no compila**. En el servidor, a medias: las pruebas que leen un error con los tipos generados fallan ante un código que no está en la lista, pero solo para los errores que esas pruebas provocan | Con la rebanada de la portada |
+| **1. La lista en el catálogo** | `openapi.yaml`: `code` pasa a tener la lista cerrada de códigos (`enum`). **Y un poco de Swift**: la función `problem(...)` de los *handlers* construye el error con el tipo generado y recibía el código como texto, así que pasa a recibirlo de la lista, con sus 8 llamadas. *(Esta casilla decía «ni una línea de Swift»; se vio que no al revisar la portada.)* | **En la web, la garantía completa**: la tabla de `errors.ts` se declara como «un mensaje para cada código de la lista», y si falta uno **no compila**. En el servidor, a medias: los 8 códigos de los *handlers* se comprueban al compilar, y **el censo** (`backend/Tools/Census`) comprueba que cada código que emite el servidor está en la lista | Con la rebanada de la portada |
 | **2. El servidor usa la lista** | `ProblemMiddleware.swift`: su `Problem`, escrito a mano con `code: String`, pasa a usar la lista generada. Unas 30 líneas, en ese fichero | La garantía completa también en el servidor: un código que no está en la lista no compila | **Pendiente del backend**, sin prisa y en su propio commit |
 
 Los tres, *a*, *b* y *c*, se diseñan en el catálogo y en el LLD del backend (§5.4), no aquí.
@@ -471,8 +473,11 @@ Resultados.
 
 #### 6.5 La temporada va detrás de `?`
 
-`/equipos/:id/plantilla?temporada=2025-26`. **Si no se indica, se usa la temporada en curso**, la que el
-servidor marca con `isCurrent`. En el camino se escribe con guion (`2025-26`) aunque la etiqueta de la
+`/?temporada=2025-26` en la portada, `/equipos/:id/plantilla?temporada=2025-26` en la plantilla. **Si no se
+indica, se usa la temporada en curso**, la que el servidor marca con `isCurrent`; **si no hay ninguna en curso**
+(de julio a que se crea la del año), **la más reciente**, con un rótulo que dice si terminó o si todavía no ha
+empezado. Una temporada de la dirección que no existe es el estado de error de la pantalla (§6.7), y lo decide
+la web con la lista de temporadas. *(Decidido con la portada, [Plan R1, decisión 5](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md).)* En el camino se escribe con guion (`2025-26`) aunque la etiqueta de la
 temporada lleve barra (`2025/26`, esquema `SeasonLabel`), porque una barra dentro de un valor del camino
 tiene que codificarse y quedaría `2025%2F26`.
 
@@ -826,6 +831,17 @@ navegador → web → Run serve → tfm_test
 - **Un `Given` solo prepara y un `Then` solo comprueba.** Un `Given` no verifica nada, y un `Then` no crea
   ni cambia datos.
 
+#### 11.5 «Cargando» y «error», sin simulacros
+
+- **Cargando: el escenario retiene la petición** con Playwright, comprueba el «cargando» y la suelta tal cual.
+  La respuesta es la del servidor, sin tocar.
+- **Error de servidor: se para el servidor de pruebas** (el 8081) y se vuelve a arrancar al acabar. Nunca el
+  del desarrollador.
+- **Dos errores, dos escenarios**: con el servidor parado antes de abrir sale la página entera (§8); para el
+  error dentro de la pantalla, se retiene su petición, se para el servidor y se suelta. Después, *Reintentar*
+  con el servidor de vuelta.
+- Por qué así y no con un retraso de mentira: [DW-17]. Solo es seguro porque los escenarios van de uno en uno.
+
 ### 12. El inicio de sesión
 
 *Hueco reservado: se monta al final (borrador, §3). Ya anotado para entonces: revisar el mensaje «Este club
@@ -856,6 +872,7 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 | La lista cerrada de códigos de error (`enum` de `code`) | `openapi.yaml`, esquema `Problem` (§4.5 *b*, paso 1) | Con la portada |
 | El formato `<campo>: <motivo>` de `detail` en los errores de valor | `openapi.yaml` (§4.5 *a*) | Con la portada |
 | ~~Poder cambiar la dirección de la federación con una variable de entorno; sin ella, rffm.es~~ | `RFFM_BASE_URL` (§11.3) | **Hecho** en `R0.8`, 2026-10-16 |
+| Que el censo compruebe que cada código que emite el servidor está en la lista | `backend/Tools/Census` (§4.5 *b*, paso 1) | Con la portada |
 | Que `ProblemMiddleware` use la lista de códigos generada | `ProblemMiddleware.swift` (§4.5 *b*, paso 2) | Sin prisa |
 | Devolver todos los errores de valor a la vez | Dominio y `ProblemMiddleware` (§4.5 *c*) | Sin prisa; entonces se revisa §4.5 *a* |
 
@@ -873,3 +890,5 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-12]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-13]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-17]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-18]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

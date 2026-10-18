@@ -1,7 +1,7 @@
 # Anexo de la Federación · Ingeniería inversa de la fuente (FCF, Cataluña)
 
-- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10**, **§C.11** y **§C.12**
-- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28 (§C.10), **2026-09-12** (§C.11) y **2026-09-20** (§C.12)
+- **Estado:** ⚠️ **§C.1–§C.9 OBSOLETAS** — describen un sitio que ya no existe. Ver **§C.10**, **§C.11**, **§C.12** y **§C.13**
+- **Fecha:** 2026-08-20 · **Reobservado:** 2026-08-28 (§C.10), **2026-09-12** (§C.11), **2026-09-20** (§C.12) y **2026-10-18** (§C.13)
 - **Aviso de alcance:** la fuente **no está en condiciones de que se le escriba un adaptador** — §C.12, [D-95]. **F9 está aplazada**
 
 > # ⚠️ Aviso de obsolescencia (2026-08-28)
@@ -972,6 +972,70 @@ Para quien retome la fase. Todo esto se comprobó en la misma revalidación y **
 | [D-74] · *"revalidar el anexo antes de escribir el adaptador"* | regla de método | ✅ **Cobrada por segunda vez**, y esta vez paró una fase entera |
 | **F9** · el adaptador de la FCF | siguiente fase del plan | ❌ **Aplazada** — [D-95], con su condición de reapertura |
 
+## C.13 El código de equipo entre temporadas, y qué pide cada pestaña — **reobservación del 2026-10-18**
+
+*Al escribir la ficha de la rebanada 1 del backoffice. La misma pregunta que el [Anexo RFFM §F.3.1] hizo en
+Madrid: ¿el código de equipo es el mismo de una temporada a otra?*
+
+### C.13.1 El número no cambia; la letra sí
+
+**Cómo se midió.** `competicions?disciplinaId=19308233&temporada=NN` para las temporadas 21 y 22; de cada una,
+las cuatro divisiones juveniles (DIVISIÓ HONOR, LLIGA NACIONAL, PREFERENT y JUVENIL PRIMERA DIVISIÓ),
+`grupos?competicioId=` de cada una y `partidos?grupId=` de cada grupo. De cada partido, `CODEQUIPO_*`,
+`NOMBRE_*` y `CODCLUB_*`. En total, 322 códigos en la 21 y 318 en la 22.
+
+| Medido | Resultado |
+|---|---|
+| Códigos que salen en las dos temporadas | **247** |
+| De ellos, del mismo club (`CODCLUB`) | **247 de 247** |
+| De ellos, en otra división (subieron o bajaron) | 45, con el mismo código |
+| Mismo nombre, código distinto | 7 casos, y **ninguno es un código nuevo**: son letras repartidas otra vez |
+
+**El caso que lo explica: Granollers.** Clasificación final de la 21 y equipos de la 22:
+
+| Código | 2025/26 | Final | 2026/27 |
+|---|---|---|---|
+| `33710` | GRANOLLERS, E.C. **A**, Preferent | 15.º, **baja** | GRANOLLERS, E.C. **B**, Primera |
+| `33712` | GRANOLLERS, E.C. **B**, Preferent | 3.º, se mantiene | GRANOLLERS, E.C. **A**, Preferent |
+
+```sh
+curl -s "https://www.fcf.cat/api/competition/classificacio?grupId=54695794" \
+  | jq -r '.data[] | "\(.position) \(.team.teamId) \(.team.name)"' | grep GRANOLLERS   # 15 33710 … A
+curl -s "https://www.fcf.cat/api/competition/classificacio?grupId=54696163" \
+  | jq -r '.data[] | "\(.position) \(.team.teamId) \(.team.name)"' | grep GRANOLLERS   # 3 33712 … B
+curl -s "https://www.fcf.cat/api/competition/partidos?grupId=58161941" \
+  | jq -r '[.[][] | select(.CODEQUIPO_CASA=="33710")][0].NOMBRE_CASA'                   # … B
+```
+
+**Lo que dice.** El código es **la plaza del club en una división**: la que se gana o se pierde jugando. No
+son los chicos (cambian cada año dentro del mismo código) ni la letra (la reparte el club). Los del B de la
+21 siguen con su `33712` y ahora se llaman A. El `33710` bajó con los mayores, que pasaron a otra categoría,
+y en Primera lo llevan los pequeños. Lo mismo, sin cruce, en Vilassar (`D` → `C`) y Amposta (`C` → `B`):
+desaparece un equipo y los de debajo suben una letra.
+
+**Consecuencia para el modelo** ([D-101]): para la federación el código es estable, pero para el equipo del
+club no. El «Juvenil A» de Granollers es el `33710` un año y el `33712` el siguiente. Por eso el código va
+en la inscripción del equipo en cada competición, y no en el equipo.
+
+### C.13.2 Las pestañas sí piden datos, pero solo la primera vez
+
+Medido con Playwright, en un navegador que pulsa cada pestaña de
+`/es/competicio?temporadaId=22&disciplinaId=19308233&competicioId=58161928&grupId=58161929`. Hace falta una
+identidad de navegador normal: sin ella, CloudFront contesta **403**. `curl` a la API no la necesita (§C.12.5).
+
+| Momento | Lo que pide |
+|---|---|
+| Carga de la página | `temporadas`, `disciplines`, `competicions`, `grupos`, `equipos?grupId=` y `partidos?grupId=` (dos veces) |
+| Resultados y Calendario | **nada**: se pintan con el `partidos` de la carga |
+| Clasificación | `classificacio?grupId=` |
+| Goles | `goleadores?grupId=&temporada=22` |
+| Sanciones | `sanciones?grupId=&temporada=22` |
+| Equipaciones | `equipacions?grupId=`, que enseña el código de cada equipo («ID: 34561») |
+
+**Volver a una pestaña ya abierta no pide nada**: la web guarda la respuesta. Por eso puede parecer que las
+pestañas no generan llamadas. `equipos` y `equipacions`, que §C.10.1 daba por «no probado», existen y la web
+los usa.
+
 ---
 
 *Referencias `§x.y` → [API_y_BBDD LLD-001](./API_y_BBDD%20LLD-001.md) · `§F.x` → [Anexo RFFM](./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md) · `D-nn` → [Anexo de Decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)*
@@ -1060,3 +1124,5 @@ Para quien retome la fase. Todo esto se comprobó en la misma revalidación y **
 [Anexo RFFM §F.14]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.15]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo RFFM §F.16]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
+[D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md

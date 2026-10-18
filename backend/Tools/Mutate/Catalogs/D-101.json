@@ -1,0 +1,167 @@
+{
+  "title": "D-101 · el código de la federación es de la inscripción del equipo en la competición",
+  "filter": "DomainTests|ApplicationTests|TeamRegistrationPersistenceTests|MigrationIntegrityTests|FederationLinkEndpointTests|IngestionPersistenceTests",
+  "mutations": [
+    {
+      "id": "M1-propio-con-codigo",
+      "description": "un equipo propio puede llevar código",
+      "file": "Sources/Domain/Team.swift",
+      "find": "if opponentClubID == nil, federationTeamID != nil {",
+      "replace": "if false, opponentClubID == nil, federationTeamID != nil {"
+    },
+    {
+      "id": "M2-fusion-al-propio",
+      "description": "la ingesta le escribe código a un propio",
+      "file": "Sources/Domain/Team.swift",
+      "find": "            federationTeamID: isOwn\n                ? nil",
+      "replace": "            federationTeamID: false\n                ? nil"
+    },
+    {
+      "id": "M3-proyeccion-sin-inscripcion",
+      "description": "el propio se proyecta sin el código de su inscripción",
+      "file": "Sources/Domain/Team.swift",
+      "find": "federationTeamID: isOwn ? ownCode : federationTeamID,",
+      "replace": "federationTeamID: federationTeamID,"
+    },
+    {
+      "id": "M4-rival-con-inscripcion",
+      "description": "a un rival se le acepta código de inscripción",
+      "file": "Sources/Domain/Team.swift",
+      "find": "if !isOwn, ownCode != nil {",
+      "replace": "if false, !isOwn, ownCode != nil {"
+    },
+    {
+      "id": "M5-junio-con-codigo",
+      "description": "la fila de junio puede llevar código",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "if federationTeamID != nil, competitionID == nil {",
+      "replace": "if false, federationTeamID != nil, competitionID == nil {"
+    },
+    {
+      "id": "M6-otro-codigo-calla",
+      "description": "en la misma competición, otro código no se para",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "guard federationTeamID == incoming else {",
+      "replace": "guard true else {"
+    },
+    {
+      "id": "M7-junio-se-engancha",
+      "description": "la fila de junio se engancha sin competición",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "guard competitionID != nil else {",
+      "replace": "guard true else {"
+    },
+    {
+      "id": "M8-enganche-sin-codigo",
+      "description": "enganchar no pone el código",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "federationTeamID: incoming, createdAt: createdAt",
+      "replace": "federationTeamID: nil, createdAt: createdAt"
+    },
+    {
+      "id": "M10-rival-no-cuenta",
+      "description": "el código de un rival no se comprueba",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "                $0.federationTeamID == request.ownTeamFederationID\n            }) {",
+      "replace": "                $0.federationTeamID == nil && false\n            }) {"
+    },
+    {
+      "id": "M11-propio-no-cuenta",
+      "description": "el código de otro propio en la competición no se comprueba",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "$0.federationTeamID == request.ownTeamFederationID && $0.teamID != team.id",
+      "replace": "$0.teamID != $0.teamID"
+    },
+    {
+      "id": "M12-choca-consigo",
+      "description": "el propio equipo cuenta como otro",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "$0.federationTeamID == request.ownTeamFederationID && $0.teamID != team.id",
+      "replace": "$0.federationTeamID == request.ownTeamFederationID"
+    },
+    {
+      "id": "M13-guarda-sin-codigo",
+      "description": "se guarda la inscripción sin el código",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "try await repositories.teamRegistrations.save(linked)",
+      "replace": "try await repositories.teamRegistrations.save(current)"
+    },
+    {
+      "id": "M14-pasada-sin-inscripcion",
+      "description": "la pasada no mira el código de la inscripción",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "ownCode: $0.isOwn ? ownCodes[$0.id] : nil)",
+      "replace": "ownCode: nil)"
+    },
+    {
+      "id": "M15-clasificacion-sin-inscripcion",
+      "description": "la clasificación no mira las inscripciones",
+      "file": "Sources/Application/IngestStandings.swift",
+      "find": ".compactMap { row in row.federationTeamID.map { ($0, row.teamID) } },",
+      "replace": ".compactMap { _ -> (String, TeamID)? in nil },"
+    },
+    {
+      "id": "M16-lista-sin-filtro",
+      "description": "la lectura por competición trae las de todas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .filter(\\.$competition.$id == competitionID.raw)\n            .all()\n        guard !rows.isEmpty else { return [] }\n\n        let teamIDs",
+      "replace": "            .all()\n        guard !rows.isEmpty else { return [] }\n\n        let teamIDs"
+    },
+    {
+      "id": "M17-no-se-escribe",
+      "description": "el código no se escribe en la fila",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "self.federationTeamID = registration.federationTeamID",
+      "replace": "self.federationTeamID = nil"
+    },
+    {
+      "id": "M18-no-se-lee",
+      "description": "el código no se lee de la fila",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "competitionID: $competition.id.map { CompetitionID(raw: $0) },\n            federationTeamID: federationTeamID,",
+      "replace": "competitionID: $competition.id.map { CompetitionID(raw: $0) },\n            federationTeamID: nil,"
+    },
+    {
+      "id": "M19-sin-guarda-huerfanos",
+      "description": "la migración no se para con un código sin destino",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "guard orphans == 0 else {",
+      "replace": "guard true else {"
+    },
+    {
+      "id": "M20-no-copia",
+      "description": "la migración no copia el código a la inscripción",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "WHERE r.team_id = t.id AND t.opponent_club_id IS NULL\n              AND r.competition_id IS NOT NULL",
+      "replace": "WHERE r.team_id = t.id AND t.opponent_club_id IS NULL\n              AND false"
+    },
+    {
+      "id": "M21-copia-a-junio",
+      "description": "la migración copia el código también a la fila de junio",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "WHERE r.team_id = t.id AND t.opponent_club_id IS NULL\n              AND r.competition_id IS NOT NULL",
+      "replace": "WHERE r.team_id = t.id AND t.opponent_club_id IS NULL"
+    },
+    {
+      "id": "M22-sin-check-propio",
+      "description": "sin el CHECK del propio sin código",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "expression: \"opponent_club_id IS NOT NULL OR federation_team_id IS NULL\")",
+      "replace": "expression: \"true\")"
+    },
+    {
+      "id": "M23-sin-check-junio",
+      "description": "sin el CHECK de la fila de junio",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "expression: \"competition_id IS NOT NULL OR federation_team_id IS NULL\")",
+      "replace": "expression: \"true\")"
+    },
+    {
+      "id": "M24-unique-ancho",
+      "description": "el UNIQUE deja repetir código en una competición",
+      "file": "Sources/Persistence/TeamRegistrationRecord.swift",
+      "find": "columns: [\"competition_id\", \"federation_team_id\"])",
+      "replace": "columns: [\"competition_id\", \"federation_team_id\", \"team_id\"])"
+    }
+  ]
+}

@@ -505,8 +505,9 @@ struct IngestCalendarTests {
     /// distingue propio de rival ni puede.
     ///
     /// Ese equipo lo creó el club (`D-66`) y lo enganchó el administrador
-    /// (`D-67`), así que tiene `codigo_equipo` y el **paso 1** lo reconoce. Dos
-    /// cosas tienen que pasar, y las dos son negativas:
+    /// (`D-67`), así que su inscripción **en esta competición** tiene
+    /// `codigo_equipo` (`D-101`) y el **paso 1** lo reconoce. Dos cosas tienen
+    /// que pasar, y las dos son negativas:
     ///
     /// 1. **no se le toca `opponent_club_id`** (§3.7, campo de propiedad,
     ///    `D-20`) — si no, la primera sincronización tras reclamarlo lo
@@ -523,10 +524,15 @@ struct IngestCalendarTests {
         let ownTeam = try Team(
             id: TeamID(raw: UUID()), opponentClubID: nil,
             category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
-            federationTeamID: "821", createdAt: Date(), updatedAt: Date())
+            createdAt: Date(), updatedAt: Date())
+        let registration = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: ownTeam, seasonID: season.id,
+            competitionID: competition.id, federationTeamID: "821",
+            createdAt: Date(), updatedAt: Date())
 
         let store = IngestionStore()
         await store.seed(teams: [ownTeam])
+        await store.seed(teamRegistrations: [registration])
         let (useCase, _, _) = await Self.pass(
             competition: competition, season: season,
             calendar: try Self.calendar(), store: store)
@@ -539,6 +545,8 @@ struct IngestCalendarTests {
         #expect(teams.count == 2)
         #expect(teams.first { $0.id == ownTeam.id }?.isOwn == true)
         #expect(teams.first { $0.id == ownTeam.id }?.opponentClubID == nil)
+        // Y su código sigue en la inscripción: la pasada no se lo pega (`D-101`).
+        #expect(teams.first { $0.id == ownTeam.id }?.federationTeamID == nil)
 
         // Solo el club del rival. El nuestro **no** aparece como OpponentClub.
         let clubs = await store.opponentClubs
@@ -546,6 +554,41 @@ struct IngestCalendarTests {
         #expect(clubs.first?.name == "C.D. GALAPAGAR")
         #expect(report.opponentClubsCreated == 1)
         #expect(report.teamsCreated == 1)
+    }
+
+    /// **El código de otra competición no vale en ésta** (`D-101`). El
+    /// «Juvenil A» puede llevar un número la temporada pasada y otro en ésta
+    /// ([Anexo FCF §C.13]), así que la pasada solo mira la inscripción **de la
+    /// competición que recorre**. Con la del año pasado, aquí no se reconoce:
+    /// el `821` de este calendario es otro equipo, y nace rival.
+    @Test("la inscripción de otra competición no reconoce al equipo en ésta (D-101)")
+    func anotherCompetitionsCodeDoesNotMatchHere() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let lastYear = CompetitionID(raw: UUID())
+        let ownTeam = try Team(
+            id: TeamID(raw: UUID()), opponentClubID: nil,
+            category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
+            createdAt: Date(), updatedAt: Date())
+        let registration = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: ownTeam, seasonID: SeasonID(raw: UUID()),
+            competitionID: lastYear, federationTeamID: "821",
+            createdAt: Date(), updatedAt: Date())
+
+        let store = IngestionStore()
+        await store.seed(teams: [ownTeam])
+        await store.seed(teamRegistrations: [registration])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season,
+            calendar: try Self.calendar(), store: store)
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let rival821 = await store.teams.first { $0.federationTeamID == "821" }
+        #expect(rival821?.isOwn == false)
+        #expect(await store.teams.count == 3)
     }
 
     // ── Lo que sostiene el emparejamiento de un club ya corregido ──────────

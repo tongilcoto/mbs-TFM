@@ -201,6 +201,9 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
             $0.teamID == teamID && $0.seasonID == seasonID
         }
     }
+    func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
+        await store.teamRegistrations.filter { $0.competitionID == competitionID }
+    }
     func save(_ registration: TeamRegistration) async throws {
         await store.save(registration)
     }

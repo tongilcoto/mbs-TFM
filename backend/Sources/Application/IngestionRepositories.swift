@@ -86,6 +86,11 @@ public protocol TeamRegistrationRepository: Sendable {
     /// `NULLS NOT DISTINCT` (`C-D.3`) garantiza que no se repitan.
     func list(teamID: TeamID, seasonID: SeasonID) async throws -> [TeamRegistration]
 
+    /// Las inscripciones **de esa competición**, de todos los equipos propios
+    /// (`D-101`). Es lo que la pasada necesita para reconocer a los propios: su
+    /// código es el de la fila de la competición que recorre, no el del equipo.
+    func list(competitionID: CompetitionID) async throws -> [TeamRegistration]
+
     /// *Upsert* por `id`, igual que los demás: el id lo pone el caso de uso.
     /// **Completar la fila de junio es un `save` con el mismo `id`**, no una
     /// fila nueva.

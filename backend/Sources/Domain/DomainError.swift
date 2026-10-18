@@ -37,7 +37,10 @@ public enum DomainError: Error, Equatable, Sendable {
     /// el idioma del que va a leer el problema (§5.4).
     case federationSeasonMismatch(seasonLabel: String, calendarMedian: Date)
 
-    /// El equipo ya está enganchado a **otro** `codigo_equipo` (`D-67`, F10).
+    /// El equipo ya está enganchado a **otro** `codigo_equipo` **en esta
+    /// competición** (`D-67`, F10; por competición desde `D-101`). En otra
+    /// competición o en otra temporada, otro código no es conflicto: el número
+    /// es la plaza de la federación, no el equipo del club.
     ///
     /// Hermano de `notEditableAfterSync` —los dos son **409**, los dos dicen que
     /// el momento es el problema y no el valor— pero con una diferencia que el
@@ -63,7 +66,9 @@ public enum DomainError: Error, Equatable, Sendable {
     /// crea equipos propios, así que el equipo del club que nadie enganchó antes
     /// de la primera pasada **ya existe como rival**, con su código. Enganchar
     /// entonces el equipo propio a ese mismo código choca contra
-    /// `uq:teams.federation_team_id`. Medido contra la base de trabajo el
+    /// `uq:teams.federation_team_id`. Desde `D-101` hay un segundo caso: otro
+    /// equipo **propio** con ese código en la misma competición, que choca
+    /// contra `uq_team_registrations_code`. Medido contra la base de trabajo el
     /// 2026-09-24: los **16** equipos del grupo estaban ya escritos como rivales.
     ///
     /// **Lo que este error NO hace es fundir las dos filas**: eso es §9.5 y está

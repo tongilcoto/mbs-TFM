@@ -38,6 +38,10 @@ public import enum Domain.Modality
 ///    llega se retira (`D-94`), y la guarda que lo protege da por hecho que el
 ///    total de goles no baja nunca (`IngestScorers.requireGoalsDoNotDecrease`,
 ///    H-53). **La FCF no la cumple** (su lista es un *top*-50).
+/// 7. **Dentro de una competición, un equipo lleva el mismo
+///    `federationTeamID` toda la temporada.** Entre temporadas no se exige
+///    nada: el número es la plaza del club en la división, y la letra puede
+///    pasar a otro (`D-101`, [Anexo FCF §C.13]).
 ///
 /// El detalle de cada método, campo a campo, está en la guía de alta de una
 /// federación nueva (`docs/API_y_BBDD Guia-Alta-Federacion-001.md`).

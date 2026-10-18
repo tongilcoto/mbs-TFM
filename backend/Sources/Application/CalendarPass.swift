@@ -35,6 +35,11 @@ final class CalendarPass {
     private var teams: [Team]
     private var rounds: [Round]
     private var matches: [Match]
+    /// El código de cada equipo propio **en esta competición**, sacado de su
+    /// inscripción (`D-101`). Un propio no lleva código en `Team`: el «Juvenil
+    /// A» puede ser un número este año y otro el siguiente, así que la pasada
+    /// solo mira el de la competición que recorre.
+    private let ownCodes: [TeamID: String]
 
     private(set) var report: IngestionRun
 
@@ -67,6 +72,10 @@ final class CalendarPass {
         self.teams = try await repositories.teams.list()
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
+        self.ownCodes = Dictionary(
+            try await repositories.teamRegistrations.list(competitionID: competition.id)
+                .compactMap { row in row.federationTeamID.map { (row.teamID, $0) } },
+            uniquingKeysWith: { first, _ in first })
         self.report = try IngestionRun(
             id: identity.id,
             competitionID: competition.id, kind: .calendar,
@@ -376,11 +385,16 @@ final class CalendarPass {
     }
 
     /// Proyecta los equipos a candidatos, que es donde hace falta el nombre de
-    /// su club (Plan §4.6).
+    /// su club (Plan §4.6) y, en los propios, el código de su inscripción
+    /// (`D-101`).
     private func candidates() throws -> [TeamCandidate] {
         let names = Dictionary(
             uniqueKeysWithValues: clubs.map { ($0.id, $0.matchingName) })
-        return try teams.map { try $0.candidate(opponentClubName: $0.opponentClubID.flatMap { names[$0] }) }
+        return try teams.map {
+            try $0.candidate(
+                opponentClubName: $0.opponentClubID.flatMap { names[$0] },
+                ownCode: $0.isOwn ? ownCodes[$0.id] : nil)
+        }
     }
 
     private func replace(_ team: Team) {

@@ -1,20 +1,20 @@
-# Plan backoffice-001 · La web del club, rebanada a rebanada
+# Plan de desarrollo backoffice-001 · La web del club, rebanada a rebanada
 
 > Rehecho desde cero el **2026-10-15**, revisando pantalla por pantalla con el desarrollador. El primer
 > intento se borró el 2026-10-16; queda en la historia de git (commit `d6a16e6`).
 >
-> Parte de: el [ADR](../docs/ADR-Backoffice-001.md), cerrado el 2026-10-12; el
-> [LLD](../docs/Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su
-> [anexo de decisiones](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); la ingesta corriendo sola en
+> Parte de: el [ADR](./ADR-Backoffice-001.md), cerrado el 2026-10-12; el
+> [LLD](./Backoffice%20LLD-001.md), cerrado el 2026-10-14 (§1–§11), con su
+> [anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); la ingesta corriendo sola en
 > el Mac ([Plan launchd-001](../backend/Plan%20launchd-001.md)); y **604 tests** en el backend.
 >
-> **Convención de remisiones.** `LLD-B §x` es el [LLD del backoffice](../docs/Backoffice%20LLD-001.md) y
-> `DW-nn`, su [anexo de decisiones](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); `LLD §x`, el
-> [LLD del backend](../docs/API_y_BBDD%20LLD-001.md) y `D-nn`, su
-> [bitácora de decisiones](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md); `ADR-B`, el
-> [ADR del backoffice](../docs/ADR-Backoffice-001.md); `H-nn`, la
+> **Convención de remisiones.** `LLD-B §x` es el [LLD del backoffice](./Backoffice%20LLD-001.md) y
+> `DW-nn`, su [anexo de decisiones](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md); `LLD §x`, el
+> [LLD del backend](./API_y_BBDD%20LLD-001.md) y `D-nn`, su
+> [bitácora de decisiones](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md); `ADR-B`, el
+> [ADR del backoffice](./ADR-Backoffice-001.md); `H-nn`, la
 > [auditoría 002](../backend/Plan%20de%20auditor%C3%ADa-002.md); y «el borrador», el
-> [borrador inicial](../docs/backoffice_initial_draft.md).
+> [borrador inicial](./backoffice_initial_draft.md).
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 
@@ -26,7 +26,7 @@
 necesita** (el borrador, §2). No se hace «todo el servidor y luego toda la web»: cada unidad de trabajo es una
 **rebanada**, que entrega una pantalla funcionando de punta a punta.
 
-Hoy el servidor sirve **6 de las 83 operaciones** del catálogo. Cada rebanada activa las suyas, y una operación
+Hoy el servidor sirve **6 de las 85 operaciones** del catálogo (las dos de `D-102` entran en él con `R1.4`). Cada rebanada activa las suyas, y una operación
 **solo se activa con la rebanada que la usa**.
 
 **Cada rebanada se da por terminada cuando:**
@@ -47,7 +47,8 @@ web y servidor funcionan en local, con el club sacado de la dirección (el borra
 
 | Qué | Dónde |
 |---|---|
-| **Qué se hace, en qué orden y cómo se comprueba**: el mapa, la ficha de cada pantalla, los pasos y su estado | Aquí |
+| **Qué se hace, en qué orden y cómo se comprueba**, para todo el backoffice: el mapa, las rebanadas y el estado de cada una | Aquí |
+| **La ficha de una rebanada, sus pasos y lo que se comprobó en cada uno**, en la web y en el servidor | Su propio plan, desde la rebanada 1: `docs/Plan de desarrollo R<n> <nombre>-001.md` |
 | Una regla que vale para **todas** las pantallas | LLD-B, en su apartado y en un commit aparte (LLD-B §E.1) |
 | El **porqué** de una decisión que solo afecta a la web | Anexo de decisiones del backoffice (`DW-nn`) |
 | El **porqué** de una decisión que cambia **lo que responde el servidor**, aunque la pida una pantalla | Bitácora del backend (`D-nn`), porque las apps del móvil usarán las mismas respuestas |
@@ -68,7 +69,7 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
 
 1. **Los escenarios de la ficha, escritos y en rojo.** Rojo **porque falta la pantalla**, no porque el arnés
    no arranque: un escenario que falla al levantar el servidor no ha probado nada (H-07).
-2. **Lo que le falta al servidor**, con el método del backend de siempre (Plan de desarrollo §5.1): prueba →
+2. **Lo que le falta al servidor**, con el método del backend de siempre (plan de desarrollo backend pre backoffice, §5.1): prueba →
    esqueleto que devuelve **mal a propósito** → rojo de aserción → implementación → mutación con
    `Tools/Mutate`. `REQUIRE_DB=1 swift test`, nunca `swift test` a secas.
 3. **Las piezas de la web, con Vitest**, con el mismo bucle: prueba → **esqueleto que pinta mal a
@@ -86,8 +87,10 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
 3. **Un escenario que no pudo arrancar falla; nunca se salta** (ADR-B, decisión 6).
 4. **Lo que se descubre y no venía en la ficha va en su propio commit**, y cada commit deja el árbol en verde
    por sí mismo.
-5. **Si un cambio del servidor toca más de un *target* o cambia el catálogo, es mini-fase**, con su renglón
-   en el [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) (regla 2 de la auditoría).
+5. **Si un cambio del servidor toca más de un *target* o cambia el catálogo, es mini-fase** (regla 2 de la
+   auditoría), y se apunta **solo en el plan de su rebanada**. Hasta la rebanada 0 llevaba además su renglón en
+   el [plan de desarrollo backend pre backoffice](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md),
+   que es donde está `R0.8`; desde la rebanada 1, ya no (decidido con el desarrollador el 2026-10-18).
 6. **Explicar en lenguaje llano**: quien revisa es ingeniero de pruebas, no desarrollador web.
 
 ---
@@ -118,7 +121,7 @@ flowchart LR
 
     subgraph EQUIPOS["Equipos"]
         direction TB
-        P["<b>Portada</b> · R1, R5<br/>/<br/>R1: equipos, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
+        P["<b>Portada</b> · R1, R5<br/>/ · ?temporada=2025-26<br/>R1: equipos de una temporada, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
         A["<b>Alta de equipo</b> · R2<br/>/equipos/nuevo"]
         F["<b>Enganche con la federación</b> · R3<br/>/equipos/:id/federacion"]
     end
@@ -172,7 +175,8 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,mTem,mCom,mRiv,mIng,mClub,mPer,P,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP,NF pendiente
+    class mEq,P,NF enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
 
@@ -195,10 +199,10 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | Rebanada | Pantalla afectada | Endpoints afectados |
 |---|---|---|
 | **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
-| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos, competición y estado de la ingesta | `getClub` ● · `listSeasons` · `listTeams` ⚠️ — su respuesta no dice en qué competición juega cada equipo · `listCompetitions` |
+| **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` · 🆕 `listSeasonRegistrations` — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ⚠️ — le faltan `pending` y `previousIngestionHealth` (enmienda de `D-89`) |
 | **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
-| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `listRounds` · `getRound` · `listMatches` · `getStanding` |
+| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | 🆕 `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
@@ -206,14 +210,15 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
 | **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
-| **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` |
+| **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
 | **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` |
 | **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
 | **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
 | — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
 
-Están las **83 operaciones** del catálogo: 81 repartidas y 2 sin pantalla a propósito. Una operación **solo se
+Están las **85 operaciones** del catálogo: 83 repartidas y 2 sin pantalla a propósito. *(Eran 83 hasta `D-102`, que
+añadió las dos lecturas del equipo en una temporada.)* Una operación **solo se
 activa con la rebanada que la usa**.
 
 **Por qué este orden:**
@@ -230,12 +235,22 @@ activa con la rebanada que la usa**.
 **Pendiente de confirmar:** si la salida a la primera temporada (rebanada 2) es crearla desde la web, una parte
 de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
 
+**Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
+La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
+bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
+elige el club puede no llegar al contraste mínimo**: habrá que comprobarla al guardarla, no al pintarla.
+
 ---
 
 ## 5. Las rebanadas, en detalle
 
-Cada rebanada se detalla aquí **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
+Cada rebanada se detalla **cuando se ha revisado con el desarrollador** (§2.2). Los pasos se numeran
 `R<rebanada>.<paso>`.
+
+**Desde la rebanada 1, cada una tiene su propio plan** (decidido con el desarrollador el 2026-10-18): toca la
+web y también el servidor, y su ficha, sus pasos y su registro no caben aquí sin enterrar el mapa. Se llama
+`docs/Plan de desarrollo R<n> <nombre>-001.md`, y aquí queda un renglón con su enlace y su estado (§6). La
+rebanada 0 se quedó escrita aquí abajo, tal como se hizo.
 
 ### Rebanada 0 · El andamiaje
 
@@ -310,6 +325,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 3/18 | 2026-10-18 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
@@ -334,10 +350,10 @@ su comprobación.
 **Hallazgos de la rebanada 0** (no venían en el plan; cada uno en su commit):
 
 - **Testing Library para Vue trae una versión vieja de su parte común** (`R0.2`, 2026-10-16): no reconocía
-  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+  algunos papeles de accesibilidad. Se le obliga a usar la 10.4 → [DW-15](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
 - **`openapi-typescript` no acepta TypeScript 6** (`R0.3`, 2026-10-16): la plantilla de Vite lo trajo, y la
   herramienta que fabrica los tipos del catálogo solo acepta TypeScript 5. Se baja a la 5.9.3 →
-  [DW-16](../docs/Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
+  [DW-16](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md).
 - **La RFFM contestó `null` a los goleadores de PRIMERA ALEVIN durante unos minutos** (`R0.8`, 2026-10-16): al
   comprobar la ingesta real sin la variable, las dos pasadas seguidas (22:09 y 22:11) fallaron en los goleadores
   de esa competición, y un `curl` directo a la RFFM a las 22:12 también devolvió `null`. **Poco después la misma
@@ -362,3 +378,12 @@ su comprobación.
   (`SeedCompetitionCommandTests`), con su rojo de aserción: el esqueleto fue a la RFFM real en vez de preguntarle
   al doble. **2/2 mutaciones** (`Catalogs/R0-10-seed.json`); 611 → **612 tests**. Un solo *target* (`App`): no
   es mini-fase.
+- **La web del 5173 apuntaba al 8080 y el servidor del desarrollador está en el 8765** (2026-10-17, al repasar el
+  documento de estudio de la rebanada): el 8080 de `R0.4` era el valor por defecto, y nadie lo usa. Decidido con el
+  desarrollador, sin poner `API_PORT` en su perfil, porque es un nombre demasiado genérico: el puerto va en
+  **`backend/.env.development`** (de cada Mac; git no lo guarda), que Vapor ya lee al arrancar en desarrollo y que
+  ahora lee también `vite.config.ts`. Orden: `BACKOFFICE_API_URL` (solo los escenarios), después ese fichero y por
+  último el 8080. Comprobado en un puerto aparte (5199): con el fichero, el club de su 8765; sin él, `502` del
+  8080 vacío; con `BACKOFFICE_API_URL`, manda la variable. Los escenarios, en verde. **Y su web del 5173 llevaba
+  arrancada desde antes de `R0.4`**: a `/api/v1/club` contestaba con la página, sin recepcionista; hay que
+  reiniciarla.

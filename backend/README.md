@@ -9,7 +9,7 @@
 | cómo se arranca, qué comando hay, por qué falla algo | **este fichero** |
 | qué hace cada capa y por qué | [AGENTS.md](../AGENTS.md) · [LLD-001](../docs/API_y_BBDD%20LLD-001.md) |
 | por qué se decidió así | [bitácora `D-nn`](../docs/API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md) |
-| qué entregó cada fase y qué midió | [Plan de desarrollo](../docs/Plan%20de%20desarrollo-001.md) §4 |
+| qué entregó cada fase y qué midió | [Plan de desarrollo](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) §4 |
 
 Convención: **`§x` sin enlace se refiere al LLD**, y `D-nn` a la bitácora de decisiones. Las referencias a
 secciones de *este* fichero van siempre como enlace, para no confundirlas con las del LLD.
@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **612 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo-001.md). La
+(`D-95`). **632 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -106,7 +106,7 @@ base de datos.**
 | `DB_HOST` / `DB_PORT` | `localhost` / `5434` | `db` / `5432` dentro de compose |
 | `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `tfm` | |
 | `DOMAIN_SUFFIX` | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
-| `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos |
+| `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos. **Mejor en `backend/.env.development`** que en el perfil del shell: Vapor lo lee solo al arrancar desde `backend/`, vale únicamente para este proyecto, y la web lo lee también para saber adónde mandar sus peticiones ([README de la web](../backoffice/README.md#para-ver-datos-el-servidor-tiene-que-estar-en-marcha)) |
 | `LOG_LEVEL` | `info` | `debug` muestra cada petición y cada SQL. Vale también en `swift test` |
 | `HTTP_TRACE` | apagado | `1` vuelca los **cuerpos** HTTP. Solo en `.development` / `.testing` |
 | `RFFM_BASE_URL` | `https://www.rffm.es` | Dónde pide la ingesta los datos de la RFFM. Solo para pruebas: los escenarios del backoffice ponen aquí una federación falsa. **La URL que se pega en el enganche sigue siendo la de la RFFM de verdad** |
@@ -310,6 +310,10 @@ la respuesta. Cuando la ingesta termina, actualiza esa misma fila, no crea otra.
 curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<el competitionId del 202>" | jq
 ```
 
+**El código se apunta en la inscripción de esa competición, no en el equipo** (`D-101`). La temporada siguiente
+el mismo equipo se engancha con el código que tenga entonces: la federación cambia la letra de un número a
+otro, y tu «Juvenil A» puede ser otro número cada año.
+
 **Los errores del enganche:**
 
 | Caso | Código | `code` |
@@ -317,8 +321,8 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<el compet
 | URL que no es de la federación **del club** | **400** | `UNREADABLE_FEDERATION_URL` |
 | La temporada es nueva y la federación no publica su nombre | **400** | `SEASON_LABEL_UNAVAILABLE` |
 | Equipo inexistente | **404** | `TEAM_NOT_FOUND` |
-| El equipo ya está enganchado | **409** | `ALREADY_LINKED_TO_FEDERATION` |
-| Ese código ya es de otro equipo | **409** | `FEDERATION_TEAM_ID_TAKEN` |
+| El equipo ya está enganchado **en esa competición**, con otro código | **409** | `ALREADY_LINKED_TO_FEDERATION` |
+| Ese código ya es de un rival, o de otro equipo tuyo en esa competición | **409** | `FEDERATION_TEAM_ID_TAKEN` |
 | Ese código no es de ningún equipo del calendario | **409** | `OWN_TEAM_NOT_IN_CALENDAR` |
 | La competición dice otra edad, género o modalidad | **409** | `COMPETITION_IDENTITY_MISMATCH` |
 | El club es de una federación que todavía no se puede sincronizar (FCF, `D-95`) | **501** | `FEDERATION_ADAPTER_MISSING` |
@@ -386,7 +390,7 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 612 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 632 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

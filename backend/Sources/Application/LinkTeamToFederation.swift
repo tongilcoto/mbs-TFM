@@ -122,13 +122,16 @@ public struct LinkTeamToFederation: Sendable {
             // opción B de H-77), y entonces es el bloqueo lo que hace que el
             // segundo espere al primero y vea su código.
             //
-            // **Y la transición se comprueba antes de escribir nada**: el
-            // `alreadyLinkedToFederation` no depende de la temporada ni de la
-            // competición, así que no hay motivo para dejarlo detrás de ellas.
+            // **Y la transición se comprueba con el equipo bloqueado**, pero ya
+            // no aquí: desde `D-101` el código es de la inscripción **en esta
+            // competición**, así que se comprueba en el paso 4, con la
+            // competición resuelta. No se escribe nada antes que pueda quedar a
+            // medias: si la temporada y la competición ya existen, se reutilizan
+            // sin escribir; si no existen, no puede haber inscripción que
+            // contradecir. Y el ámbito es una transacción (`D-83`).
             guard let team = try await repositories.teams.lock(request.teamID) else {
                 throw ApplicationError.teamNotFound(id: "\(request.teamID)")
             }
-            let linked = try team.linked(toFederationTeamID: request.ownTeamFederationID)
 
             // ── 1. La temporada ─────────────────────────────────────────────
             //
@@ -261,7 +264,43 @@ public struct LinkTeamToFederation: Sendable {
                     gender: competition.gender,
                     modality: competition.modality))
 
-            // ── 3. La inscripción (`C-C.10`) ────────────────────────────────
+            // ── 3. El código tiene que estar libre (`C-E.10`, `D-101`) ───────
+            //
+            // **Se pregunta antes de escribir.** Hay dos `UNIQUE` que lo
+            // rechazarían —el de `teams` para los rivales y el de
+            // `(competition_id, federation_team_id)` de las inscripciones—, y sin
+            // esto el choque lo daba Postgres: un `23505` que salía por HTTP como
+            // **500 con el SQL en crudo**, donde el *spec* declara **409**.
+            //
+            // **Un rival con ese código** es el desenlace normal de enganchar
+            // tarde: por [D-66] la ingesta no crea equipos propios, así que el
+            // equipo del club que nadie enganchó antes de la primera pasada **ya
+            // existe como rival** con ese mismo código. Medido contra la base de
+            // trabajo el 2026-09-24: los 16 equipos del grupo ya estaban escritos.
+            //
+            // **Otro equipo propio con ese código en esta competición** es el
+            // otro caso. En otra competición o en otra temporada no se compara
+            // nada: el número es la plaza de la federación, no el equipo del club
+            // ([Anexo FCF §C.13]).
+            if let holder = try await repositories.teams.list().first(where: {
+                $0.federationTeamID == request.ownTeamFederationID
+            }) {
+                throw DomainError.federationTeamIDTaken(
+                    code: request.ownTeamFederationID,
+                    owner: "\(holder.id)")
+            }
+            if let holder = try await repositories.teamRegistrations
+                .list(competitionID: competition.id)
+                .first(where: {
+                    $0.federationTeamID == request.ownTeamFederationID && $0.teamID != team.id
+                })
+            {
+                throw DomainError.federationTeamIDTaken(
+                    code: request.ownTeamFederationID,
+                    owner: "\(holder.teamID)")
+            }
+
+            // ── 4. La inscripción, con el código: el enganche (`C-C.10`, `D-101`)
             //
             // Lo que esto compra no es una fila más: es que **todo equipo propio
             // con calendario esté inscrito por construcción** (`D-68`), y por
@@ -269,6 +308,10 @@ public struct LinkTeamToFederation: Sendable {
             // contradecir. Sin ella queda el agujero que la decisión describe —
             // entre el `202` y la primera pasada no existe ni un `Match` del que
             // derivar la participación (`D-27`).
+            //
+            // **Y desde `D-101` es también el enganche**: el código que el
+            // administrador eligió va en esta fila, no en el equipo. El «Juvenil A»
+            // puede llevar otro número la temporada siguiente.
             //
             // **La fila de junio se completa, no se duplica.** Si el club ya
             // había inscrito al equipo —`(equipo, temporada, nil)`, que es lo
@@ -279,53 +322,29 @@ public struct LinkTeamToFederation: Sendable {
             //
             // **Y es aditivo**: un equipo juega liga *y* copa (`D-12`), así que
             // la fila de **otra** competición no se toca — se enganchan una por
-            // una y cada una deja la suya.
+            // una y cada una deja la suya, con su código.
             let registrations = try await repositories.teamRegistrations.list(
                 teamID: team.id, seasonID: season.id)
-            if !registrations.contains(where: { $0.competitionID == competition.id }) {
+            let current: TeamRegistration
+            if let existing = registrations.first(where: { $0.competitionID == competition.id }) {
+                current = existing
+            } else {
                 let open = registrations.first { $0.competitionID == nil }
-                try await repositories.teamRegistrations.save(
-                    try TeamRegistration(
-                        id: open?.id ?? TeamRegistrationID(raw: ids.next()),
-                        team: team,
-                        seasonID: season.id,
-                        competitionID: competition.id,
-                        createdAt: open?.createdAt ?? now,
-                        updatedAt: now))
+                current = try TeamRegistration(
+                    id: open?.id ?? TeamRegistrationID(raw: ids.next()),
+                    team: team,
+                    seasonID: season.id,
+                    competitionID: competition.id,
+                    createdAt: open?.createdAt ?? now,
+                    updatedAt: now)
             }
-
-            // ── 4. El enganche ──────────────────────────────────────────────
-            //
-            // **`C-E.10`: el código tiene que estar libre, y se pregunta antes de
-            // escribir.** `federation_team_id` es `UNIQUE` (§3.5), así que sin
-            // esto el choque lo daba Postgres — un `23505` que salía por HTTP
-            // como **500 con el SQL en crudo**, donde el *spec* declara **409**.
-            //
-            // No es un caso raro: es el desenlace **normal de enganchar tarde**.
-            // Por [D-66] la ingesta no crea equipos propios, así que el equipo
-            // del club que nadie enganchó antes de la primera pasada **ya existe
-            // como rival** con ese mismo código. Medido contra la base de trabajo
-            // el 2026-09-24: los 16 equipos del grupo ya estaban escritos.
-            //
-            // **Se pregunta por la lista y no por un puerto nuevo**: es lo que la
-            // cadena de emparejamiento hace en cada pasada (§3.7), así que el
-            // coste ya está pagado y el puerto no se ensancha por un caso de
-            // guarda.
-            //
-            // **Y el propio equipo no cuenta**: volver a enganchar al mismo
-            // código es idempotente, que es lo que hace que reintentar el `202`
-            // sea seguro.
-            if let holder = try await repositories.teams.list().first(where: {
-                $0.federationTeamID == request.ownTeamFederationID && $0.id != team.id
-            }) {
-                throw DomainError.federationTeamIDTaken(
-                    code: request.ownTeamFederationID,
-                    owner: "\(holder.id)")
+            // La transición, con el equipo bloqueado desde el paso 0.
+            // Una fila nueva o la de junio nunca llevan código, así que siempre
+            // cambian; solo no se escribe el reenganche idempotente.
+            let linked = try current.linked(toFederationTeamID: request.ownTeamFederationID)
+            if linked != current {
+                try await repositories.teamRegistrations.save(linked)
             }
-
-            // La transición ya se comprobó al empezar el ámbito, con el equipo
-            // bloqueado (paso 0).
-            try await repositories.teams.save(linked)
 
             // ── 5. La constancia, ANTES de responder (`C-C.11`, `D-96`) ─────
             //
@@ -367,7 +386,7 @@ public struct LinkTeamToFederation: Sendable {
             }
 
             return FederationLinkResult(
-                jobID: accepted.id, teamID: linked.id,
+                jobID: accepted.id, teamID: team.id,
                 competitionID: competition.id, seasonID: season.id)
         }
     }

@@ -265,8 +265,7 @@ struct IngestionPersistenceTests {
             let cadeteB = try Team(
                 id: TeamID(raw: UUID()), opponentClubID: nil,
                 category: .cadete, letter: "B", gender: .masculino,
-                modality: .futbol11, federationTeamID: "3349087",
-                createdAt: Date(), updatedAt: Date())
+                modality: .futbol11, createdAt: Date(), updatedAt: Date())
             try await tenant.scope {
                 try await $0.teams.save(cadeteA)
                 try await $0.teams.save(cadeteB)
@@ -275,7 +274,7 @@ struct IngestionPersistenceTests {
             let bloqueado = try #require(
                 try await tenant.scope { try await $0.teams.lock(cadeteB.id) })
             #expect(bloqueado.id == cadeteB.id)
-            #expect(bloqueado.federationTeamID == "3349087")
+            #expect(bloqueado.letter == "B")
 
             let ninguno = try await tenant.scope {
                 try await $0.teams.lock(TeamID(raw: UUID()))

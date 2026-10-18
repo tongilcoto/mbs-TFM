@@ -1,7 +1,7 @@
 # Backoffice — borrador inicial
 
 > **Qué es esto:** el encuadre acordado el **2026-09-25**, antes de escribir una línea. **No es un plan de
-> fases** —el [Plan de desarrollo-001](./Plan%20de%20desarrollo-001.md) cubre solo la ingesta (F0–F10)— ni
+> fases** —el [Plan de desarrollo backend pre backoffice-001](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md) cubre solo la ingesta (F0–F10)— ni
 > sustituye al ADR ni al LLD del módulo, que **siguen sin escribir**. Es lo que hay que tener delante para
 > abrirlos.
 

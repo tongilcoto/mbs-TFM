@@ -34,17 +34,26 @@ public import struct Foundation.Date
 /// de `C-D.3`. Igual que la coherencia entre competición y temporada, que es una
 /// **FK compuesta** y no una guarda que alguien tenga que recordar (`D-61`).
 ///
-/// # `Team` no se toca
+/// # Y el código de la federación vive aquí (`D-101`)
 ///
-/// Ni `season_id` ni `competition_id` dentro (`D-28`): `federation_team_id` es
-/// estable entre temporadas, así que duplicar la fila del equipo por temporada
-/// rompería la clave de emparejamiento de la ingesta. La temporada se afirma
-/// **sobre** el equipo, no **dentro** de él.
+/// `federationTeamID` es el código que el equipo lleva **en esa competición**.
+/// Iba en `Team`, con la premisa de que era estable entre temporadas: el número
+/// lo es, pero designa la **plaza** del club en la división, no su «Juvenil A».
+/// En Granollers, el A de una temporada es el B de la siguiente ([Anexo FCF
+/// §C.13]). Dentro de una competición no cambia en toda la temporada, así que se
+/// apunta una vez, en el enganche.
+///
+/// `Team` sigue sin `season_id` ni `competition_id` (`D-28`): la temporada se
+/// afirma **sobre** el equipo, no **dentro** de él.
 public struct TeamRegistration: Identifiable, Equatable, Sendable {
     public let id: TeamRegistrationID
     public let teamID: TeamID
     public let seasonID: SeasonID
     public let competitionID: CompetitionID?
+    /// El código del equipo en esta competición (`D-101`). Nulo mientras no se
+    /// haya enganchado, y **siempre** nulo en la fila de junio, que no tiene
+    /// competición en la que significar algo.
+    public let federationTeamID: String?
     public let createdAt: Date
     public let updatedAt: Date
 
@@ -53,6 +62,7 @@ public struct TeamRegistration: Identifiable, Equatable, Sendable {
         team: Team,
         seasonID: SeasonID,
         competitionID: CompetitionID? = nil,
+        federationTeamID: String? = nil,
         createdAt: Date,
         updatedAt: Date
     ) throws {
@@ -74,10 +84,71 @@ public struct TeamRegistration: Identifiable, Equatable, Sendable {
             )
         }
 
+        // **Sin competición no hay código** (`D-101`): el número solo significa
+        // algo dentro de un grupo. El `CHECK` del esquema dice lo mismo.
+        if federationTeamID != nil, competitionID == nil {
+            throw DomainError.invalidValue(
+                field: "federationTeamId",
+                reason: "la inscripción sin competición no lleva código de federación")
+        }
+        if let federationTeamID, federationTeamID.trimmed.isEmpty {
+            throw DomainError.invalidValue(
+                field: "federationTeamId",
+                reason: "el código de federación es opcional, pero si viene no puede estar en blanco")
+        }
+
         self.id = id
         self.teamID = team.id
         self.seasonID = seasonID
         self.competitionID = competitionID
+        self.federationTeamID = federationTeamID
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+extension TeamRegistration {
+    /// **El enganche de `D-67`: una transición, no una fusión** (`D-101`).
+    ///
+    /// Vivía en `Team`. Es la misma regla, pero ahora **por competición**: otro
+    /// código en la misma competición se para con **409**, porque el enganche es
+    /// un administrador afirmando *"este es mi equipo"* y callar le devolvería un
+    /// `202` con la inscripción atada a otro. Repetir el mismo código es
+    /// idempotente, que es lo que hace seguro reintentar el `202`. Y en otra
+    /// competición —la copa, o la temporada siguiente— hay otra fila y no se
+    /// compara nada.
+    ///
+    /// No lleva `TeamID`: la fila **ya es** de un equipo propio, lo comprobó su
+    /// `init`. Por eso se reconstruye sin volver a pedir el `Team`.
+    public func linked(toFederationTeamID incoming: String) throws -> TeamRegistration {
+        guard competitionID != nil else {
+            throw DomainError.invalidValue(
+                field: "federationTeamId",
+                reason: "la inscripción sin competición no lleva código de federación")
+        }
+        if let federationTeamID {
+            guard federationTeamID == incoming else {
+                throw DomainError.alreadyLinkedToFederation(
+                    existing: federationTeamID, incoming: incoming)
+            }
+            return self
+        }
+        return TeamRegistration(
+            id: id, teamID: teamID, seasonID: seasonID, competitionID: competitionID,
+            federationTeamID: incoming, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    /// Para `linked`, que ya parte de una fila válida y propia.
+    private init(
+        id: TeamRegistrationID, teamID: TeamID, seasonID: SeasonID,
+        competitionID: CompetitionID?, federationTeamID: String?,
+        createdAt: Date, updatedAt: Date
+    ) {
+        self.id = id
+        self.teamID = teamID
+        self.seasonID = seasonID
+        self.competitionID = competitionID
+        self.federationTeamID = federationTeamID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

@@ -30,9 +30,13 @@ public struct Team: Identifiable, Equatable, Sendable {
     public let gender: Gender
     public let modality: Modality
 
-    /// El `codigo_equipo` de la federación: identifica al **equipo**, no al club
-    /// (§3.7). **Anulable**: un equipo vive sin él desde que el club lo crea
-    /// hasta que se engancha (`D-66`, `D-67`).
+    /// El `codigo_equipo` de la federación, **solo de los rivales** (`D-101`):
+    /// identifica la plaza de ese club en la división, no al club (§3.7).
+    /// Anulable porque la fuente puede no publicarlo.
+    ///
+    /// **Un equipo propio no lo lleva nunca.** Su código es el de su inscripción
+    /// en cada competición (`TeamRegistration.federationTeamID`): el «Juvenil A»
+    /// puede ser un número un año y otro el siguiente ([Anexo FCF §C.13]).
     public let federationTeamID: String?
 
     public let createdAt: Date
@@ -49,6 +53,11 @@ public struct Team: Identifiable, Equatable, Sendable {
         createdAt: Date,
         updatedAt: Date
     ) throws {
+        if opponentClubID == nil, federationTeamID != nil {
+            throw DomainError.invalidValue(
+                field: "federationTeamId",
+                reason: "un equipo propio no lleva código de federación: va en su inscripción")
+        }
         if let letter, letter.trimmed.isEmpty {
             throw DomainError.invalidValue(
                 field: "letter",
@@ -157,6 +166,13 @@ public struct Team: Identifiable, Equatable, Sendable {
 
     /// La proyección al candidato de la cadena de §3.7 (F4).
     ///
+    /// # Y por qué pide el código del propio por fuera (`D-101`)
+    ///
+    /// Un equipo propio no lleva código: el suyo es el de su inscripción **en la
+    /// competición que se está pasando**, y eso lo sabe el caso de uso, que la ha
+    /// leído. Un rival no tiene inscripción (`D-68`), así que pasarle uno es un
+    /// error del llamante y se para.
+    ///
     /// # Por qué pide el nombre del club por fuera
     ///
     /// El paso 2 compara el **nombre del club**, y `Team` no lo tiene: lo tiene
@@ -171,7 +187,14 @@ public struct Team: Identifiable, Equatable, Sendable {
     /// Es el peor final posible de los tres, y es silencioso. Un equipo rival
     /// cuyo club no aparece en la lista es corrupción de datos, no un caso de
     /// negocio, y se para.
-    public func candidate(opponentClubName: NormalizedName?) throws -> TeamCandidate {
+    public func candidate(
+        opponentClubName: NormalizedName?, ownCode: String?
+    ) throws -> TeamCandidate {
+        if !isOwn, ownCode != nil {
+            throw DomainError.invalidValue(
+                field: "ownCode",
+                reason: "un equipo rival no tiene inscripción: su código es el suyo")
+        }
         let ownership: TeamOwnership
         switch (opponentClubID, opponentClubName) {
         case (nil, _):
@@ -187,7 +210,7 @@ public struct Team: Identifiable, Equatable, Sendable {
 
         return TeamCandidate(
             id: id,
-            federationTeamID: federationTeamID,
+            federationTeamID: isOwn ? ownCode : federationTeamID,
             ownership: ownership,
             category: category,
             letter: letter,
@@ -198,64 +221,12 @@ public struct Team: Identifiable, Equatable, Sendable {
 }
 
 extension Team {
-    /// **El enganche de `D-67`: una transición, no una fusión.**
-    ///
-    /// # Por qué no es `merging`, que es la pregunta entera
-    ///
-    /// `federationTeamID` es campo **de emparejamiento** (§3.7) y su política es
-    /// `UpsertPolicy.matching`: rellena hueco y **calla** cuando ya hay valor
-    /// (`D-76`). Eso es lo correcto para la ingesta — un `codigo_equipo` distinto
-    /// llegando en la pasada del lunes no puede pisar el que ya está — y es lo
-    /// contrario de lo correcto aquí: el enganche no es la fuente hablando, es un
-    /// **administrador afirmando** *"este es mi equipo"*. Callar le devolvería un
-    /// `202` mientras el equipo se queda enganchado a otro sitio.
-    ///
-    /// La misma columna con dos escritores y dos reglas, que es lo que §5.1 llama
-    /// la frontera de propiedad. De ahí que sea un método aparte y no un
-    /// parámetro más de `merging`.
-    ///
-    /// # El mismo código no es conflicto
-    ///
-    /// El enganche es **aditivo**: un equipo juega liga *y* copa (`D-12`) y se
-    /// engancha una vez por competición, pero su `codigo_equipo` identifica al
-    /// **equipo** y no a la competición (§3.7) — así que el segundo enganche
-    /// llega con el mismo valor. Rechazarlo dejaría la copa inenganchable. Mismo
-    /// criterio que `Competition.requireUnchanged`: repetir lo que ya hay es
-    /// idempotente.
-    ///
-    /// # Y no se llega aquí desde un equipo rival
-    ///
-    /// No hace falta comprobarlo: `D-66` fija `opponentClubID` como campo del
-    /// BFF, y quien decide *qué* equipo se engancha es la ruta —desde la página
-    /// del equipo propio—. Lo que sí se comprueba es lo que esta fila puede
-    /// contradecir por sí sola.
-    public func linked(toFederationTeamID incoming: String) throws -> Team {
-        if let federationTeamID, federationTeamID != incoming {
-            throw DomainError.alreadyLinkedToFederation(
-                existing: federationTeamID, incoming: incoming)
-        }
-
-        return try Team(
-            id: id,
-            opponentClubID: opponentClubID,
-            category: category,
-            letter: letter,
-            gender: gender,
-            modality: modality,
-            federationTeamID: incoming,
-            createdAt: createdAt,
-            updatedAt: updatedAt
-        )
-    }
-}
-
-extension Team {
     /// El *upsert* del equipo (§3.7), y son solo dos campos.
     ///
     /// | Campo | Clase | Qué hace |
     /// |---|---|---|
     /// | `opponentClubID` | **de propiedad** | la ingesta no lo toca **nunca** (`D-20`) |
-    /// | `federationTeamID` | **de emparejamiento** | no sobrescribe; rellena hueco (`D-76`) |
+    /// | `federationTeamID` | **de emparejamiento** | no sobrescribe; rellena hueco (`D-76`). **En un propio, nunca** (`D-101`) |
     ///
     /// Los otros cuatro —`category`, `letter`, `gender`, `modality`— **no están
     /// en la firma** porque son identidad (§3.5): no se fusionan, se empareja
@@ -272,8 +243,11 @@ extension Team {
             letter: letter,
             gender: gender,
             modality: modality,
-            federationTeamID: UpsertPolicy.matching(
-                existing: federationTeamID, incoming: incomingFederationTeamID),
+            // El propio no lo recibe: su código es el de la inscripción (`D-101`).
+            federationTeamID: isOwn
+                ? nil
+                : UpsertPolicy.matching(
+                    existing: federationTeamID, incoming: incomingFederationTeamID),
             createdAt: createdAt,
             updatedAt: updatedAt
         )
