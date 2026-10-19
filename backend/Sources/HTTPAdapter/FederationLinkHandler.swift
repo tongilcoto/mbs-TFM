@@ -110,7 +110,7 @@ extension APIHandler {
             seasonLabel = try payload.seasonLabel.map { try SeasonLabel($0) }
         } catch DomainError.invalidValue(_, let reason) {
             return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "INVALID_VALUE",
+                Self.problem(status: 400, code: .INVALID_VALUE,
                              title: "Valor no válido",
                              detail: "seasonLabel: \(reason)"))))
         }

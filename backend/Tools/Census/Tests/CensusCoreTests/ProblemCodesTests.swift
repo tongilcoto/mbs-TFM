@@ -43,4 +43,51 @@ struct ProblemCodesTests {
         let tests = [SourceFile(path: "T.swift", text: #"#expect(code == "TEAM_NOT_FOUND")"#)]
         #expect(filesMentioning(code: "NOT_FOUND", in: tests).isEmpty)
     }
+
+    // ── Desde R1.4: el código como caso de la lista del catálogo (`.X`) ──────
+
+    @Test("`code: .X` también es un código emitido: las llamadas a `problem(...)` de los handlers (R1.4)")
+    func emittedAsContractCase() {
+        let handler = SourceFile(path: "Sources/HTTPAdapter/IngestionHandler.swift", text: """
+            return .badRequest(.init(body: .application_problem_plus_json(
+                Self.problem(status: 400, code: .INVALID_LIMIT, title: "…"))))
+            """)
+        #expect(emittedProblemCodes(in: [handler]) == [CodeEmission(
+            code: "INVALID_LIMIT", file: "Sources/HTTPAdapter/IngestionHandler.swift", line: 2)])
+    }
+
+    @Test("un test nombra el código si lo escribe como caso de la lista (`.X`)")
+    func mentionedAsContractCase() {
+        let tests = [
+            SourceFile(path: "Tests/APITests/A.swift", text: "#expect(problem.code == .TEAM_NOT_FOUND)"),
+            SourceFile(path: "Tests/APITests/B.swift", text: "// TEAM_NOT_FOUND sin punto ni comillas no cuenta"),
+        ]
+        #expect(filesMentioning(code: "TEAM_NOT_FOUND", in: tests) == ["Tests/APITests/A.swift"])
+    }
+
+    @Test("con `.X`, ni la cola ni la cabeza de otro código cuentan (`.NOT_FOUND` y `.TEAM` en `.TEAM_NOT_FOUND`)")
+    func memberHasBothBorders() {
+        let tests = [SourceFile(path: "T.swift", text: "#expect(problem.code == .TEAM_NOT_FOUND)")]
+        #expect(filesMentioning(code: "NOT_FOUND", in: tests).isEmpty)
+        #expect(filesMentioning(code: "TEAM", in: tests).isEmpty)
+    }
+
+    // ── La lista del catálogo (R1.5) ──────────────────────────────────────
+
+    @Test("la lista se lee del `enum` del esquema `ProblemCode`; sin él, no hay lista")
+    func contractListIsReadFromTheSpec() {
+        let spec: [String: Any] = ["components": ["schemas": [
+            "ProblemCode": ["type": "string", "enum": ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND"]],
+        ]]]
+        #expect(contractProblemCodes(spec: spec) == ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND"])
+        #expect(contractProblemCodes(spec: ["components": ["schemas": [:]]]) == nil)
+    }
+
+    @Test("un código emitido que no está en la lista sale; los de la lista sin emitir, no")
+    func missingFromContract() {
+        let missing = codesMissingFromContract(
+            emitted: ["TEAM_NOT_FOUND", "INVALID_LIMIT", "SEASON_NOT_FOUND"],
+            contract: ["SEASON_NOT_FOUND", "TEAM_NOT_FOUND", "NOT_FOUND"])
+        #expect(missing == ["INVALID_LIMIT"])
+    }
 }

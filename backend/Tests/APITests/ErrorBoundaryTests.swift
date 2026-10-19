@@ -331,7 +331,7 @@ struct ActorSeamTests {
                 let problem = try JSONDecoder().decode(
                     Components.Schemas.Problem.self,
                     from: Data(response.body.readableBytesView))
-                #expect(problem.code == "TENANT_MISMATCH")
+                #expect(problem.code == .TENANT_MISMATCH)
                 #expect(problem.detail?.contains("e2uno") == true)
                 #expect(problem.detail?.contains("e2dos") == true)
             }
@@ -418,7 +418,7 @@ struct ActorSeamTests {
                 let problem = try JSONDecoder().decode(
                     Components.Schemas.Problem.self,
                     from: Data(response.body.readableBytesView))
-                #expect(problem.code == "TENANT_MISMATCH")
+                #expect(problem.code == .TENANT_MISMATCH)
             }
 
             try await TestEnvironment.dropClubs([slug], schemaPrefix: Self.prefix, on: app)

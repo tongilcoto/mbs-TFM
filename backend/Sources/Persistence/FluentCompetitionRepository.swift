@@ -47,9 +47,15 @@ public struct FluentCompetitionRepository: CompetitionRepository {
             .toDomain()
     }
 
-    public func list(seasonID: SeasonID) async throws -> [Competition] {
-        try await CompetitionRecord.query(on: database)
-            .filter(\.$season.$id == seasonID.raw)
+    public func list(_ filter: CompetitionFilter) async throws -> [Competition] {
+        let query = CompetitionRecord.query(on: database)
+        // Cada filtro que viene es una condición más (se suman); el que no viene
+        // no añade ninguna. Los enumerados bajan a su *raw value*, como al guardar.
+        if let seasonID = filter.seasonID { query.filter(\.$season.$id == seasonID.raw) }
+        if let modality = filter.modality { query.filter(\.$modality == modality.rawValue) }
+        if let ageCategory = filter.ageCategory { query.filter(\.$ageCategory == ageCategory.rawValue) }
+        if let gender = filter.gender { query.filter(\.$gender == gender.rawValue) }
+        return try await query
             .sort(\.$ageCategory)
             .sort(\.$groupLabel)
             .all()

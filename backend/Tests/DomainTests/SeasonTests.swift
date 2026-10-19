@@ -70,54 +70,73 @@ struct SeasonTests {
         #expect(updated.isArchived, "archivedAt no es campo de PATCH")
     }
 
-    /// §3.2: la vigente es la de `endDate` **más próximo que aún es ≥ hoy**.
-    @Test("la temporada vigente es la de fin más próximo aún no pasado (§3.2)")
-    func currentIsTheNearestNotYetEnded() throws {
-        let seasons = [
-            try Self.make("2023/24"),  // acabó el 2024-06-30
-            try Self.make("2024/25"),  // acabó el 2025-06-30
-            try Self.make("2025/26"),  // acaba  el 2026-06-30
-            try Self.make("2026/27"),  // acaba  el 2027-06-30
-        ]
-        let enero2026 = Date(timeIntervalSince1970: 1_767_225_600)  // 2026-01-01
-
-        #expect(seasons.current(on: enero2026)?.label.value == "2025/26")
+    /// Un instante en UTC, para escribir las horas de los tests sin ambigüedad.
+    static func utc(_ text: String) -> Date {
+        try! Date(text, strategy: .iso8601)
     }
 
-    /// El corte es **inclusivo**: el 30 de junio la temporada sigue siendo la
-    /// vigente; el 1 de julio ya lo es la siguiente. Como el tiempo no retrocede,
-    /// hay exactamente una y no queda invariante que mantener.
-    @Test("el último día de la temporada aún es el suyo (§3.2)")
-    func theLastDayStillCounts() throws {
-        let seasons = [try Self.make("2025/26"), try Self.make("2026/27")]
-        let label = try SeasonLabel("2025/26")
-
-        #expect(seasons.current(on: label.endDate)?.label.value == "2025/26")
-        #expect(seasons.current(on: label.endDate.addingTimeInterval(86_400))?
-            .label.value == "2026/27")
-    }
-
-    /// Archivar oculta la temporada (§3.5). Una temporada oculta que resultara
-    /// ser la vigente dejaría al cliente sin ninguna.
-    @Test("una temporada archivada no puede ser la vigente (§3.5)")
-    func archivedSeasonsAreNeverCurrent() throws {
-        let vigente = try Self.make("2025/26")
+    /// §3.2 (Plan R1, decisión 5): **en curso es la que contiene el día de hoy**,
+    /// del 1 de julio al 30 de junio.
+    @Test("la temporada en curso es la que contiene el día de hoy (§3.2)")
+    func currentIsTheOneContainingToday() throws {
         let seasons = [
-            try vigente.archived(at: Date(timeIntervalSince1970: 0)),
+            try Self.make("2024/25"),
+            try Self.make("2025/26"),
             try Self.make("2026/27"),
         ]
-        let enero2026 = Date(timeIntervalSince1970: 1_767_225_600)
 
-        #expect(seasons.current(on: enero2026)?.label.value == "2026/27")
+        #expect(seasons.current(on: Self.utc("2026-01-15T12:00:00Z"))?.label.value == "2025/26")
     }
 
-    /// Con todas pasadas no hay vigente, y eso es un resultado, no un fallo.
+    /// El caso en que la regla vieja (*"`endDate` más próximo que aún es ≥ hoy"*)
+    /// fallaba: sin la del año creada, una temporada creada por adelantado salía
+    /// en curso meses antes de empezar. Y la web no podía decir *"todavía no ha
+    /// empezado"* (Plan R1, decisión 5).
+    @Test("una temporada creada por adelantado no está en curso antes de su 1 de julio")
+    func aSeasonCreatedInAdvanceIsNotCurrentYet() throws {
+        let seasons = [try Self.make("2025/26"), try Self.make("2027/28")]
+
+        #expect(seasons.current(on: Self.utc("2026-10-18T12:00:00Z")) == nil)
+    }
+
+    /// El corte es **por días y en hora de Madrid**: el 30 de junio, a cualquier
+    /// hora, la temporada sigue siendo la suya. La regla vieja comparaba el
+    /// instante con las 00:00 del 30 de junio, y a mediodía ya daba la siguiente.
+    @Test("el 30 de junio, hasta las 23:59 de Madrid, sigue siendo de la temporada que acaba")
+    func theWholeLastDayCounts() throws {
+        let seasons = [try Self.make("2025/26"), try Self.make("2026/27")]
+
+        // 23:30 en Madrid (UTC+2 en verano).
+        #expect(seasons.current(on: Self.utc("2026-06-30T21:30:00Z"))?.label.value == "2025/26")
+    }
+
+    /// El día es el de Madrid, no el de UTC: a las 00:30 del 1 de julio en Madrid
+    /// todavía es 30 de junio en UTC, y la temporada ya es la nueva.
+    @Test("el 1 de julio de Madrid ya es de la temporada nueva, aunque en UTC sea 30 de junio")
+    func theDayIsCountedInMadrid() throws {
+        let seasons = [try Self.make("2025/26"), try Self.make("2026/27")]
+
+        #expect(seasons.current(on: Self.utc("2026-06-30T22:30:00Z"))?.label.value == "2026/27")
+    }
+
+    /// Archivar oculta la temporada (§3.5). Una temporada oculta no está en curso.
+    @Test("una temporada archivada no está en curso (§3.5)")
+    func archivedSeasonsAreNeverCurrent() throws {
+        let seasons = [
+            try Self.make("2025/26").archived(at: Date(timeIntervalSince1970: 0)),
+            try Self.make("2026/27"),
+        ]
+
+        #expect(seasons.current(on: Self.utc("2026-01-15T12:00:00Z")) == nil)
+    }
+
+    /// Sin ninguna en curso no hay vigente, y eso es un resultado, no un fallo:
+    /// es julio antes de crear la del año.
     @Test("sin ninguna temporada en curso, no hay vigente (§3.2)")
     func noCurrentSeasonIsAValidAnswer() throws {
-        let seasons = [try Self.make("2023/24")]
-        let enero2026 = Date(timeIntervalSince1970: 1_767_225_600)
+        let seasons = [try Self.make("2025/26")]
 
-        #expect(seasons.current(on: enero2026) == nil)
-        #expect([Season]().current(on: enero2026) == nil)
+        #expect(seasons.current(on: Self.utc("2026-08-01T12:00:00Z")) == nil)
+        #expect([Season]().current(on: Self.utc("2026-08-01T12:00:00Z")) == nil)
     }
 }

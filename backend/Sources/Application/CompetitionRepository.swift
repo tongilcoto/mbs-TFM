@@ -35,8 +35,41 @@ public protocol CompetitionRepository: Sendable {
         seasonID: SeasonID, federationGroupID: String
     ) async throws -> Competition?
 
-    func list(seasonID: SeasonID) async throws -> [Competition]
+    /// Las que cumplen **todos** los filtros que vengan (`GET /v1/competitions`);
+    /// uno que no viene no filtra. Orden: categoría y grupo.
+    func list(_ filter: CompetitionFilter) async throws -> [Competition]
 
     /// *Upsert* del agregado (§4.3).
     func save(_ competition: Competition) async throws
+}
+
+/// Los filtros de `GET /v1/competitions` (§5.1). **Todos opcionales y se suman**:
+/// cada uno que viene estrecha el resultado, y uno que no viene no filtra.
+///
+/// El catálogo acepta los cuatro, y se programan los cuatro: un filtro que el
+/// catálogo acepta y el servidor ignora devolvería datos que no se han pedido, sin
+/// avisar (Plan R1, §5).
+public struct CompetitionFilter: Equatable, Sendable {
+    public var seasonID: SeasonID?
+    public var modality: Modality?
+    public var ageCategory: TeamCategory?
+    public var gender: Gender?
+
+    public init(
+        seasonID: SeasonID? = nil, modality: Modality? = nil,
+        ageCategory: TeamCategory? = nil, gender: Gender? = nil
+    ) {
+        self.seasonID = seasonID
+        self.modality = modality
+        self.ageCategory = ageCategory
+        self.gender = gender
+    }
+}
+
+extension CompetitionRepository {
+    /// Las de una temporada. Es la lectura de la ingesta, que recorre la
+    /// temporada entera; existía antes que los filtros y se queda como atajo.
+    public func list(seasonID: SeasonID) async throws -> [Competition] {
+        try await list(CompetitionFilter(seasonID: seasonID))
+    }
 }

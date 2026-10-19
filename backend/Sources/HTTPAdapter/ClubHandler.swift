@@ -191,7 +191,7 @@ extension APIHandler {
         let actor = try actors.currentActor()
         guard case .json(let body) = input.body else {
             return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "BAD_REQUEST",
+                Self.problem(status: 400, code: .BAD_REQUEST,
                              title: "El cuerpo debe ser application/json"))))
         }
 
@@ -202,7 +202,7 @@ extension APIHandler {
         // un cuerpo sintácticamente válido que no pide nada: 400, no 422.
         guard !command.isEmpty else {
             return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "EMPTY_PATCH",
+                Self.problem(status: 400, code: .EMPTY_PATCH,
                              title: "El cuerpo debe traer al menos un campo",
                              detail: "minProperties: 1"))))
         }
@@ -218,10 +218,13 @@ extension APIHandler {
 
     /// Construye el cuerpo RFC 7807 con el **tipo generado del spec**, no con un
     /// diccionario suelto: así el cuerpo de error también está atado al contrato.
+    /// El código sale de la **lista cerrada** del catálogo (`ProblemCode`): uno
+    /// que no esté en ella no compila.
     static func problem(
-        status: Int, code: String, title: String, detail: String? = nil
+        status: Int, code: Components.Schemas.ProblemCode, title: String, detail: String? = nil
     ) -> Components.Schemas.Problem {
-        .init(_type: "https://api.example.com/problems/\(code.lowercased().replacingOccurrences(of: "_", with: "-"))",
-              title: title, status: status, detail: detail, code: code)
+        let slug = code.rawValue.lowercased().replacingOccurrences(of: "_", with: "-")
+        return .init(_type: "https://api.example.com/problems/\(slug)",
+                     title: title, status: status, detail: detail, code: code)
     }
 }

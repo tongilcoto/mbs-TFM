@@ -5,8 +5,8 @@
       "id": "K1-underscore",
       "description": "el patrón de los códigos pierde el `_`: `TEAM_NOT_FOUND` deja de contarse",
       "file": "Sources/CensusCore/ProblemCodes.swift",
-      "find": "/code: \"([A-Z_]+)\"/",
-      "replace": "/code: \"([A-Z]+)\"/"
+      "find": "/code: (?:\"([A-Z_]+)\"|",
+      "replace": "/code: (?:\"([A-Z]+)\"|"
     },
     {
       "id": "K2-line",
@@ -19,8 +19,8 @@
       "id": "K3-quotes",
       "description": "el código se busca sin comillas: `NOT_FOUND` pasa por nombrado dentro de `TEAM_NOT_FOUND`",
       "file": "Sources/CensusCore/ProblemCodes.swift",
-      "find": "tests.filter { $0.text.contains(\"\\\"\\(code)\\\"\") }.map(\\.path)",
-      "replace": "tests.filter { $0.text.contains(code) }.map(\\.path)"
+      "find": "$0.text.contains(\"\\\"\\(code)\\\"\")",
+      "replace": "$0.text.contains(code)"
     },
     {
       "id": "K4-2xx",
@@ -98,6 +98,41 @@
       "file": "Sources/CensusCore/KnownGaps.swift",
       "find": "unexpected: gaps.subtracting(knownKeys).sorted(),",
       "replace": "unexpected: [],"
+    },
+    {
+      "id": "K15-emitted-member",
+      "description": "el patrón de los códigos emitidos deja de ver `code: .X`: los 8 de los handlers se pierden (R1.4)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "|\\.([A-Z_]+)(?![A-Za-z0-9_]))/",
+      "replace": "|\\.NUNCA([A-Z_]+)(?![A-Za-z0-9_]))/"
+    },
+    {
+      "id": "K16-mention-member",
+      "description": "un test que nombra el código como `.X` deja de contar (R1.4)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": " || $0.text.contains(member)",
+      "replace": ""
+    },
+    {
+      "id": "K17-member-border",
+      "description": "sin borde de identificador detrás de `.X`: `.TEAM_NOT_FOUND` pasa por nombrar `TEAM`",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "Regex(\"\\\\.\\(code)(?![A-Za-z0-9_])\")",
+      "replace": "Regex(\"\\\\.\\(code)\")"
+    },
+    {
+      "id": "K18-contract-key",
+      "description": "la lista se busca en otro esquema: el catálogo parece no tenerla (R1.5)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "schemas?[\"ProblemCode\"]",
+      "replace": "schemas?[\"Problem\"]"
+    },
+    {
+      "id": "K19-contract-missing",
+      "description": "el censo deja de ver los códigos emitidos que faltan en la lista (R1.5)",
+      "file": "Sources/CensusCore/ProblemCodes.swift",
+      "find": "Set(emitted).subtracting(contract).sorted()",
+      "replace": "[String]()"
     }
   ]
 }

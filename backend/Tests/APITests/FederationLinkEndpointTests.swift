@@ -482,7 +482,7 @@ struct FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .conflict)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "COMPETITION_IDENTITY_MISMATCH")
+                #expect(problem.code == .COMPETITION_IDENTITY_MISMATCH)
                 #expect(problem.detail?.contains("infantil") == true)
                 #expect(problem.detail?.contains("cadete") == true)
             }
@@ -792,7 +792,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .conflict)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "ALREADY_LINKED_TO_FEDERATION")
+                #expect(problem.code == .ALREADY_LINKED_TO_FEDERATION)
                 #expect(problem.status == 409)
                 // El `detail` lleva **los dos códigos**: quien lo lee es el
                 // administrador, y sin ellos no sabría cuál de sus equipos es.
@@ -865,7 +865,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .conflict)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "COMPETITION_IDENTITY_MISMATCH")
+                #expect(problem.code == .COMPETITION_IDENTITY_MISMATCH)
                 // **Las dos ternas enteras**: quien lo lee es un administrador
                 // mirando dos rótulos, así que no hace falta un campo que diga
                 // cuál de los tres falla.
@@ -908,7 +908,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .badRequest)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "INVALID_VALUE")
+                #expect(problem.code == .INVALID_VALUE)
                 #expect(problem.detail?.hasPrefix("seasonLabel: debe ser AAAA/AB") == true,
                         "\(problem.detail ?? "nil")")
             }
@@ -934,7 +934,7 @@ extension FederationLinkEndpointTests {
                 ) { response async throws in
                     #expect(response.status == .notFound, "\(path)")
                     let problem = try Self.decodeProblem(response)
-                    #expect(problem.code == "TEAM_NOT_FOUND", "\(path)")
+                    #expect(problem.code == .TEAM_NOT_FOUND, "\(path)")
                     // **Comparado EXACTO, y eso es lo que `F10-ter` compró.**
                     // Hasta entonces el `detail` llevaba el UUID en mayúsculas
                     // —`"\(id.raw)"`, que es lo que hace Foundation— mientras que
@@ -978,7 +978,7 @@ extension FederationLinkEndpointTests {
                 ) { response async throws in
                     #expect(response.status == .notImplemented, "\(path)")
                     let problem = try Self.decodeProblem(response)
-                    #expect(problem.code == "FEDERATION_ADAPTER_MISSING", "\(path)")
+                    #expect(problem.code == .FEDERATION_ADAPTER_MISSING, "\(path)")
                     #expect(problem.detail?.contains("fcf") == true, "\(path)")
                 }
             }
@@ -1045,7 +1045,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == expected)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == code)
+                #expect(problem.code?.rawValue == code)
                 // **El motivo viaja**: es un 5xx, así que el `detail` se calla
                 // fuera de desarrollo (`exposesInternalDetail`), pero el `code` y
                 // el `title` son lo que distingue *"la RFFM está caída"* de *"la
@@ -1087,7 +1087,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .badRequest)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "UNREADABLE_FEDERATION_URL")
+                #expect(problem.code == .UNREADABLE_FEDERATION_URL)
                 // **El motivo y la URL van enteros**: es un 4xx, así que el
                 // `detail` no se calla, y quien lo lee es el administrador que
                 // acaba de pegarla.
@@ -1120,7 +1120,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .badRequest)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "SEASON_LABEL_UNAVAILABLE")
+                #expect(problem.code == .SEASON_LABEL_UNAVAILABLE)
                 #expect(problem.detail?.contains("21") == true)
                 #expect(problem.detail?.contains("Da de alta la temporada") == true)
             }
@@ -1215,7 +1215,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .conflict)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "FEDERATION_TEAM_ID_TAKEN")
+                #expect(problem.code == .FEDERATION_TEAM_ID_TAKEN)
                 #expect(problem.detail?.contains("3349086") == true)
                 #expect(problem.detail?.contains(neighbour.raw.uuidString.lowercased()) == true)
             }
@@ -1246,7 +1246,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .conflict)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "OWN_TEAM_NOT_IN_CALENDAR")
+                #expect(problem.code == .OWN_TEAM_NOT_IN_CALENDAR)
                 #expect(problem.detail?.contains("55555") == true)
                 #expect(problem.detail?.contains("24037549") == true)
             }
@@ -1383,7 +1383,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .badGateway)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "FEDERATION_SOURCE_MISMATCH")
+                #expect(problem.code == .FEDERATION_SOURCE_MISMATCH)
                 // **Los dos nombres**: sin ellos, *"apunta a otra competición"*
                 // no dice a cuál, y quien lo lee tiene doce equipos.
                 #expect(problem.detail?.contains("PRIMERA CADETE") == true)
@@ -1426,7 +1426,7 @@ extension FederationLinkEndpointTests {
             ) { response async throws in
                 #expect(response.status == .badGateway)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "FEDERATION_SEASON_MISMATCH")
+                #expect(problem.code == .FEDERATION_SEASON_MISMATCH)
                 // La etiqueta que se esperaba y **la mediana**, en ISO y en UTC:
                 // el Dominio entrega la fecha sin formatear porque no conoce ni
                 // la zona ni el idioma de quien va a leer el problema (§5.4).

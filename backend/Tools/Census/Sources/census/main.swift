@@ -6,8 +6,10 @@ import Yams
 // census [--package-path <dir>] [--known-gaps <fichero>]
 //
 // Desde `backend/`. Escribe el censo por stdout y sale con:
-//   0  los huecos de hoy son exactamente los de known-gaps.json
-//   1  hay un hueco nuevo, o una entrada de la lista ya no es hueco
+//   0  los huecos de hoy son exactamente los de known-gaps.json, y cada código
+//      emitido está en la lista del catálogo (`ProblemCode`)
+//   1  hay un hueco nuevo, una entrada de la lista ya no es hueco, o el servidor
+//      emite un código que no está en la lista del catálogo
 //   3  no se pudo hacer el censo
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -78,6 +80,9 @@ func main() throws -> Int32 {
     guard let operations = (config["filter"] as? [String: Any])?["operations"] as? [String] else {
         throw Failure(description: "openapi-generator-config.yaml no tiene filter.operations")
     }
+    guard let contractCodes = contractProblemCodes(spec: spec) else {
+        throw Failure(description: "openapi.yaml no tiene la lista de códigos (components.schemas.ProblemCode.enum)")
+    }
     let sources = try swiftFiles(under: "Sources", in: package)
     let tests = try swiftFiles(under: "Tests", in: package)
     let apiTests = tests.filter { $0.path.hasPrefix("Tests/APITests/") }
@@ -89,6 +94,7 @@ func main() throws -> Int32 {
     let codes = Set(emissions.map(\.code)).sorted()
     let codeMentions = Dictionary(uniqueKeysWithValues: codes.map { ($0, filesMentioning(code: $0, in: tests)) })
     let codeGaps = Set(codes.filter { codeMentions[$0]!.isEmpty })
+    let missingFromContract = codesMissingFromContract(emitted: codes, contract: contractCodes)
 
     let fields = try reachableFields(spec: spec, operations: operations).sorted()
     let fieldGaps = Set(fields.filter { !mentions(property: $0.property, in: apiTests) }.map(\.description))
@@ -110,6 +116,20 @@ func main() throws -> Int32 {
         let places = emissions.filter { $0.code == code }.map { "`\($0.file):\($0.line)`" }
         let named = codeMentions[code]!.map { "`\(($0 as NSString).lastPathComponent)`" }
         out.append("| `\(code)` | \(places.joined(separator: " ")) | \(named.isEmpty ? "—" : named.joined(separator: " ")) |")
+    }
+    out.append("")
+    out.append("## La lista del catálogo (`ProblemCode`): \(contractCodes.count) códigos")
+    out.append("")
+    if missingFromContract.isEmpty {
+        out.append("- **Cada código emitido está en la lista.**")
+    } else {
+        out.append("- ⚠️ **Emitidos y fuera de la lista**: \(missingFromContract.map { "`\($0)`" }.joined(separator: ", ")). "
+                   + "Añádelos al `enum` de `ProblemCode` en `openapi.yaml`.")
+    }
+    let unseen = Set(contractCodes).subtracting(codes).sorted()
+    if !unseen.isEmpty {
+        out.append("- En la lista y sin un `code: …` que el censo vea: \(unseen.map { "`\($0)`" }.joined(separator: ", ")). "
+                   + "No es un fallo: puede salir de una condición (hoy, el `NOT_FOUND` de `ProblemMiddleware`).")
     }
     out.append("")
     out.append("## Campos: \(fields.count - fieldGaps.count) de \(fields.count) nombrados en `Tests/APITests/`")
@@ -136,7 +156,7 @@ func main() throws -> Int32 {
         }
     }
     print(out.joined(separator: "\n"))
-    return codeRatchet.holds && fieldRatchet.holds ? 0 : 1
+    return codeRatchet.holds && fieldRatchet.holds && missingFromContract.isEmpty ? 0 : 1
 }
 
 do {

@@ -156,8 +156,13 @@ struct FakeCompetitionRepository: CompetitionRepository {
             $0.seasonID == seasonID && $0.federationGroupID == federationGroupID
         }
     }
-    func list(seasonID: SeasonID) async throws -> [Competition] {
-        await store.competitions.filter { $0.seasonID == seasonID }
+    func list(_ filter: CompetitionFilter) async throws -> [Competition] {
+        await store.competitions.filter { competition in
+            (filter.seasonID.map { competition.seasonID == $0 } ?? true)
+                && (filter.modality.map { competition.modality == $0 } ?? true)
+                && (filter.ageCategory.map { competition.ageCategory == $0 } ?? true)
+                && (filter.gender.map { competition.gender == $0 } ?? true)
+        }
     }
     func save(_ competition: Competition) async throws { await store.save(competition) }
 }
@@ -179,6 +184,9 @@ struct FakeOpponentClubRepository: OpponentClubRepository {
 struct FakeTeamRepository: TeamRepository {
     let store: IngestionStore
     func list() async throws -> [Team] { await store.teams }
+    func list(ids: [TeamID]) async throws -> [Team] {
+        await store.teams.filter { ids.contains($0.id) }
+    }
     func find(_ id: TeamID) async throws -> Team? {
         await store.teams.first { $0.id == id }
     }
@@ -203,6 +211,9 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
     }
     func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
         await store.teamRegistrations.filter { $0.competitionID == competitionID }
+    }
+    func list(seasonID: SeasonID) async throws -> [TeamRegistration] {
+        await store.teamRegistrations.filter { $0.seasonID == seasonID }
     }
     func save(_ registration: TeamRegistration) async throws {
         await store.save(registration)
@@ -262,6 +273,20 @@ struct FakeIngestionRunRepository: IngestionRunRepository {
             .sorted { ($0.finishedAt ?? .distantFuture) > ($1.finishedAt ?? .distantFuture) }
             .prefix(limit)
             .map { $0 }
+    }
+    func recent(competitionIDs: [CompetitionID], perKind: Int) async throws -> [IngestionRun] {
+        let runs = await store.ingestionRuns.filter { competitionIDs.contains($0.competitionID) }
+        return Dictionary(grouping: runs) { "\($0.competitionID)/\($0.kind)" }.values.flatMap {
+            $0.sorted { $0.startedAt > $1.startedAt }.prefix(perKind)
+        }
+    }
+    func lastFinishedAt(competitionIDs: [CompetitionID]) async throws -> [CompetitionID: Date] {
+        let runs = await store.ingestionRuns.filter { competitionIDs.contains($0.competitionID) }
+        return Dictionary(grouping: runs, by: \.competitionID)
+            .compactMapValues { $0.compactMap(\.finishedAt).max() }
+    }
+    func lastFinishedAt() async throws -> Date? {
+        await store.ingestionRuns.compactMap(\.finishedAt).max()
     }
 }
 

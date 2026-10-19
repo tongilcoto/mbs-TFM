@@ -37,6 +37,12 @@ public protocol TeamRepository: Sendable {
     /// (`D-67`).
     func list() async throws -> [Team]
 
+    /// **Los de esos `id`**, de una vez (`listSeasonRegistrations`, `D-102`). Sin
+    /// orden en el resultado; un `id` que no existe no sale. Existe para no traer
+    /// todos los equipos —que incluyen los rivales, cientos— cuando se quieren los
+    /// de unas pocas inscripciones.
+    func list(ids: [TeamID]) async throws -> [Team]
+
     /// **Uno por su id**, que es lo que estrena F10 (`C-D.1`).
     ///
     /// Hasta aquí este puerto solo sabía servir la lista entera, y era
@@ -90,6 +96,11 @@ public protocol TeamRegistrationRepository: Sendable {
     /// (`D-101`). Es lo que la pasada necesita para reconocer a los propios: su
     /// código es el de la fila de la competición que recorre, no el del equipo.
     func list(competitionID: CompetitionID) async throws -> [TeamRegistration]
+
+    /// Las de **esa temporada**, de todos los equipos propios (`D-102`): es el
+    /// equipo en una temporada, leído. Una fila por (equipo, competición), y la de
+    /// junio sin competición. Sin orden en el resultado.
+    func list(seasonID: SeasonID) async throws -> [TeamRegistration]
 
     /// *Upsert* por `id`, igual que los demás: el id lo pone el caso de uso.
     /// **Completar la fila de junio es un `save` con el mismo `id`**, no una
@@ -173,6 +184,24 @@ public protocol IngestionRunRepository: Sendable {
     func findAccepted(
         competitionID: CompetitionID, kind: IngestionKind
     ) async throws -> IngestionRun?
+
+    /// **Las `perKind` últimas pasadas de cada clase**, de cada una de esas
+    /// competiciones, por cuándo empezaron (`D-89`, enmienda). Es lo que lee el
+    /// estado de la ingesta: la última de cada clase decide, y la anterior dice
+    /// qué había antes de una pasada en marcha. Sin orden en el resultado.
+    ///
+    /// Por clase y no las N últimas a secas: una pasada deja una fila de
+    /// clasificación **por jornada**, y treinta jornadas taparían el calendario.
+    func recent(competitionIDs: [CompetitionID], perKind: Int) async throws -> [IngestionRun]
+
+    /// Cuándo acabó la última pasada de cada una de esas competiciones, **bien o
+    /// mal** (`lastIngestionAt`, `D-89`). La que nunca acabó una no sale.
+    func lastFinishedAt(competitionIDs: [CompetitionID]) async throws -> [CompetitionID: Date]
+
+    /// Cuándo acabó la última pasada **del club**, de cualquier competición, bien
+    /// o mal: es lo que pone a cero el reloj de los 15 minutos (`D-89`, enmienda).
+    /// La tabla es de un solo club por construcción (§6).
+    func lastFinishedAt() async throws -> Date?
 }
 
 /// Qué hizo `IngestionRunRepository.record` con la fila (A-11·H-55).

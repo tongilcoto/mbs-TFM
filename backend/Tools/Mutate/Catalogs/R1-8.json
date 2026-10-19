@@ -1,0 +1,237 @@
+{
+  "title": "R1.8 · el estado de la ingesta (D-89, enmienda; Plan R1, decisión 2)",
+  "mutations": [
+    {
+      "id": "D1-edge",
+      "description": "a los 15 minutos justos todavía en marcha",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "if now.timeIntervalSince(reference) >= stuckAfter",
+      "replace": "if now.timeIntervalSince(reference) > stuckAfter",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D2-threshold",
+      "description": "20 minutos en vez de 15",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "stuckAfter: TimeInterval = 15 * 60",
+      "replace": "stuckAfter: TimeInterval = 20 * 60",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D3-no-reset",
+      "description": "el reloj no vuelve a cero cuando acaba otra pasada del club",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "let reference = max(open.startedAt, clubLastFinishedAt ?? open.startedAt)",
+      "replace": "let reference = open.startedAt",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D4-club-only",
+      "description": "el reloj cuenta solo desde la última del club, aunque se pidiera después",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "let reference = max(open.startedAt, clubLastFinishedAt ?? open.startedAt)",
+      "replace": "let reference = clubLastFinishedAt ?? open.startedAt",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D5-no-previous",
+      "description": "pending sin lo de antes",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "return IngestionHealthAssessment(health: .pending, previous: previous)",
+      "replace": "return IngestionHealthAssessment(health: .pending, previous: nil)",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D6-previous-with-open",
+      "description": "lo de antes se calcula con la pasada en marcha dentro",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "recentRuns.filter { $0.id != open.id }",
+      "replace": "recentRuns",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D7-orphan",
+      "description": "una pasada pedida cuenta aunque no sea la última de su clase",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "if let open = latestByKind(recentRuns).first(where: { $0.outcome == .accepted })",
+      "replace": "if let open = recentRuns.first(where: { $0.outcome == .accepted })",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D8-any-failure",
+      "description": "cualquier fallo cuenta, no solo el de la última de cada clase",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "if latestByKind(runs).contains(where: { $0.outcome == .failed })",
+      "replace": "if runs.contains(where: { $0.outcome == .failed })",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D9-by-finish",
+      "description": "la última de cada clase es la que acabó más tarde",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "sameKind.max { $0.startedAt < $1.startedAt }",
+      "replace": "sameKind.max { ($0.finishedAt ?? .distantPast) < ($1.finishedAt ?? .distantPast) }",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D10-order",
+      "description": "«sin datos» va antes que «con fallos»",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "filter": "IngestionHealthTests",
+      "edits": [
+        {
+          "find": "        if latestByKind(runs).contains(where: { $0.outcome == .failed }) { return .failing }\n",
+          "replace": ""
+        },
+        {
+          "find": "        return .ok\n",
+          "replace": "        if latestByKind(runs).contains(where: { $0.outcome == .failed }) { return .failing }\n        return .ok\n"
+        }
+      ]
+    },
+    {
+      "id": "D11-stale-edge",
+      "description": "una semana justa ya es desactualizada",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "now.timeIntervalSince(lastSyncedAt) > staleAfter",
+      "replace": "now.timeIntervalSince(lastSyncedAt) >= staleAfter",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "D12-stale-days",
+      "description": "seis días en vez de siete",
+      "file": "Sources/Domain/IngestionHealth.swift",
+      "find": "staleAfter: TimeInterval = 7 * 24 * 60 * 60",
+      "replace": "staleAfter: TimeInterval = 6 * 24 * 60 * 60",
+      "filter": "IngestionHealthTests"
+    },
+    {
+      "id": "P1-per-kind",
+      "description": "la consulta no corta en las N últimas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "WHERE position <= \\(bind: perKind)",
+      "replace": "WHERE position <= 99",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "P2-partition",
+      "description": "las N últimas de la competición, no de cada clase",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "PARTITION BY competition_id, kind ORDER BY",
+      "replace": "PARTITION BY competition_id ORDER BY",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "P3-order",
+      "description": "las N primeras en vez de las N últimas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "ORDER BY started_at DESC, id DESC",
+      "replace": "ORDER BY started_at ASC, id DESC",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "P4-scope",
+      "description": "las pasadas de competiciones no pedidas se cuelan",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "WHERE competition_id IN (\\(binds: competitionIDs.map(\\.raw)))\n            ) AS ranked",
+      "replace": "WHERE \\(binds: competitionIDs.map(\\.raw)) IS NOT NULL OR true\n            ) AS ranked",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "P5-min",
+      "description": "la primera hora de fin de cada competición, no la última",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "SELECT competition_id, max(finished_at) AS last",
+      "replace": "SELECT competition_id, min(finished_at) AS last",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "P6-club-min",
+      "description": "la primera hora de fin del club, no la última",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "SELECT max(finished_at) AS last FROM",
+      "replace": "SELECT min(finished_at) AS last FROM",
+      "filter": "IngestionHealthPersistenceTests"
+    },
+    {
+      "id": "A1-per-kind",
+      "description": "el caso de uso pide solo la última de cada clase",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "recent(competitionIDs: ids, perKind: 2)",
+      "replace": "recent(competitionIDs: ids, perKind: 1)",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "A2-club",
+      "description": "el caso de uso no pasa el reloj del club",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "clubLastFinishedAt: clubLastFinished,",
+      "replace": "clubLastFinishedAt: nil,",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "A3-last",
+      "description": "lastIngestionAt no llega",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "lastIngestionAt: lastFinished[competition.id])",
+      "replace": "lastIngestionAt: nil)",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "A4-mixed",
+      "description": "a cada competición le llegan las pasadas de todas",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "recentRuns: recent[competition.id] ?? [],",
+      "replace": "recentRuns: recent.values.flatMap { $0 },",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "A5-synced",
+      "description": "el último éxito no llega a la regla",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "lastSyncedAt: competition.lastSyncedAt,",
+      "replace": "lastSyncedAt: nil,",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "H1-previous",
+      "description": "previousIngestionHealth no viaja",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "response.previousIngestionHealth = ingestion.previous.map { .init(value1: $0.toContract()) }",
+      "replace": "response.previousIngestionHealth = nil",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H2-last",
+      "description": "lastIngestionAt no viaja",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "response.lastIngestionAt = lastIngestionAt",
+      "replace": "response.lastIngestionAt = nil",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H3-health",
+      "description": "ingestionHealth no viaja",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "response.ingestionHealth = ingestion.health.toContract()",
+      "replace": "response.ingestionHealth = nil",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "E1-stale",
+      "description": "stale del Dominio sale never en el contrato",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "case .stale: .stale",
+      "replace": "case .stale: .never",
+      "filter": "ContractEnumTests"
+    },
+    {
+      "id": "E2-pending",
+      "description": "pending del Dominio sale ok en el contrato",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "case .pending: .pending",
+      "replace": "case .pending: .ok",
+      "filter": "ContractEnumTests"
+    }
+  ]
+}

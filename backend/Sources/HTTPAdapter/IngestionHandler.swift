@@ -57,7 +57,7 @@ extension APIHandler {
         let limit = input.query.limit ?? Self.defaultRunLimit
         guard (1...Self.maxRunLimit).contains(limit) else {
             return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "INVALID_LIMIT",
+                Self.problem(status: 400, code: .INVALID_LIMIT,
                              title: "`limit` fuera de rango",
                              detail: "1..\(Self.maxRunLimit), recibido \(limit)"))))
         }
@@ -109,7 +109,7 @@ extension APIHandler {
         // recorrido entero de un club por una casilla sin marcar.
         if let competitionIDs, competitionIDs.isEmpty {
             return .badRequest(.init(body: .application_problem_plus_json(
-                Self.problem(status: 400, code: "EMPTY_SELECTION",
+                Self.problem(status: 400, code: .EMPTY_SELECTION,
                              title: "`competitionIds` no puede venir vacío",
                              detail: "minItems: 1. Para la temporada vigente entera, omítelo."))))
         }
@@ -146,7 +146,7 @@ extension APIHandler {
                 // invitaría a reintentar con otro cuerpo, y eso aquí no
                 // arregla nada. La constancia ya está en `ingestion_runs`.
                 return .badGateway(.init(body: .application_problem_plus_json(
-                    Self.problem(status: 502, code: "INGESTION_FAILED",
+                    Self.problem(status: 502, code: .INGESTION_FAILED,
                                  title: "La pasada no terminó",
                                  detail: reason))))
             case nil:
@@ -155,7 +155,7 @@ extension APIHandler {
                 // retorno exige un valor y un `fatalError` aquí tumbaría el
                 // servidor por una rama que no debería existir.
                 return .badGateway(.init(body: .application_problem_plus_json(
-                    Self.problem(status: 502, code: "INGESTION_FAILED",
+                    Self.problem(status: 502, code: .INGESTION_FAILED,
                                  title: "La pasada no llegó a ejecutarse"))))
             }
         }
@@ -281,7 +281,7 @@ extension APIHandler {
     /// entrega como `String` (`D-65`).
     static func invalidUUID(_ error: InvalidUUID) -> Components.Responses.BadRequest {
         .init(body: .application_problem_plus_json(
-            problem(status: 400, code: "INVALID_UUID",
+            problem(status: 400, code: .INVALID_UUID,
                     title: "`\(error.field)` no es un UUID",
                     detail: error.value)))
     }

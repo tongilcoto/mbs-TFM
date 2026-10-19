@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). **632 tests.** Qué trajo cada una: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **682 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -36,7 +36,10 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/club` · `PATCH /v1/club`                                                     | F0                                |
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
 | `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
-| Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
+| `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
+| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
+| Las otras 76 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -385,12 +388,87 @@ curl -s "http://atleti.localhost:8080/v1/ingestion-runs?competitionId=<uuid>&lim
 - **Las pasadas que fallan también quedan registradas**: el `POST` da **502** y el `GET` enseña la fila con
   su `outcome` y su motivo, con el `sqlState` y la restricción si el fallo vino de Postgres (`D-85`).
 
+<a id="temporadas"></a>
+### 4.3 Las temporadas
+
+**Las temporadas del club, de la más reciente a la más antigua.** Es lo que usa el selector de temporada de la
+portada del backoffice (rebanada 1).
+
+```sh
+curl -s http://atleti.localhost:8080/v1/seasons | jq                        # sin las archivadas
+curl -s "http://atleti.localhost:8080/v1/seasons?includeArchived=true" | jq  # con ellas
+```
+
+- **`isCurrent: true` marca la temporada en curso**: la que contiene el día de hoy, del 1 de julio al 30 de
+  junio, contado en hora de Madrid (`D-103`). **Puede no haber ninguna**: en julio, antes de crear la del año,
+  o si la siguiente se creó por adelantado, que no está en curso hasta su 1 de julio.
+- `startDate` y `endDate` son días sin hora (`2026-07-01`), y salen de la etiqueta.
+- **`archivedAt` no viene si la temporada no está archivada**: el campo falta, no llega como `null`.
+
+<a id="competiciones"></a>
+### 4.4 Las competiciones
+
+**Las competiciones del club, con cuatro filtros que se suman.** Es lo que usa la portada del backoffice para
+poner nombre a la competición de cada equipo (rebanada 1).
+
+```sh
+curl -s http://atleti.localhost:8080/v1/competitions | jq                         # todas, de todas las temporadas
+curl -s "http://atleti.localhost:8080/v1/competitions?seasonId=<uuid>" | jq       # las de una temporada
+curl -s "http://atleti.localhost:8080/v1/competitions?ageCategory=cadete&gender=femenino" | jq
+```
+
+| Filtro | Valores |
+|---|---|
+| `seasonId` | El `id` de una temporada (`GET /v1/seasons`). Si no es un UUID, **400**; si no es de ninguna temporada, lista vacía |
+| `modality` | `futbol_11`, `futbol_7`, `futbol_5`, `futbol_sala`, `futbol_playa` |
+| `ageCategory` | `prebenjamin`, `benjamin`, `alevin`, `infantil`, `cadete`, `juvenil`, `senior` |
+| `gender` | `masculino`, `femenino`, `mixto` |
+
+- Salen ordenadas por categoría y grupo.
+
+**Cada competición dice cómo va su ingesta** (`D-89`, con su enmienda del 2026-10-18). Se calcula al pedirla, a
+partir del registro de pasadas (`/v1/ingestion-runs`):
+
+| `ingestionHealth` | En la portada | Cuándo |
+|---|---|---|
+| `failing` | Con fallos | Hay una pasada pedida y **lleva 15 minutos sin acabar ninguna pasada del club**: se da por perdida |
+| `pending` | En marcha | Hay una pasada pedida, y las del club van acabando |
+| `failing` | Con fallos | La última pasada de **alguna** de las tres clases (calendario, clasificación, goleadores) falló |
+| `never` | Sin datos todavía | El calendario nunca se ha sincronizado bien |
+| `stale` | Desactualizada | La última sincronización buena es de hace **más** de una semana |
+| `ok` | Al día | El resto |
+
+- Se mira en ese orden, de arriba abajo, y gana el primero que se cumple.
+- **`previousIngestionHealth` solo viene con `pending`**: dice cómo estaba antes de la pasada en marcha, para no
+  perder un fallo anterior («La anterior tuvo fallos»).
+- `lastSyncedAt` es la última sincronización **buena**; `lastIngestionAt`, cuándo acabó la última pasada, **bien
+  o mal**. Si son distintas, la última falló.
+
+<a id="equipos-de-la-temporada"></a>
+### 4.5 Los equipos de una temporada
+
+**Los equipos del club en una temporada, cada uno con las competiciones en las que juega** (`D-102`). Es la
+lista de la portada del backoffice (rebanada 1); el nombre y el estado de cada competición salen de §4.4.
+
+```sh
+curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registrations | jq
+```
+
+- **Un elemento por equipo**: `team` (el equipo, igual que en cualquier otra respuesta), `seasonId` y
+  `competitions`, una lista con el `competitionId` y el código del equipo en la federación
+  (`federationTeamId`) de cada una.
+- **Un equipo inscrito sin competición todavía** (el estado de junio) sale con `competitions` vacía.
+- Solo equipos **propios**. Ordenados por categoría, de menor a mayor edad, y por letra.
+- `team.clubName` es el **nombre corto** del club, y `team.displayName`, «nombre corto + categoría + letra»
+  (`Celtic Cadete B`).
+- Una temporada que no existe da **404**; un `id` que no es un UUID, **400**.
+
 ---
 
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 632 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 682 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -517,6 +595,9 @@ resultados posibles (cazada, sobrevive, equivalente, **inválida**) están en [s
 
 ### 5.3 El censo del contrato — `Tools/Census`
 
+**Cuenta lo que el servidor promete en su catálogo y ningún test nombra**: códigos de error y campos de las
+respuestas. Lo que se acepta sin test va apuntado, con su motivo, en `Tools/Census/known-gaps.json`.
+
 ```sh
 swift build --package-path Tools/Census
 Tools/Census/.build/debug/census          # códigos Problem y campos del contrato sin test que los nombre
@@ -525,9 +606,25 @@ swift test --package-path Tools/Census    # los tests del censo
 
 **Pásalo al añadir un endpoint.** Busca en el *spec* los códigos de error y los campos que ningún test
 menciona, y sale con `1` si aparece alguno nuevo, o si alguno de los apuntados en
-`Tools/Census/known-gaps.json` ya tiene test. **Que un test mencione algo no significa que lo compruebe**
+`Tools/Census/known-gaps.json` ya tiene test. **También sale con `1` si el servidor emite un código de error que
+no está en la lista del catálogo** (`ProblemCode`, en `openapi.yaml`): se añade allí. **Que un test mencione algo no significa que lo compruebe**
 (H-47): el censo encuentra huecos, pero no garantiza cobertura; para eso está la mutación. El método y sus
 límites, en [su README](./Tools/Census/README.md).
+
+### 5.4 Las dos herramientas son paquetes aparte, y Xcode las enseña cerradas
+
+`Tools/Mutate` y `Tools/Census` tienen **cada una su propio `Package.swift`**, separado del servidor, por dos
+motivos:
+
+- **Sus tests no se mezclan con los del servidor.** El recuento de §0 es solo del servidor; los de las
+  herramientas se pasan con `swift test --package-path Tools/…`.
+- **El censo usa una librería para leer el catálogo (Yams)** que el servidor no necesita.
+
+**Al abrir `backend/Package.swift` en Xcode, salen cerradas**: Xcode trata una carpeta con su propio
+`Package.swift` como otro proyecto y no deja navegarla. Para ver su código, **File → Open** sobre
+`Tools/Census/Package.swift` o `Tools/Mutate/Package.swift`, y se abren en su propia ventana. Para usarlas
+basta la terminal, con los comandos de §5.2 y §5.3. Cuándo se pasan en cada paso, en el
+[plan del backoffice §2.5](../docs/Plan%20de%20desarrollo%20backoffice-001.md).
 
 ---
 
@@ -827,7 +924,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **6.860 líneas, 83 operaciones en 45 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **7.069 líneas, 85 operaciones en 46 rutas y las 21 entidades de §3.2**.
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh
@@ -870,6 +967,7 @@ despista (`missing required module '_NumericsShims'`).
 | Síntoma | Causa casi segura |
 |---|---|
 | `Cannot find type 'Components' in scope` en Xcode | Los tipos del contrato no existen hasta que corre el plugin. Acepta el aviso de confianza y ⌘B. **La CLI es la fuente de verdad**, no el índice |
+| En Xcode, `Tools/Census` o `Tools/Mutate` salen cerradas y no se pueden abrir | Son paquetes aparte ([§5.4](#54-las-dos-herramientas-son-paquetes-aparte-y-xcode-las-enseña-cerradas)). **File → Open** sobre su `Package.swift` |
 | `connection refused` al 5434 | `docker compose up -d db` |
 | Verde sospechosamente rápido (0,002 s) | Corriste sin `REQUIRE_DB=1` y Docker estaba parado: **no se probó nada que toque la base** |
 | `400 TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |

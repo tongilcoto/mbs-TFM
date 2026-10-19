@@ -14,8 +14,8 @@ accessModifier: public
 # EL FILTRO ES EL TRINQUETE DEL ALCANCE.
 #
 # `APIProtocol` declara un método por operación generada, y conformarlo obliga a
-# implementarlas TODAS. Con las 83 operaciones del spec completo, la fase F0
-# tendría que escribir 81 stubs que lanzan "no implementado" — ruido que además
+# implementarlas TODAS. Con las 85 operaciones del spec completo, la fase F0
+# tendría que escribir 83 stubs que lanzan "no implementado" — ruido que además
 # apaga la garantía de D-65, porque un stub compila igual de bien que un handler.
 #
 # En su lugar se genera **solo lo implementado**. Cada fase del plan de
@@ -33,3 +33,6 @@ filter:
     - triggerIngestion    # F6 — el disparador manual del job (D-87)
     - previewFederationLink   # F10 — paso 1 del enganche (D-67): lee la coordenada, no persiste
     - linkTeamToFederation    # F10 — paso 2 (D-67): escribe el enganche en cascada y encola la ingesta
+    - listSeasons             # R1 — las temporadas, para el selector de la portada del backoffice
+    - listCompetitions        # R1 — las competiciones, con sus filtros, para la portada del backoffice
+    - listSeasonRegistrations # R1 — los equipos de una temporada, con sus competiciones (D-102)

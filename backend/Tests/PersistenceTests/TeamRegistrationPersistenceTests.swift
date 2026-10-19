@@ -313,4 +313,61 @@ struct TeamRegistrationPersistenceTests {
             }
         }
     }
+
+    // ── D-102 · el equipo en una temporada, leído (Plan R1, R1.9) ───────────
+
+    static func ownTeam(_ category: TeamCategory, _ letter: String) throws -> Team {
+        try Team(
+            id: TeamID(raw: UUID()), opponentClubID: nil, category: category, letter: letter,
+            gender: .masculino, modality: .futbol11, createdAt: Date(), updatedAt: Date())
+    }
+
+    /// Las de **esa temporada**, de **todos** los equipos: la del A con
+    /// competición y la de junio del B. La del A del año anterior no sale.
+    @Test("list por temporada trae las de todos los equipos en esa temporada y ninguna de otra (D-102)")
+    func listBySeasonBringsEveryTeamInThatSeason() async throws {
+        try await Self.withFixture("treg-season") { a, vigente, anterior, competicion, tenant in
+            let b = try Self.ownTeam(.infantil, "B")
+            let aVigente = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: a, seasonID: vigente,
+                competitionID: competicion, federationTeamID: "3349086",
+                createdAt: Date(), updatedAt: Date())
+            let bJunio = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: b, seasonID: vigente,
+                createdAt: Date(), updatedAt: Date())
+            let aAnterior = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: a, seasonID: anterior,
+                createdAt: Date(), updatedAt: Date())
+            try await tenant.scope {
+                try await $0.teams.save(b)
+                for registration in [aVigente, bJunio, aAnterior] {
+                    try await $0.teamRegistrations.save(registration)
+                }
+            }
+
+            let found = try await tenant.scope { try await $0.teamRegistrations.list(seasonID: vigente) }
+
+            #expect(Set(found.map(\.id)) == [aVigente.id, bJunio.id])
+            let deA = try #require(found.first { $0.id == aVigente.id })
+            #expect(deA.competitionID == competicion)
+            #expect(deA.federationTeamID == "3349086")
+        }
+    }
+
+    @Test("list por ids trae esos equipos y no los demás (D-102)")
+    func teamsByIDsBringOnlyThose() async throws {
+        try await Self.withFixture("treg-team-ids") { a, _, _, _, tenant in
+            let b = try Self.ownTeam(.infantil, "B")
+            let c = try Self.ownTeam(.alevin, "C")
+            try await tenant.scope {
+                try await $0.teams.save(b)
+                try await $0.teams.save(c)
+            }
+
+            let found = try await tenant.scope { try await $0.teams.list(ids: [a.id, c.id]) }
+
+            #expect(Set(found.map(\.id)) == [a.id, c.id])
+        }
+    }
 }
+

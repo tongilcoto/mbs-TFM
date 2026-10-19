@@ -634,7 +634,7 @@ struct IngestionEndpointTests {
                 // **Por código, no solo por status** (H-46): desde `A-14`·H-63
                 // este 404 lo decide un solo sitio, el middleware.
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "COMPETITION_NOT_FOUND")
+                #expect(problem.code == .COMPETITION_NOT_FOUND)
                 #expect(problem.detail == alien)
             }
         }
@@ -653,7 +653,7 @@ struct IngestionEndpointTests {
             ) { response async throws in
                 #expect(response.status == .notFound)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "COMPETITION_NOT_FOUND")
+                #expect(problem.code == .COMPETITION_NOT_FOUND)
                 #expect(problem.detail == alien)
             }
         }
@@ -675,7 +675,7 @@ struct IngestionEndpointTests {
                 // `seasonNotFound` (el *schema* roto); aquí tiene que salir el 404
                 // de `unknownSeason`, que es lo que el `status` de arriba fija.
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "SEASON_NOT_FOUND")
+                #expect(problem.code == .SEASON_NOT_FOUND)
                 #expect(problem.detail == alien)
             }
         }
@@ -695,7 +695,7 @@ struct IngestionEndpointTests {
             ) { response async throws in
                 #expect(response.status == .notImplemented)
                 let problem = try Self.decodeProblem(response)
-                #expect(problem.code == "FEDERATION_ADAPTER_MISSING")
+                #expect(problem.code == .FEDERATION_ADAPTER_MISSING)
                 #expect(problem.detail?.contains("fcf") == true)
             }
         }

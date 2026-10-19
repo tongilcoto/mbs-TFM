@@ -1,0 +1,117 @@
+{
+  "title": "R1.9 · listSeasonRegistrations, el equipo en una temporada (D-102)",
+  "mutations": [
+    {
+      "id": "P1-season",
+      "description": "la lectura por temporada trae las de todas las temporadas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "TeamRegistrationRecord.query(on: database)\n            .filter(\\.$season.$id == seasonID.raw)",
+      "replace": "TeamRegistrationRecord.query(on: database)",
+      "filter": "TeamRegistrationPersistenceTests"
+    },
+    {
+      "id": "P2-ids",
+      "description": "la lectura de equipos por id los trae todos",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .filter(\\.$id ~~ ids.map(\\.raw))\n",
+      "replace": "",
+      "filter": "TeamRegistrationPersistenceTests"
+    },
+    {
+      "id": "A1-404",
+      "description": "una temporada que no existe da la lista vacía",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "guard try await seasons.find(seasonID) != nil else {",
+      "replace": "guard true else {",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "A2-comp-order",
+      "description": "las competiciones de un equipo, de la más nueva a la más vieja",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": ".sorted { $0.createdAt < $1.createdAt }",
+      "replace": ".sorted { $0.createdAt > $1.createdAt }",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "A3-age-order",
+      "description": "los equipos, de mayor a menor edad",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "if left != right { return left < right }",
+      "replace": "if left != right { return left > right }",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "A4-letter-order",
+      "description": "dentro de una categoría, la B antes que la A",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "return (lhs.team.letter ?? \"\") < (rhs.team.letter ?? \"\")",
+      "replace": "return (lhs.team.letter ?? \"\") > (rhs.team.letter ?? \"\")",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "A5-alphabetical",
+      "description": "las categorías en orden alfabético y no de edad",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "let ages = TeamCategory.allCases\n",
+      "replace": "let ages = TeamCategory.allCases.sorted { $0.rawValue < $1.rawValue }\n",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "A6-mixed",
+      "description": "a cada equipo le llegan las competiciones de todos",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "competitions: (byTeam[team.id] ?? [])",
+      "replace": "competitions: rows",
+      "filter": "ListSeasonRegistrationsTests"
+    },
+    {
+      "id": "H1-club-name",
+      "description": "clubName lleva el nombre largo",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "clubName: club.shortName,",
+      "replace": "clubName: club.name,",
+      "filter": "SeasonRegistrationEndpointTests"
+    },
+    {
+      "id": "H2-display",
+      "description": "displayName sin la letra",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "[club.shortName, category.displayLabel, letter]",
+      "replace": "[club.shortName, category.displayLabel]",
+      "filter": "SeasonRegistrationEndpointTests"
+    },
+    {
+      "id": "H3-400",
+      "description": "un seasonId que no es UUID da 200 vacío",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "return .badRequest(Self.invalidUUID(error))",
+      "replace": "return .ok(.init(body: .json([])))",
+      "filter": "SeasonRegistrationEndpointTests"
+    },
+    {
+      "id": "H4-code",
+      "description": "el código de la federación de la inscripción no viaja",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": ".init(competitionId: \"\\($0.competitionID)\", federationTeamId: $0.federationTeamID)",
+      "replace": ".init(competitionId: \"\\($0.competitionID)\", federationTeamId: nil)",
+      "filter": "SeasonRegistrationEndpointTests"
+    },
+    {
+      "id": "H5-season",
+      "description": "seasonId lleva el id del equipo",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "seasonId: \"\\(seasonID)\",",
+      "replace": "seasonId: \"\\(team.id)\",",
+      "filter": "SeasonRegistrationEndpointTests"
+    },
+    {
+      "id": "H6-modality",
+      "description": "la modalidad del equipo sale siempre fútbol 7",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "modality: .init(value1: modality.toContract()),",
+      "replace": "modality: .init(value1: .futbol_7),",
+      "filter": "SeasonRegistrationEndpointTests"
+    }
+  ]
+}

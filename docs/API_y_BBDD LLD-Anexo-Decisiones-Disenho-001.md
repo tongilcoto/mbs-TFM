@@ -116,6 +116,7 @@
 | **D-54**               | La denormalización de `Goal` no llega al DTO: se escribe quién marca                                                          | §3.2, §5.1, §5.2                   |
 | **D-99**               | Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`                                       | §5.4                               |
 | **D-102**              | El equipo en una temporada tiene su propia lectura, y sus competiciones salen solo de la inscripción                          | §3.4, §5.1, §9.12                  |
+| **D-103**              | La temporada en curso es la que contiene el día de hoy, no la de fin más próximo                                              | §3.2, §5.1                         |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -4525,6 +4526,46 @@ cruzar por categoría y género, que falla con el A y el B en el mismo grupo ([D
 **Enmienda** a [D-68] («No hay `GET` propio» y «Lo que se asume» de su enmienda) y a [D-89] («la portada es UNA
 petición»). Y resuelve §9.12 del LLD con la salida (c).
 
+
+---
+
+### D-103 · La temporada en curso es la que contiene el día de hoy, no la de fin más próximo
+
+**Lo que lo obligó a decidirse** (2026-10-18, al programar `listSeasons` en el paso R1.6 del backoffice). Dos
+documentos decían cosas distintas. El LLD (§3.2) y el catálogo definían `isCurrent` como *«la temporada con el
+`endDate` más próximo que aún es ≥ hoy»*. La portada del backoffice ([Plan R1, decisión 5](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md))
+contaba con que, sin temporada en curso, enseñaría la más reciente con el rótulo «todavía no ha empezado» si se
+creó por adelantado. Con la regla vieja ese rótulo no podía salir nunca.
+
+Las dos reglas coinciden casi siempre: en junio con la siguiente ya creada, la en curso es la que acaba; en
+julio, antes de crear la del año, no hay ninguna. **Solo se separan en un caso**: sin la temporada del año y con
+la siguiente creada por adelantado. El 18/10/2026, con la 2027/28 creada y sin la 2026/27, la regla vieja daba
+en curso la 2027/28, que no empieza hasta julio de 2027.
+
+| Opción | Veredicto |
+|--------|-----------|
+| (a) La de `endDate` más próximo que aún es ≥ hoy | Descartada: da en curso una temporada que no ha empezado |
+| **(b) La que contiene el día de hoy**, del 1 de julio al 30 de junio | **Elegida** por el desarrollador |
+
+**Decisión: (b).**
+
+1. **En curso es la que contiene el día de hoy.** Las temporadas van del 1 de julio al 30 de junio sin huecos
+   (`SeasonLabel`), así que hay **como mucho una**. Puede no haber ninguna, y es un resultado, no un fallo.
+2. **El día se cuenta en hora de Madrid, y por días, no por instantes.** La regla vieja comparaba la hora de
+   ahora con el 30 de junio a las 00:00, y desde el mediodía del 30 ya daba la siguiente temporada. Era un
+   fallo pequeño que nadie había visto: su test solo miraba las 00:00 en punto.
+3. **Las archivadas no cuentan**, como antes (§3.5).
+4. **La regla vive en un solo sitio**, `current(on:)` del Dominio, y la usan **la respuesta** (`isCurrent`) y
+   **la ingesta**, que recorre la temporada en curso cuando no se le pide otra. La ingesta cambia en el caso
+   de arriba: una temporada creada por adelantado no se recorre sola hasta su 1 de julio. Antes de esa fecha la
+   federación no tiene nada que darle, así que no se pierde nada.
+5. **`Round.isCurrent` no cambia**: sigue siendo la jornada de fin más próximo que aún es ≥ hoy. Entre dos
+   jornadas hay días que no son de ninguna, y la que cuenta es la próxima. El catálogo y el LLD decían que era
+   «el mismo criterio» que el de la temporada; ya no lo es, y lo dicen.
+
+**Enmienda** al LLD §3.2 (fila `Season`) y a las descripciones de `SeasonResponse.isCurrent` y
+`RoundResponse.isCurrent` del catálogo.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4664,5 +4705,6 @@ petición»). Y resuelve §9.12 del LLD con la salida (c).
 [D-100]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

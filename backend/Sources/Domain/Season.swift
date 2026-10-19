@@ -1,4 +1,6 @@
 public import struct Foundation.Date
+import struct Foundation.Calendar
+import struct Foundation.TimeZone
 
 /// La temporada. **Raíz de agregado** (§4.2).
 ///
@@ -147,24 +149,38 @@ extension Season {
 }
 
 extension Collection<Season> {
-    /// La temporada **vigente**: la de `endDate` más próximo que aún es ≥ la
-    /// fecha dada (§3.2).
+    /// La temporada **en curso**: la que contiene el día de hoy, del 1 de julio
+    /// al 30 de junio (§3.2; Plan R1, decisión 5).
     ///
-    /// **`isCurrent` se deriva en lectura y no se almacena**, y por eso vive
-    /// aquí y no en `Season`: no es una propiedad de una temporada sino su
-    /// posición **relativa** al resto. Como el tiempo no retrocede, hay
-    /// exactamente una y no queda invariante que mantener — que es justo lo que
-    /// una columna `is_current` sí obligaría a mantener.
+    /// Hasta R1.6 era *"la de `endDate` más próximo que aún es ≥ hoy"*, y las dos
+    /// reglas solo se separan en un caso: sin la temporada del año creada, una
+    /// creada **por adelantado** salía en curso meses antes de empezar, y la web
+    /// no podía decir que todavía no ha empezado. Como las temporadas van del 1 de
+    /// julio al 30 de junio sin huecos, **como mucho hay una**, y no queda
+    /// invariante que mantener.
     ///
-    /// **Las archivadas no cuentan.** Archivar oculta la temporada (§3.5), y una
-    /// temporada oculta que resultara ser la vigente dejaría al cliente sin
-    /// ninguna.
+    /// **El día se cuenta en hora de Madrid**, y se compara por días, no por
+    /// instantes: `endDate` es el 30 de junio a las 00:00 (UTC), y comparar con
+    /// la hora de ahora daba la siguiente temporada desde el mediodía del 30.
+    ///
+    /// **Las archivadas no cuentan.** Archivar oculta la temporada (§3.5).
     ///
     /// Se resuelve en memoria y no en SQL a propósito: un club tiene un puñado
     /// de temporadas, así que la lista completa cabe de sobra y la regla se
     /// prueba en el nivel 1 de la pirámide, sin contenedor (§8.1).
-    public func current(on date: Date) -> Season? {
-        self.filter { !$0.isArchived && $0.endDate >= date }
-            .min { $0.endDate < $1.endDate }
+    public func current(on instant: Date) -> Season? {
+        let today = Self.madridDay(of: instant)
+        return first { !$0.isArchived && $0.startDate <= today && today <= $0.endDate }
+    }
+
+    /// El día de Madrid en que cae `instant`, escrito como lo están `startDate`
+    /// y `endDate`: a las 00:00 en UTC (`SeasonLabel`).
+    private static func madridDay(of instant: Date) -> Date {
+        var madrid = Calendar(identifier: .gregorian)
+        madrid.timeZone = TimeZone(identifier: "Europe/Madrid")!
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        // Inalcanzable: año, mes y día salen de una fecha que existe.
+        return utc.date(from: madrid.dateComponents([.year, .month, .day], from: instant))!
     }
 }

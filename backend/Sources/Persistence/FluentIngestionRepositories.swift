@@ -48,6 +48,14 @@ public struct FluentTeamRepository: TeamRepository {
             .map { try $0.toDomain() }
     }
 
+    public func list(ids: [TeamID]) async throws -> [Team] {
+        guard !ids.isEmpty else { return [] }
+        return try await TeamRecord.query(on: database)
+            .filter(\.$id ~~ ids.map(\.raw))
+            .all()
+            .map { try $0.toDomain() }
+    }
+
     /// **Uno por su id** (`C-D.1`, [D-67]).
     ///
     /// `TeamRecord.find` y no una consulta con filtro: la clave primaria es la
@@ -414,6 +422,71 @@ public struct FluentIngestionRunRepository: IngestionRunRepository {
             .first()?
             .toDomain()
     }
+
+    /// SQL y no Fluent: *"las N últimas de cada grupo"* es una función de ventana
+    /// (`row_number`), que Fluent no expresa. La consulta trae los `id`, y las
+    /// filas se leen después por Fluent, con su mapeo de siempre.
+    public func recent(
+        competitionIDs: [CompetitionID], perKind: Int
+    ) async throws -> [IngestionRun] {
+        guard !competitionIDs.isEmpty else { return [] }
+        let sql = try sqlDatabase(helper: "recent")
+        // Desempate por `id` para que dos filas con la misma hora den siempre la
+        // misma respuesta.
+        let ids = try await sql.raw("""
+            SELECT id FROM (
+                SELECT id, row_number() OVER (
+                    PARTITION BY competition_id, kind ORDER BY started_at DESC, id DESC
+                ) AS position
+                FROM \(ident: IngestionRunRecord.schema)
+                WHERE competition_id IN (\(binds: competitionIDs.map(\.raw)))
+            ) AS ranked
+            WHERE position <= \(bind: perKind)
+            """).all().map { try $0.decode(column: "id", as: UUID.self) }
+        guard !ids.isEmpty else { return [] }
+        return try await IngestionRunRecord.query(on: database)
+            .filter(\.$id ~~ ids)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    /// SQL por el `GROUP BY`. `max` ya salta los nulos, así que la aceptada, que
+    /// no tiene final, no cuenta; una competición con solo aceptadas no sale.
+    public func lastFinishedAt(
+        competitionIDs: [CompetitionID]
+    ) async throws -> [CompetitionID: Date] {
+        guard !competitionIDs.isEmpty else { return [:] }
+        let sql = try sqlDatabase(helper: "lastFinishedAt")
+        let rows = try await sql.raw("""
+            SELECT competition_id, max(finished_at) AS last
+            FROM \(ident: IngestionRunRecord.schema)
+            WHERE competition_id IN (\(binds: competitionIDs.map(\.raw))) AND finished_at IS NOT NULL
+            GROUP BY competition_id
+            """).all()
+        var result: [CompetitionID: Date] = [:]
+        for row in rows {
+            let id = CompetitionID(raw: try row.decode(column: "competition_id", as: UUID.self))
+            result[id] = try row.decode(column: "last", as: Date.self)
+        }
+        return result
+    }
+
+    public func lastFinishedAt() async throws -> Date? {
+        let sql = try sqlDatabase(helper: "lastFinishedAt")
+        return try await sql.raw("""
+            SELECT max(finished_at) AS last FROM \(ident: IngestionRunRecord.schema)
+            """).first()?.decode(column: "last", as: Date?.self)
+    }
+
+    /// Las tres lecturas del estado de la ingesta hablan SQL. Lanza sobre una base
+    /// que no lo hable, por lo mismo que `SQLHelpers` (H-35).
+    private func sqlDatabase(helper: String) throws -> any SQLDatabase {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: helper, object: IngestionRunRecord.schema)
+        }
+        return sql
+    }
 }
 
 extension IngestionRunRecord {
@@ -692,6 +765,25 @@ public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
     private let database: any Database
     public init(database: any Database) { self.database = database }
 
+    /// Las filas, con su equipo. Los equipos se leen **todos de una vez**, no uno
+    /// por fila. Que falte uno es corrupción, no un caso de negocio: la FK lo
+    /// impide.
+    private func withTheirTeams(_ rows: [TeamRegistrationRecord]) async throws -> [TeamRegistration] {
+        guard !rows.isEmpty else { return [] }
+        let teamIDs = Set(rows.map { $0.$team.id })
+        let teams = Dictionary(
+            uniqueKeysWithValues: try await TeamRecord.query(on: database)
+                .filter(\.$id ~~ teamIDs)
+                .all()
+                .map { ($0.id, try $0.toDomain()) })
+        return try rows.map { row in
+            guard let team = teams[row.$team.id] else {
+                throw PersistenceError.notFound(table: TeamRecord.schema)
+            }
+            return try row.toDomain(team: team)
+        }
+    }
+
     /// Las de **ese par**, que es lo que el puerto promete y no una comodidad:
     /// la cascada del enganche pregunta *"¿qué tiene este equipo en esta
     /// temporada?"* para distinguir la fila de junio —que completa— de una
@@ -720,24 +812,20 @@ public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
     /// Las de **esa competición**, de todos los equipos propios (`D-101`): la
     /// pasada reconoce a los propios por el código de estas filas. Aquí sí hay
     /// equipos distintos, así que se leen todos de una vez y no uno por fila.
+    /// Las de **esa temporada** (`D-102`). Como en la de competición, hay equipos
+    /// distintos, así que se leen todos de una vez y no uno por fila.
+    public func list(seasonID: SeasonID) async throws -> [TeamRegistration] {
+        let rows = try await TeamRegistrationRecord.query(on: database)
+            .filter(\.$season.$id == seasonID.raw)
+            .all()
+        return try await withTheirTeams(rows)
+    }
+
     public func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
         let rows = try await TeamRegistrationRecord.query(on: database)
             .filter(\.$competition.$id == competitionID.raw)
             .all()
-        guard !rows.isEmpty else { return [] }
-
-        let teamIDs = Set(rows.map { $0.$team.id })
-        let teams = Dictionary(
-            uniqueKeysWithValues: try await TeamRecord.query(on: database)
-                .filter(\.$id ~~ teamIDs)
-                .all()
-                .map { ($0.id, try $0.toDomain()) })
-        return try rows.map { row in
-            guard let team = teams[row.$team.id] else {
-                throw PersistenceError.notFound(table: TeamRecord.schema)
-            }
-            return try row.toDomain(team: team)
-        }
+        return try await withTheirTeams(rows)
     }
 
     public func save(_ registration: TeamRegistration) async throws {
