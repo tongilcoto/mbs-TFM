@@ -571,13 +571,13 @@ Antes del código, para que el código se escriba contra algo ya escrito.
 
 Con el método del backend (§5): prueba → esqueleto → rojo de aserción → implementación → mutación.
 
-| Paso | Qué | Cómo se comprueba | Se graba |
-|---|---|---|---|
-| **R1.6** | `listSeasons`, con su filtro | Tests de los niveles que toque, mutación con su catálogo, y `curl` contra la base de trabajo | Un commit |
-| **R1.7** | `listCompetitions`, con sus cuatro filtros, **sin** el estado de la ingesta | Lo mismo | Un commit |
-| **R1.8** | **El estado de la ingesta**: la regla de la decisión 2 entera (cada clase, el reloj que vuelve a cero, `pending`, `previousIngestionHealth`, el orden). Va en un paso propio porque es la parte más delicada. Al acabar, H-58 se cierra en la auditoría | Un test por caso del orden, con valores distintos entre sí; mutación con su catálogo; y la base de trabajo mirada en TablePlus contra lo que dice `curl` (el Alevín) | Un commit |
-| **R1.9** | `listSeasonRegistrations`, con la lectura por temporada del repositorio de inscripciones | Tests, mutación y `curl` | Un commit |
-| **R1.10** | Cierre del servidor: el recuento leído del XML, el censo con las tres operaciones (huecos nuevos con su test o en `known-gaps.json`), y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
+| Paso      | Qué                                                                                                                                                                                                                                                     | Cómo se comprueba                                                                                                                                                    | Se graba  |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **R1.6**  | `listSeasons`, con su filtro                                                                                                                                                                                                                            | Tests de los niveles que toque, mutación con su catálogo, y `curl` contra la base de trabajo                                                                         | Un commit |
+| **R1.7**  | `listCompetitions`, con sus cuatro filtros, **sin** el estado de la ingesta                                                                                                                                                                             | Lo mismo                                                                                                                                                             | Un commit |
+| **R1.8**  | **El estado de la ingesta**: la regla de la decisión 2 entera (cada clase, el reloj que vuelve a cero, `pending`, `previousIngestionHealth`, el orden). Va en un paso propio porque es la parte más delicada. Al acabar, H-58 se cierra en la auditoría | Un test por caso del orden, con valores distintos entre sí; mutación con su catálogo; y la base de trabajo mirada en TablePlus contra lo que dice `curl` (el Alevín) | Un commit |
+| **R1.9**  | `listSeasonRegistrations`, con la lectura por temporada del repositorio de inscripciones                                                                                                                                                                | Tests, mutación y `curl`                                                                                                                                             | Un commit |
+| **R1.10** | Cierre del servidor: el recuento leído del XML, el censo con las tres operaciones (huecos nuevos con su test o en `known-gaps.json`), y el README del backend                                                                                           | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0`                                                                                                    | Un commit |
 
 ### D · La web
 
@@ -627,3 +627,7 @@ De las piezas comunes a la pantalla.
   vieja: comparaba la hora de ahora con el 30 de junio a las 00:00, así que desde el mediodía del 30 daba la
   temporada siguiente. La regla la usa también la ingesta, que cambia solo en el caso de la temporada creada por
   adelantado. `Round.isCurrent` no cambia, y el catálogo y el LLD dejan de decir que es el mismo criterio.
+- **`listCompetitions` no declaraba el 400** (se vio en R1.7). Su `seasonId` es un UUID que llega como texto, y
+  el *handler* responde 400 `INVALID_UUID` si no lo es, como `listIngestionRuns`. Pero sin el 400 en el catálogo
+  la respuesta no se puede devolver, y habría acabado en 500. Se añade, con una descripción que dice que los
+  filtros se suman y que una `seasonId` que no es de ninguna temporada da la lista vacía, no un error.

@@ -676,7 +676,12 @@ paths:
       tags: [Competitions]
       operationId: listCompetitions
       summary: Lista las competiciones
-      description: Colección pequeña por club → **sin paginación** (§5.3).
+      description: |
+        Colección pequeña por club → **sin paginación** (§5.3).
+
+        **Los filtros se suman**: cada uno que viene estrecha el resultado, y sin ninguno salen todas las
+        del club, de todas las temporadas. Una `seasonId` que no es de ninguna temporada **no es un
+        error**: la lista sale vacía, como cualquier filtro sin resultados. Una que no es un UUID, **400**.
       parameters:
         - name: seasonId
           in: query
@@ -708,6 +713,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/CompetitionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         default: { $ref: '#/components/responses/DefaultProblem' }
 
