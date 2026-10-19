@@ -14,7 +14,8 @@ import TestSupport
 /// Nivel 4 (§8.1): `GET /v1/competitions` (Plan R1, R1.7). Que los filtros se
 /// sumen lo prueba el nivel 3; aquí se prueba **el borde**: que cada filtro de la
 /// dirección llega a su sitio, el 400 de una `seasonId` que no es un UUID, y cada
-/// campo del DTO. El estado de la ingesta llega en R1.8.
+/// campo del DTO, también los tres del estado de la ingesta (R1.8), cuya regla
+/// está en el nivel 1.
 @Suite("Competitions · §5.1 · la lista de competiciones",
        .serialized,
        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
@@ -22,9 +23,17 @@ struct CompetitionEndpointTests {
 
     static let prefix = "e2e_"
     static let slug = "compsclub"
-    static let now = Date(timeIntervalSince1970: 1_760_000_000)
+    static let createdAt = Date(timeIntervalSince1970: 1_760_000_000)
     /// Segundos enteros, para poder compararla tal cual después del viaje.
     static let syncedAt = Date(timeIntervalSince1970: 1_770_000_000)
+    /// Dos horas después de la sincronización: **el reloj se fija** para que el
+    /// estado de la ingesta no dependa del momento en que corra la batería.
+    static let now = syncedAt.addingTimeInterval(2 * 60 * 60)
+
+    struct FixedClock: Clock {
+        let instant: Date
+        func now() -> Date { instant }
+    }
 
     /// La `a` y otra por filtro, que se diferencia de ella **solo** en ese campo.
     struct Seeded: Sendable {
@@ -36,7 +45,7 @@ struct CompetitionEndpointTests {
     static func withSeededClub(
         _ body: @escaping @Sendable (Application, Seeded) async throws -> Void
     ) async throws {
-        try await TestEnvironment.withApp { app in
+        try await TestEnvironment.withApp(clock: FixedClock(instant: now)) { app in
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
             try await TestEnvironment.provisionClub(slug, federation: .rffm, schemaPrefix: prefix, on: app)
 
@@ -59,7 +68,7 @@ struct CompetitionEndpointTests {
                 ] {
                     try await $0.seasons.save(try Season(
                         id: id, label: try SeasonLabel(label), federationSeasonID: federationID,
-                        createdAt: now, updatedAt: now))
+                        createdAt: createdAt, updatedAt: createdAt))
                 }
                 for (index, row) in rows.enumerated() {
                     let (id, seasonID, modality, category, gender, group, synced) = row
@@ -67,7 +76,20 @@ struct CompetitionEndpointTests {
                         id: id, seasonID: seasonID, modality: modality, gender: gender,
                         federationCompetitionID: "2403754\(index)", federationGroupID: "9900\(index)",
                         ageCategory: category, divisionLabel: "Primera División Autonómica",
-                        groupLabel: group, lastSyncedAt: synced, createdAt: now, updatedAt: now))
+                        groupLabel: group, lastSyncedAt: synced, createdAt: createdAt, updatedAt: createdAt))
+                }
+                // La `a`, **en marcha y con la anterior con fallos**: el calendario
+                // salió bien, los goleadores mal, y hay un calendario pedido hace 5
+                // minutos. Las demás no tienen pasadas: «sin datos todavía».
+                for (kind, outcome, started, finished) in [
+                    (IngestionKind.calendar, IngestionOutcome.succeeded, syncedAt.addingTimeInterval(-60), syncedAt as Date?),
+                    (.scorers, .failed, syncedAt.addingTimeInterval(60), syncedAt.addingTimeInterval(120)),
+                    (.calendar, .accepted, now.addingTimeInterval(-5 * 60), nil),
+                ] {
+                    try await $0.ingestionRuns.record(try IngestionRun(
+                        id: IngestionRunID(raw: UUID()), competitionID: seeded.a, kind: kind,
+                        startedAt: started, finishedAt: finished, outcome: outcome,
+                        error: outcome == .failed ? "FederationError" : nil))
                 }
             }
 
@@ -162,4 +184,28 @@ struct CompetitionEndpointTests {
             }
         }
     }
+
+    /// Los tres campos del estado de la ingesta (R1.8). La `a` está «en marcha» y
+    /// «la anterior tuvo fallos», y su última pasada acabada es la de goleadores;
+    /// la de fútbol 7 no tiene ninguna: «sin datos todavía», sin los otros dos.
+    @Test("el estado de la ingesta: pending con la anterior failing, y never sin pasadas")
+    func mapsTheIngestionHealth() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/competitions?seasonId=\(seeded.first)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                let competitions = try Self.decode(response)
+                let a = try #require(competitions.first { $0.id == "\(seeded.a)" })
+                #expect(a.ingestionHealth == .pending)
+                #expect(a.previousIngestionHealth?.value1 == .failing)
+                #expect(a.lastIngestionAt == Self.syncedAt.addingTimeInterval(120))
+
+                let futbol7 = try #require(competitions.first { $0.id == "\(seeded.futbol7)" })
+                #expect(futbol7.ingestionHealth == .never)
+                #expect(futbol7.previousIngestionHealth == nil)
+                #expect(futbol7.lastIngestionAt == nil)
+            }
+        }
+    }
 }
+

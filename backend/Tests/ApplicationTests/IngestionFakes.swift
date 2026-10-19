@@ -268,6 +268,20 @@ struct FakeIngestionRunRepository: IngestionRunRepository {
             .prefix(limit)
             .map { $0 }
     }
+    func recent(competitionIDs: [CompetitionID], perKind: Int) async throws -> [IngestionRun] {
+        let runs = await store.ingestionRuns.filter { competitionIDs.contains($0.competitionID) }
+        return Dictionary(grouping: runs) { "\($0.competitionID)/\($0.kind)" }.values.flatMap {
+            $0.sorted { $0.startedAt > $1.startedAt }.prefix(perKind)
+        }
+    }
+    func lastFinishedAt(competitionIDs: [CompetitionID]) async throws -> [CompetitionID: Date] {
+        let runs = await store.ingestionRuns.filter { competitionIDs.contains($0.competitionID) }
+        return Dictionary(grouping: runs, by: \.competitionID)
+            .compactMapValues { $0.compactMap(\.finishedAt).max() }
+    }
+    func lastFinishedAt() async throws -> Date? {
+        await store.ingestionRuns.compactMap(\.finishedAt).max()
+    }
 }
 
 /// El de F7. **Guarda por `id` y devuelve ordenado por posición**, como el de

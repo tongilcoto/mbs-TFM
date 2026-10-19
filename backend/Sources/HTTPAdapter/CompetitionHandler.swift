@@ -21,17 +21,33 @@ extension APIHandler {
         } catch let error as InvalidUUID {
             return .badRequest(Self.invalidUUID(error))
         }
-        let competitions = try await unitOfWork.withRepositories(actor: actor) { repositories in
-            try await ListCompetitions(competitions: repositories.competitions).execute(filter)
+        let clock = self.clock
+        let listings = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await ListCompetitions(
+                competitions: repositories.competitions,
+                ingestionRuns: repositories.ingestionRuns,
+                clock: clock
+            ).execute(filter)
         }
-        return .ok(.init(body: .json(competitions.map { $0.toResponse() })))
+        return .ok(.init(body: .json(listings.map { $0.toResponse() })))
+    }
+}
+
+extension CompetitionListing {
+    /// Mapeo `Caso de uso → DTO` (§2.2): la competición, con los tres campos que
+    /// se derivan al leerla (`D-89`). `previousIngestionHealth` solo viene con
+    /// `pending`, y eso ya lo garantiza el Dominio.
+    func toResponse() -> Components.Schemas.CompetitionResponse {
+        var response = competition.toResponse()
+        response.lastIngestionAt = lastIngestionAt
+        response.ingestionHealth = ingestion.health.toContract()
+        response.previousIngestionHealth = ingestion.previous.map { .init(value1: $0.toContract()) }
+        return response
     }
 }
 
 extension Domain.Competition {
-    /// Mapeo `Entidad → DTO` (§2.2). **Sin el estado de la ingesta todavía**
-    /// (`lastIngestionAt`, `ingestionHealth`, `previousIngestionHealth`): son
-    /// opcionales en el catálogo, y llegan con R1.8.
+    /// Mapeo `Entidad → DTO` (§2.2), con lo que es de la competición sola.
     func toResponse() -> Components.Schemas.CompetitionResponse {
         .init(
             id: "\(id)",
@@ -48,6 +64,20 @@ extension Domain.Competition {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+    }
+}
+
+extension Domain.IngestionHealth {
+    /// `switch` exhaustivo por lo mismo que sus hermanas (`D-61`); que cada valor
+    /// vaya a su gemelo lo exige `ContractEnumTests`.
+    func toContract() -> Components.Schemas.IngestionHealth {
+        switch self {
+        case .ok: .ok
+        case .failing: .failing
+        case .stale: .stale
+        case .never: .never
+        case .pending: .pending
+        }
     }
 }
 

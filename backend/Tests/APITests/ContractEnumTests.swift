@@ -171,5 +171,13 @@ struct ContractEnumTests {
             #expect(value.toContract().toDomain() == value)
         }
     }
+
+    /// Los cinco, con el `pending` de la enmienda de `D-89` (R1.8). Cruzar `stale`
+    /// con `never` pintaría «Desactualizada» en una competición recién enganchada.
+    @Test("IngestionHealth → contrato, los cinco (R1.8)")
+    func ingestionHealth() {
+        #expect(IngestionHealth.allCases.count == 5)
+        Self.check(IngestionHealth.allCases, { $0.toContract() }, "IngestionHealth")
+    }
 }
 

@@ -173,6 +173,24 @@ public protocol IngestionRunRepository: Sendable {
     func findAccepted(
         competitionID: CompetitionID, kind: IngestionKind
     ) async throws -> IngestionRun?
+
+    /// **Las `perKind` últimas pasadas de cada clase**, de cada una de esas
+    /// competiciones, por cuándo empezaron (`D-89`, enmienda). Es lo que lee el
+    /// estado de la ingesta: la última de cada clase decide, y la anterior dice
+    /// qué había antes de una pasada en marcha. Sin orden en el resultado.
+    ///
+    /// Por clase y no las N últimas a secas: una pasada deja una fila de
+    /// clasificación **por jornada**, y treinta jornadas taparían el calendario.
+    func recent(competitionIDs: [CompetitionID], perKind: Int) async throws -> [IngestionRun]
+
+    /// Cuándo acabó la última pasada de cada una de esas competiciones, **bien o
+    /// mal** (`lastIngestionAt`, `D-89`). La que nunca acabó una no sale.
+    func lastFinishedAt(competitionIDs: [CompetitionID]) async throws -> [CompetitionID: Date]
+
+    /// Cuándo acabó la última pasada **del club**, de cualquier competición, bien
+    /// o mal: es lo que pone a cero el reloj de los 15 minutos (`D-89`, enmienda).
+    /// La tabla es de un solo club por construcción (§6).
+    func lastFinishedAt() async throws -> Date?
 }
 
 /// Qué hizo `IngestionRunRepository.record` con la fila (A-11·H-55).

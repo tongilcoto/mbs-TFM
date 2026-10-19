@@ -17,9 +17,6 @@
     "SeasonResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "SeasonResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "CompetitionResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
-    "CompetitionResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
-    "CompetitionResponse.ingestionHealth": "opcional en el spec y el servidor todavía no lo rellena: el estado de la ingesta llega con R1.8 (Plan R1), que trae sus tests y quita esta entrada",
-    "CompetitionResponse.lastIngestionAt": "opcional en el spec y el servidor todavía no lo rellena: el estado de la ingesta llega con R1.8 (Plan R1), que trae sus tests y quita esta entrada",
-    "CompetitionResponse.previousIngestionHealth": "opcional en el spec y el servidor todavía no lo rellena: el estado de la ingesta llega con R1.8 (Plan R1), que trae sus tests y quita esta entrada"
+    "CompetitionResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
   }
 }

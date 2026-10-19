@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **650 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **673 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -424,8 +424,24 @@ curl -s "http://atleti.localhost:8080/v1/competitions?ageCategory=cadete&gender=
 | `gender` | `masculino`, `femenino`, `mixto` |
 
 - Salen ordenadas por categoría y grupo.
-- **Todavía sin el estado de la ingesta**: `ingestionHealth`, `previousIngestionHealth` y `lastIngestionAt` no
-  vienen hasta el paso R1.8. `lastSyncedAt` (la última sincronización que salió bien) sí.
+
+**Cada competición dice cómo va su ingesta** (`D-89`, con su enmienda del 2026-10-18). Se calcula al pedirla, a
+partir del registro de pasadas (`/v1/ingestion-runs`):
+
+| `ingestionHealth` | En la portada | Cuándo |
+|---|---|---|
+| `failing` | Con fallos | Hay una pasada pedida y **lleva 15 minutos sin acabar ninguna pasada del club**: se da por perdida |
+| `pending` | En marcha | Hay una pasada pedida, y las del club van acabando |
+| `failing` | Con fallos | La última pasada de **alguna** de las tres clases (calendario, clasificación, goleadores) falló |
+| `never` | Sin datos todavía | El calendario nunca se ha sincronizado bien |
+| `stale` | Desactualizada | La última sincronización buena es de hace **más** de una semana |
+| `ok` | Al día | El resto |
+
+- Se mira en ese orden, de arriba abajo, y gana el primero que se cumple.
+- **`previousIngestionHealth` solo viene con `pending`**: dice cómo estaba antes de la pasada en marcha, para no
+  perder un fallo anterior («La anterior tuvo fallos»).
+- `lastSyncedAt` es la última sincronización **buena**; `lastIngestionAt`, cuándo acabó la última pasada, **bien
+  o mal**. Si son distintas, la última falló.
 
 ---
 
