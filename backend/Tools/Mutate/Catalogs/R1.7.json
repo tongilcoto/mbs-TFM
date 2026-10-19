@@ -1,0 +1,125 @@
+{
+  "title": "R1.7 · listCompetitions y sus cuatro filtros",
+  "mutations": [
+    {
+      "id": "P1-season",
+      "description": "la consulta ignora seasonId",
+      "file": "Sources/Persistence/FluentCompetitionRepository.swift",
+      "find": "if let seasonID = filter.seasonID { query.filter(\\.$season.$id == seasonID.raw) }",
+      "replace": "",
+      "filter": "CompetitionPersistenceTests"
+    },
+    {
+      "id": "P2-modality",
+      "description": "la consulta ignora modality",
+      "file": "Sources/Persistence/FluentCompetitionRepository.swift",
+      "find": "if let modality = filter.modality { query.filter(\\.$modality == modality.rawValue) }",
+      "replace": "",
+      "filter": "CompetitionPersistenceTests"
+    },
+    {
+      "id": "P3-age",
+      "description": "la consulta ignora ageCategory",
+      "file": "Sources/Persistence/FluentCompetitionRepository.swift",
+      "find": "if let ageCategory = filter.ageCategory { query.filter(\\.$ageCategory == ageCategory.rawValue) }",
+      "replace": "",
+      "filter": "CompetitionPersistenceTests"
+    },
+    {
+      "id": "P4-gender",
+      "description": "la consulta ignora gender",
+      "file": "Sources/Persistence/FluentCompetitionRepository.swift",
+      "find": "if let gender = filter.gender { query.filter(\\.$gender == gender.rawValue) }",
+      "replace": "",
+      "filter": "CompetitionPersistenceTests"
+    },
+    {
+      "id": "A1-filter",
+      "description": "el caso de uso no pasa los filtros",
+      "file": "Sources/Application/ListCompetitions.swift",
+      "find": "try await competitions.list(filter)",
+      "replace": "try await competitions.list(CompetitionFilter())",
+      "filter": "ListCompetitionsTests"
+    },
+    {
+      "id": "H1-season",
+      "description": "el handler no pasa seasonId",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "seasonID: try query.seasonId.map { SeasonID(raw: try Self.uuid($0, field: \"seasonId\")) },",
+      "replace": "seasonID: nil,",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H2-modality",
+      "description": "el handler no pasa modality",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "modality: query.modality?.toDomain(),",
+      "replace": "modality: nil,",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H3-age",
+      "description": "el handler no pasa ageCategory",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "ageCategory: query.ageCategory?.toDomain(),",
+      "replace": "ageCategory: nil,",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H4-gender",
+      "description": "el handler no pasa gender",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "gender: query.gender?.toDomain())",
+      "replace": "gender: nil)",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H5-400",
+      "description": "una seasonId que no es UUID da 200 vacío",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "return .badRequest(Self.invalidUUID(error))",
+      "replace": "return .ok(.init(body: .json([])))",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H6-codes",
+      "description": "los dos códigos de la federación cruzados",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "federationCompetitionId: federationCompetitionID,",
+      "replace": "federationCompetitionId: federationGroupID,",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H7-synced",
+      "description": "lastSyncedAt no viaja",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "lastSyncedAt: lastSyncedAt,",
+      "replace": "lastSyncedAt: nil,",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "H8-season-id",
+      "description": "seasonId lleva el id de la competición",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "seasonId: \"\\(seasonID)\",",
+      "replace": "seasonId: \"\\(id)\",",
+      "filter": "CompetitionEndpointTests"
+    },
+    {
+      "id": "E1-modality",
+      "description": "fútbol 7 del contrato se traduce a fútbol 5",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "case .futbol_7: .futbol7",
+      "replace": "case .futbol_7: .futbol5",
+      "filter": "ContractEnumTests"
+    },
+    {
+      "id": "E2-category",
+      "description": "cadete del contrato se traduce a juvenil",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "case .cadete: .cadete",
+      "replace": "case .cadete: .juvenil",
+      "filter": "ContractEnumTests"
+    }
+  ]
+}

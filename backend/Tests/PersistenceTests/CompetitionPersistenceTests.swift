@@ -213,4 +213,89 @@ struct CompetitionPersistenceTests {
             #expect(despues.isEmpty, "la FK no es CASCADE: la purga de §5.4 no funcionaría")
         }
     }
+
+    // ── Los cuatro filtros de `GET /v1/competitions` (Plan R1, R1.7) ─────────
+
+    /// Cinco competiciones: la `a` y otra por filtro, que se diferencia de ella
+    /// **solo** en ese campo. Así cada filtro, solo, deja fuera una distinta, y un
+    /// filtro que se ignore se nota.
+    struct FilterFixture: Sendable {
+        let first: SeasonID, second: SeasonID
+        let a: CompetitionID            // primera temporada, F11, infantil, masculino
+        let futbol7: CompetitionID      // como a, pero fútbol 7
+        let cadete: CompetitionID       // como a, pero cadete
+        let femenino: CompetitionID     // como a, pero femenino
+        let otherSeason: CompetitionID  // como a, pero de la segunda temporada
+    }
+
+    static func withFilterFixture(
+        _ slug: String,
+        _ body: @escaping @Sendable (FilterFixture, TenantFixture) async throws -> Void
+    ) async throws {
+        try await SeasonPersistenceTests.withTenant(slug) { tenant in
+            let first = try SeasonPersistenceTests.season("2025/26", federationSeasonID: "21")
+            let second = try SeasonPersistenceTests.season("2026/27", federationSeasonID: "22")
+            let fixture = FilterFixture(
+                first: first.id, second: second.id,
+                a: CompetitionID(raw: UUID()), futbol7: CompetitionID(raw: UUID()),
+                cadete: CompetitionID(raw: UUID()), femenino: CompetitionID(raw: UUID()),
+                otherSeason: CompetitionID(raw: UUID()))
+            let rows: [(CompetitionID, SeasonID, Modality, TeamCategory, Gender, String)] = [
+                (fixture.a, first.id, .futbol11, .infantil, .masculino, "g-a"),
+                (fixture.futbol7, first.id, .futbol7, .infantil, .masculino, "g-f7"),
+                (fixture.cadete, first.id, .futbol11, .cadete, .masculino, "g-cad"),
+                (fixture.femenino, first.id, .futbol11, .infantil, .femenino, "g-fem"),
+                (fixture.otherSeason, second.id, .futbol11, .infantil, .masculino, "g-a"),
+            ]
+            try await tenant.scope {
+                try await $0.seasons.save(first)
+                try await $0.seasons.save(second)
+                for (id, seasonID, modality, category, gender, group) in rows {
+                    try await $0.competitions.save(try Competition(
+                        id: id, seasonID: seasonID, modality: modality, gender: gender,
+                        federationCompetitionID: "24037548", federationGroupID: group,
+                        ageCategory: category, divisionLabel: "Primera", groupLabel: group,
+                        createdAt: Date(), updatedAt: Date()))
+                }
+            }
+            try await body(fixture, tenant)
+        }
+    }
+
+    @Test("sin filtros, todas las del club, de las dos temporadas")
+    func noFilterListsThemAll() async throws {
+        try await Self.withFilterFixture("comp-f-all") { f, tenant in
+            let all = try await tenant.scope { try await $0.competitions.list(CompetitionFilter()) }
+            #expect(Set(all.map(\.id)) == [f.a, f.futbol7, f.cadete, f.femenino, f.otherSeason])
+        }
+    }
+
+    @Test("cada filtro, solo, deja la que se diferencia en ese campo")
+    func eachFilterNarrowsOnItsOwn() async throws {
+        try await Self.withFilterFixture("comp-f-each") { f, tenant in
+            let cases: [(CompetitionFilter, CompetitionID, String)] = [
+                (CompetitionFilter(seasonID: f.second), f.otherSeason, "seasonId"),
+                (CompetitionFilter(modality: .futbol7), f.futbol7, "modality"),
+                (CompetitionFilter(ageCategory: .cadete), f.cadete, "ageCategory"),
+                (CompetitionFilter(gender: .femenino), f.femenino, "gender"),
+            ]
+            for (filter, expected, name) in cases {
+                let found = try await tenant.scope { try await $0.competitions.list(filter) }
+                #expect(found.map(\.id) == [expected], "\(name)")
+            }
+        }
+    }
+
+    /// Los filtros **se suman**: con los cuatro a la vez solo queda la `a`.
+    @Test("los cuatro a la vez se suman, no se eligen")
+    func filtersAreCombinedWithAnd() async throws {
+        try await Self.withFilterFixture("comp-f-and") { f, tenant in
+            let found = try await tenant.scope {
+                try await $0.competitions.list(CompetitionFilter(
+                    seasonID: f.first, modality: .futbol11, ageCategory: .infantil, gender: .masculino))
+            }
+            #expect(found.map(\.id) == [f.a])
+        }
+    }
 }
+

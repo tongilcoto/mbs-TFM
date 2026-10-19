@@ -148,4 +148,28 @@ struct ContractEnumTests {
             #expect(value.toContract().toDomain() == value)
         }
     }
+
+    /// **Las dos de vuelta que trae R1.7**: los filtros `modality` y `ageCategory`
+    /// de `GET /v1/competitions` llegan del cliente como valores del contrato.
+    /// Traducir uno al vecino devolvería otras competiciones sin avisar.
+    @Test("Modality ← contrato, y el viaje redondo (R1.7)")
+    func modalityBack() {
+        Self.check(
+            Components.Schemas.Modality.allCases, { $0.toDomain() }, "Modality (de vuelta)")
+
+        for value in Modality.allCases {
+            #expect(value.toContract().toDomain() == value)
+        }
+    }
+
+    @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
+    func teamCategoryBack() {
+        Self.check(
+            Components.Schemas.TeamCategory.allCases, { $0.toDomain() }, "TeamCategory (de vuelta)")
+
+        for value in TeamCategory.allCases {
+            #expect(value.toContract().toDomain() == value)
+        }
+    }
 }
+

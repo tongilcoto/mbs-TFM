@@ -156,8 +156,13 @@ struct FakeCompetitionRepository: CompetitionRepository {
             $0.seasonID == seasonID && $0.federationGroupID == federationGroupID
         }
     }
-    func list(seasonID: SeasonID) async throws -> [Competition] {
-        await store.competitions.filter { $0.seasonID == seasonID }
+    func list(_ filter: CompetitionFilter) async throws -> [Competition] {
+        await store.competitions.filter { competition in
+            (filter.seasonID.map { competition.seasonID == $0 } ?? true)
+                && (filter.modality.map { competition.modality == $0 } ?? true)
+                && (filter.ageCategory.map { competition.ageCategory == $0 } ?? true)
+                && (filter.gender.map { competition.gender == $0 } ?? true)
+        }
     }
     func save(_ competition: Competition) async throws { await store.save(competition) }
 }
