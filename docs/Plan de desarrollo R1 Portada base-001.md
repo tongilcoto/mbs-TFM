@@ -633,3 +633,7 @@ De las piezas comunes a la pantalla.
   el *handler* responde 400 `INVALID_UUID` si no lo es, como `listIngestionRuns`. Pero sin el 400 en el catálogo
   la respuesta no se puede devolver, y habría acabado en 500. Se añade, con una descripción que dice que los
   filtros se suman y que una `seasonId` que no es de ninguna temporada da la lista vacía, no un error.
+- **Las dos lecturas que escribí en R1.4 no declaraban el 400** (se vio en R1.9, y es el mismo caso que el de
+  `listCompetitions` en R1.7). `listSeasonRegistrations` y `getTeamRegistration` llevan un `id` en la ruta que
+  llega como texto; las del enganche, con `{teamId}`, sí declaran el 400 de un `id` que no es UUID. Se añade a
+  las dos, también a `getTeamRegistration`, que no funcionará hasta la rebanada 4.
