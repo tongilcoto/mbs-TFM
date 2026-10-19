@@ -559,6 +559,9 @@ resultados posibles (cazada, sobrevive, equivalente, **inválida**) están en [s
 
 ### 5.3 El censo del contrato — `Tools/Census`
 
+**Cuenta lo que el servidor promete en su catálogo y ningún test nombra**: códigos de error y campos de las
+respuestas. Lo que se acepta sin test va apuntado, con su motivo, en `Tools/Census/known-gaps.json`.
+
 ```sh
 swift build --package-path Tools/Census
 Tools/Census/.build/debug/census          # códigos Problem y campos del contrato sin test que los nombre
@@ -571,6 +574,21 @@ menciona, y sale con `1` si aparece alguno nuevo, o si alguno de los apuntados e
 no está en la lista del catálogo** (`ProblemCode`, en `openapi.yaml`): se añade allí. **Que un test mencione algo no significa que lo compruebe**
 (H-47): el censo encuentra huecos, pero no garantiza cobertura; para eso está la mutación. El método y sus
 límites, en [su README](./Tools/Census/README.md).
+
+### 5.4 Las dos herramientas son paquetes aparte, y Xcode las enseña cerradas
+
+`Tools/Mutate` y `Tools/Census` tienen **cada una su propio `Package.swift`**, separado del servidor, por dos
+motivos:
+
+- **Sus tests no se mezclan con los del servidor.** El recuento de §0 es solo del servidor; los de las
+  herramientas se pasan con `swift test --package-path Tools/…`.
+- **El censo usa una librería para leer el catálogo (Yams)** que el servidor no necesita.
+
+**Al abrir `backend/Package.swift` en Xcode, salen cerradas**: Xcode trata una carpeta con su propio
+`Package.swift` como otro proyecto y no deja navegarla. Para ver su código, **File → Open** sobre
+`Tools/Census/Package.swift` o `Tools/Mutate/Package.swift`, y se abren en su propia ventana. Para usarlas
+basta la terminal, con los comandos de §5.2 y §5.3. Cuándo se pasan en cada paso, en el
+[plan del backoffice §2.5](../docs/Plan%20de%20desarrollo%20backoffice-001.md).
 
 ---
 
@@ -913,6 +931,7 @@ despista (`missing required module '_NumericsShims'`).
 | Síntoma | Causa casi segura |
 |---|---|
 | `Cannot find type 'Components' in scope` en Xcode | Los tipos del contrato no existen hasta que corre el plugin. Acepta el aviso de confianza y ⌘B. **La CLI es la fuente de verdad**, no el índice |
+| En Xcode, `Tools/Census` o `Tools/Mutate` salen cerradas y no se pueden abrir | Son paquetes aparte ([§5.4](#54-las-dos-herramientas-son-paquetes-aparte-y-xcode-las-enseña-cerradas)). **File → Open** sobre su `Package.swift` |
 | `connection refused` al 5434 | `docker compose up -d db` |
 | Verde sospechosamente rápido (0,002 s) | Corriste sin `REQUIRE_DB=1` y Docker estaba parado: **no se probó nada que toque la base** |
 | `400 TENANT_NOT_RESOLVED` | Llamaste a `localhost:8080` sin subdominio ni `X-Club` |

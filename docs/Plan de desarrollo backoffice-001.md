@@ -71,7 +71,8 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
    no arranque: un escenario que falla al levantar el servidor no ha probado nada (H-07).
 2. **Lo que le falta al servidor**, con el método del backend de siempre (plan de desarrollo backend pre backoffice, §5.1): prueba →
    esqueleto que devuelve **mal a propósito** → rojo de aserción → implementación → mutación con
-   `Tools/Mutate`. `REQUIRE_DB=1 swift test`, nunca `swift test` a secas.
+   `Tools/Mutate` → el censo en `0` (las dos herramientas, en §2.5). `REQUIRE_DB=1 swift test`, nunca
+   `swift test` a secas.
 3. **Las piezas de la web, con Vitest**, con el mismo bucle: prueba → **esqueleto que pinta mal a
    propósito** (la pieza existe y se monta, pero enseña otro texto) → rojo de aserción → implementación.
    Un `Cannot find module` no es un rojo: demuestra que el fichero no estaba, no que la prueba cace nada.
@@ -92,6 +93,28 @@ Cada rebanada empieza **por el escenario**, que es lo que el usuario verá, y ac
    el [plan de desarrollo backend pre backoffice](./Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md),
    que es donde está `R0.8`; desde la rebanada 1, ya no (decidido con el desarrollador el 2026-10-18).
 6. **Explicar en lenguaje llano**: quien revisa es ingeniero de pruebas, no desarrollador web.
+
+### 2.5 Las dos herramientas del servidor
+
+Los tests en verde dicen que lo que se comprueba está bien, pero no dicen **qué se ha quedado sin comprobar**.
+Para eso hay dos herramientas, y cada paso que programa algo en el servidor pasa las dos antes de darse por
+hecho:
+
+| Herramienta | Qué hace | Cuándo | Cómo, desde `backend/` |
+|---|---|---|---|
+| **La mutación** (`Tools/Mutate`) | **Estropea el código a propósito**, un cambio cada vez (quitar un filtro, cruzar dos campos…), y pasa los tests. Si ningún test cae, ese cambio «sobrevive»: es algo que los tests no vigilan | Al acabar cada paso del servidor. Los cambios se escriben en un catálogo propio del paso, `Tools/Mutate/Catalogs/R<n>-<m>.json`, que se guarda en el repositorio para poder repetirlo | `swift build -c release --package-path Tools/Mutate` (una vez) y `Tools/Mutate/.build/release/mutate Tools/Mutate/Catalogs/R1-7.json`, antes con `--dry-run`. Necesita Docker |
+| **El censo** (`Tools/Census`) | **Cuenta lo que el servidor promete y ningún test nombra**: los códigos de error, los campos de las respuestas de las operaciones activas, y que cada código emitido esté en la lista `ProblemCode` del catálogo | Al activar una operación. Lo que se acepta sin test va en `Tools/Census/known-gaps.json`, **cada cosa con su motivo**; si algo de esa lista ya tiene test, el censo obliga a quitarlo | `swift build --package-path Tools/Census` y `Tools/Census/.build/debug/census`: tiene que salir con `0` |
+
+- **Nombrar no es comprobar.** El censo encuentra huecos, pero un test que nombra un campo puede no mirar su
+  valor. Lo que demuestra que un test vigila algo es la mutación.
+- **Lo que se midió va en el renglón del paso**, en el plan de su rebanada: «mutación 15/15», «censo en `0`»,
+  y lo que entró o salió de `known-gaps.json`.
+- **Son paquetes Swift aparte**: cada uno tiene su propio `Package.swift` dentro de `backend/Tools/`. Por dos
+  motivos: sus tests **no se mezclan con el recuento del servidor** (los «650 tests» son solo del servidor), y
+  el censo usa una librería para leer el catálogo (Yams) que el servidor no necesita.
+- **Por eso Xcode los enseña cerrados.** Al abrir `backend/Package.swift`, Xcode trata cualquier carpeta con su
+  propio `Package.swift` como otro proyecto y no deja navegarla. Se abren aparte: **File → Open** sobre
+  `backend/Tools/Census/Package.swift` (o el de `Mutate`), en su propia ventana. Para usarlos basta la terminal.
 
 ---
 
