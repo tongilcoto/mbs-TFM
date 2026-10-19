@@ -387,7 +387,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests**, **632** desde `D-101` (2026-10-18). Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18) y **682** tras el servidor de la rebanada 1. Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
@@ -395,7 +395,14 @@ PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cóm
 **cerrada el 2026-10-16, y con ella la rebanada 0**: `npm run e2e` arranca su propio servidor (8081, `tfm_test`),
 su web (5174) y una federación falsa (8090) con las respuestas grabadas, crea un club `bo_` por escenario y pasa
 axe en los dos modos al final de cada uno. Para eso, la dirección de la RFFM se lee de `RFFM_BASE_URL`
-(mini-fase `R0.8`; sin ella, la de verdad). Lo siguiente, la ficha de la rebanada 1.
+(mini-fase `R0.8`; sin ella, la de verdad).
+La **rebanada 1** (la portada) tiene [su plan](./docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), y **su parte del
+servidor está cerrada** (`R1.1`–`R1.10`, 2026-10-19): el catálogo con la lectura del equipo en una temporada
+(`D-102`), el estado de la ingesta con `pending` (enmienda de `D-89`) y la lista cerrada de códigos de error
+(`ProblemCode`), que el censo vigila; y tres operaciones nuevas, `listSeasons`, `listCompetitions` y
+`listSeasonRegistrations`: el servidor sirve **9 de las 85**. Por el camino, `D-103` (la temporada en curso es la que
+contiene hoy) y H-58 cerrado. **682 tests**; cada paso, con su catálogo de mutación (`Tools/Mutate/Catalogs/R1-6`
+a `R1-9`). Lo siguiente, **la web de la rebanada 1, desde `R1.11`** (los mensajes de error en `src/api/errors.ts`).
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`

@@ -468,7 +468,7 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 632 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 682 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

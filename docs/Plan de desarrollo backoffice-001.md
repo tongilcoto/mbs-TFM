@@ -110,7 +110,7 @@ hecho:
 - **Lo que se midió va en el renglón del paso**, en el plan de su rebanada: «mutación 15/15», «censo en `0`»,
   y lo que entró o salió de `known-gaps.json`.
 - **Son paquetes Swift aparte**: cada uno tiene su propio `Package.swift` dentro de `backend/Tools/`. Por dos
-  motivos: sus tests **no se mezclan con el recuento del servidor** (los «650 tests» son solo del servidor), y
+  motivos: sus tests **no se mezclan con el recuento del servidor** (los tests de §0 del README del backend son solo del servidor), y
   el censo usa una librería para leer el catálogo (Yams) que el servidor no necesita.
 - **Por eso Xcode los enseña cerrados.** Al abrir `backend/Package.swift`, Xcode trata cualquier carpeta con su
   propio `Package.swift` como otro proyecto y no deja navegarla. Se abren aparte: **File → Open** sobre
@@ -348,7 +348,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
-| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 9/18 | 2026-10-19 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 10/18 | 2026-10-19 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
