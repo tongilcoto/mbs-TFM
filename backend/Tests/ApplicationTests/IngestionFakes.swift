@@ -184,6 +184,9 @@ struct FakeOpponentClubRepository: OpponentClubRepository {
 struct FakeTeamRepository: TeamRepository {
     let store: IngestionStore
     func list() async throws -> [Team] { await store.teams }
+    func list(ids: [TeamID]) async throws -> [Team] {
+        await store.teams.filter { ids.contains($0.id) }
+    }
     func find(_ id: TeamID) async throws -> Team? {
         await store.teams.first { $0.id == id }
     }
@@ -208,6 +211,9 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
     }
     func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
         await store.teamRegistrations.filter { $0.competitionID == competitionID }
+    }
+    func list(seasonID: SeasonID) async throws -> [TeamRegistration] {
+        await store.teamRegistrations.filter { $0.seasonID == seasonID }
     }
     func save(_ registration: TeamRegistration) async throws {
         await store.save(registration)

@@ -600,6 +600,10 @@ paths:
         **Solo equipos propios**: los rivales no se inscriben (D-68), y su temporada se sigue leyendo con
         `GET /teams?seasonId=`.
 
+        **Orden**: por categoría, de menor a mayor edad (de prebenjamín a senior, no alfabético), y dentro
+        de cada una por letra, con el equipo sin letra delante. Una temporada sin inscripciones da la lista
+        vacía; una que no existe, **404**.
+
         Colección pequeña por club → **sin paginación** (§5.3).
       responses:
         '200':

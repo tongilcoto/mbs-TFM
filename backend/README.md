@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **673 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 en curso ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **682 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -38,7 +38,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
 | `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
-| Las otras 77 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
+| Las otras 76 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -442,6 +443,25 @@ partir del registro de pasadas (`/v1/ingestion-runs`):
   perder un fallo anterior («La anterior tuvo fallos»).
 - `lastSyncedAt` es la última sincronización **buena**; `lastIngestionAt`, cuándo acabó la última pasada, **bien
   o mal**. Si son distintas, la última falló.
+
+<a id="equipos-de-la-temporada"></a>
+### 4.5 Los equipos de una temporada
+
+**Los equipos del club en una temporada, cada uno con las competiciones en las que juega** (`D-102`). Es la
+lista de la portada del backoffice (rebanada 1); el nombre y el estado de cada competición salen de §4.4.
+
+```sh
+curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registrations | jq
+```
+
+- **Un elemento por equipo**: `team` (el equipo, igual que en cualquier otra respuesta), `seasonId` y
+  `competitions`, una lista con el `competitionId` y el código del equipo en la federación
+  (`federationTeamId`) de cada una.
+- **Un equipo inscrito sin competición todavía** (el estado de junio) sale con `competitions` vacía.
+- Solo equipos **propios**. Ordenados por categoría, de menor a mayor edad, y por letra.
+- `team.clubName` es el **nombre corto** del club, y `team.displayName`, «nombre corto + categoría + letra»
+  (`Celtic Cadete B`).
+- Una temporada que no existe da **404**; un `id` que no es un UUID, **400**.
 
 ---
 
@@ -904,7 +924,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **7.065 líneas, 85 operaciones en 46 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **7.069 líneas, 85 operaciones en 46 rutas y las 21 entidades de §3.2**.
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh

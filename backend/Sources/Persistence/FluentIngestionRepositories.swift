@@ -48,6 +48,14 @@ public struct FluentTeamRepository: TeamRepository {
             .map { try $0.toDomain() }
     }
 
+    public func list(ids: [TeamID]) async throws -> [Team] {
+        guard !ids.isEmpty else { return [] }
+        return try await TeamRecord.query(on: database)
+            .filter(\.$id ~~ ids.map(\.raw))
+            .all()
+            .map { try $0.toDomain() }
+    }
+
     /// **Uno por su id** (`C-D.1`, [D-67]).
     ///
     /// `TeamRecord.find` y no una consulta con filtro: la clave primaria es la
@@ -757,6 +765,25 @@ public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
     private let database: any Database
     public init(database: any Database) { self.database = database }
 
+    /// Las filas, con su equipo. Los equipos se leen **todos de una vez**, no uno
+    /// por fila. Que falte uno es corrupción, no un caso de negocio: la FK lo
+    /// impide.
+    private func withTheirTeams(_ rows: [TeamRegistrationRecord]) async throws -> [TeamRegistration] {
+        guard !rows.isEmpty else { return [] }
+        let teamIDs = Set(rows.map { $0.$team.id })
+        let teams = Dictionary(
+            uniqueKeysWithValues: try await TeamRecord.query(on: database)
+                .filter(\.$id ~~ teamIDs)
+                .all()
+                .map { ($0.id, try $0.toDomain()) })
+        return try rows.map { row in
+            guard let team = teams[row.$team.id] else {
+                throw PersistenceError.notFound(table: TeamRecord.schema)
+            }
+            return try row.toDomain(team: team)
+        }
+    }
+
     /// Las de **ese par**, que es lo que el puerto promete y no una comodidad:
     /// la cascada del enganche pregunta *"¿qué tiene este equipo en esta
     /// temporada?"* para distinguir la fila de junio —que completa— de una
@@ -785,24 +812,20 @@ public struct FluentTeamRegistrationRepository: TeamRegistrationRepository {
     /// Las de **esa competición**, de todos los equipos propios (`D-101`): la
     /// pasada reconoce a los propios por el código de estas filas. Aquí sí hay
     /// equipos distintos, así que se leen todos de una vez y no uno por fila.
+    /// Las de **esa temporada** (`D-102`). Como en la de competición, hay equipos
+    /// distintos, así que se leen todos de una vez y no uno por fila.
+    public func list(seasonID: SeasonID) async throws -> [TeamRegistration] {
+        let rows = try await TeamRegistrationRecord.query(on: database)
+            .filter(\.$season.$id == seasonID.raw)
+            .all()
+        return try await withTheirTeams(rows)
+    }
+
     public func list(competitionID: CompetitionID) async throws -> [TeamRegistration] {
         let rows = try await TeamRegistrationRecord.query(on: database)
             .filter(\.$competition.$id == competitionID.raw)
             .all()
-        guard !rows.isEmpty else { return [] }
-
-        let teamIDs = Set(rows.map { $0.$team.id })
-        let teams = Dictionary(
-            uniqueKeysWithValues: try await TeamRecord.query(on: database)
-                .filter(\.$id ~~ teamIDs)
-                .all()
-                .map { ($0.id, try $0.toDomain()) })
-        return try rows.map { row in
-            guard let team = teams[row.$team.id] else {
-                throw PersistenceError.notFound(table: TeamRecord.schema)
-            }
-            return try row.toDomain(team: team)
-        }
+        return try await withTheirTeams(rows)
     }
 
     public func save(_ registration: TeamRegistration) async throws {

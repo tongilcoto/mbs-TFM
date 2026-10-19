@@ -37,6 +37,12 @@ public protocol TeamRepository: Sendable {
     /// (`D-67`).
     func list() async throws -> [Team]
 
+    /// **Los de esos `id`**, de una vez (`listSeasonRegistrations`, `D-102`). Sin
+    /// orden en el resultado; un `id` que no existe no sale. Existe para no traer
+    /// todos los equipos —que incluyen los rivales, cientos— cuando se quieren los
+    /// de unas pocas inscripciones.
+    func list(ids: [TeamID]) async throws -> [Team]
+
     /// **Uno por su id**, que es lo que estrena F10 (`C-D.1`).
     ///
     /// Hasta aquí este puerto solo sabía servir la lista entera, y era
@@ -90,6 +96,11 @@ public protocol TeamRegistrationRepository: Sendable {
     /// (`D-101`). Es lo que la pasada necesita para reconocer a los propios: su
     /// código es el de la fila de la competición que recorre, no el del equipo.
     func list(competitionID: CompetitionID) async throws -> [TeamRegistration]
+
+    /// Las de **esa temporada**, de todos los equipos propios (`D-102`): es el
+    /// equipo en una temporada, leído. Una fila por (equipo, competición), y la de
+    /// junio sin competición. Sin orden en el resultado.
+    func list(seasonID: SeasonID) async throws -> [TeamRegistration]
 
     /// *Upsert* por `id`, igual que los demás: el id lo pone el caso de uso.
     /// **Completar la fila de junio es un `save` con el mismo `id`**, no una
