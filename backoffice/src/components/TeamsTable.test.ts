@@ -18,12 +18,20 @@ function renderTable(rows: TeamRow[]) {
   render(TeamsTable, { props: { rows, caption: 'Equipos de la temporada 2026/27' } })
 }
 
-// Lo que dice cada fila, celda a celda, como lo leería un lector de pantalla.
+// Lo que dice cada fila, celda a celda: cada trozo de texto, separado por un espacio. (Vue quita los espacios
+// entre etiquetas, así que el texto tal cual juntaría el icono con su palabra: «✓Al día».)
 function rowTexts() {
   return screen
     .getAllByRole('row')
     .slice(1)
-    .map((row) => [...row.querySelectorAll('th, td')].map((cell) => cell.textContent?.replace(/\s+/g, ' ').trim()))
+    .map((row) => [...row.querySelectorAll('th, td')].map(words))
+}
+
+function words(cell: Element): string {
+  const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT)
+  const pieces: string[] = []
+  while (walker.nextNode()) pieces.push(walker.currentNode.textContent!.trim())
+  return pieces.filter(Boolean).join(' ')
 }
 
 describe('la tabla de equipos', () => {
@@ -62,7 +70,7 @@ describe('la tabla de equipos', () => {
       },
     ])
 
-    expect(rowTexts()[0]![2]).toMatch(/^↻ En marcha ?✕ La anterior tuvo fallos$/)
+    expect(rowTexts()[0]![2]).toBe('↻ En marcha ✕ La anterior tuvo fallos')
   })
 
   test('un equipo con dos competiciones: su nombre una vez, y una línea por competición', () => {

@@ -65,7 +65,7 @@ const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending:
                 aria-hidden="true"
                 :class="['icon', competition.health]"
               >{{ icons[competition.health] }}</span>
-              {{ competition.healthName }}
+              <span>{{ competition.healthName }}</span>
             </span>
             <span
               v-if="competition.previousFailed"
@@ -75,7 +75,7 @@ const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending:
                 aria-hidden="true"
                 class="icon failing"
               >{{ icons.failing }}</span>
-              La anterior tuvo fallos
+              <span>La anterior tuvo fallos</span>
             </span>
           </td>
           <td>{{ competition.lastSynced }}</td>
