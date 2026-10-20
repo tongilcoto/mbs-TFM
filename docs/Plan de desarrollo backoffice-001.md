@@ -348,7 +348,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
-| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 16/18 | 2026-10-20 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 17/18 | 2026-10-20 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

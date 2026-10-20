@@ -64,7 +64,8 @@ Before(async function (this: ScenarioWorld) {
   const start = Date.now()
   this.club = await createScenarioClub()
   clubTimesMs.push(Date.now() - start)
-  this.context = await browser!.newContext({ locale: 'es-ES' })
+  // La hora de Madrid, para que las fechas que enseña la web sean las mismas en cualquier ordenador.
+  this.context = await browser!.newContext({ locale: 'es-ES', timezoneId: 'Europe/Madrid' })
   this.page = await this.context.newPage()
 })
 
@@ -87,5 +88,13 @@ After(async function (this: ScenarioWorld, { result }) {
   const problems = await accessibilityProblems(this.page)
   if (problems.length > 0) {
     throw new Error(`Fallos de accesibilidad (axe, WCAG 2.2 AA):\n${problems.join('\n')}`)
+  }
+})
+
+// Lo primero al acabar (Cucumber pasa los After del último al primero): si algún `Then` apuntó un fallo, el
+// escenario falla aquí con todos (World.check).
+After(async function (this: ScenarioWorld) {
+  if (this.failures.length > 0) {
+    throw new Error(`Comprobaciones que fallaron:\n${this.failures.map((f) => `  · ${f}`).join('\n')}`)
   }
 })
