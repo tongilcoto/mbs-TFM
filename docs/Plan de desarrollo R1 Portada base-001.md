@@ -640,3 +640,8 @@ De las piezas comunes a la pantalla.
   `listCompetitions` en R1.7). `listSeasonRegistrations` y `getTeamRegistration` llevan un `id` en la ruta que
   llega como texto; las del enganche, con `{teamId}`, sí declaran el 400 de un `id` que no es UUID. Se añade a
   las dos, también a `getTeamRegistration`, que no funcionará hasta la rebanada 4.
+- **axe medía el modo oscuro a mitad de la animación** (se vio en R1.12). El arnés (`e2e/support/accessibility.ts`,
+  de R0.13) cambia de modo y mide al instante, y las piezas de PrimeVue tardan 0,2 s en pasar al color del otro
+  modo: axe leía el color de en medio y daba un fallo de contraste que no existe. Con la página en blanco no se
+  veía; con el primer botón, **10 de 10** veces. Mientras mide, el arnés quita las animaciones y luego las
+  devuelve: **0 de 10**.
