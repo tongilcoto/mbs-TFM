@@ -19,6 +19,7 @@
     "e2e": "NODE_OPTIONS='--import tsx' cucumber-js"
   },
   "dependencies": {
+    "@primeuix/styled": "0.7.4",
     "@primeuix/themes": "2.0.3",
     "openapi-fetch": "^0.17.0",
     "primelocale": "^2.6.0",
