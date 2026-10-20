@@ -443,6 +443,7 @@ la competición arriba.
 | Camino | Pantalla | Estado |
 |---|---|---|
 | `/` | **Portada**: los equipos del club con su competición | ✅ Rebanada 1 |
+| `/equipos` | Lleva a la portada: la lista de equipos es la portada, y así cada sección del menú tiene su camino (`/equipos`, `/temporadas`…) | ✅ Rebanada 1 |
 | `/equipos/nuevo` | **Alta de equipo** | ✅ Rebanada 2 |
 | `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
 | `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |

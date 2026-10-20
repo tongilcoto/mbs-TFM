@@ -647,3 +647,7 @@ De las piezas comunes a la pantalla.
   modo: axe leía el color de en medio y daba un fallo de contraste que no existe. Con la página en blanco no se
   veía; con el primer botón, **10 de 10** veces. Mientras mide, el arnés quita las animaciones y luego las
   devuelve: **0 de 10**.
+- **`/equipos` daba «Esta página no existe»** (lo vio el desarrollador tras R1.13). El mapa (LLD-B §6.1) solo tenía
+  `/` para la lista de equipos, pero las demás secciones del menú irán en `/temporadas`, `/rivales`… y
+  `/equipos/nuevo` cuelga de `/equipos`. Ahora `/equipos` lleva a la portada y la dirección pasa a `/`; una fila
+  más en el mapa del LLD-B y 2 pruebas del mapa de pantallas (46 → **48**), una de ellas en rojo sin la redirección.

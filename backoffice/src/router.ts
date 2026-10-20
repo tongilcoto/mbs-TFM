@@ -14,6 +14,8 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: HomeScreen, meta: { title: 'Equipos' } },
+    // La lista de equipos es la portada; /equipos lleva a ella, como el resto de secciones del menú (LLD-B §6.1).
+    { path: '/equipos', redirect: '/' },
     // Cualquier otro camino (LLD-B §6.7).
     { path: '/:anything(.*)*', component: NotFoundScreen, meta: { title: 'Esta página no existe' } },
   ],
