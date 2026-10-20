@@ -28,7 +28,10 @@ Given('la web de mi club no ha podido conectar con el servidor', async function 
 })
 
 When('abro la web de un club que no existe', async function (this: ScenarioWorld) {
-  await this.page.goto(`http://bo-noexiste.localhost:${config.webPort}/`)
+  // Empieza por `bo-` como los de los escenarios, pero ninguno se llama así: los suyos llevan seis cifras.
+  const slug = `bo-no-${this.random.int(0, 0xffffff).toString(16).padStart(6, '0')}`
+  this.note(`club que no existe «${slug}»`)
+  await this.page.goto(`http://${slug}.localhost:${config.webPort}/`)
   await this.page.locator('h1').waitFor()
 })
 

@@ -4,6 +4,28 @@ import type { BrowserContext, Page } from 'playwright'
 import type { ScenarioClub } from './clubs.ts'
 import type { HeldRequest } from './hold-request.ts'
 import { config } from './config.ts'
+import type { Competition, Season, Team } from './invented.ts'
+import type { Random } from './random.ts'
+
+/** Lo que los `Given` han dado de alta, para que los pasos siguientes se refieran a ello («el equipo»…). */
+export interface ScenarioData {
+  /** El nombre corto que se le puso al club. */
+  shortName?: string
+  /** Los equipos del club, para no inventar dos iguales. */
+  teams: Team[]
+  /** El equipo del escenario. */
+  team?: Team
+  /** La competición que juega, si juega alguna. */
+  competition?: Competition
+  /** Las temporadas pasadas del club, por orden de alta. */
+  pastSeasons: Season[]
+  /** La temporada que todavía no ha empezado. */
+  futureSeason?: Season
+  /** La temporada que se pide en la dirección y el club no tiene. */
+  missingSeason?: Season
+  /** Las competiciones de las que se ha lanzado una ingesta: al acabar, se espera a que acaben. */
+  ingesting: string[]
+}
 
 export class ScenarioWorld extends World {
   context!: BrowserContext
@@ -14,6 +36,11 @@ export class ScenarioWorld extends World {
   failures: string[] = []
   /** La petición que el escenario tiene retenida, si tiene alguna (DW-17). */
   held?: HeldRequest
+  /** El azar del escenario (random.ts): con la misma semilla, los mismos datos. */
+  random!: Random
+  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [] }
+  /** Los datos que le tocaron al escenario, en palabras: salen en el informe si falla. */
+  chosen: string[] = []
 
   constructor(options: IWorldOptions) {
     super(options)
@@ -31,6 +58,11 @@ export class ScenarioWorld extends World {
       const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
       this.failures.push(`${what}: ${reason}`)
     }
+  }
+
+  /** Apunta un dato elegido al azar, para poder repetir el escenario si falla. */
+  note(text: string): void {
+    this.chosen.push(text)
   }
 
   /** La dirección de la web de pruebas para el club del escenario: el club va en el nombre (LLD-B §8). */

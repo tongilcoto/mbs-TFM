@@ -77,6 +77,7 @@ Then('la dirección es {string}', async function (this: ScenarioWorld, expected:
   )
 })
 
-Then('la pestaña del navegador dice {string}', async function (this: ScenarioWorld, expected: string) {
+Then('la pestaña del navegador dice {string} y el nombre corto de mi club', async function (this: ScenarioWorld, screen: string) {
+  const expected = `${screen} · ${this.data.shortName!}`
   await this.check('la pestaña', () => becomes(this.page, () => this.page.title(), expected, 'la pestaña'))
 })

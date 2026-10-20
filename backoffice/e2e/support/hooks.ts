@@ -11,9 +11,11 @@ import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@
 import { chromium, type Browser } from 'playwright'
 import { accessibilityProblems } from './accessibility.ts'
 import { apiServerIsRunning, startApiServer, stopApiServer } from './api-server.ts'
+import { settleIngestions } from './club-data.ts'
 import { createScenarioClub, dropScenarioClub, type ScenarioClub } from './clubs.ts'
 import { startFakeFederation } from './fake-federation.ts'
 import { sweepScenarioClubs } from './sweep.ts'
+import { randomFor, runSeed } from './random.ts'
 import { prepareTestDatabase } from './test-database.ts'
 import { startWebServer } from './web-server.ts'
 import type { ScenarioWorld } from './world.ts'
@@ -34,6 +36,7 @@ async function stopAll(): Promise<void> {
 }
 
 BeforeAll({ timeout: 90_000 }, async function () {
+  console.log(`Semilla de los datos: ${runSeed}. Para repetirlos: SEMILLA=${runSeed} npm run e2e`)
   try {
     await prepareTestDatabase()
     const swept = await sweepScenarioClubs()
@@ -60,7 +63,9 @@ AfterAll({ timeout: 30_000 }, async function () {
   }
 })
 
-Before(async function (this: ScenarioWorld) {
+Before(async function (this: ScenarioWorld, { pickle }) {
+  // Su propio azar, del nombre del escenario: se repite igual lanzándolo solo.
+  this.random = randomFor(`${pickle.uri}|${pickle.name}`)
   const start = Date.now()
   this.club = await createScenarioClub()
   clubTimesMs.push(Date.now() - start)
@@ -72,10 +77,15 @@ Before(async function (this: ScenarioWorld) {
 // Después de cada escenario: se cierra su pestaña y se borra su club (o se conserva, con KEEP_TEST_DATA=1).
 // Y si el escenario paró el servidor de pruebas y no llegó a arrancarlo (falló a medias), se arranca aquí, para
 // que el siguiente no herede el fallo.
-After({ timeout: 30_000 }, async function (this: ScenarioWorld) {
+After({ timeout: 30_000 }, async function (this: ScenarioWorld, { result, pickle }) {
   await this.context?.close()
   if (!apiServerIsRunning()) await startApiServer()
+  if (result?.status === Status.FAILED && this.chosen.length > 0) {
+    console.log(`\nDatos de «${pickle.name}» (SEMILLA=${runSeed}):\n${this.chosen.map((c) => `  · ${c}`).join('\n')}`)
+  }
   if (!this.club) return
+  // Lo que el escenario dejó en marcha en el servidor acaba antes de borrar su club.
+  await settleIngestions(this.club, this.data.ingesting)
   if (keepTestData) kept.push(this.club)
   else await dropScenarioClub(this.club)
 })

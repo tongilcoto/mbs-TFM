@@ -1,14 +1,18 @@
 // El marco: la cabecera, el modo, «Saltar al contenido» y «Esta página no existe» (plan R1, §3.1 y §3.3).
 import { Given, Then, When } from '@cucumber/cucumber'
 import { setShortName } from '../support/club-data.ts'
+import { clubName } from '../support/invented.ts'
 import { becomes, shows } from '../support/look.ts'
 import type { ScenarioWorld } from '../support/world.ts'
 
 const isDark = (world: ScenarioWorld) =>
   world.page.evaluate(() => document.documentElement.classList.contains('app-dark'))
 
-Given('mi club se llama {string}', async function (this: ScenarioWorld, shortName: string) {
+Given('mi club tiene un nombre corto', async function (this: ScenarioWorld) {
+  const shortName = clubName(this.random)
   await setShortName(this.club, shortName)
+  this.data.shortName = shortName
+  this.note(`nombre corto «${shortName}»`)
 })
 
 // El sistema del navegador en claro, y nada elegido todavía en la web: así abre en claro.
@@ -31,7 +35,8 @@ When('salto al contenido con el teclado', async function (this: ScenarioWorld) {
   await this.page.keyboard.press('Enter')
 })
 
-Then('la cabecera dice {string}', async function (this: ScenarioWorld, text: string) {
+Then('la cabecera dice el nombre corto de mi club', async function (this: ScenarioWorld) {
+  const text = this.data.shortName!
   await this.check('la cabecera', () => shows(this.page.getByRole('banner').getByText(text), `«${text}» en la cabecera`))
 })
 

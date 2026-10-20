@@ -2,14 +2,14 @@
 Feature: El marco de la web
 
   Scenario: La cabecera enseña el nombre corto del club
-    Given mi club se llama "Celtic Castilla"
+    Given mi club tiene un nombre corto
     When abro la portada de mi club
-    Then la cabecera dice "Celtic Castilla"
+    Then la cabecera dice el nombre corto de mi club
 
   Scenario: La pestaña del navegador dice la pantalla y el club
-    Given mi club se llama "Celtic Castilla"
+    Given mi club tiene un nombre corto
     When abro la portada de mi club
-    Then la pestaña del navegador dice "Equipos · Celtic Castilla"
+    Then la pestaña del navegador dice "Equipos" y el nombre corto de mi club
 
   Scenario: El interruptor cambia de modo
     Given estoy en la portada de mi club en modo claro
