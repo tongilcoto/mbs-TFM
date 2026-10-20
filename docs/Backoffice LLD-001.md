@@ -660,6 +660,7 @@ calendario empieza en lunes**.
 |---|---|
 | Fecha | `14/09/2025`; en tablas, si cabe, `sáb 14/09` |
 | Hora | `12:00`, en formato de 24 horas |
+| Fecha y hora de un instante (`lastSyncedAt`…) | `17/10/2026 23:40`, **en la hora de quien mira** (la de su navegador): el servidor los manda en UTC. En Madrid y en Canarias, cada uno la suya |
 | Hora aún sin fijar (`kickoffTime` vacío) | «Hora por confirmar» |
 | Números | A la española: `1.234,5` |
 
