@@ -1,4 +1,4 @@
-<!-- La portada. En blanco hasta la rebanada 1. -->
+<!-- La portada. De momento, solo su título: la tabla de equipos llega en R1.15. -->
 <template>
-  <main />
+  <h1>Equipos</h1>
 </template>
