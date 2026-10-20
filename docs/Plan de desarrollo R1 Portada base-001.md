@@ -17,6 +17,9 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
+> **Cerrado el 2026-10-20**: los 18 pasos hechos (§8). El servidor sirve 9 de las 85 operaciones; **682 tests** en
+> el backend, y en la web **80 pruebas de piezas y 35 escenarios**. Lo aprendido, en la §9.
+>
 > **Estado del documento: decisiones revisadas.** Las siete de la §4 se revisaron una a una con el desarrollador
 > el 2026-10-18, y las secciones 2 a 5 están escritas con lo acordado. La §6 (escenarios) es una **lista
 > provisional**, y la §7 (pasos), revisada el mismo día. Se empieza por `R1.1`.
@@ -504,9 +507,10 @@ escriben sus tests o se apuntan en `known-gaps.json` con su motivo, como dice su
 
 ## 6. Los escenarios
 
-**Lista provisional.** Lo que hay que probar de punta a punta, sacado de la ficha (§3) y de las decisiones (§4).
-Los `.feature` **se escriben al final**, con la *skill* de escenarios del desarrollador, porque la lista irá
-cambiando mientras se construye. Al final de cada escenario, axe en los dos modos, como ya hace el arnés.
+**Lista provisional, ya escrita.** Lo que hay que probar de punta a punta, sacado de la ficha (§3) y de las
+decisiones (§4). Los `.feature` se escribieron al final (R1.17), con la *skill* de escenarios del desarrollador,
+y **los que valen son ellos**, en `backoffice/e2e/features/`: esta lista queda como el punto de partida. Al final de
+cada escenario, axe en los dos modos, como ya hace el arnés.
 
 **El marco** (§3.1)
 
@@ -550,7 +554,7 @@ Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cad
 bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
 solo, y lo que no venga en el plan va en su propio commit.
 
-### A · Los documentos de las decisiones
+### A · Los documentos de las decisiones ✅
 
 Antes del código, para que el código se escriba contra algo ya escrito.
 
@@ -560,14 +564,14 @@ Antes del código, para que el código se escriba contra algo ya escrito.
 | **R1.2** | Web: `DW-17` y `DW-18` (decisión 4), y el LLD-B §4.1 (el 502 sin código), §4.5 *b* (sí toca Swift), §6.5 (la portada) y §11 (retener la petición y parar el servidor de pruebas) | El desarrollador lo revisa | Un commit aparte (LLD-B §E.1) |
 | **R1.3** | El plan del backoffice (§4): `listTeams` a la rebanada 12, **85** operaciones, y la paleta por club como pendiente | El desarrollador lo revisa | Un commit |
 
-### B · El catálogo (la mini-fase)
+### B · El catálogo (la mini-fase) ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R1.4** | `openapi.yaml`: las dos lecturas de la pareja, `pending` y `previousIngestionHealth` con la descripción rehecha, la lista cerrada de códigos y el formato de `detail`. Y en el mismo paso, la función `problem(...)` y sus 8 llamadas, porque sin ellas no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, y los tipos de la web regenerados (`schema.d.ts`) con `npm run build` en verde. Y las cifras de **83 operaciones** que describen el catálogo de hoy pasan a 85 (`AGENTS.md`, el README del backend, `SpecConventionTests` y el comentario de `openapi-generator-config.yaml`), buscadas por el número | Un commit |
 | **R1.5** | El censo comprueba que cada código que emite el servidor está en la lista | Sus tests (`swift test --package-path Tools/Census`), y un código quitado a propósito de la lista lo hace salir con `1` | Un commit |
 
-### C · El servidor
+### C · El servidor ✅
 
 Con el método del backend (§5): prueba → esqueleto → rojo de aserción → implementación → mutación.
 
@@ -579,7 +583,7 @@ Con el método del backend (§5): prueba → esqueleto → rojo de aserción →
 | **R1.9**  | `listSeasonRegistrations`, con la lectura por temporada del repositorio de inscripciones                                                                                                                                                                | Tests, mutación y `curl`                                                                                                                                             | Un commit |
 | **R1.10** | Cierre del servidor: el recuento leído del XML, el censo con las tres operaciones (huecos nuevos con su test o en `known-gaps.json`), y el README del backend                                                                                           | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0`                                                                                                    | Un commit |
 
-### D · La web
+### D · La web ✅
 
 De las piezas comunes a la pantalla.
 
@@ -592,7 +596,7 @@ De las piezas comunes a la pantalla.
 | **R1.15** | La portada: la tabla, los cuatro estados y el selector de temporada | Vitest, y la web abierta con el club del desarrollador | Un commit |
 | **R1.16** | El arnés: retener una petición, y parar y arrancar el servidor de pruebas (8081) | Un escenario de prueba que lo use, y el servidor del desarrollador (8765) sin tocar | Un commit |
 
-### E · Los escenarios y el cierre
+### E · Los escenarios y el cierre ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -613,6 +617,14 @@ De las piezas comunes a la pantalla.
 | **R1.8** | ✅ 2026-10-19 | **El estado de la ingesta**, la decisión 2 entera. Dominio: `IngestionHealth` (con `pending`) e `IngestionHealth.assess`, una función pura con el orden de seis casos; 15 minutos **justos** ya cuentan como cola parada, y la semana tiene que ser **más** de una semana. Persistencia: tres lecturas nuevas del registro (las dos últimas de cada clase por competición, con `row_number`; la última hora de fin por competición, y la del club), **tres consultas tenga el club las competiciones que tenga**. `ListCompetitions` junta cada competición con su estado y su `lastIngestionAt`, y el *handler* los pone en la respuesta. Tests: 17 del Dominio (uno por caso del orden, más los bordes, el orden por `startedAt`, la clase que no se publica y la pasada pedida vieja que otra dejó atrás), 3 de persistencia, 2 del caso de uso (eran 1), 1 del endpoint y 1 de la traducción al contrato. Rojo de aserción visto en los cuatro ciclos, salvo en el test de la traducción, escrito a la vez que ella (lo sostiene la mutación). **650 → 673**, leído del XML. Mutación (`Catalogs/R1-8.json`): **28/28**. Censo en `0`: los tres campos de la ingesta salen de `known-gaps.json`, como dejó escrito R1.7. La base de trabajo mirada contra `curl` (servidor aparte en el 8799): el Alevín, con las tres clases bien esta mañana, `ok`; el Cadete, con el calendario fallido a las 08:09, `failing`. **H-58, cerrado** en la auditoría. El README del backend (§4.4, con la tabla de estados) y el plan del backoffice |
 | **R1.9** | ✅ 2026-10-19 | `listSeasonRegistrations` activada. Persistencia: la lectura **por temporada** del repositorio de inscripciones (la que pedía el plan) y, **además**, la de equipos **por sus `id`**, para no traer todos los equipos con los rivales; las dos lecturas de inscripciones con equipos comparten ahora una función. `ListSeasonRegistrations` agrupa las filas en **un elemento por equipo**, con la fila de junio como lista vacía, ordena por categoría (de menor a mayor edad) y letra, y da 404 (`unknownSeason`) si la temporada no existe. El *handler* compone el equipo: `clubName` es el nombre corto del club y `displayName`, nombre corto + categoría + letra. Antes, el 400 en el catálogo (ver los hallazgos), y el orden escrito en la descripción de la operación. Tests: 2 de persistencia, 3 del caso de uso y 4 del endpoint (el orden con la de junio vacía, cada campo del equipo, el 404 y el 400). Rojo de aserción visto en los tres ciclos. **673 → 682**, leído del XML. Mutación (`Catalogs/R1-9.json`): **14/14**. Censo en `0`: 9 operaciones, y `createdAt` y `updatedAt` de `TeamResponse` a `known-gaps.json` con el motivo de siempre. `curl` contra la base de trabajo (servidor aparte en el 8799): «Celtic Alevín A» y «Celtic Cadete B», cada uno con su competición y su código (824 y 820); temporada inexistente, 404; `abc`, 400. **Con esto el servidor sirve 9 de las 85 operaciones**, lo que pedía la §5. El README del backend (§0 y §4.5) y el plan del backoffice |
 | **R1.10** | ✅ 2026-10-19 | **Cierre del servidor.** El recuento, leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **682** (679 + 3 omitidos), igual contando `<testcase>` uno a uno; **632 → 682** en la parte del servidor de la rebanada. El censo con las tres operaciones, salida `0`: 9 operaciones, 23 de 31 códigos y 95 de 105 campos nombrados en los tests; lo que no, en `known-gaps.json` con su motivo. Los cuatro catálogos de la rebanada, pasados otra vez sobre el código final: R1-6 **13/13**, R1-7 **15/15**, R1-8 **28/28**, R1-9 **14/14**; y el del censo, **19/19**. Casi todo el README del backend se fue escribiendo en cada paso (§0 y §4.3 a §4.5); aquí, el recuento del comentario de §5. Y `AGENTS.md`, con el servidor de la rebanada 1 cerrado y lo siguiente, `R1.11` |
+| **R1.11** | ✅ 2026-10-19 | `src/api/errors.ts`: la tabla `Record<ProblemCode, string>`, **un mensaje para cada uno de los 32 códigos**, agrupados por tema; `DATABASE_UNAVAILABLE` y `FEDERATION_UNREACHABLE` son los únicos con *Reintentar*. Un código que la tabla no tiene sale con el mensaje de su familia (404, 409/422, 5xx y, para el resto, «Algo ha fallado», que el LLD-B no nombraba) y con su código. Un 502, 503 o 504 **sin código** es `noConnection`, «No se ha podido conectar con el servidor» con *Reintentar* (DW-18); el mismo objeto servirá en R1.13 para «nada en 30 s» y «sin conexión», que la ficha del marco junta en un solo mensaje. Vitest: **4 → 22** en la web (18 nuevas). Comprobado a mano: sin `TEAM_NOT_FOUND` en la tabla, `npm run build` falla con `TS2741`; con un código inventado de más, con `TS2353`; restaurado, en verde. Lint limpio |
+| **R1.12** | ✅ 2026-10-20 | `src/theme/palette.ts` con el principal y los cuatro colores de cada modo. El oscuro, **medido sobre los píxeles del boceto 1**: fondo `#0b1424`, superficie `#131c2c`, texto `#dae3f9` y el verde `#60ca3b`; el texto suave del boceto, `#77829b`, se queda en 4,43 de contraste sobre la superficie y pasa a `#7a859e` (4,61), el más parecido que llega a 4,5. El claro, el de Aura. `primevue.ts`: Aura con la paleta encima; los once tonos del verde los calcula `palette()` de `@primeuix/styled`, que pasa a dependencia directa con la versión que ya traía PrimeVue (0.7.4). **Además de lo previsto**: en modo claro el principal es el tono 800 (`#356f20`, 6,1 sobre blanco), porque el verde del boceto sobre blanco da 2,1. El fondo de la página sale de la paleta como `--p-fondo`, y hasta que PrimeVue carga, el del navegador, así que no hay destello blanco. El interruptor (`components/ThemeToggle.vue`, con `theme/mode.ts`), de momento encima de la portada: se muda a la cabecera en R1.13. Vitest: **22 → 34** (2 del interruptor y 10 del contraste de la paleta en los dos modos, que fallan con el gris del boceto). La web abierta con Playwright en un Vite aparte (5199, el 5173 sin tocar): con el sistema en claro y en oscuro, el fondo y el texto de la paleta, el interruptor cambia el modo, lo guarda en `tema` y se respeta al recargar; axe sin fallos en los dos modos, tras el arreglo del arnés (ver los hallazgos). `npm run e2e` en verde |
+| **R1.13** | ✅ 2026-10-20 | **El marco** (`App.vue`): pide el club al arrancar y, hasta tenerlo, enseña la cabecera con solo el interruptor y «Cargando…» (`role="status"`, se lee sin mover el foco); con el club, la cabecera (`AppHeader.vue`: escudo, si lo hay, y nombre corto), el menú (`SideMenu.vue`: solo «Equipos», con `aria-current`) y la pantalla. La pestaña, «Equipos · <nombre corto>». Si el club falla, la página entera (`FullPageError.vue`): el mensaje de `errors.ts` como título, el código en pequeño, *Reintentar* solo si el fallo puede ser pasajero, sin menú; con `TENANT_NOT_RESOLVED`, «Por ejemplo: celtic-castilla.<la dirección de ahora>» en local y `tu-club.…` publicada. «Esta página no existe» con «Ir a la portada» (`screens/not-found/`) para cualquier otro camino. «Saltar al contenido», lo primero del tabulador, lleva el foco a `<main>`; la portada, de momento, solo con su título. **Además de lo previsto**: `api/result.ts`, que convierte cada petición en «datos» o «error ya traducido» (el servidor que no contesta, también) y que usarán todas las pantallas; la cancelación al salir de una pantalla sigue su camino. Vitest: **34 → 46** (5 de `result.ts`, 3 de la cabecera, 3 de la página de error y 1 del menú). La web abierta contra el servidor del desarrollador (8765) desde un Vite aparte (5199): con el club, «Equipos · Celtic» y el marco; `noexiste.`, «Este club no existe»; sin club, «Falta el club» con el ejemplo; `/equipoz`, «Esta página no existe»; y con un Vite apuntando a un puerto vacío, «No se ha podido conectar» con *Reintentar*. axe sin fallos en los dos modos en los cinco. `TENANT_NOT_PROVISIONED` no se vio en vivo (no hay un club así en la base de trabajo): lo cubren `errors.ts` y la página de error. `npm run e2e` en verde. **Pendiente para R1.15**: llevar el foco al título al cambiar de pantalla (LLD-B §10.2), que con una sola pantalla aún no se nota |
+| **R1.14** | ✅ 2026-10-20 | `src/theme/format.ts` con `formatInstant`: el instante del servidor (UTC, `2026-10-19T06:01:21Z`) como `17/10/2026 23:40`, hora de 24 horas. **La zona, la de quien mira** (su navegador), que nadie había decidido: en España es la de Madrid, y un club de Canarias ve la suya. Escrito en el LLD-B §9.6. Las pruebas la fijan con un parámetro, para dar lo mismo en cualquier ordenador. Vitest: **48 → 54** (Madrid en verano y en invierno, el cambio de día cerca de medianoche, Canarias, las décimas de segundo y la del navegador). Comprobado que avisan: con la hora forzada a UTC fallan 5; con el reloj de 12 horas, 4 |
+| **R1.15** | ✅ 2026-10-20 | **La portada.** La lógica, aparte y probada: `screens/home/seasons.ts` (qué temporada, el rótulo «terminada» o «todavía no ha empezado» comparando las fechas como texto, y el guion de la dirección), `screens/home/rows.ts` (un equipo por fila con todas sus competiciones) y `theme/names.ts` (las categorías y los estados de la ingesta en español, con la tabla atada al catálogo como `errors.ts`). Las piezas: `TeamsTable.vue` (cabeceras de verdad, el equipo como cabecera de su fila, el estado con icono, color y palabra; **un equipo con dos competiciones ocupa dos líneas con su nombre una sola vez**, con `rowspan`, para que cada competición quede alineada con su estado y su fecha), `SeasonPicker.vue` (el desplegable de PrimeVue con su etiqueta «Temporada») y `LoadError.vue` (el error en el hueco de la tabla). La pantalla pide las temporadas una vez y, con la elegida, los equipos y las competiciones a la vez; cada carga cancela la anterior, y salir de la pantalla también. Sin sincronizar nunca, «Nunca». **Los colores de los estados**, de Aura y con nombre (`--p-estado-bien`, `-fallo`, `-en-marcha`, `-aviso`, `-sin-datos`), en `primevue.ts`. **Además de lo previsto**: el foco al título al cambiar de pantalla (LLD-B §10.2, pendiente de R1.13), solo si cambia el camino, para que el selector no pierda el foco; y la regla del revisor de las etiquetas, ajustada para los campos de PrimeVue (basta con `for`): una etiqueta con `for` pasa aunque no apunte a nada, y eso lo vigila axe en los escenarios. Vitest: **54 → 80**. La web abierta contra el servidor del desarrollador (8765) desde un Vite aparte (5199): la temporada 2026/27 con el Alevín A y el Cadete B, «Al día»; `?temporada=2019-20` y `abc`, su error con el enlace; y con respuestas interceptadas por Playwright, solo para mirarlo: el club sin temporadas, «Cargando equipos…», el error de la tabla y *Reintentar* que trae los equipos, y el cambio a una 2025/26 sin equipos (la dirección pasa a `?temporada=2025-26`, **2 peticiones**, el foco sigue en el selector, y «Atrás» vuelve). Al abrir, **4 peticiones** al servidor: el club y las tres de la portada. axe sin fallos en los dos modos. `npm run e2e` en verde |
+| **R1.16** | ✅ 2026-10-20 | **El arnés** (DW-17). `e2e/support/api-server.ts`: `stopApiServer()` y `startApiServer()` a mitad de escenario, y al acabar cada uno, si quedó parado, se vuelve a arrancar, para que el siguiente no herede el fallo; su fichero de mensajes sigue escribiendo detrás al rearrancar (`append` en `processes.ts`). `e2e/support/hold-request.ts` (nuevo): `holdRequest(page, '/seasons')` retiene la próxima petición a esa ruta (solo esa, y no las que llevan algo detrás), dice cuándo ha llegado y la suelta tal cual. **Lo que costó**: Playwright da por atendida una petición retenida si se quita su regla antes de que salga; la regla espera dentro y se quita cuando la petición ya ha salido. Comprobado con cinco escenarios de usar y tirar, borrados después: «Cargando» con la petición retenida; la página entera con el servidor parado y *Reintentar* tras arrancarlo; el error en la tabla (retener, parar, soltar) y *Reintentar*; y un escenario que deja el servidor parado, seguido de otro que lo encuentra en marcha. **6 de 6, en tres pasadas**. El servidor de pruebas vuelve en **unos 230 ms**. El del desarrollador (8765), el mismo proceso antes y después, y contestando |
+| **R1.17** | ✅ 2026-10-20 | **Los escenarios**, con la *skill* de escenarios del desarrollador: un estado y un módulo por escenario, un solo `When`, siete pasos como mucho, y **comprobaciones blandas** (`World.check`: cada `Then` apunta su fallo y el escenario falla al final con todos). Lo que en la §6 era un recorrido (Reintentar, «Atrás», «Ir a la portada») va en escenarios encadenados con `Given` compuestos. Cinco `.feature`: `marco` (8), `club-que-falla` (5), `portada` (12, con los cinco estados de la ingesta en un `Scenario Outline`), `temporada` (7) y `portada-vacia` (2); con el de humo, **35**. **Los datos de cada escenario, por los caminos de la aplicación y al azar** (LLD-B §11.3, *skill* de escenarios, principio 9): el enganche y la ingesta de la API contra competiciones que se inventa el escenario y sirve la federación falsa, `PATCH /club`, y `seed-team` y `seed-competition` donde la API aún no llega; la base de datos solo para «Sin datos todavía», «Desactualizada», el inscrito sin competición y el club a medias. Cada pasada escribe su semilla (`SEMILLA=…` la repite) y un escenario que falla enseña sus datos. El navegador de los escenarios, en hora de Madrid. «Cargando» y los errores con las piezas de R1.16, sin simulacros. Comprobado que avisan: con «Al dia» en lugar de «Al día», y con Reintentar siempre visible, fallan los escenarios que tocan, y un escenario con dos fallos los enseña los dos. Con la hora en UTC en vez de Madrid, falla el escenario de la última sincronización. **35 de 35 en cuatro pasadas con cuatro semillas**, unos 40 s cada una, axe en los dos modos en todos. El servidor del desarrollador (8765), sin tocar |
+| **R1.18** | ✅ 2026-10-20 | **Cierre.** Los cinco pasos de `AGENTS.md`: (1) el recuento del backend, leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **682** (679 + 3 omitidos), igual que en R1.10, porque la web no tocó el servidor salvo la hora de la consola, que no tiene tests; en la web, **80 pruebas de piezas** (`npm test`) y **35 escenarios** (`npm run e2e`); (2) el README del backend no cambia: su recuento sigue siendo el de R1.10; (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada y lo siguiente; (4) los rótulos de la §7 con su ✅ y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol: el plan del backoffice decía que el servidor sirve **6** de las 85 (son **9** desde R1.9), y el libro de estudio de la rebanada 0 decía «hoy hay 4 pruebas» (eran las de entonces). El README de la web dice qué enseña hoy y cómo ver la portada con datos. Lo aprendido, en la §9 |
 
 **Punto de partida: 632 tests en el backend, 4 en la web.**
 
@@ -639,3 +651,51 @@ De las piezas comunes a la pantalla.
   `listCompetitions` en R1.7). `listSeasonRegistrations` y `getTeamRegistration` llevan un `id` en la ruta que
   llega como texto; las del enganche, con `{teamId}`, sí declaran el 400 de un `id` que no es UUID. Se añade a
   las dos, también a `getTeamRegistration`, que no funcionará hasta la rebanada 4.
+- **axe medía el modo oscuro a mitad de la animación** (se vio en R1.12). El arnés (`e2e/support/accessibility.ts`,
+  de R0.13) cambia de modo y mide al instante, y las piezas de PrimeVue tardan 0,2 s en pasar al color del otro
+  modo: axe leía el color de en medio y daba un fallo de contraste que no existe. Con la página en blanco no se
+  veía; con el primer botón, **10 de 10** veces. Mientras mide, el arnés quita las animaciones y luego las
+  devuelve: **0 de 10**.
+- **`/equipos` daba «Esta página no existe»** (lo vio el desarrollador tras R1.13). El mapa (LLD-B §6.1) solo tenía
+  `/` para la lista de equipos, pero las demás secciones del menú irán en `/temporadas`, `/rivales`… y
+  `/equipos/nuevo` cuelga de `/equipos`. Ahora `/equipos` lleva a la portada y la dirección pasa a `/`; una fila
+  más en el mapa del LLD-B y 2 pruebas del mapa de pantallas (46 → **48**), una de ellas en rojo sin la redirección.
+- **La consola del servidor no decía la hora** (lo vio el desarrollador tras R1.13, con el servidor abierto
+  mientras usaba la web). Ahora `serve` empieza cada línea por ella, en hora local y con el formato del log de la
+  ingesta programada (`2026-10-20T19:25:40+0200`), con la pieza que ya trae ConsoleKit. **Solo `serve`**, por
+  decisión del desarrollador: `ingest` la lanza `launchd` con un guion que ya pone la hora, y saldría dos veces.
+  Un cambio en `Run/main.swift` y una nota en el README del backend (§2). Comprobado con un servidor aparte en el
+  8799: la hora en cada línea; y con un comando que no existe, el aviso sale sin ella.
+- **Un club sin su *schema* da un 500 genérico, no «club no preparado»** (se vio en R1.17). El servidor emite
+  `TENANT_NOT_PROVISIONED` cuando el *schema* existe pero le falta la fila del club (`GetClub.swift:18`). Si falta
+  el *schema* entero, Postgres dice que la tabla `clubs` no existe y sale `INTERNAL`: la web enseña «Error del
+  servidor» en vez de «Este club aún no está preparado». El escenario prueba el caso que el servidor sí cubre (el
+  club a medias). **Sin decidir**: si el servidor debe traducir también el *schema* que falta; es del backend.
+- **Los datos de los escenarios, a mano en la base, ni eran como los de verdad ni seguían el LLD-B** (se vio en
+  R1.17). Al escribirlos con SQL, el campo `skipped` de una pasada iba como lista y el servidor lo lee como objeto
+  (`{"rows": []}`): respondía 500 y la tabla salía vacía. Y el desarrollador vio fechas y nombres fijos en los
+  `.feature` (`2026-10-17T21:40:00Z`, «Cadete B»): datos atados al código del sistema y siempre los mismos. Se
+  rehízo dentro de R1.17 con la regla nueva de su *skill* de escenarios (principio 9): primero la API, luego los
+  comandos del servidor, la base solo como último recurso, y al azar con semilla. Es lo que ya decía el LLD-B
+  §11.3, que se amplía con la federación que inventa competiciones.
+
+## 9. Lo aprendido
+
+- **Antes de elegir cómo se hace algo, leer lo que el LLD ya decidió.** Los datos de los escenarios se
+  escribieron primero con SQL, y el LLD-B §11.3 decía desde el 2026-10-14 que se crean a través del servidor y de
+  la federación falsa. Lo vio el desarrollador por otro lado (fechas y nombres fijos en los `.feature`) y se rehízo
+  dentro de R1.17. De paso salió una regla para su *skill* de escenarios (principio 9): la API primero, los
+  comandos del servidor después, la base solo como último recurso, y al azar con semilla.
+- **La herramienta que mide también se mide.** axe daba un fallo de contraste que no existía, porque medía en
+  mitad de la animación del cambio de modo (R1.12). Antes de creerse un fallo, ver si se repite con la causa
+  quitada: con las animaciones paradas, de 10 de 10 a 0 de 10.
+- **Usar la web mientras se construye encuentra lo que nadie decidió.** `/equipos` sin pantalla, la consola del
+  servidor sin hora y la zona horaria de las fechas (la de quien mira, R1.14) no estaban en el plan; salieron de
+  que el desarrollador tenía la web y el servidor abiertos. Cada uno fue en su commit, y apuntado en los hallazgos.
+- **Un icono con texto: la palabra, en su propia etiqueta.** El estado de la ingesta llevaba el icono y la
+  palabra juntos, y el escenario que buscaba «Al día» no lo encontraba. Con la palabra aparte, la encuentran el
+  escenario y el lector de pantalla, y el icono se marca como decorativo.
+
+**Queda abierto, con dueño:** si el servidor debe decir «club no preparado» también cuando falta el *schema*
+entero (hallazgos, del backend), y **la tabla de equipos**, que el desarrollador quiere hablar antes del plan de
+la rebanada 2.

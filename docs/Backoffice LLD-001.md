@@ -443,6 +443,7 @@ la competición arriba.
 | Camino | Pantalla | Estado |
 |---|---|---|
 | `/` | **Portada**: los equipos del club con su competición | ✅ Rebanada 1 |
+| `/equipos` | Lleva a la portada: la lista de equipos es la portada, y así cada sección del menú tiene su camino (`/equipos`, `/temporadas`…) | ✅ Rebanada 1 |
 | `/equipos/nuevo` | **Alta de equipo** | ✅ Rebanada 2 |
 | `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
 | `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |
@@ -659,6 +660,7 @@ calendario empieza en lunes**.
 |---|---|
 | Fecha | `14/09/2025`; en tablas, si cabe, `sáb 14/09` |
 | Hora | `12:00`, en formato de 24 horas |
+| Fecha y hora de un instante (`lastSyncedAt`…) | `17/10/2026 23:40`, **en la hora de quien mira** (la de su navegador): el servidor los manda en UTC. En Madrid y en Canarias, cada uno la suya |
 | Hora aún sin fijar (`kickoffTime` vacío) | «Hora por confirmar» |
 | Números | A la española: `1.234,5` |
 
@@ -818,6 +820,29 @@ navegador → web → Run serve → tfm_test
 - **Es un servidor pequeño que devuelve las respuestas grabadas** que ya usa el backend
   (`backend/Tests/*/Fixtures/`): calendario jugado y sin jugar, goleadores, clasificación y los casos de
   «no existe». Si un escenario necesita algo que no está grabado, se graba una respuesta nueva.
+- **Y sirve también las competiciones que se inventa cada escenario** (desde R1.17): un calendario sin jugar,
+  de la temporada, la edad, el género y la modalidad que le toquen, y sus goleadores, ninguno todavía. A una
+  competición inventada se le puede pedir que falle (los goleadores llegan a `null`, como cuando la RFFM no
+  los encuentra) o que tarde (retiene su calendario hasta que acaba el escenario): así se llega a «Con fallos»
+  y a «En marcha» con pasadas de verdad.
+
+**De dónde sale cada dato, por orden de preferencia** (la *skill* de escenarios del desarrollador, principio 9):
+
+1. **La API del servidor**: el enganche, la ingesta, el nombre del club. Nunca el *endpoint* que prueba el
+   escenario: si la portada lee `/competitions`, la hora esperada se saca de `/ingestion-runs`.
+2. **Los comandos del servidor**, donde la API aún no llega: `seed-team` hasta que exista `POST /teams`
+   (rebanada 2), y `seed-competition` para una temporada sin equipos.
+3. **La base de datos**, solo para lo que ninguno de los dos produce, y cada caso dice por qué en el código:
+   «Sin datos todavía» (el enganche siempre lanza una ingesta), «Desactualizada» (haría falta esperar una
+   semana), el equipo inscrito sin competición (hasta la rebanada 2) y el club a medio preparar (un estado
+   roto a propósito).
+
+**Los datos, al azar; los literales, solo si deciden la rama.** La edad, la letra, el género y la modalidad
+del equipo, la división, el grupo, las temporadas pasadas y futuras y el nombre del club se eligen al azar en
+cada pasada, para que salga lo que con los mismos datos de siempre no saldría nunca. En el `.feature` solo
+quedan fijos los cinco estados de la ingesta y los textos que se esperan en la pantalla. **Al azar, pero
+repetible**: cada pasada escribe su semilla al empezar (`SEMILLA=… npm run e2e` la repite), y un escenario
+que falla enseña los datos que le tocaron.
 - **La dirección de la federación se cambia con `RFFM_BASE_URL`** (hecho en `R0.8`, 2026-10-16); si no se
   pone, sigue siendo rffm.es. Solo cambia adónde pide la ingesta: la URL que se pega en el enganche sigue
   siendo la de la RFFM de verdad.

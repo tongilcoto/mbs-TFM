@@ -42,11 +42,13 @@ export function startProcess(
   name: string,
   command: string,
   args: string[],
-  options: { env?: NodeJS.ProcessEnv; cwd?: string; logName: string },
+  // `append`: lo que escriba se añade al fichero en vez de empezarlo de cero. Para un proceso que se vuelve a
+  // arrancar en la misma pasada, como el servidor de pruebas (R1.16), y que no se pierda lo de antes.
+  options: { env?: NodeJS.ProcessEnv; cwd?: string; logName: string; append?: boolean },
 ): Started {
   mkdirSync(config.logs, { recursive: true })
   const logFile = path.join(config.logs, `${options.logName}.log`)
-  const log = createWriteStream(logFile)
+  const log = createWriteStream(logFile, { flags: options.append ? 'a' : 'w' })
   const child = spawn(command, args, {
     cwd: options.cwd,
     env: { ...process.env, ...options.env },

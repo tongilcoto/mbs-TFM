@@ -28,6 +28,19 @@ export default tseslint.config(
   // La accesibilidad, mientras se escribe: imagen sin texto alternativo, botón sin nombre,
   // campo sin etiqueta… dan error.
   ...vueA11y.configs['flat/recommended'],
+  // Cada campo con su etiqueta visible (LLD-B §10.4). Basta con unirla por `for`, sin meter el campo dentro, y
+  // cuentan como campos los de PrimeVue: si no, la regla solo reconoce los de HTML (<input>, <select>…).
+  {
+    rules: {
+      'vuejs-accessibility/label-has-for': [
+        'error',
+        {
+          required: { some: ['nesting', 'id'] },
+          controlComponents: ['Select', 'InputText', 'InputNumber', 'DatePicker', 'Textarea', 'Checkbox'],
+        },
+      ],
+    },
+  },
 
   // Las piezas solo pintan: no pueden hablar con el servidor (LLD-B §1.2, DW-01).
   {

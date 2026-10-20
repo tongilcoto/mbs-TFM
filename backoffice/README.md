@@ -8,6 +8,11 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
+**Lo que enseña hoy** (rebanada 1, cerrada el 2026-10-20): la **portada**, con los equipos del club en una
+temporada, la competición en la que juega cada uno, cómo va su ingesta y cuándo se sincronizó por última vez, en
+tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
+cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
+
 ## Antes de empezar
 
 - **Node 22.** La versión está fijada en `.nvmrc`; con nvm, basta con `nvm use` dentro de esta carpeta.
@@ -45,7 +50,7 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
 |---|---|---|
 | El servidor de pruebas | puerto **8081**, base `tfm_test` | el 8080 y la base `tfm` |
 | La web de pruebas | puerto **5174** | el 5173 |
-| La federación falsa, con respuestas grabadas | puerto **8090**, en el lugar de rffm.es | — |
+| La federación falsa, con respuestas grabadas y competiciones inventadas | puerto **8090**, en el lugar de rffm.es | — |
 
 - **Antes, una vez:** `npx playwright install chromium`, que descarga el navegador de los escenarios. Docker
   tiene que estar en marcha, porque la base de pruebas vive en el mismo Postgres.
@@ -55,6 +60,10 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
   AA). Un fallo hace fallar el escenario y dice en qué modo, qué regla y dónde.
 - **Cada escenario tiene su propio club**, `bo-…`, que se borra al acabar. Para conservarlos y mirarlos en
   TablePlus (base `tfm_test`): `KEEP_TEST_DATA=1 npm run e2e`. La pasada siguiente los barre.
+- **Los datos de cada escenario se eligen al azar** (equipos, competiciones, temporadas, nombre del club), así que
+  cada pasada prueba con otros. Al empezar, la pasada escribe su semilla; **para repetir los mismos datos**:
+  `SEMILLA=255079 npm run e2e`. Si un escenario falla, el informe dice qué datos le tocaron. La semilla y esos
+  datos quedan también en `e2e-results/datos.log`, que se rehace en cada pasada.
 - **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
   viejo probaría código que ya no es el tuyo.
 
@@ -79,6 +88,9 @@ echo "API_PORT=8765" > backend/.env.development
 Sin el fichero, los dos usan el **8080**. Si cambias el puerto con la web ya arrancada, Vite se reinicia solo al
 cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl+C` y vuelve a lanzar
 `npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
+
+**Para que la portada tenga equipos**, el club tiene que tenerlos enganchados con su federación. Mientras la web
+no sepa dar de alta equipos (rebanada 2), se hace desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
 
 Una forma rápida de ver que los dos se hablan:
 

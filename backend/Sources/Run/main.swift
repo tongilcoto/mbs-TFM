@@ -4,7 +4,25 @@ import Vapor
 /// Punto de entrada. Deliberadamente sin lógica: la raíz de composición es
 /// `configure(_:)` en el target `App` (§2.2).
 var environment = try Environment.detect()
-try LoggingSystem.bootstrap(from: &environment)
+
+// **La hora delante de cada línea, solo en `serve`** (hallazgo de R1, plan de la portada). Es la consola que
+// se mira mientras se usa la web, y sin hora no se cuadra lo que pasa en ella con lo que pasa aquí. Los demás
+// comandos no: `ingest` la lanza `launchd` con un guion que ya pone la hora a cada línea (`Tools/Deploy`), y
+// saldría dos veces. Sin comando, Vapor arranca `serve`; por eso cuenta también el que no trae ninguno.
+let command = environment.arguments.dropFirst().first
+let isServe = command == nil || command == "serve" || command?.hasPrefix("-") == true
+if isServe {
+    try LoggingSystem.bootstrap(from: &environment) { level in
+        let console = Terminal()
+        return { label in
+            // El mismo formato que el guion de `launchd`: `2026-10-20T19:05:12+0200`, en hora local.
+            ConsoleFragmentLogger(fragment: timestampDefaultLoggerFragment(),
+                                  label: label, console: console, level: level)
+        }
+    }
+} else {
+    try LoggingSystem.bootstrap(from: &environment)
+}
 
 let app = try await Application.make(environment)
 

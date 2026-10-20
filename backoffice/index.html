@@ -17,10 +17,16 @@
       })()
     </script>
     <style>
-      /* El fondo y el texto de la página siguen al modo desde el primer pintado. */
+      /* El fondo y el texto de la página siguen al modo desde el primer pintado: los del navegador (Canvas)
+         hasta que PrimeVue carga, y después los de la paleta (src/theme/palette.ts). */
       html { color-scheme: light; }
       html.app-dark { color-scheme: dark; }
-      body { margin: 0; background: Canvas; color: CanvasText; }
+      body {
+        margin: 0;
+        background: var(--p-fondo, Canvas);
+        color: var(--p-text-color, CanvasText);
+        font-family: system-ui, sans-serif;
+      }
     </style>
   </head>
   <body>

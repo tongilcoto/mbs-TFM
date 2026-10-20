@@ -32,7 +32,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
   revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 85, repartidas; eran 83 hasta `D-102`). La
   10, Estadísticas, necesita peticiones que **no están en el catálogo**. Desde la rebanada 1, cada una tiene
-  su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó. El primer intento, con fichas y decisiones sin revisar, se borró el
+  su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó: la 1, [Portada base](./docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), **cerrada el 2026-10-20**. El primer intento, con fichas y decisiones sin revisar, se borró el
   2026-10-16; queda en la historia de git (commit `d6a16e6`).
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
@@ -402,7 +402,15 @@ servidor está cerrada** (`R1.1`–`R1.10`, 2026-10-19): el catálogo con la lec
 (`ProblemCode`), que el censo vigila; y tres operaciones nuevas, `listSeasons`, `listCompetitions` y
 `listSeasonRegistrations`: el servidor sirve **9 de las 85**. Por el camino, `D-103` (la temporada en curso es la que
 contiene hoy) y H-58 cerrado. **682 tests**; cada paso, con su catálogo de mutación (`Tools/Mutate/Catalogs/R1-6`
-a `R1-9`). Lo siguiente, **la web de la rebanada 1, desde `R1.11`** (los mensajes de error en `src/api/errors.ts`).
+a `R1-9`). Y **la web de la rebanada 1, cerrada el 2026-10-20, y con ella la rebanada** (`R1.11`–`R1.18`): el
+marco (cabecera con el club, menú, modo claro y oscuro, «Saltar al contenido», «Esta página no existe» y la página
+entera cuando el club falla), la portada con los equipos de una temporada, su competición, cómo va su ingesta y su
+última sincronización en la hora de quien mira, el selector de temporada en la dirección (`?temporada=2025-26`) y
+sus cuatro estados; un mensaje en español para cada código de error. **80 pruebas de piezas y 35 escenarios**, con
+axe en los dos modos. Los escenarios preparan sus datos **por la propia aplicación y al azar, con semilla**
+(LLD-B §11.3): el enganche y la ingesta de verdad contra competiciones que inventa la federación falsa, y la base
+solo como último recurso. Lo siguiente, **hablar de la tabla de equipos** con el desarrollador y después el plan de
+la rebanada 2 (el alta de equipos).
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`

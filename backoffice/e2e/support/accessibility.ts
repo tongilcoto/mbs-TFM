@@ -14,6 +14,9 @@ const modes = [
 export async function accessibilityProblems(page: Page): Promise<string[]> {
   const problems: string[] = []
   const wasDark = await isDark(page)
+  // Sin animaciones mientras se mide: las piezas de PrimeVue tardan 0,2 s en pasar al color del otro modo, y axe
+  // mediría el color de en medio, que no es ninguno de los dos.
+  const noTransitions = await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' })
   for (const mode of modes) {
     // El modo se cambia con la clase de <html>, como hace la web (LLD-B §9.3), sin recargar: así se
     // analiza la pantalla en el estado exacto en que la dejó el escenario.
@@ -25,6 +28,7 @@ export async function accessibilityProblems(page: Page): Promise<string[]> {
     }
   }
   await page.evaluate((dark) => document.documentElement.classList.toggle('app-dark', dark), wasDark)
+  await noTransitions.evaluate((style) => style.parentNode?.removeChild(style))
   return problems
 }
 

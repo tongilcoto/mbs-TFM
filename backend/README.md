@@ -125,6 +125,15 @@ base de datos.**
 HTTP_TRACE=1 swift run Run serve --log debug     # cuerpos + SQL
 ```
 
+**En `serve`, cada línea empieza por la hora**, en hora local y con el mismo formato que el log de la ingesta
+programada (§6.5):
+
+```
+2026-10-20T19:25:40+0200 [ INFO ] GET /v1/club [request-id: 1DF07ABF-…]
+```
+
+Los demás comandos no la llevan: `ingest` la lanza `launchd` con un guion que ya la pone, y saldría dos veces.
+
 ---
 
 ## 3. La base de datos
