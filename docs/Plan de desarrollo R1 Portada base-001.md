@@ -651,3 +651,9 @@ De las piezas comunes a la pantalla.
   `/` para la lista de equipos, pero las demás secciones del menú irán en `/temporadas`, `/rivales`… y
   `/equipos/nuevo` cuelga de `/equipos`. Ahora `/equipos` lleva a la portada y la dirección pasa a `/`; una fila
   más en el mapa del LLD-B y 2 pruebas del mapa de pantallas (46 → **48**), una de ellas en rojo sin la redirección.
+- **La consola del servidor no decía la hora** (lo vio el desarrollador tras R1.13, con el servidor abierto
+  mientras usaba la web). Ahora `serve` empieza cada línea por ella, en hora local y con el formato del log de la
+  ingesta programada (`2026-10-20T19:25:40+0200`), con la pieza que ya trae ConsoleKit. **Solo `serve`**, por
+  decisión del desarrollador: `ingest` la lanza `launchd` con un guion que ya pone la hora, y saldría dos veces.
+  Un cambio en `Run/main.swift` y una nota en el README del backend (§2). Comprobado con un servidor aparte en el
+  8799: la hora en cada línea; y con un comando que no existe, el aviso sale sin ella.
