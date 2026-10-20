@@ -10,7 +10,7 @@
 import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@cucumber/cucumber'
 import { chromium, type Browser } from 'playwright'
 import { accessibilityProblems } from './accessibility.ts'
-import { startApiServer } from './api-server.ts'
+import { apiServerIsRunning, startApiServer, stopApiServer } from './api-server.ts'
 import { createScenarioClub, dropScenarioClub, type ScenarioClub } from './clubs.ts'
 import { startFakeFederation } from './fake-federation.ts'
 import { sweepScenarioClubs } from './sweep.ts'
@@ -39,7 +39,8 @@ BeforeAll({ timeout: 90_000 }, async function () {
     const swept = await sweepScenarioClubs()
     if (swept > 0) console.log(`Barridos ${swept} clubs bo_ de una pasada anterior.`)
     running.push(await startFakeFederation())
-    running.push(await startApiServer())
+    await startApiServer()
+    running.push({ stop: stopApiServer })
     running.push(await startWebServer())
     browser = await chromium.launch()
   } catch (error) {
@@ -68,8 +69,11 @@ Before(async function (this: ScenarioWorld) {
 })
 
 // Después de cada escenario: se cierra su pestaña y se borra su club (o se conserva, con KEEP_TEST_DATA=1).
-After(async function (this: ScenarioWorld) {
+// Y si el escenario paró el servidor de pruebas y no llegó a arrancarlo (falló a medias), se arranca aquí, para
+// que el siguiente no herede el fallo.
+After({ timeout: 30_000 }, async function (this: ScenarioWorld) {
   await this.context?.close()
+  if (!apiServerIsRunning()) await startApiServer()
   if (!this.club) return
   if (keepTestData) kept.push(this.club)
   else await dropScenarioClub(this.club)
