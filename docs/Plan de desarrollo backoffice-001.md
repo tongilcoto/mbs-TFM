@@ -26,7 +26,7 @@
 necesita** (el borrador, §2). No se hace «todo el servidor y luego toda la web»: cada unidad de trabajo es una
 **rebanada**, que entrega una pantalla funcionando de punta a punta.
 
-Hoy el servidor sirve **6 de las 85 operaciones** del catálogo (las dos de `D-102` entran en él con `R1.4`). Cada rebanada activa las suyas, y una operación
+Hoy el servidor sirve **9 de las 85 operaciones** del catálogo (desde la rebanada 1). Cada rebanada activa las suyas, y una operación
 **solo se activa con la rebanada que la usa**.
 
 **Cada rebanada se da por terminada cuando:**
@@ -348,7 +348,7 @@ su comprobación.
 | Rebanada | Estado | Pasos | Fecha |
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
-| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | 🟡 en curso | 17/18 | 2026-10-20 |
+| **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

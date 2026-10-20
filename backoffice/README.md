@@ -8,6 +8,11 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
+**Lo que enseña hoy** (rebanada 1, cerrada el 2026-10-20): la **portada**, con los equipos del club en una
+temporada, la competición en la que juega cada uno, cómo va su ingesta y cuándo se sincronizó por última vez, en
+tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
+cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
+
 ## Antes de empezar
 
 - **Node 22.** La versión está fijada en `.nvmrc`; con nvm, basta con `nvm use` dentro de esta carpeta.
@@ -83,6 +88,9 @@ echo "API_PORT=8765" > backend/.env.development
 Sin el fichero, los dos usan el **8080**. Si cambias el puerto con la web ya arrancada, Vite se reinicia solo al
 cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl+C` y vuelve a lanzar
 `npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
+
+**Para que la portada tenga equipos**, el club tiene que tenerlos enganchados con su federación. Mientras la web
+no sepa dar de alta equipos (rebanada 2), se hace desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
 
 Una forma rápida de ver que los dos se hablan:
 

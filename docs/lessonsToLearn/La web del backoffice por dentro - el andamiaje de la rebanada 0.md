@@ -379,7 +379,7 @@ paquete no tiene esa regla). Lo caza axe en los escenarios (sección 13).
 - **`test-setup.ts`** prepara cada prueba: vacía la página al terminar y añade un `matchMedia` mínimo, porque
   jsdom no lo trae y PrimeVue lo usa.
 
-Hoy hay **4 pruebas**: las tres reglas de la conexión y el calendario en español.
+Al cerrar la rebanada 0 había **4 pruebas**: las tres reglas de la conexión y el calendario en español.
 
 > **«Una prueba que falla porque no encuentra el fichero no es un rojo».** El plan lo exige así (§2.3): primero
 > un **esqueleto que existe pero hace mal a propósito**, para ver fallar la prueba **por lo que comprueba**. Si
