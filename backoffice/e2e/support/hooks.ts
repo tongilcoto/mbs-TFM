@@ -8,11 +8,14 @@
 // fallar el escenario como cualquier otro (R0.13). Después, el club se borra; con KEEP_TEST_DATA=1 se deja para mirarlo
 // en TablePlus sobre `tfm_test`, y lo barre la pasada siguiente.
 import { After, AfterAll, Before, BeforeAll, setDefaultTimeout, Status } from '@cucumber/cucumber'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { chromium, type Browser } from 'playwright'
 import { accessibilityProblems } from './accessibility.ts'
 import { apiServerIsRunning, startApiServer, stopApiServer } from './api-server.ts'
 import { settleIngestions } from './club-data.ts'
 import { createScenarioClub, dropScenarioClub, type ScenarioClub } from './clubs.ts'
+import { config } from './config.ts'
 import { startFakeFederation } from './fake-federation.ts'
 import { sweepScenarioClubs } from './sweep.ts'
 import { randomFor, runSeed } from './random.ts'
@@ -35,8 +38,15 @@ async function stopAll(): Promise<void> {
   while (running.length > 0) await running.pop()!.stop()
 }
 
+// La semilla y los datos de los escenarios que fallan, también en un fichero: la consola se pierde al cerrarla.
+// Empieza de cero en cada pasada, como los demás de `e2e-results/`, que no van al repositorio.
+const dataLog = path.join(config.logs, 'datos.log')
+
 BeforeAll({ timeout: 90_000 }, async function () {
-  console.log(`Semilla de los datos: ${runSeed}. Para repetirlos: SEMILLA=${runSeed} npm run e2e`)
+  const seedLine = `Semilla de los datos: ${runSeed}. Para repetirlos: SEMILLA=${runSeed} npm run e2e`
+  console.log(seedLine)
+  mkdirSync(config.logs, { recursive: true })
+  writeFileSync(dataLog, `${new Date().toISOString()} · ${seedLine}\n`)
   try {
     await prepareTestDatabase()
     const swept = await sweepScenarioClubs()
@@ -81,7 +91,9 @@ After({ timeout: 30_000 }, async function (this: ScenarioWorld, { result, pickle
   await this.context?.close()
   if (!apiServerIsRunning()) await startApiServer()
   if (result?.status === Status.FAILED && this.chosen.length > 0) {
-    console.log(`\nDatos de «${pickle.name}» (SEMILLA=${runSeed}):\n${this.chosen.map((c) => `  · ${c}`).join('\n')}`)
+    const text = `\nDatos de «${pickle.name}» (SEMILLA=${runSeed}):\n${this.chosen.map((c) => `  · ${c}`).join('\n')}`
+    console.log(text)
+    appendFileSync(dataLog, `${text}\n`)
   }
   if (!this.club) return
   // Lo que el escenario dejó en marcha en el servidor acaba antes de borrar su club.

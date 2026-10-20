@@ -57,7 +57,8 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
   TablePlus (base `tfm_test`): `KEEP_TEST_DATA=1 npm run e2e`. La pasada siguiente los barre.
 - **Los datos de cada escenario se eligen al azar** (equipos, competiciones, temporadas, nombre del club), así que
   cada pasada prueba con otros. Al empezar, la pasada escribe su semilla; **para repetir los mismos datos**:
-  `SEMILLA=255079 npm run e2e`. Si un escenario falla, el informe dice qué datos le tocaron.
+  `SEMILLA=255079 npm run e2e`. Si un escenario falla, el informe dice qué datos le tocaron. La semilla y esos
+  datos quedan también en `e2e-results/datos.log`, que se rehace en cada pasada.
 - **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
   viejo probaría código que ya no es el tuyo.
 
