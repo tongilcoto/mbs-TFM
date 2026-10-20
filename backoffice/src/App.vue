@@ -1,7 +1,7 @@
 <!-- El marco (LLD-B §8.1): pide el club al arrancar, y hasta tenerlo no pinta ninguna pantalla. -->
 <script setup lang="ts">
-import { onMounted, ref, watchEffect } from 'vue'
-import { useRoute } from 'vue-router'
+import { nextTick, onMounted, ref, watchEffect } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from './api/client'
 import type { ShownError } from './api/errors'
 import { asResult } from './api/result'
@@ -28,6 +28,18 @@ onMounted(loadClub)
 // La pestaña dice dónde se está y de qué club: «Equipos · Celtic Castilla» (LLD-B §10.2).
 watchEffect(() => {
   document.title = club.value ? `${route.meta.title} · ${club.value.shortName}` : 'Backoffice'
+})
+
+// Al cambiar de pantalla, el foco va a su título, y el lector de pantalla lo lee (LLD-B §10.2). Solo si cambia
+// el camino: cambiar de temporada en la portada cambia la dirección, y el foco tiene que seguir en el selector.
+// Al abrir la web, tampoco: el foco empieza al principio de la página, donde está «Saltar al contenido».
+useRouter().afterEach((to, from) => {
+  if (from.matched.length === 0 || to.path === from.path) return
+  nextTick(() => {
+    const title = document.querySelector<HTMLElement>('main h1')
+    title?.setAttribute('tabindex', '-1')
+    title?.focus()
+  })
 })
 
 // Si falta el club en la dirección, cómo abrirla bien (LLD-B §8.3). En local, con el club de desarrollo.

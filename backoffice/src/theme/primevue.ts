@@ -6,6 +6,14 @@ import type { PrimeVueConfiguration } from 'primevue/config'
 import { DARK_MODE_CLASS } from './mode'
 import { palette } from './palette'
 
+// Los colores de los estados, que el boceto no tiene: se toman de Aura (plan R1, decisión 7) y se nombran por lo
+// que significan (LLD-B §9.2). Salen como --p-estado-bien, --p-estado-fallo… Nunca van solos: siempre con su
+// palabra al lado (LLD-B §9.4). En claro, tonos oscuros para que se vean sobre blanco; en oscuro, claros.
+const states = {
+  claro: { bien: '{green.700}', fallo: '{red.600}', enMarcha: '{sky.700}', aviso: '{amber.700}', sinDatos: '{surface.500}' },
+  oscuro: { bien: '{green.400}', fallo: '{red.400}', enMarcha: '{sky.400}', aviso: '{amber.400}', sinDatos: '{surface.400}' },
+}
+
 // Aura con la paleta encima (plan R1, decisión 7). Lo que la paleta no dice —los colores de los estados, los
 // bordes, los campos de los formularios— sigue siendo de Aura.
 const preset = definePreset(Aura, {
@@ -19,6 +27,7 @@ const preset = definePreset(Aura, {
         surface: { 0: palette.claro.superficie, 50: palette.claro.fondo },
         text: { color: palette.claro.texto, mutedColor: palette.claro.textoSuave },
         fondo: palette.claro.fondo,
+        estado: states.claro,
       },
       dark: {
         primary: { color: '{primary.500}', hoverColor: '{primary.400}', activeColor: '{primary.300}' },
@@ -27,6 +36,7 @@ const preset = definePreset(Aura, {
         text: { color: palette.oscuro.texto, mutedColor: palette.oscuro.textoSuave },
         // El fondo de la página: no es de ninguna pieza, así que Aura no lo tiene. Sale como --p-fondo (index.html).
         fondo: palette.oscuro.fondo,
+        estado: states.oscuro,
       },
     },
   },
