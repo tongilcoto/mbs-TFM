@@ -396,6 +396,37 @@ struct MatchingChainTests {
         #expect(outcome == .unmatched)
     }
 
+    /// **La misma regla que en la cadena de clubes**, que a la de equipos le
+    /// faltaba. Si la fila almacenada ya tiene código y es **otro**, la fuente
+    /// está diciendo que es otra plaza ([D-101]), aunque el club y la letra
+    /// coincidan.
+    ///
+    /// Sin esta regla, un rival que estrena código conservando la letra (el
+    /// «caso 1») casaba por nombre con su fila vieja. Como el emparejamiento no
+    /// pisa un código guardado (`D-76`), el nuevo no entraba nunca: el rival se
+    /// quedaba emparejado por nombre para siempre.
+    @Test("un código distinto descarta al candidato aunque club, categoría y letra casen (§3.7, D-101)")
+    func teamIgnoresACandidateWhoseKeyContradicts() {
+        let granollersA = TeamCandidate(
+            id: TeamID(raw: UUID()),
+            federationTeamID: "33710",
+            ownership: .opponent(clubName: NormalizedName("E.C. Granollers")),
+            category: .juvenil, letter: "A", gender: .masculino, modality: .futbol11
+        )
+
+        let outcome = MatchingChain.team(
+            IncomingTeam(
+                federationTeamID: "40001",
+                clubName: NormalizedName("E.C. GRANOLLERS"),
+                letter: "A"
+            ),
+            in: CompetitionScope(ageCategory: .juvenil, gender: .masculino, modality: .futbol11),
+            among: [granollersA]
+        )
+
+        #expect(outcome == .unmatched)
+    }
+
     // ── Equipos: la frontera de D-66 / D-67 ──────────────────────────────────
 
     /// **El límite que `D-76` le deja escrito a esta fase**, y que dice de quién

@@ -98,8 +98,14 @@ public enum MatchingChain {
         // `D-76` hace entre un campo de propiedad y uno de emparejamiento: mismo
         // `nil`, dos lecturas opuestas. La letra está en la clave única de §3.5,
         // que además se declara `NULLS NOT DISTINCT` justo por esto.
+        //
+        // Y, como en la cadena de clubes, **no puede contradecir al paso 1**: si
+        // el candidato ya tiene código y es otro, es otra plaza (`D-101`). Sin
+        // esto, un rival que estrena código conservando la letra casaba con su
+        // fila vieja y, como `D-76` no pisa el código, no lo recibía nunca.
         let byName = candidates.filter {
-            $0.ownership == .opponent(clubName: incoming.clubName)
+            ($0.federationTeamID == nil || $0.federationTeamID == incoming.federationTeamID)
+                && $0.ownership == .opponent(clubName: incoming.clubName)
                 && $0.category == scope.ageCategory
                 && $0.letter == incoming.letter
                 && $0.gender == scope.gender
