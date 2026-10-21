@@ -1,0 +1,34 @@
+{
+  "title": "D-105 · la jornada de descanso es un partido contra un rival ficticio",
+  "filter": "RFFMCalendarParserTests|IngestCalendarTests",
+  "mutations": [
+    {
+      "id": "R1-sin-marca",
+      "description": "el adaptador no marca el descanso",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "isRestDay: isPlaceholder(raw.codigoEquipoLocal)\n                || isPlaceholder(raw.codigoEquipoVisitante)",
+      "replace": "isRestDay: false"
+    },
+    {
+      "id": "R2-menos-uno-como-codigo",
+      "description": "el -1 del ficticio llega como código",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "$0.isEmpty || isPlaceholder($0) ? nil : $0",
+      "replace": "$0.isEmpty ? nil : $0"
+    },
+    {
+      "id": "R3-fecha-a-cualquiera",
+      "description": "la fecha de la jornada se presta a cualquier partido sin fecha",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "        guard federationMatch.isRestDay else { return nil }\n",
+      "replace": "\n"
+    },
+    {
+      "id": "R4-descanso-sin-fecha",
+      "description": "el descanso no toma la fecha de su jornada",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "federationMatch.date ?? restDayDate(federationMatch, roundID: roundID)",
+      "replace": "federationMatch.date"
+    }
+  ]
+}

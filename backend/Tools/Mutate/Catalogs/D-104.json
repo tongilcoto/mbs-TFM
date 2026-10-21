@@ -1,0 +1,118 @@
+{
+  "title": "D-104 · el equipo rival es de una temporada; el propio no (y el caso 1 de la cadena)",
+  "filter": "DomainTests|ApplicationTests|MigrationIntegrityTests|FederationLinkEndpointTests|IngestionPersistenceTests|SeasonRegistrationEndpointTests",
+  "mutations": [
+    {
+      "id": "C1-paso2-con-otro-codigo",
+      "description": "el paso 2 de equipos casa con un candidato de otro código (caso 1)",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "($0.federationTeamID == nil || $0.federationTeamID == incoming.federationTeamID)\n                && ",
+      "replace": "true\n                && "
+    },
+    {
+      "id": "M1-rival-sin-temporada",
+      "description": "el Dominio acepta un rival sin temporada",
+      "file": "Sources/Domain/Team.swift",
+      "find": "if opponentClubID != nil, seasonID == nil {",
+      "replace": "if false, opponentClubID != nil, seasonID == nil {"
+    },
+    {
+      "id": "M2-propio-con-temporada",
+      "description": "el Dominio acepta un propio con temporada",
+      "file": "Sources/Domain/Team.swift",
+      "find": "if opponentClubID == nil, seasonID != nil {",
+      "replace": "if false, opponentClubID == nil, seasonID != nil {"
+    },
+    {
+      "id": "M3-fusion-pierde-temporada",
+      "description": "la fusión de la ingesta borra la temporada",
+      "file": "Sources/Domain/Team.swift",
+      "find": "            seasonID: seasonID,\n            category: category,",
+      "replace": "            seasonID: nil,\n            category: category,"
+    },
+    {
+      "id": "M4-cuenta-en-cualquier-temporada",
+      "description": "un rival cuenta en cualquier temporada",
+      "file": "Sources/Domain/Team.swift",
+      "find": "isOwn || seasonID == season",
+      "replace": "true"
+    },
+    {
+      "id": "M5-calendario-sin-filtro",
+      "description": "la pasada del calendario mira rivales de todas las temporadas",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "            .filter { $0.counts(in: competition.seasonID) }\n",
+      "replace": "\n"
+    },
+    {
+      "id": "M6-calendario-crea-sin-temporada",
+      "description": "la pasada crea el rival sin temporada",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "seasonID: competition.seasonID,",
+      "replace": "seasonID: nil,"
+    },
+    {
+      "id": "M7-clasificacion-sin-filtro",
+      "description": "la clasificación mira rivales de todas las temporadas",
+      "file": "Sources/Application/IngestStandings.swift",
+      "find": "                        .filter { $0.counts(in: competition.seasonID) }\n",
+      "replace": "\n"
+    },
+    {
+      "id": "M8-enganche-sin-filtro",
+      "description": "el enganche bloquea por un rival de otra temporada",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "$0.counts(in: season.id)\n                    && ",
+      "replace": "true\n                    && "
+    },
+    {
+      "id": "M9-respuesta-con-temporada",
+      "description": "la respuesta de un propio lleva temporada",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "seasonId: seasonID.map { \"\\($0)\" },",
+      "replace": "seasonId: \"x\","
+    },
+    {
+      "id": "M10-check-pareja",
+      "description": "el esquema no ata temporada y club rival",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "expression: \"(opponent_club_id IS NULL) = (season_id IS NULL)\")",
+      "replace": "expression: \"true\")"
+    },
+    {
+      "id": "M11-codigo-unico-global",
+      "description": "el código vuelve a ser único entre temporadas",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "            columns: [\"season_id\", \"federation_team_id\"])",
+      "replace": "            columns: [\"federation_team_id\"])"
+    },
+    {
+      "id": "M12-identidad-sin-temporada",
+      "description": "la clave de identidad no lleva la temporada",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "columns: [\"season_id\", \"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"])",
+      "replace": "columns: [\"opponent_club_id\", \"category\", \"letter\", \"gender\", \"modality\"])"
+    },
+    {
+      "id": "M13-guarda-ciega",
+      "description": "la migración no se para con un rival de dos temporadas",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "HAVING count(DISTINCT u.season_id) > 1",
+      "replace": "HAVING count(DISTINCT u.season_id) > 99"
+    },
+    {
+      "id": "M14-huerfano-se-queda",
+      "description": "la migración no borra el rival que nada referencia",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "               AND NOT EXISTS (SELECT 1 FROM",
+      "replace": "               AND false AND NOT EXISTS (SELECT 1 FROM"
+    },
+    {
+      "id": "M15-sin-datos",
+      "description": "la migración no da su temporada a los rivales",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "             WHERE u.team_id = t.id AND t.opponent_club_id IS NOT NULL\n",
+      "replace": "             WHERE false AND u.team_id = t.id AND t.opponent_club_id IS NOT NULL\n"
+    }
+  ]
+}
