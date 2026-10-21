@@ -4611,6 +4611,9 @@ temporada y su código ya van, siempre, en la inscripción ([D-68], [D-101]).
 
 1. **`teams.season_id`**, con clave ajena a `seasons`. **Obligatoria en el rival y vacía en el propio**:
    `CHECK ((opponent_club_id IS NULL) = (season_id IS NULL))`, y la misma regla en el `init` del Dominio.
+   La clave ajena es **en cascada**: borrar una temporada ([D-24]) ya se lleva sus competiciones y sus
+   partidos, y con ellos sobran sus rivales. *(Añadido al programarla: el esquema de esta entrada no lo
+   decía.)*
 2. **Las dos claves únicas ganan la temporada.** La del código pasa de `UNIQUE (federation_team_id)` a
    `UNIQUE (season_id, federation_team_id)`. La de identidad, `uq_teams_identity`, pasa a ser (temporada,
    club, categoría, letra, género, modalidad), sin cambiar su `NULLS NOT DISTINCT`. En los propios la
@@ -4647,6 +4650,14 @@ exactamente el criterio con el que D-28 se la dio a `Player`.
   para la misma plaza ([D-101], [D-84]), o por el club rival, que no tiene temporada.
 - **Reclamar un rival como propio** (`PUT /teams/{teamId}/ownership`, sin programar) tendrá que vaciar su
   temporada además de mover su código a la inscripción. El `CHECK` le obliga a no olvidarlo.
+
+**Hecho** el 2026-10-21, en tres commits detrás del arreglo del caso 1: esta entrada; el modelo y la migración
+`AddSeasonToOpponentTeams` (la columna, los datos, el `CHECK` y las dos claves únicas), y la ingesta, la
+clasificación, el enganche y `TeamResponse.seasonId`. Probada contra la base de trabajo: los 29 rivales con su
+temporada y el ficticio, borrado. 682 → **697 tests**, junto con [D-105]; **16/16 mutaciones**
+(`Tools/Mutate/Catalogs/D-104.json`, con la del caso 1). Y una comprobación que no estaba prevista: §3.7 ya pedía
+que el paso 2 descartara al candidato cuya clave contradice, para equipos y para clubes. El caso 1 era código
+que no cumplía el diseño, no un hueco del diseño.
 
 **Enmienda** a [D-101] (punto 3 y «Lo que se asume a cambio», primer punto, que queda resuelto) y a [D-28]
 (fila `Team`, `OpponentClub`): el propio sigue sin temporada; el rival, ya no.
@@ -4703,7 +4714,7 @@ Y el dato importa: **quién descansa en cada jornada** es algo que la web tiene 
 **Hecho el mismo día** (2026-10-21): adaptador, pasada del calendario y tests del adaptador (con los dos
 partidos de la jornada 1 del alevín, copiados de la RFFM) y de la pasada (el descanso con su fecha, el
 partido normal sin fecha que sigue fuera, y un ficticio por categoría). Los tests del descanso salen en rojo
-sin el arreglo.
+sin el arreglo. **4/4 mutaciones** (`Tools/Mutate/Catalogs/D-105.json`).
 
 **Enmienda** a la fila `"(No asignado)"` del [Anexo RFFM §F.11].
 

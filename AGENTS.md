@@ -58,7 +58,8 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   no del *equipo*. Así que `Team` tiene `POST` (sin ningún dato de federación) y `DELETE` **mientras no
   esté emparejado**; un equipo sin código en ninguna inscripción no tiene segundo escritor. **El código de
   la federación de un equipo propio va en su inscripción de cada competición, no en `Team`** (`D-101`): el
-  número es la plaza del club en la división, y la letra puede pasar a otro número de un año a otro. La otra mitad de la
+  número es la plaza del club en la división, y la letra puede pasar a otro número de un año a otro. **El rival, en
+  cambio, es de una temporada** (`D-104`): lleva `season_id`, y cada temporada tiene sus filas. La otra mitad de la
   regla, sin la cual esto no se sostiene: **la ingesta no crea equipos propios**, así que todo lo que
   encuentra y no reconoce es de un `OpponentClub`. `gender` y `modality` pasan a ser identidad de alta:
   van en `CreateTeamRequest`, nunca en el `PATCH`.
@@ -387,7 +388,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests**, **632** desde `D-101` (2026-10-18) y **682** tras el servidor de la rebanada 1. Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1 y **697** con `D-104` y `D-105` (2026-10-21). Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
@@ -409,8 +410,11 @@ entera cuando el club falla), la portada con los equipos de una temporada, su co
 sus cuatro estados; un mensaje en español para cada código de error. **80 pruebas de piezas y 35 escenarios**, con
 axe en los dos modos. Los escenarios preparan sus datos **por la propia aplicación y al azar, con semilla**
 (LLD-B §11.3): el enganche y la ingesta de verdad contra competiciones que inventa la federación falsa, y la base
-solo como último recurso. Lo siguiente, **hablar de la tabla de equipos** con el desarrollador y después el plan de
-la rebanada 2 (el alta de equipos).
+solo como último recurso. **La tabla de equipos, revisada el 2026-10-21**, antes de la rebanada 2: el rival pasa a
+ser de una temporada (`D-104`), con el paso 2 de la cadena de equipos arreglado (ya no casa con un rival de otro
+código, como pedía §3.7), y la jornada de descanso de un grupo impar se guarda como partido contra el equipo
+ficticio de la federación, con la fecha de su jornada (`D-105`). Lo siguiente, el plan de la rebanada 2 (el alta
+de equipos).
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
