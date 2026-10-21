@@ -290,11 +290,13 @@ public struct IngestStandings: Sendable {
                 fixtures: fixtures,
                 // Los rivales por el código de su fila, y los propios por el de
                 // su inscripción **en esta competición** (`D-101`): igual que la
-                // pasada del calendario, o la tabla casaría con otro número.
+                // pasada del calendario, o la tabla casaría con otro número. Y
+                // solo los rivales **de esta temporada** (`D-104`): el mismo
+                // código del año pasado es otra fila.
                 teamsByFederationID: Dictionary(
-                    try await repositories.teams.list().compactMap { team in
-                        team.federationTeamID.map { ($0, team.id) }
-                    }
+                    try await repositories.teams.list()
+                        .filter { $0.counts(in: competition.seasonID) }
+                        .compactMap { team in team.federationTeamID.map { ($0, team.id) } }
                         + repositories.teamRegistrations.list(competitionID: competitionID)
                         .compactMap { row in row.federationTeamID.map { ($0, row.teamID) } },
                     uniquingKeysWith: { first, _ in first }),

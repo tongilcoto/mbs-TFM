@@ -282,8 +282,12 @@ public struct LinkTeamToFederation: Sendable {
             // otro caso. En otra competición o en otra temporada no se compara
             // nada: el número es la plaza de la federación, no el equipo del club
             // ([Anexo FCF §C.13]).
+            //
+            // **Y el rival, solo si es de esta temporada** (`D-104`): el del año
+            // pasado con el mismo código es otra fila, y no bloquea.
             if let holder = try await repositories.teams.list().first(where: {
-                $0.federationTeamID == request.ownTeamFederationID
+                $0.counts(in: season.id)
+                    && $0.federationTeamID == request.ownTeamFederationID
             }) {
                 throw DomainError.federationTeamIDTaken(
                     code: request.ownTeamFederationID,

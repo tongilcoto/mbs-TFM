@@ -961,15 +961,16 @@ paths:
       description: |
         Colección pequeña por club → **sin paginación** (§5.3).
 
-        Sobre `seasonId`: **`Team` no tiene temporada** (§3.2) — "Infantil A" es la misma entidad año tras
-        año. El filtro responde con una **unión asimétrica** (D-68), porque las dos mitades no llegan por
-        la misma puerta:
+        Sobre `seasonId`: **el equipo propio no tiene temporada** (§3.2) — "Infantil A" es la misma entidad
+        año tras año —, y **el rival sí** (D-104). El filtro responde con una **unión asimétrica** (D-68),
+        porque las dos mitades no llegan por la misma puerta:
 
         - **propios** → de `TeamRegistration`, la inscripción que afirma el club (`PUT
           /teams/{teamId}/registrations/{seasonId}`). En junio el equipo ya existe y **todavía no hay un
           solo partido** del que derivar nada;
-        - **rivales** → de la **derivación por participación** de D-27: equipos con algún partido, como
-          local o como visitante, en alguna `Competition` de esa temporada (§3.4).
+        - **rivales** → de su propia temporada (`seasonId` de la respuesta, D-104). Es el mismo conjunto
+          que daba la **derivación por participación** de D-27 —el rival nace de un partido de esa
+          temporada—, leído de la columna.
 
         Los dos conjuntos son **disjuntos** —un rival no se inscribe— así que no hay contradicción posible.
         El significado del filtro **no ha cambiado**; cambió de dónde sale la respuesta.
@@ -1283,8 +1284,9 @@ paths:
         '409':
           description: |
             El equipo ya está enganchado **en esta competición** con otro código (en otra competición o en
-            otra temporada no es conflicto, D-101), ese `federationTeamId` ya pertenece a un rival o a otro
-            equipo propio de esta competición, **ese `ownTeamFederationId` no es de ninguno de los equipos del calendario** (el
+            otra temporada no es conflicto, D-101), ese `federationTeamId` ya pertenece a un rival **de esta
+            temporada** (el del año pasado con el mismo código no cuenta, D-104) o a otro equipo propio de esta
+            competición, **ese `ownTeamFederationId` no es de ninguno de los equipos del calendario** (el
             `code` es `OWN_TEAM_NOT_IN_CALENDAR`), o la identidad no cuadra: la competición dice una
             `ageCategory`, un `gender` o una `modality` distintos de los que el equipo tiene congelados
             desde su alta (D-66, D-58, §3.2). A diferencia del 409 de D-21, **este tiene salida**: se
@@ -4894,6 +4896,17 @@ components:
           description: |
             **Nulo ⇒ equipo propio** (del club del tenant); no nulo ⇒ equipo rival. Solo se cambia por
             `PUT`/`DELETE /teams/{teamId}/ownership`, nunca por `PATCH`.
+        seasonId:
+          type: [string, 'null']
+          format: uuid
+          readOnly: true
+          description: |
+            **La temporada del rival** (D-104); en un equipo propio vale siempre `null`.
+
+            El rival es la plaza que la federación publica **en una temporada**: su letra y su código pueden
+            cambiar al año siguiente, así que cada temporada tiene su fila. Dos «Granollers A» de dos años
+            son dos equipos, y este campo dice de cuál es cada uno. El propio dura para siempre: su temporada
+            va en la inscripción (`GET /teams/{teamId}/registrations/{seasonId}`, D-102).
         federationTeamId:
           type: [string, 'null']
           readOnly: true
@@ -4909,6 +4922,9 @@ components:
             A»: el A de una temporada puede llevar otro número la siguiente. Por eso el código del equipo
             propio va en su **inscripción** de cada competición, y lo escribe el enganche (D-67). Se lee con
             `GET /teams/{teamId}/registrations/{seasonId}` (D-102).
+
+            **En un rival, es el de su temporada** (`seasonId`, D-104): el mismo número puede salir en el rival
+            de otro año, que es otra fila.
 
             **No es una clave de unión**: nunca PK, nunca FK, nunca un `JOIN` interno.
 

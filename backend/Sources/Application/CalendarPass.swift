@@ -69,7 +69,10 @@ final class CalendarPass {
         self.ids = ids
         self.now = now
         self.clubs = try await repositories.opponentClubs.list()
+        // `D-104`: los propios y los rivales de **esta** temporada. El de otra
+        // es otra fila, aunque lleve el mismo código.
         self.teams = try await repositories.teams.list()
+            .filter { $0.counts(in: competition.seasonID) }
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
         self.ownCodes = Dictionary(

@@ -82,7 +82,8 @@ struct IngestStandingsTests {
     static func seed(
         federation: FederationCode = .rffm,
         roundNumbers: [Int],
-        played: Set<Int>
+        played: Set<Int>,
+        lastSeasonTwin: Bool = false
     ) async throws -> Fixture {
         let store = IngestionStore()
         let season = try Season(
@@ -138,6 +139,19 @@ struct IngestStandingsTests {
             id: ClubID(raw: UUID()), name: "Atleti", shortName: "Atleti",
             slug: try Slug("atleti"),
             federation: federation, createdAt: now, updatedAt: now))
+        // `D-104`: con `lastSeasonTwin`, el rival del año pasado con el código
+        // `111` va **delante** en la lista, que es donde lo cogería una pasada
+        // que no mirara la temporada.
+        if lastSeasonTwin {
+            let last = try Season(
+                id: SeasonID(raw: UUID()), label: try SeasonLabel("2024/25"),
+                federationSeasonID: "20", createdAt: now, updatedAt: now)
+            let twin = try Team(
+                id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
+                seasonID: last.id, category: .cadete, letter: "A", gender: .masculino,
+                modality: .futbol11, federationTeamID: "111", createdAt: now, updatedAt: now)
+            await store.seed(seasons: [last], teams: [twin])
+        }
         await store.seed(
             seasons: [season], competitions: [competition], rounds: roundEntities,
             teams: teamEntities, matches: matches)
@@ -225,6 +239,20 @@ struct IngestStandingsTests {
         // El orden que publica la fuente se respeta: en la jornada 2 gana el otro.
         let second = written.filter { $0.roundID == fixture.rounds[2] }
         #expect(second.first { $0.position == 1 }?.teamID == fixture.teams["222"])
+    }
+
+    /// `D-104`: el rival del año pasado con el mismo código es otra fila, y la
+    /// tabla de esta temporada no se le apunta.
+    @Test("la fila de la tabla va al rival de esta temporada, no al del año pasado con su código (D-104)")
+    func theTableGoesToThisSeasonsOpponent() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1], lastSeasonTwin: true)
+        let client = StandingsClient([1: Self.table(["111", "222"])])
+
+        _ = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+
+        let written = await fixture.store.standingRows
+        #expect(Set(written.map(\.teamID)) == [fixture.teams["111"], fixture.teams["222"]])
     }
 
     // ── La columna PREV, encadenada jornada a jornada ────────────────────────

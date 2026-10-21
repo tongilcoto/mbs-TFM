@@ -103,6 +103,19 @@ public struct Team: Identifiable, Equatable, Sendable {
     /// **Derivado, no almacenado** (§3.6, `D-03`).
     public var isOwn: Bool { opponentClubID == nil }
 
+    /// **¿Cuenta este equipo en una temporada?** (`D-104`).
+    ///
+    /// El propio, siempre: dura para siempre, y en cada temporada lo reconoce
+    /// el código de su inscripción. El rival, solo en la suya: el `33710` del
+    /// año pasado es otra fila que el `33710` de éste, aunque sea la misma plaza.
+    ///
+    /// Es la puerta por la que pasan la ingesta del calendario, la de la
+    /// clasificación y la guarda del enganche. Sin ella, cualquiera de las tres
+    /// casaría con el rival de otra temporada y le llevaría los partidos.
+    public func counts(in season: SeasonID) -> Bool {
+        isOwn || seasonID == season
+    }
+
     /// **¿La competición dice lo mismo que este equipo tiene congelado?**
     /// (`D-66`, `D-58`).
     ///
