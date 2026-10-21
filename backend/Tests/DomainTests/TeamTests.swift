@@ -10,6 +10,7 @@ struct TeamTests {
 
     static func team(
         opponentClubID: OpponentClubID? = nil,
+        seasonID: SeasonID? = nil,
         category: TeamCategory = .cadete,
         letter: String? = "A",
         gender: Gender = .masculino,
@@ -19,6 +20,8 @@ struct TeamTests {
         try Team(
             id: TeamID(raw: UUID()),
             opponentClubID: opponentClubID,
+            // `D-104`: el rival es de una temporada; si el test no dice cuál, una.
+            seasonID: seasonID ?? opponentClubID.map { _ in SeasonID(raw: UUID()) },
             category: category,
             letter: letter,
             gender: gender,
@@ -180,6 +183,34 @@ struct TeamTests {
         #expect(throws: DomainError.self) {
             try Self.team(opponentClubID: nil, federationTeamID: "821")
         }
+    }
+
+    // ── D-104 · el rival es de una temporada; el propio no ───────────────────
+
+    /// La temporada va **con** el club rival: los dos o ninguno. El rival es la
+    /// plaza de la federación en una temporada; el propio dura para siempre y
+    /// su temporada va en la inscripción. El `CHECK` del esquema dice lo mismo.
+    @Test("un rival sin temporada y un propio con ella no existen (D-104)")
+    func theSeasonGoesWithTheOpponentClub() throws {
+        #expect(throws: DomainError.self, "un rival sin temporada") {
+            try Team(
+                id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
+                seasonID: nil, category: .cadete, gender: .masculino, modality: .futbol11,
+                createdAt: Date(), updatedAt: Date())
+        }
+        #expect(throws: DomainError.self, "un propio con temporada") {
+            try Self.team(opponentClubID: nil, seasonID: SeasonID(raw: UUID()))
+        }
+    }
+
+    /// La temporada es identidad, así que la fusión de la ingesta no la toca.
+    @Test("la ingesta no cambia la temporada de un rival (D-104)")
+    func mergingKeepsTheSeason() throws {
+        let stored = try Self.team(opponentClubID: OpponentClubID(raw: UUID()))
+
+        let merged = try stored.merging(opponentClubID: nil, federationTeamID: "821")
+
+        #expect(merged.seasonID == stored.seasonID)
     }
 
     // ── C-A.3 · la identidad tiene que cuadrar (D-66, D-58) ──────────────────

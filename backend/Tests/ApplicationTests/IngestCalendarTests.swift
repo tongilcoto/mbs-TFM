@@ -624,7 +624,7 @@ struct IngestCalendarTests {
             federationClubID: "0011078749",
             createdAt: Date(), updatedAt: Date())
         let rival = try Team(
-            id: TeamID(raw: UUID()), opponentClubID: renamed.id,
+            id: TeamID(raw: UUID()), opponentClubID: renamed.id, seasonID: season.id,
             category: .cadete, letter: "B", gender: .masculino, modality: .futbol11,
             federationTeamID: "304468", createdAt: Date(), updatedAt: Date())
 

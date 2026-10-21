@@ -103,7 +103,8 @@ struct IngestStandingsTests {
                 shortName: "CLUB \(code)", slug: try Slug("club-\(code)"),
                 createdAt: now, updatedAt: now)
             let team = try Team(
-                id: TeamID(raw: UUID()), opponentClubID: club.id, category: .cadete,
+                id: TeamID(raw: UUID()), opponentClubID: club.id, seasonID: season.id,
+                category: .cadete,
                 letter: code == "111" ? "A" : "B", gender: .masculino,
                 modality: .futbol11, federationTeamID: code,
                 createdAt: now, updatedAt: now)

@@ -185,6 +185,7 @@ extension OpponentClubRecord {
 extension TeamRecord {
     func apply(_ team: Team) {
         $opponentClub.id = team.opponentClubID?.raw
+        $season.id = team.seasonID?.raw
         category = team.category.rawValue
         letter = team.letter
         gender = team.gender.rawValue
@@ -212,6 +213,7 @@ extension TeamRecord {
         return try Team(
             id: TeamID(raw: try requireID()),
             opponentClubID: $opponentClub.id.map { OpponentClubID(raw: $0) },
+            seasonID: $season.id.map { SeasonID(raw: $0) },
             category: category,
             letter: letter,
             gender: gender,

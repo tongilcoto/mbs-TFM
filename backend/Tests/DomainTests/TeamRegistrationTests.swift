@@ -11,6 +11,7 @@ struct TeamRegistrationTests {
         try Team(
             id: TeamID(raw: UUID()),
             opponentClubID: opponentClubID,
+            seasonID: opponentClubID.map { _ in SeasonID(raw: UUID()) },
             category: .cadete,
             letter: "A",
             gender: .masculino,

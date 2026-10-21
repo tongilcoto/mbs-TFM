@@ -579,13 +579,17 @@ struct IngestionPersistenceTests {
                 id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR",
                 shortName: "Galapagar", slug: try Slug(derivedFrom: "C.D. GALAPAGAR"),
                 createdAt: Date(), updatedAt: Date())
+            let season = try Season(
+                id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+                federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
             let team = try Team(
-                id: TeamID(raw: UUID()), opponentClubID: club.id,
+                id: TeamID(raw: UUID()), opponentClubID: club.id, seasonID: season.id,
                 category: .cadete, letter: "B", gender: .masculino,
                 modality: .futbol11, federationTeamID: "304468",
                 createdAt: Date(), updatedAt: Date())
 
             let stored = try await tenant.scope { repositories -> [Team] in
+                try await repositories.seasons.save(season)
                 try await repositories.opponentClubs.save(club)
                 try await repositories.teams.save(team)
                 return try await repositories.teams.list()

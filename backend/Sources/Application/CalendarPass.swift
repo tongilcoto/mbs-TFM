@@ -369,6 +369,8 @@ final class CalendarPass {
             // produzca un equipo propio, y ésa es la mitad de la regla sin la
             // cual la otra —que `Team` tenga `POST`— no se sostiene.
             opponentClubID: clubID,
+            // `D-104`: el rival es de la temporada de la competición que se pasa.
+            seasonID: competition.seasonID,
             // Las tres que la fuente no publica, prestadas por la competición
             // (`D-07`, `D-58`). Las tres entran en la clave única de §3.5.
             category: competition.ageCategory,

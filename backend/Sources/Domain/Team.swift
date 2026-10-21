@@ -16,6 +16,18 @@ public struct Team: Identifiable, Equatable, Sendable {
     /// sincronización tras reclamar un equipo lo devolvería a rival.
     public let opponentClubID: OpponentClubID?
 
+    /// **La temporada del rival** (`D-104`): obligatoria en el rival y vacía en
+    /// el propio, la misma pareja que `opponentClubID`.
+    ///
+    /// El rival es la plaza que la federación publica **en una temporada**: su
+    /// letra y su código pueden cambiar al año siguiente, así que cada temporada
+    /// tiene su fila. El propio dura para siempre (`D-28`): su temporada va en la
+    /// inscripción, con su código (`D-68`, `D-101`).
+    ///
+    /// Es **identidad**, no atajo: entra en las dos claves únicas de §3.5, y por
+    /// eso tampoco es parámetro de `merging`.
+    public let seasonID: SeasonID?
+
     // ── Identidad (§3.5) ─────────────────────────────────────────────────────
     // Las cuatro forman la clave única junto con `opponentClubID`, y **ninguna
     // es parámetro de `merging`**: son de alta y nunca del `PATCH` (`D-66`,
@@ -45,6 +57,7 @@ public struct Team: Identifiable, Equatable, Sendable {
     public init(
         id: TeamID,
         opponentClubID: OpponentClubID? = nil,
+        seasonID: SeasonID? = nil,
         category: TeamCategory,
         letter: String? = nil,
         gender: Gender,
@@ -58,6 +71,16 @@ public struct Team: Identifiable, Equatable, Sendable {
                 field: "federationTeamId",
                 reason: "un equipo propio no lleva código de federación: va en su inscripción")
         }
+        if opponentClubID == nil, seasonID != nil {
+            throw DomainError.invalidValue(
+                field: "seasonId",
+                reason: "un equipo propio no lleva temporada: va en su inscripción")
+        }
+        if opponentClubID != nil, seasonID == nil {
+            throw DomainError.invalidValue(
+                field: "seasonId",
+                reason: "un equipo rival es de una temporada: hace falta la suya")
+        }
         if let letter, letter.trimmed.isEmpty {
             throw DomainError.invalidValue(
                 field: "letter",
@@ -67,6 +90,7 @@ public struct Team: Identifiable, Equatable, Sendable {
 
         self.id = id
         self.opponentClubID = opponentClubID
+        self.seasonID = seasonID
         self.category = category
         self.letter = letter
         self.gender = gender
@@ -239,6 +263,7 @@ extension Team {
             id: id,
             opponentClubID: UpsertPolicy.owned(
                 existing: opponentClubID, incoming: incomingOpponentClubID),
+            seasonID: seasonID,
             category: category,
             letter: letter,
             gender: gender,

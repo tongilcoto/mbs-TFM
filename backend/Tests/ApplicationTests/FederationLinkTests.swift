@@ -791,6 +791,7 @@ struct FederationLinkTests {
         let team = try Fixture.team()
         let rival = try Team(
             id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
+            seasonID: SeasonID(raw: UUID()),
             category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
             federationTeamID: "3349086", createdAt: Fixture.now, updatedAt: Fixture.now)
         let store = IngestionStore()

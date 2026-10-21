@@ -1196,9 +1196,15 @@ extension FederationLinkEndpointTests {
                     shortName: "Galapagar", slug: try Slug("c-d-galapagar"),
                     createdAt: Self.now, updatedAt: Self.now)
                 try await repositories.opponentClubs.save(club)
+                // `D-104`: el rival es de una temporada, y es la del enganche
+                // (`federation_season_id` 21), que la cascada reutiliza.
+                let season = try Season(
+                    id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+                    federationSeasonID: "21", createdAt: Self.now, updatedAt: Self.now)
+                try await repositories.seasons.save(season)
                 try await repositories.teams.save(
                     try Team(
-                        id: neighbour, opponentClubID: club.id,
+                        id: neighbour, opponentClubID: club.id, seasonID: season.id,
                         category: .cadete, letter: "A",
                         gender: .masculino, modality: .futbol11,
                         federationTeamID: "3349086",
@@ -1221,9 +1227,10 @@ extension FederationLinkEndpointTests {
             }
 
             // Y la cascada **no dejó nada**: la guarda va dentro del ámbito, así
-            // que la temporada y la competición que se habían creado se van con
-            // el `rollback`.
-            #expect(try await Self.rowCount("seasons", on: app) == 0)
+            // que la competición que se había creado se va con el `rollback`. La
+            // temporada que queda es la del rival, que ya estaba.
+            #expect(try await Self.rowCount("seasons", on: app) == 1)
+            #expect(try await Self.rowCount("competitions", on: app) == 0)
             #expect(try await Self.rowCount("ingestion_runs", on: app) == 0)
         }
     }

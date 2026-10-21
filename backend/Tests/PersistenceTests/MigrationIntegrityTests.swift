@@ -313,14 +313,17 @@ struct MigrationIntegrityTests {
     /// **17 con `D-101`**: el código del equipo propio pasa de `teams` a
     /// `team_registrations`, con sus dos `CHECK` y su `UNIQUE`.
     ///
+    /// **18 con `D-104`**: el rival pasa a ser de una temporada, con su `CHECK` y
+    /// las dos claves únicas de `teams` rehechas.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 17, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 18, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 17,
+        #expect(nombres.count == 18,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -461,7 +464,10 @@ struct MigrationIntegrityTests {
             // **21 con `D-101`**: `chk_teams_own_without_code` —un propio no lleva
             // código— y `chk_team_registrations_code_needs_competition` —la fila
             // de junio tampoco—.
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 21,
+            //
+            // **22 con `D-104`**: `chk_teams_season_only_opponents`, la pareja
+            // club rival ⇔ temporada.
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 22,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")
@@ -750,7 +756,11 @@ struct MigrationIntegrityTests {
             let schema = "\(Self.prefix)d101"
             let ids = try await Self.seedBeforeD101(schema: schema, ownLinked: true, on: app)
 
-            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            // **Solo hasta la de `D-101`**: la de `D-104`, detrás, borraría este
+            // rival, que no tiene partidos de los que sacar su temporada.
+            try await MigrateTenantsCommand.migrate(
+                schema: schema,
+                migrations: Self.migrations(through: "MoveOwnTeamCodeToRegistration"), on: app)
 
             let sql = app.db(.control) as! any SQLDatabase
             let teams = try await sql.raw("""
@@ -793,6 +803,179 @@ struct MigrationIntegrityTests {
                 WHERE id = \(bind: ids.own)
                 """).first(decodingColumn: "code", as: String.self)
             #expect(code == "33710", "la migración se llevó el código antes de pararse")
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// Las migraciones por tenant **hasta la que se nombra, incluida**.
+    static func migrations(through name: String) throws -> [any Migration] {
+        let all = TenantMigrations.all()
+        let cut = try #require(
+            all.firstIndex { $0.name.hasSuffix(name) },
+            "\(name) no está en la lista: el corte no significa nada")
+        return Array(all.prefix(through: cut))
+    }
+
+    // ── D-104 · el rival es de una temporada ─────────────────────────────────
+
+    /// Un club **de antes de `D-104`**: migrado hasta la migración anterior, con
+    /// dos temporadas, un equipo propio y tres rivales. Uno juega un partido en
+    /// la primera, otro solo sale en su clasificación y el tercero no aparece en
+    /// nada. Con `spread`, el que juega tiene además un partido en la segunda.
+    static func seedBeforeD104(schema: String, spread: Bool, on app: Application)
+        async throws -> (own: UUID, played: UUID, standing: UUID, orphan: UUID, season: UUID)
+    {
+        let sql = app.db(.control) as! any SQLDatabase
+        try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+        try await MigrateTenantsCommand.migrate(
+            schema: schema,
+            migrations: Self.migrations(through: "MoveOwnTeamCodeToRegistration"), on: app)
+
+        let (season, nextSeason, competition, nextCompetition) = (UUID(), UUID(), UUID(), UUID())
+        let (round, nextRound, club) = (UUID(), UUID(), UUID())
+        let (own, played, standing, orphan) = (UUID(), UUID(), UUID(), UUID())
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).seasons (id, label, federation_season_id, start_date, end_date)
+            VALUES (\(bind: season), '2025/26', '21', '2025-07-01', '2026-06-30'),
+                   (\(bind: nextSeason), '2026/27', '22', '2026-07-01', '2027-06-30')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).competitions (id, season_id, modality, gender, age_category,
+                federation_competition_id, federation_group_id, division_label, group_label)
+            VALUES (\(bind: competition), \(bind: season), 'futbol_11', 'masculino', 'juvenil',
+                '54322950', '54695794', 'Preferent', 'Grup 1'),
+                   (\(bind: nextCompetition), \(bind: nextSeason), 'futbol_11', 'masculino', 'juvenil',
+                '64322950', '64695794', 'Preferent', 'Grup 1')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).rounds (id, competition_id, number, start_date, end_date)
+            VALUES (\(bind: round), \(bind: competition), 1, '2025-09-13', '2025-09-14'),
+                   (\(bind: nextRound), \(bind: nextCompetition), 1, '2026-09-12', '2026-09-13')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).opponent_clubs (id, name, short_name, slug)
+            VALUES (\(bind: club), 'E.C. GRANOLLERS', 'Granollers', 'e-c-granollers')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).teams (id, opponent_club_id, category, letter, gender, modality, federation_team_id)
+            VALUES (\(bind: own), NULL, 'juvenil', 'A', 'masculino', 'futbol_11', NULL),
+                   (\(bind: played), \(bind: club), 'juvenil', 'A', 'masculino', 'futbol_11', '33710'),
+                   (\(bind: standing), \(bind: club), 'juvenil', 'B', 'masculino', 'futbol_11', '33712'),
+                   (\(bind: orphan), \(bind: club), 'alevin', NULL, 'masculino', 'futbol_11', '-1')
+            """).run()
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).matches (id, competition_id, round_id, match_date, home_team_id, away_team_id, status)
+            VALUES (\(bind: UUID()), \(bind: competition), \(bind: round), '2025-09-13', \(bind: own), \(bind: played), 'programado')
+            """).run()
+        if spread {
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).matches (id, competition_id, round_id, match_date, home_team_id, away_team_id, status)
+                VALUES (\(bind: UUID()), \(bind: nextCompetition), \(bind: nextRound), '2026-09-12', \(bind: played), \(bind: own), 'programado')
+                """).run()
+        }
+        try await sql.raw("""
+            INSERT INTO \(ident: schema).standing_rows (id, competition_id, round_id, team_id, position,
+                played, won, drawn, lost, goals_for, goals_against, points)
+            VALUES (\(bind: UUID()), \(bind: competition), \(bind: round), \(bind: standing), 2, 1, 0, 1, 0, 1, 1, 1)
+            """).run()
+        return (own, played, standing, orphan, season)
+    }
+
+    /// **La migración de `D-104` da su temporada a cada rival**, la de sus
+    /// partidos o la de su clasificación; borra el que nada referencia, y el
+    /// propio se queda sin temporada.
+    @Test("la migración da a cada rival la temporada de sus partidos o su clasificación (D-104)")
+    func eachOpponentGetsTheSeasonItPlaysIn() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d104"
+            let ids = try await Self.seedBeforeD104(schema: schema, spread: false, on: app)
+
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let teams = try await sql.raw("""
+                SELECT id::text || '=' || coalesce(season_id::text, '-') AS line
+                FROM \(ident: schema).teams
+                """).all(decodingColumn: "line", as: String.self)
+            let season = ids.season.uuidString.lowercased()
+            #expect(Set(teams) == [
+                "\(ids.own.uuidString.lowercased())=-",
+                "\(ids.played.uuidString.lowercased())=\(season)",
+                "\(ids.standing.uuidString.lowercased())=\(season)",
+            ], "el rival sin partidos ni clasificación tenía que irse")
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// **Las reglas de `D-104`, en el esquema**: el rival sin temporada y el
+    /// propio con ella no caben; el mismo código vale en otra temporada y no en
+    /// la misma. Es el caso 2 del Granollers: la temporada siguiente, el
+    /// `33712` es el A y el `33710` el B, en dos filas nuevas.
+    @Test("el rival necesita temporada, el propio no la admite, y el código es único por temporada (D-104)")
+    func theSeasonRulesLiveInTheSchema() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d104rules"
+            let ids = try await Self.seedBeforeD104(schema: schema, spread: false, on: app)
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let club = try #require(try await sql.raw("""
+                SELECT opponent_club_id AS club FROM \(ident: schema).teams WHERE id = \(bind: ids.played)
+                """).first(decodingColumn: "club", as: UUID.self))
+            let nextSeason = try #require(try await sql.raw("""
+                SELECT id FROM \(ident: schema).seasons WHERE label = '2026/27'
+                """).first(decodingColumn: "id", as: UUID.self))
+            @Sendable func insert(club: UUID?, season: UUID?, letter: String, code: String?) async throws {
+                try await sql.raw("""
+                    INSERT INTO \(ident: schema).teams (id, opponent_club_id, season_id, category, letter, gender, modality, federation_team_id)
+                    VALUES (\(bind: UUID()), \(bind: club), \(bind: season), 'juvenil', \(bind: letter), 'masculino', 'futbol_11', \(bind: code))
+                    """).run()
+            }
+
+            await #expect(throws: (any Error).self, "un rival sin temporada") {
+                try await insert(club: club, season: nil, letter: "C", code: nil)
+            }
+            await #expect(throws: (any Error).self, "un propio con temporada") {
+                try await insert(club: nil, season: ids.season, letter: "C", code: nil)
+            }
+            await #expect(throws: (any Error).self, "el mismo código en la misma temporada") {
+                try await insert(club: club, season: ids.season, letter: "C", code: "33710")
+            }
+            await #expect(throws: (any Error).self, "el mismo rival en la misma temporada") {
+                try await insert(club: club, season: ids.season, letter: "A", code: "99999")
+            }
+            try await insert(club: club, season: nextSeason, letter: "A", code: "33712")
+            try await insert(club: club, season: nextSeason, letter: "B", code: "33710")
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// **Un rival con partidos de dos temporadas no cabe en una fila**, y la
+    /// migración se para antes de tocar nada: ni la columna llega a existir.
+    @Test("con un rival repartido en dos temporadas, la migración se para sin tocar nada (D-104)")
+    func anOpponentInTwoSeasonsStopsTheMigration() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d104spread"
+            _ = try await Self.seedBeforeD104(schema: schema, spread: true, on: app)
+
+            await #expect(throws: (any Error).self) {
+                try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            }
+
+            let sql = app.db(.control) as! any SQLDatabase
+            let columns = try await sql.raw("""
+                SELECT count(*) AS n FROM information_schema.columns
+                WHERE table_schema = \(bind: schema) AND table_name = 'teams' AND column_name = 'season_id'
+                """).first(decodingColumn: "n", as: Int.self)
+            #expect(columns == 0, "la migración tocó el esquema antes de pararse")
+            let teams = try await sql.raw("""
+                SELECT count(*) AS n FROM \(ident: schema).teams
+                """).first(decodingColumn: "n", as: Int.self)
+            #expect(teams == 4, "la migración borró equipos antes de pararse")
 
             try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
         }
