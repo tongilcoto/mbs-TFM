@@ -71,6 +71,7 @@
 | **D-85**               | El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción                                      | §3.2, §3.3, §3.5, §5.6             |
 | **D-101**              | El código de la federación es de la inscripción del equipo en la competición, no del equipo                                   | §3.2, §3.5, §3.7, §5.1             |
 | **D-104**              | El equipo rival es de una temporada; el propio no                                                                             | §3.2, §3.5, §3.7, §5.1             |
+| **D-105**              | La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada                                     | §3.7                               |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -4650,6 +4651,62 @@ exactamente el criterio con el que D-28 se la dio a `Player`.
 **Enmienda** a [D-101] (punto 3 y «Lo que se asume a cambio», primer punto, que queda resuelto) y a [D-28]
 (fila `Team`, `OpponentClub`): el propio sigue sin temporada; el rival, ya no.
 
+---
+
+### D-105 · La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada
+
+**Lo que lo obligó a decidirse** (2026-10-21, al revisar la tabla `teams` para [D-104]). En un grupo impar
+la federación empareja cada jornada al equipo que descansa con uno **ficticio**: «Equipo Casa (No asignado)»
+o «Equipo Fuera (No asignado)», con código `-1`, sin escudo y sin fecha. Medido en el alevín de 2026/27
+(`temporada=22&competicion=26737859&grupo=27325582`): 26 jornadas, un descanso en cada una. El [Anexo RFFM
+§F.11] ya lo había visto y decía solo «tolerarlo». Lo que hacía la ingesta:
+
+- **Creaba un rival con el ficticio**, código `-1`. La migración de [D-104] lo borró, porque no tenía partidos.
+- **Descartaba el partido como «sin fecha»** (`missingMatchDate`): 26 descartes por pasada, todos falsas
+  alarmas, en el registro que existe para contestar «¿por qué falta esto?» ([D-85]).
+- **Con [D-104], el `-1` habría chocado**: el código del rival es único en su temporada, y el ficticio del
+  alevín y el del cadete llevan el mismo. Peor aún: el paso 1 de la cadena casaría el descanso de una
+  categoría con el ficticio de la otra.
+
+Y el dato importa: **quién descansa en cada jornada** es algo que la web tiene que poder enseñar.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) El adaptador quita esos partidos del calendario | Ni rival fantasma ni falsas alarmas | Descartada por el desarrollador: se pierde quién descansa |
+| (b) Una tabla de descansos (jornada, equipo) | `teams` y `matches` limpios | Descartada por el desarrollador: otra tabla para un dato que cabe en `matches` |
+| (c) `matches` admite un lado vacío y fecha vacía | Sin ficticio | Descartada: cambia el esquema y la API, y cada lectura de partidos tiene que conocer el partido cojo |
+| **(d) El descanso es un partido contra el ficticio, que es un rival más** | Sin cambio de esquema | **Elegida** |
+
+**Decisión: (d).**
+
+1. **El adaptador de la RFFM lo reconoce** (por el código `-1`) y marca el partido como descanso
+   (`FederationMatch.isRestDay`). Es suyo porque es una costumbre de la RFFM, no de nuestro modelo ([D-97]).
+2. **El `-1` no llega como código**: el adaptador lo quita. El ficticio se reconoce entonces por su nombre,
+   su categoría y su temporada, como cualquier rival sin código. Sale uno por categoría y temporada, por cada
+   nombre («Casa» y «Fuera»), cada uno con su club ficticio.
+3. **El partido toma la fecha del primer día de su jornada**, y sin hora: la hora queda sin confirmar, como en
+   cualquier partido al que la federación aún no se la ha puesto. Las fechas de la jornada salen de sus
+   otros partidos ([D-81]). **Un partido normal sin fecha sigue sin guardarse**: la fecha de la jornada solo
+   se presta al descanso, y para un partido de verdad sería inventarla ([D-75]).
+
+**Lo que se asume a cambio.**
+
+- **El ficticio aparece donde se listan los equipos de un grupo**: la composición de la competición sale de
+  sus partidos ([D-27]), y el `/preview` del enganche lo ofrece entre los equipos del calendario. La web solo
+  pinta partidos, y ahí es justo lo que se quiere ver.
+- **Una lectura que busque «el próximo partido»** de un equipo puede dar su descanso. Lo decidirá la pantalla
+  que lo necesite.
+- **La fecha del descanso no la publica la federación.** Es la de su jornada, y se mueve con ella.
+- **Al crear el ficticio, el registro apunta una vez que es «un equipo sin código»** (`unidentifiedTeam`).
+  Es cierto, y sale una vez por ficticio y temporada, no en cada pasada.
+
+**Hecho el mismo día** (2026-10-21): adaptador, pasada del calendario y tests del adaptador (con los dos
+partidos de la jornada 1 del alevín, copiados de la RFFM) y de la pasada (el descanso con su fecha, el
+partido normal sin fecha que sigue fuera, y un ficticio por categoría). Los tests del descanso salen en rojo
+sin el arreglo.
+
+**Enmienda** a la fila `"(No asignado)"` del [Anexo RFFM §F.11].
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4791,5 +4848,6 @@ exactamente el criterio con el que D-28 se la dio a `Player`.
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-104]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

@@ -553,7 +553,7 @@ Complementan las de §F.5, que siguen siendo válidas. **[C]** salvo indicación
 | El nombre de grupo **no tiene formato estable**: `"Grupo 1"` en un endpoint, `"GRUPO 17"` en otro | Normalizar |
 | **No hay campo de género** en ninguna entidad; solo se infiere del texto (`FÚTBOL FEMENINO`) | Resuelto en **§F.14**: el género va en el **nombre de la competición**, y de ahí lo toma el modelo ([D-58]). No hay campo propio en ninguna entidad |
 | `estado` y `sesion_ok` acompañan a todas las respuestas, siempre `"1"` | **[I]** `"1"` = OK. `sesion_ok` sugiere que el *backend* legacy podría devolver `"0"` con lista vacía **en vez de un error HTTP**: una lista vacía no siempre significa «no hay datos» |
-| `"(No asignado)"` aparece como **nombre real** de equipo | Tolerarlo |
+| `"(No asignado)"` aparece como **nombre real** de equipo | ~~Tolerarlo~~ **Enmendado por [D-105]**: es el rival **ficticio** de la jornada de descanso en un grupo impar («Equipo Casa / Fuera (No asignado)», código `-1`, sin escudo ni fecha). El adaptador marca el partido como descanso y quita el `-1`; la ingesta lo guarda con la fecha de su jornada |
 | Los códigos son **cadenas de longitud variable** (3 a 8 dígitos), con espacios de numeración antiguos y nuevos conviviendo | No normalizar a entero, no rellenar con ceros |
 | **La etiqueta de temporada llega como `"2025-2026"`**, no `"2024/25"` | Reformatear al `label` del modelo (§3.2) |
 | **`?nova=1`** aparece en la URL del escudo de forma inconsistente (0/240 en calendario, 13/13 en clasificación) | Normalizar quitando el *query* si se usa como clave |
@@ -832,6 +832,7 @@ variables — con **`.JPG` en mayúsculas**, que una comparación sensible a caj
 [Anexo FCF]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo FCF §C.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.2]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [Anexo FCF §C.3]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
