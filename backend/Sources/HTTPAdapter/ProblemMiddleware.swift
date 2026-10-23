@@ -341,6 +341,19 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "\(field): ya hay una temporada con '\(value)'",
                                base: typeBaseURI, slug: "season-already-exists")
 
+            case .seasonAlreadyLinked(let label, let existing, let incoming):
+                // **409**, el criterio de `ALREADY_LINKED_TO_FEDERATION`, que es su
+                // paralelo en el equipo: la URL es válida, lo que no encaja es el
+                // estado —esa temporada ya está enganchada con otro código— y tiene
+                // salida: revisar que la URL sea de la temporada correcta. **El
+                // `detail` lleva los dos códigos**, que es lo que hace falta para
+                // saber cuál de los dos está mal (`D-106`).
+                return Problem(status: .conflict, code: "SEASON_ALREADY_LINKED",
+                               title: "La temporada ya está enganchada con otro código",
+                               detail: "la temporada \(label) ya tiene el código '\(existing)' y "
+                                   + "la URL trae '\(incoming)'",
+                               base: typeBaseURI, slug: "season-already-linked")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha

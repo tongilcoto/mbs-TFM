@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **717 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **724 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -220,6 +220,12 @@ primero.
 **Una competición se da de alta enganchando un equipo del club**: se pega en la ficha del equipo la URL de
 su calendario en la web de la federación (`D-67`). Con eso se crean de una vez la temporada (si no existía),
 la competición y la inscripción del equipo, y se encola su primera ingesta.
+
+**La temporada se busca en dos pasos** (`D-106`): por el código de la URL (`temporada=21`) y, si no está, por su
+**etiqueta**. Así, la temporada que el club creó antes sin código ([§4.3](#temporadas)) la reconoce el primer
+enganche y **le pone el código**, en vez de crear otra. Si la temporada de esa etiqueta ya tiene **otro** código,
+las dos puertas responden **409 `SEASON_ALREADY_LINKED`**, con los dos códigos en el `detail`: o la URL es de
+otra temporada, o la del club se enganchó con otra cosa.
 
 > **Cuando exista la web**, esto se hace desde la ficha del equipo y los `curl` de aquí sobran. Hasta
 > entonces, este es el camino, y son tres pasos.
@@ -500,7 +506,7 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 717 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 724 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

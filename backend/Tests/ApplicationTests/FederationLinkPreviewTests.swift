@@ -61,7 +61,7 @@ struct FederationLinkPreviewTests {
     }
 
     static func season(
-        _ label: String = "2025/26", federationSeasonID: String = "21"
+        _ label: String = "2025/26", federationSeasonID: String? = "21"
     ) throws -> Season {
         try Season(
             id: SeasonID(raw: UUID()), label: try SeasonLabel(label),
@@ -209,6 +209,49 @@ struct FederationLinkPreviewTests {
         // La etiqueta que se enseña es **la del club**, no la que diga la
         // fuente: la temporada ya existe y su rótulo es dato nuestro.
         #expect(onSeeded.season.label == "2025/26")
+    }
+
+    // ── D-106 · la temporada que nació en la web, sin código ─────────────────
+
+    /// **Si no la encuentra por el código, la busca por la etiqueta** (`D-106`):
+    /// la temporada que el club creó en julio desde el alta de equipo no tiene
+    /// código, y el primer enganche se lo pone. El `/preview` solo lo **anuncia**
+    /// —`exists: true`, y la etiqueta es la del club—: no escribe nada (`C-C.1`).
+    @Test("una temporada sin código con la etiqueta del calendario ya existe, y no se escribe (D-106)")
+    func aSeasonWithoutCodeIsFoundByItsLabel() async throws {
+        let team = try Self.team()
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(seasons: [try Self.season("2025/26", federationSeasonID: nil)], teams: [team])
+
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(preview.season.exists)
+        #expect(preview.season.label == "2025/26")
+        #expect(preview.season.federationSeasonID == "21")
+        #expect(await store.writes == 0)
+        #expect(await store.seasons.first?.federationSeasonID == nil, "el /preview le puso el código")
+    }
+
+    /// **Y si la de esa etiqueta ya tiene otro código, no se pisa** (`D-106`, punto
+    /// 4): o la URL es de otra temporada, o la del club se enganchó con otra cosa.
+    @Test("la temporada de esa etiqueta con otro código: SEASON_ALREADY_LINKED (D-106)")
+    func aSeasonLinkedToAnotherCodeStopsThePreview() async throws {
+        let team = try Self.team()
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(seasons: [try Self.season("2025/26", federationSeasonID: "20")], teams: [team])
+
+        await #expect(throws: ApplicationError.seasonAlreadyLinked(
+            label: "2025/26", existing: "20", incoming: "21")) {
+            try await Self.useCase(
+                store: store,
+                federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+                .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+        }
     }
 
     // ── C-C.3 · `alreadyRegistered` ──────────────────────────────────────────

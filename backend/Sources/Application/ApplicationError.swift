@@ -78,6 +78,13 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// su valor, que es la forma `campo: motivo` del `detail`.
     case seasonAlreadyExists(field: String, value: String)
 
+    /// **La temporada del club con la etiqueta de la URL ya tiene otro código**
+    /// (`D-106`, punto 4 → **409** `SEASON_ALREADY_LINKED`), en el enganche y en su
+    /// `/preview`. No se pisa: o la URL es de otra temporada, o la del club se
+    /// enganchó con otra cosa. Distinto de `federationSeasonMismatch`, que es la
+    /// guarda de fechas de `D-91`.
+    case seasonAlreadyLinked(label: String, existing: String, incoming: String)
+
     /// **La base no responde** (H-23, `D-86` enmendada).
     ///
     /// No es el fallo de una competición: es el fallo del sitio donde se apuntan

@@ -1,0 +1,62 @@
+{
+  "title": "R2.8 · el enganche busca la temporada también por su etiqueta (D-106)",
+  "filter": "FederationLinkTests|FederationLinkPreviewTests|FederationLinkEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-etiqueta",
+      "description": "no se busca por la etiqueta: se crea otra temporada",
+      "file": "Sources/Application/SeasonRepository.swift",
+      "find": "        guard let label,\n              let byLabel",
+      "replace": "        guard let label, label.value.isEmpty,\n              let byLabel"
+    },
+    {
+      "id": "M2-pisa-el-codigo",
+      "description": "la de esa etiqueta con otro código se pisa",
+      "file": "Sources/Application/SeasonRepository.swift",
+      "find": "        if let other = byLabel.federationSeasonID {",
+      "replace": "        if let other = byLabel.federationSeasonID, other.isEmpty {"
+    },
+    {
+      "id": "M3-sin-archivadas",
+      "description": "la busca solo entre las no archivadas",
+      "file": "Sources/Application/SeasonRepository.swift",
+      "find": "try await list(includingArchived: true).first(where: { $0.label == label })",
+      "replace": "try await list(includingArchived: false).first(where: { $0.label == label })"
+    },
+    {
+      "id": "M4-no-pone-codigo",
+      "description": "el enganche reutiliza la temporada pero no le pone el código",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "                if existing.federationSeasonID == nil {",
+      "replace": "                if false, existing.federationSeasonID == nil {"
+    },
+    {
+      "id": "M5-no-guarda-codigo",
+      "description": "le pone el código pero no lo guarda",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "                    season = try existing.applying(federationSeasonID: coordinate.federationSeasonID)\n                    try await repositories.seasons.save(season)\n",
+      "replace": "                    season = try existing.applying(federationSeasonID: coordinate.federationSeasonID)\n"
+    },
+    {
+      "id": "M6-preview-solo-codigo",
+      "description": "el /preview no busca por la etiqueta",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "                label: calendar.seasonLabel)",
+      "replace": "                label: nil)"
+    },
+    {
+      "id": "M7-409-generico",
+      "description": "el 409 sale con otro código",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .conflict, code: \"SEASON_ALREADY_LINKED\",",
+      "replace": "return Problem(status: .conflict, code: \"ALREADY_LINKED_TO_FEDERATION\","
+    },
+    {
+      "id": "M8-codigos-cruzados",
+      "description": "el error cruza el código que tiene con el que trae la URL",
+      "file": "Sources/Application/SeasonRepository.swift",
+      "find": "label: label.value, existing: other, incoming: code)",
+      "replace": "label: label.value, existing: code, incoming: other)"
+    }
+  ]
+}

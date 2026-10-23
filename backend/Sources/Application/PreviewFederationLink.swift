@@ -71,8 +71,13 @@ public struct PreviewFederationLink: Sendable {
         // la temporada y la competición ya están.
         let existing = try await unitOfWork.withRepositories(actor: actor) {
             repositories in
-            let season = try await repositories.seasons
-                .findByFederationID(coordinate.federationSeasonID)
+            // **`D-106`: por el código y, si no, por la etiqueta.** La que nació en
+            // la web sin código cuenta como existente: el enganche se lo pondrá,
+            // y aquí solo se anuncia. La etiqueta que se busca es la de la fuente,
+            // traducida por el conector: el `/preview` no tiene otra.
+            let season = try await repositories.seasons.findForLink(
+                federationSeasonID: coordinate.federationSeasonID,
+                label: calendar.seasonLabel)
             // **Sin temporada no puede haber competición** (§3.5): la fila se
             // identifica por `season_id` **+** `federation_group_id`, así que
             // preguntar sin lo primero no tiene sentido — y la respuesta ya se
