@@ -106,6 +106,10 @@ public enum TenantMigrations {
             // `team_registrations`, con sus `CHECK`, su `UNIQUE` y los datos. Al
             // final de lo que altera, que es su único requisito de orden ([D-90]).
             MoveOwnTeamCodeToRegistration(),
+            // `D-104`: el rival pasa a ser de una temporada — la columna, los
+            // datos, el `CHECK` y las dos claves únicas rehechas. Al final de lo
+            // que altera, que es su único requisito de orden ([D-90]).
+            AddSeasonToOpponentTeams(),
         ]
     }
 }

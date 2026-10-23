@@ -784,24 +784,50 @@ struct FederationLinkTests {
         }
     }
 
-    /// **Y el rival que ya lleva ese código, también** (`C-E.10`): es el
-    /// desenlace normal de enganchar tarde, y no cambia con `D-101`.
-    @Test("el código de un rival se rechaza, como antes (C-E.10)")
+    /// **Y el rival de esta temporada que ya lleva ese código, también**
+    /// (`C-E.10`): es el desenlace normal de enganchar tarde, y no cambia con
+    /// `D-101` ni con `D-104`.
+    @Test("el código de un rival de esta temporada se rechaza, como antes (C-E.10, D-104)")
     func anOpponentsCodeIsTaken() async throws {
         let team = try Fixture.team()
-        let rival = try Team(
-            id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
-            category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
-            federationTeamID: "3349086", createdAt: Fixture.now, updatedAt: Fixture.now)
+        let season = try Fixture.season(federationSeasonID: "21")
+        let rival = try Self.rival(seasonID: season.id)
         let store = IngestionStore()
         await store.seed(club: try Fixture.club())
-        await store.seed(teams: [team, rival])
+        await store.seed(seasons: [season], teams: [team, rival])
 
         await #expect(throws: DomainError.federationTeamIDTaken(
             code: "3349086", owner: "\(rival.id)")) {
             try await Self.useCase(store: store, federation: Self.client())
                 .execute(try Self.request(teamID: team.id), actor: Self.actor)
         }
+    }
+
+    /// **El rival del año pasado con ese código no bloquea** (`D-104`): es otra
+    /// fila, de otra temporada. Antes de `D-104` el club no podía enganchar la
+    /// plaza que un rival había tenido la temporada anterior.
+    @Test("el código de un rival de otra temporada no bloquea el enganche (D-104)")
+    func anOpponentsCodeFromAnotherSeasonIsFree() async throws {
+        let team = try Fixture.team()
+        let last = try Fixture.season("2024/25", federationSeasonID: "20")
+        let rival = try Self.rival(seasonID: last.id)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [last], teams: [team, rival])
+
+        _ = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        let registrations = await store.teamRegistrations
+        #expect(registrations.contains { $0.teamID == team.id && $0.federationTeamID == "3349086" })
+    }
+
+    static func rival(seasonID: SeasonID) throws -> Team {
+        try Team(
+            id: TeamID(raw: UUID()), opponentClubID: OpponentClubID(raw: UUID()),
+            seasonID: seasonID,
+            category: .cadete, letter: "A", gender: .masculino, modality: .futbol11,
+            federationTeamID: "3349086", createdAt: Fixture.now, updatedAt: Fixture.now)
     }
 
     static func match(_ id: String, date: Date) -> FederationMatch {

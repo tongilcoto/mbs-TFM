@@ -127,6 +127,8 @@ struct SeasonRegistrationEndpointTests {
                 #expect(team.modality.value1 == .futbol_11)
                 #expect(team.opponentClubId == nil)
                 #expect(team.federationTeamId == nil)
+                // `D-104`: un propio no tiene temporada; la suya va en la inscripción.
+                #expect(team.seasonId == nil)
                 #expect(team.isOwn)
                 #expect(team.clubName == "SEASREGCLUB")
                 #expect(team.displayName == "SEASREGCLUB Cadete B")

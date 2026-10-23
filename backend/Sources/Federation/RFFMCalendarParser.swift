@@ -127,8 +127,21 @@ public enum RFFMCalendarParser {
             date: try RFFMValue.matchDate(raw.fecha),
             kickoff: try RFFMValue.kickoff(raw.hora),
             venue: RFFMValue.venue(raw.campo),
-            venueCode: raw.codigoCampo.flatMap { $0.isEmpty ? nil : $0 }
+            venueCode: raw.codigoCampo.flatMap { $0.isEmpty ? nil : $0 },
+            isRestDay: isPlaceholder(raw.codigoEquipoLocal)
+                || isPlaceholder(raw.codigoEquipoVisitante)
         )
+    }
+
+    /// **El equipo ficticio de la jornada de descanso** (`D-105`). En un grupo
+    /// impar, la RFFM empareja cada jornada al que descansa con «Equipo Casa
+    /// (No asignado)» o «Equipo Fuera (No asignado)», con código `-1`, sin
+    /// escudo y sin fecha. Medido en el alevín de 2026/27: 26 jornadas, un
+    /// descanso en cada una.
+    static let placeholderCode = "-1"
+
+    private static func isPlaceholder(_ code: String?) -> Bool {
+        code == placeholderCode
     }
 
     private static func team(
@@ -136,7 +149,11 @@ public enum RFFMCalendarParser {
     ) -> FederationTeamRef {
         let split = RFFMValue.teamName(name ?? "")
         return FederationTeamRef(
-            federationTeamID: id.flatMap { $0.isEmpty ? nil : $0 },
+            // El `-1` del ficticio **no es un código** (`D-105`): es el mismo en
+            // todos los grupos, y como clave casaría el ficticio de una
+            // categoría con el de otra. Sin él, el ficticio se reconoce por su
+            // nombre, su categoría y su temporada, como cualquier rival sin código.
+            federationTeamID: id.flatMap { $0.isEmpty || isPlaceholder($0) ? nil : $0 },
             name: split.name,
             letter: split.letter,
             // Entero, con la `'B'`: es lo que enseña el `/preview` (§F.5).

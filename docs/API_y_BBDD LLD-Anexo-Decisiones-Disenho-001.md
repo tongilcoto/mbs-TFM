@@ -70,6 +70,8 @@
 | **D-82**               | El slug del club rival se deriva del nombre, mecánicamente y sin diccionario                                                  | §3.2, §3.5                         |
 | **D-85**               | El registro de las pasadas de ingesta es una tabla, y se escribe fuera de su transacción                                      | §3.2, §3.3, §3.5, §5.6             |
 | **D-101**              | El código de la federación es de la inscripción del equipo en la competición, no del equipo                                   | §3.2, §3.5, §3.7, §5.1             |
+| **D-104**              | El equipo rival es de una temporada; el propio no                                                                             | §3.2, §3.5, §3.7, §5.1             |
+| **D-105**              | La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada                                     | §3.7                               |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -683,6 +685,9 @@ esquema.
 
 > **Enmendado por [D-101].** La razón de la fila `Team` se queda —el equipo no lleva `season_id`—, pero el
 > código de la federación ya no vive en él: es de la inscripción del equipo en cada competición.
+>
+> **Enmendado por [D-104].** Solo para el **rival**: su letra y su código son los de una temporada, así que
+> lleva `season_id` como identidad, no como atajo. El equipo propio sigue sin temporada.
 
 **Por qué el último caso no es [D-04].** Allí se denormalizaron los `team_id` de `Goal` porque el *join* era
 contra la tabla **grande** y estaba en el camino caliente de **todas** las consultas de desglose. Aquí el
@@ -4442,6 +4447,10 @@ Se apunta una vez, en el enganche (que es lo que lanza la primera ingesta), y ya
    IS NULL)`, y la misma regla en el `init` del Dominio. **Los rivales sí lo siguen llevando en `Team`**: no
    se inscriben ([D-68]), y para nosotros un rival es exactamente la plaza que publica la federación. Su
    `UNIQUE` se queda.
+
+   > **Enmendado por [D-104].** El rival lo sigue llevando en `Team`, pero cada fila de rival es **de una
+   > temporada** (`teams.season_id`), y el `UNIQUE` pasa a ser por temporada: la plaza cambia de letra, y a
+   > veces de código, de un año a otro.
 4. **El enganche** escribe el código en la inscripción de esa competición, no en el equipo. La regla de
    [D-67] se mantiene, pero **por competición**: otro código en la **misma** competición sigue siendo **409
    `ALREADY_LINKED_TO_FEDERATION`**; en otra competición o en otra temporada, no. `FEDERATION_TEAM_ID_TAKEN`
@@ -4462,6 +4471,7 @@ La FCF no lo ha confirmado, y en la RFFM no está medido.
 - **Un equipo rival al que la federación cambia la letra se queda con la vieja**, porque la letra es
   identidad ([D-77]) y la ingesta no la toca. No rompe el emparejamiento, que va por código. **Queda
   abierto**, y no es de esta decisión.
+  > **Resuelto por [D-104].** Cada temporada el rival tiene su propia fila, con la letra de ese año.
 - **Reclamar un rival como propio** (`PUT /teams/{teamId}/ownership`, sin fase) tendrá que mover su código
   a la inscripción. Lo hará quien programe esa operación; el `CHECK` le obliga a no olvidarlo.
 - **`Team.federationTeamId` del contrato** vale siempre `null` en un equipo propio. El código del equipo
@@ -4565,6 +4575,148 @@ en curso la 2027/28, que no empieza hasta julio de 2027.
 
 **Enmienda** al LLD §3.2 (fila `Season`) y a las descripciones de `SeasonResponse.isCurrent` y
 `RoundResponse.isCurrent` del catálogo.
+
+---
+
+### D-104 · El equipo rival es de una temporada; el propio no
+
+**Lo que lo obligó a decidirse** (2026-10-20 y 21, al revisar la tabla `teams` antes de la rebanada 2 del
+backoffice). [D-101] sacó el código de la federación del equipo propio y lo llevó a la inscripción, que tiene
+temporada y competición. Pero dejó **el del rival en `teams`**, que no tiene temporada, con este argumento:
+*«para nosotros un rival es exactamente la plaza que publica la federación»*. El problema es que la plaza
+cambia de letra, y a veces de código, de una temporada a otra. Con el ejemplo de Granollers de [D-101]:
+
+- **Caso 1 · Código nuevo, misma letra.** La ingesta no reconoce el código y busca por club, categoría y
+  letra. Casaba con la fila vieja aunque esa fila tuviera **otro** código y, como [D-76] no pisa un código
+  guardado, el nuevo no entraba nunca: el rival se quedaba emparejado por nombre para siempre. **Era un fallo
+  de la cadena, no del modelo**, y se arregló aparte (commit `cd8c256`): el paso 2 de equipos ya no acepta un
+  candidato con otro código, igual que el de clubes. Se comprobó con un test que salía en rojo.
+- **Caso 2 · La federación intercambia los códigos del A y el B.** En 26/27 el `33712` pasa a ser el A y el
+  `33710` el B. La ingesta reconoce por código, así que los partidos del `33712` van a la fila del `33712`:
+  **es la misma plaza y son sus partidos**. Lo que queda mal es la letra: la fila sigue diciendo «B» cuando
+  la federación ya la llama «A». Es el hueco que [D-101] dejó abierto en «Lo que se asume a cambio».
+- **Caso 3 · Código y nombre nuevos.** La ingesta no encuentra la fila y crea otra con el mismo club,
+  categoría y letra, que choca con la clave única `uq_teams_identity`. **Deducido, no medido.**
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| A — El rival es su código, y la letra va por competición | Una tabla nueva «rival en la competición», simétrica con la inscripción | Descartada: un rival **sin código** (la ingesta los admite) solo se reconoce por club y letra, justo lo que pasaría a variar; y `GET /v1/teams/{id}` de un rival no sabría qué letra devolver sin temporada. Además, en `teams` no hay nombre que mover: se forma con el club, la categoría y la letra |
+| **B — Un rival por temporada** | `teams.season_id` en los rivales; cada temporada, filas nuevas | **Elegida** |
+| C — La ingesta reescribe letra y código del rival | El cambio más pequeño | Descartada: el historial de temporadas pasadas mostraría la letra de hoy, y en el intercambio del caso 2 la clave única rechaza la primera fila a mitad de la pasada, porque la otra aún tiene ese código |
+
+El desarrollador lo precisó así: **si el propio no lleva código en `teams`, tampoco lleva temporada.** Su
+temporada y su código ya van, siempre, en la inscripción ([D-68], [D-101]).
+
+**Decisión: B.**
+
+1. **`teams.season_id`**, con clave ajena a `seasons`. **Obligatoria en el rival y vacía en el propio**:
+   `CHECK ((opponent_club_id IS NULL) = (season_id IS NULL))`, y la misma regla en el `init` del Dominio.
+   La clave ajena es **en cascada**: borrar una temporada ([D-24]) ya se lleva sus competiciones y sus
+   partidos, y con ellos sobran sus rivales. *(Añadido al programarla: el esquema de esta entrada no lo
+   decía.)*
+2. **Las dos claves únicas ganan la temporada.** La del código pasa de `UNIQUE (federation_team_id)` a
+   `UNIQUE (season_id, federation_team_id)`. La de identidad, `uq_teams_identity`, pasa a ser (temporada,
+   club, categoría, letra, género, modalidad), sin cambiar su `NULLS NOT DISTINCT`. En los propios la
+   temporada es nula en todas las filas, así que entre ellos la clave sigue funcionando igual que hoy.
+3. **La ingesta** busca rivales solo entre los de la temporada de la competición que recorre, más los
+   propios, y los crea con esa temporada. **Nunca reescribe la fila de otra temporada.** Vale para el
+   calendario y para la clasificación.
+4. **El enganche.** `FEDERATION_TEAM_ID_TAKEN` salta si el código lo tiene un rival **de esa temporada**. Un
+   rival del año pasado con el mismo código ya no bloquea.
+5. **La API.** La respuesta del equipo gana **`seasonId`**, de solo lectura: vacío en el propio y relleno en
+   el rival. Sin él, la web no sabe de qué temporada es cada uno de los dos «Granollers A». Cambian también
+   los textos de `federationTeamId` y de `FEDERATION_TEAM_ID_TAKEN`. `GET /v1/teams?seasonId=` devuelve lo
+   mismo; por dentro, los rivales salen de la columna en vez de buscarlos por sus partidos.
+6. **La migración** es nueva ([D-90]). Pone a cada rival la temporada de las competiciones donde aparece,
+   por sus partidos o por su clasificación. Al rival que **nada referencia** lo borra: no hay de dónde sacar
+   su temporada, y si vuelve a aparecer la ingesta lo crea con la suya. Si encuentra un rival con partidos
+   de **varias** temporadas, **se para** en vez de repartirlos: hoy no existe ninguno, porque solo hay una
+   temporada cargada, y a partir de esta migración no puede nacer otro.
+
+**Por qué la temporada y no la competición**, al revés que [D-101]. El propio lleva el código por
+competición porque ya tenía una fila por competición, la inscripción. El rival no se inscribe, y lo que
+cambia la federación cambia **de una temporada a otra**, no entre la liga y la copa. Una fila por
+competición repetiría el rival en cada torneo del año sin que nada lo pida.
+
+**Por qué no contradice a [D-28].** D-28 negó la columna a `Team` porque la temporada era un **atajo** y el
+equipo era la misma entidad año tras año. Para el propio eso sigue siendo cierto. Para el rival ha dejado de
+serlo: su letra y su código son los de una temporada, así que la temporada es **identidad**, que es
+exactamente el criterio con el que D-28 se la dio a `Player`.
+
+**Lo que se asume a cambio.**
+
+- **Filas nuevas cada temporada**: unas 20 por competición. Es la tabla más pequeña del modelo.
+- **El hilo de un rival entre temporadas no tiene fila propia.** Se reconstruye por el código, que no cambia
+  para la misma plaza ([D-101], [D-84]), o por el club rival, que no tiene temporada.
+- **Reclamar un rival como propio** (`PUT /teams/{teamId}/ownership`, sin programar) tendrá que vaciar su
+  temporada además de mover su código a la inscripción. El `CHECK` le obliga a no olvidarlo.
+
+**Hecho** el 2026-10-21, en tres commits detrás del arreglo del caso 1: esta entrada; el modelo y la migración
+`AddSeasonToOpponentTeams` (la columna, los datos, el `CHECK` y las dos claves únicas), y la ingesta, la
+clasificación, el enganche y `TeamResponse.seasonId`. Probada contra la base de trabajo: los 29 rivales con su
+temporada y el ficticio, borrado. 682 → **697 tests**, junto con [D-105]; **16/16 mutaciones**
+(`Tools/Mutate/Catalogs/D-104.json`, con la del caso 1). Y una comprobación que no estaba prevista: §3.7 ya pedía
+que el paso 2 descartara al candidato cuya clave contradice, para equipos y para clubes. El caso 1 era código
+que no cumplía el diseño, no un hueco del diseño.
+
+**Enmienda** a [D-101] (punto 3 y «Lo que se asume a cambio», primer punto, que queda resuelto) y a [D-28]
+(fila `Team`, `OpponentClub`): el propio sigue sin temporada; el rival, ya no.
+
+---
+
+### D-105 · La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada
+
+**Lo que lo obligó a decidirse** (2026-10-21, al revisar la tabla `teams` para [D-104]). En un grupo impar
+la federación empareja cada jornada al equipo que descansa con uno **ficticio**: «Equipo Casa (No asignado)»
+o «Equipo Fuera (No asignado)», con código `-1`, sin escudo y sin fecha. Medido en el alevín de 2026/27
+(`temporada=22&competicion=26737859&grupo=27325582`): 26 jornadas, un descanso en cada una. El [Anexo RFFM
+§F.11] ya lo había visto y decía solo «tolerarlo». Lo que hacía la ingesta:
+
+- **Creaba un rival con el ficticio**, código `-1`. La migración de [D-104] lo borró, porque no tenía partidos.
+- **Descartaba el partido como «sin fecha»** (`missingMatchDate`): 26 descartes por pasada, todos falsas
+  alarmas, en el registro que existe para contestar «¿por qué falta esto?» ([D-85]).
+- **Con [D-104], el `-1` habría chocado**: el código del rival es único en su temporada, y el ficticio del
+  alevín y el del cadete llevan el mismo. Peor aún: el paso 1 de la cadena casaría el descanso de una
+  categoría con el ficticio de la otra.
+
+Y el dato importa: **quién descansa en cada jornada** es algo que la web tiene que poder enseñar.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) El adaptador quita esos partidos del calendario | Ni rival fantasma ni falsas alarmas | Descartada por el desarrollador: se pierde quién descansa |
+| (b) Una tabla de descansos (jornada, equipo) | `teams` y `matches` limpios | Descartada por el desarrollador: otra tabla para un dato que cabe en `matches` |
+| (c) `matches` admite un lado vacío y fecha vacía | Sin ficticio | Descartada: cambia el esquema y la API, y cada lectura de partidos tiene que conocer el partido cojo |
+| **(d) El descanso es un partido contra el ficticio, que es un rival más** | Sin cambio de esquema | **Elegida** |
+
+**Decisión: (d).**
+
+1. **El adaptador de la RFFM lo reconoce** (por el código `-1`) y marca el partido como descanso
+   (`FederationMatch.isRestDay`). Es suyo porque es una costumbre de la RFFM, no de nuestro modelo ([D-97]).
+2. **El `-1` no llega como código**: el adaptador lo quita. El ficticio se reconoce entonces por su nombre,
+   su categoría y su temporada, como cualquier rival sin código. Sale uno por categoría y temporada, por cada
+   nombre («Casa» y «Fuera»), cada uno con su club ficticio.
+3. **El partido toma la fecha del primer día de su jornada**, y sin hora: la hora queda sin confirmar, como en
+   cualquier partido al que la federación aún no se la ha puesto. Las fechas de la jornada salen de sus
+   otros partidos ([D-81]). **Un partido normal sin fecha sigue sin guardarse**: la fecha de la jornada solo
+   se presta al descanso, y para un partido de verdad sería inventarla ([D-75]).
+
+**Lo que se asume a cambio.**
+
+- **El ficticio aparece donde se listan los equipos de un grupo**: la composición de la competición sale de
+  sus partidos ([D-27]), y el `/preview` del enganche lo ofrece entre los equipos del calendario. La web solo
+  pinta partidos, y ahí es justo lo que se quiere ver.
+- **Una lectura que busque «el próximo partido»** de un equipo puede dar su descanso. Lo decidirá la pantalla
+  que lo necesite.
+- **La fecha del descanso no la publica la federación.** Es la de su jornada, y se mueve con ella.
+- **Al crear el ficticio, el registro apunta una vez que es «un equipo sin código»** (`unidentifiedTeam`).
+  Es cierto, y sale una vez por ficticio y temporada, no en cada pasada.
+
+**Hecho el mismo día** (2026-10-21): adaptador, pasada del calendario y tests del adaptador (con los dos
+partidos de la jornada 1 del alevín, copiados de la RFFM) y de la pasada (el descanso con su fecha, el
+partido normal sin fecha que sigue fuera, y un ficticio por categoría). Los tests del descanso salen en rojo
+sin el arreglo. **4/4 mutaciones** (`Tools/Mutate/Catalogs/D-105.json`).
+
+**Enmienda** a la fila `"(No asignado)"` del [Anexo RFFM §F.11].
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4706,5 +4858,7 @@ en curso la 2027/28, que no empieza hasta julio de 2027.
 [D-101]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-104]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

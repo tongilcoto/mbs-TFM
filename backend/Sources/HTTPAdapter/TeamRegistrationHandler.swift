@@ -59,6 +59,8 @@ extension Domain.Team {
             gender: .init(value1: gender.toContract()),
             modality: .init(value1: modality.toContract()),
             opponentClubId: nil,
+            // Un propio no tiene temporada (`D-104`): la suya es la de la inscripción.
+            seasonId: seasonID.map { "\($0)" },
             federationTeamId: federationTeamID,
             isOwn: isOwn,
             clubName: club.shortName,

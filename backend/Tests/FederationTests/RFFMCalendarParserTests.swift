@@ -216,6 +216,48 @@ struct RFFMCalendarParserTests {
         }
     }
 
+    /// **La jornada de descanso** (`D-105`). Los dos partidos son los de la
+    /// jornada 1 del alevín de 2026/27, copiados tal cual de la RFFM el
+    /// 2026-10-21 (`temporada=22&competicion=26737859&grupo=27325582`): uno
+    /// normal y el de descanso, con el ficticio de visitante.
+    @Test("el partido contra el ficticio es un descanso, y su -1 no llega como código (D-105)")
+    func theRestDayIsMarkedAndItsPlaceholderHasNoCode() throws {
+        let page = #"""
+            <script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"calendar":{"estado":"1","competicion":\#
+            "PRIMERA ALEVIN","grupo":"Grupo 1","temporada":"2026-2027",\#
+            "host":"https://appweb.rffm.es/","rounds":[{"codjornada":"1","jornada":"1 (19-09-2026)",\#
+            "equipos":[\#
+            {"codacta":"5670185","codigo_equipo_local":"1031212","escudo_equipo_local":"",\#
+            "equipo_local":"A.D. ALHONDIGA 'B'","goles_casa":"","codigo_equipo_visitante":"8956090",\#
+            "escudo_equipo_visitante":"","equipo_visitante":"C.D. CHAMBERI DE MADRID 'B'",\#
+            "goles_visitante":"","codigo_campo":"103","campo":"","fecha":"19-09-2026","hora":""},\#
+            {"codacta":"5670186","codigo_equipo_local_externo":"","codigo_equipo_visitante_externo":"",\#
+            "codigo_equipo_local":"8956086","escudo_equipo_local":"/pnfg/pimg/Clubes/00100_0014267176_CHAMBERI.png",\#
+            "equipo_local":"C.D. CHAMBERI DE MADRID 'A'","goles_casa":"","codigo_equipo_visitante":"-1",\#
+            "escudo_equipo_visitante":"","equipo_visitante":"Equipo Fuera (No asignado)",\#
+            "goles_visitante":"","codigo_campo":"103","campo":"","fecha":"","hora":""}]}]}}}}
+            </script>
+            """#
+
+        let matches = try RFFMCalendarParser.parse(page).rounds[0].matches
+
+        #expect(matches[0].isRestDay == false)
+        let rest = matches[1]
+        #expect(rest.isRestDay)
+        #expect(rest.date == nil)
+        #expect(rest.away.federationTeamID == nil, "el -1 casaría el ficticio de una categoría con el de otra")
+        #expect(rest.away.rawName == "Equipo Fuera (No asignado)")
+        #expect(rest.home.federationTeamID == "8956086", "el equipo que descansa conserva su código")
+    }
+
+    /// Y el volcado real de una temporada entera no tiene ninguno: el grupo es
+    /// par.
+    @Test("un grupo par no tiene jornadas de descanso (D-105)")
+    func anEvenGroupHasNoRestDays() throws {
+        #expect(try parse().rounds.flatMap(\.matches).allSatisfy { !$0.isRestDay })
+    }
+
     /// El segundo disfraz de lo mismo, y **peor**: con una `temporada`
     /// inexistente la RFFM devuelve `200` y **el calendario entero de otra
     /// temporada**, con `temporada` vacía. Es decir, ignora el parámetro.

@@ -407,6 +407,13 @@ public struct FederationMatch: Equatable, Sendable {
     /// a *"un campo sin lector no se transporta"*.
     public let venueCode: String?
 
+    /// **Una jornada de descanso** (`D-105`): en un grupo impar, la federación
+    /// empareja cada jornada al que descansa con un equipo **ficticio**, sin
+    /// fecha. Lo sabe el adaptador, que es quien conoce cómo lo escribe su
+    /// federación (`D-97`); la ingesta guarda el partido con la fecha de su
+    /// jornada, para que se vea quién descansa.
+    public let isRestDay: Bool
+
     public init(
         federationMatchID: String?,
         home: FederationTeamRef,
@@ -416,7 +423,8 @@ public struct FederationMatch: Equatable, Sendable {
         date: Date?,
         kickoff: WallClockTime?,
         venue: String?,
-        venueCode: String?
+        venueCode: String?,
+        isRestDay: Bool = false
     ) {
         self.federationMatchID = federationMatchID
         self.home = home
@@ -427,6 +435,7 @@ public struct FederationMatch: Equatable, Sendable {
         self.kickoff = kickoff
         self.venue = venue
         self.venueCode = venueCode
+        self.isRestDay = isRestDay
     }
 }
 

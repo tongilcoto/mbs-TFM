@@ -624,7 +624,7 @@ struct IngestCalendarTests {
             federationClubID: "0011078749",
             createdAt: Date(), updatedAt: Date())
         let rival = try Team(
-            id: TeamID(raw: UUID()), opponentClubID: renamed.id,
+            id: TeamID(raw: UUID()), opponentClubID: renamed.id, seasonID: season.id,
             category: .cadete, letter: "B", gender: .masculino, modality: .futbol11,
             federationTeamID: "304468", createdAt: Date(), updatedAt: Date())
 
@@ -1368,6 +1368,207 @@ struct IngestCalendarTests {
                 }),
             clock: FixedClock(instant: syncInstant),
             ids: SequentialUUIDProvider())
+    }
+
+    // ── D-104 · el rival es de una temporada ─────────────────────────────────
+
+    /// Los dos rivales de Granollers **de la temporada anterior**: el `33710`
+    /// era el A y el `33712` el B.
+    static func granollersLastSeason(
+        club: OpponentClubID, codes: Bool = true
+    ) throws -> (season: Season, a: Team, b: Team) {
+        let last = try Season(
+            id: SeasonID(raw: UUID()), label: try SeasonLabel("2024/25"),
+            federationSeasonID: "20", createdAt: Date(), updatedAt: Date())
+        func rival(_ letter: String, _ code: String) throws -> Team {
+            try Team(
+                id: TeamID(raw: UUID()), opponentClubID: club, seasonID: last.id,
+                category: .cadete, letter: letter, gender: .masculino, modality: .futbol11,
+                federationTeamID: codes ? code : nil, createdAt: Date(), updatedAt: Date())
+        }
+        return (last, try rival("A", "33710"), try rival("B", "33712"))
+    }
+
+    static func granollers() throws -> OpponentClub {
+        try OpponentClub(
+            id: OpponentClubID(raw: UUID()), name: "E.C. GRANOLLERS",
+            shortName: "Granollers", slug: try Slug("e-c-granollers"),
+            federationClubID: "0013000001", createdAt: Date(), updatedAt: Date())
+    }
+
+    /// **El caso 2 de `D-104`**: de una temporada a otra, la federación
+    /// intercambia los códigos del A y el B. La pasada de la temporada nueva
+    /// crea **dos filas nuevas**, con la letra de este año, y no toca las del
+    /// año pasado. Antes de `D-104` casaba por código con las viejas, y los
+    /// partidos del A salían con la letra B.
+    @Test("con los códigos del A y el B intercambiados, la temporada nueva tiene sus propias filas (D-104)")
+    func swappedCodesGetNewRowsInTheNewSeason() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let club = try Self.granollers()
+        let last = try Self.granollersLastSeason(club: club.id)
+
+        let store = IngestionStore()
+        await store.seed(seasons: [last.season], teams: [last.a, last.b])
+        await store.seed(opponentClubs: [club])
+        let calendar = try Self.calendar(matches: [
+            Self.match(
+                federationMatchID: "1",
+                away: Self.teamRef(
+                    id: "33712", name: "E.C. GRANOLLERS", letter: "A", club: "0013000001")),
+            Self.match(
+                federationMatchID: "2",
+                home: Self.teamRef(
+                    id: "33710", name: "E.C. GRANOLLERS", letter: "B", club: "0013000001")),
+        ])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar, store: store)
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let teams = await store.teams.filter { $0.opponentClubID == club.id }
+        let thisSeason = teams.filter { $0.seasonID == season.id }
+        #expect(Set(thisSeason.map { "\($0.federationTeamID ?? "-")=\($0.letter ?? "-")" })
+                == ["33712=A", "33710=B"])
+        // Las del año pasado, intactas.
+        #expect(teams.first { $0.id == last.a.id } == last.a)
+        #expect(teams.first { $0.id == last.b.id } == last.b)
+        // Y los partidos de esta temporada apuntan a las filas de esta temporada.
+        let newIDs = Set(thisSeason.map(\.id))
+        let matches = await store.matches
+        #expect(matches.count == 2)
+        #expect(matches.allSatisfy { newIDs.contains($0.homeTeamID) || newIDs.contains($0.awayTeamID) })
+    }
+
+    /// **El rival sin código** (`F9-bis`) solo se reconoce por club, categoría y
+    /// letra, que es justo lo que cambia de un año a otro. Por eso busca solo
+    /// en su temporada: el Granollers A del año pasado no es el de éste.
+    @Test("un rival sin código no casa por nombre con el de otra temporada (D-104)")
+    func aCodelessOpponentIsNotReusedAcrossSeasons() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let club = try Self.granollers()
+        let last = try Self.granollersLastSeason(club: club.id, codes: false)
+
+        let store = IngestionStore()
+        await store.seed(seasons: [last.season], teams: [last.a, last.b])
+        await store.seed(opponentClubs: [club])
+        let calendar = try Self.calendar(matches: [
+            Self.match(
+                away: Self.teamRef(
+                    id: nil, name: "E.C. GRANOLLERS", letter: "A", club: "0013000001"))
+        ])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar, store: store)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let granollersA = await store.teams.filter {
+            $0.opponentClubID == club.id && $0.letter == "A"
+        }
+        #expect(granollersA.count == 2)
+        #expect(granollersA.contains { $0.seasonID == season.id })
+        #expect(report.matchesCreated == 1)
+    }
+
+    // ── D-105 · la jornada de descanso es un partido contra el ficticio ──────
+
+    /// La jornada 1 de un grupo impar: un partido normal y el de descanso, tal
+    /// como los deja el adaptador (el ficticio sin código, sin fecha).
+    static func roundWithRestDay() throws -> FederationCalendar {
+        try Self.calendar(matches: [
+            Self.match(federationMatchID: "5670185", date: Self.date("20-09-2025")),
+            FederationMatch(
+                federationMatchID: "5670186",
+                home: Self.teamRef(
+                    id: "8956086", name: "C.D. CHAMBERI DE MADRID", letter: "A", club: "0014267176"),
+                away: Self.teamRef(
+                    id: nil, name: "Equipo Fuera (No asignado)", letter: nil, club: nil),
+                homeScore: nil, awayScore: nil, date: nil, kickoff: nil,
+                venue: nil, venueCode: "103", isRestDay: true),
+        ])
+    }
+
+    /// **El descanso se guarda**, con la fecha del primer día de su jornada y
+    /// sin hora, y el ficticio queda como un rival más de esta temporada. Así
+    /// la web ve en cada jornada quién descansa.
+    @Test("el partido de descanso se guarda con la fecha de su jornada, contra el ficticio (D-105)")
+    func theRestDayIsStoredWithItsRoundDate() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.roundWithRestDay())
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        #expect(report.matchesCreated == 2)
+        #expect(!report.skipped.contains { $0.reason == .missingMatchDate })
+        let teams = await store.teams
+        let clubs = await store.opponentClubs
+        let placeholderClub = try #require(clubs.first { $0.name == "Equipo Fuera (No asignado)" })
+        let placeholder = try #require(teams.first { $0.opponentClubID == placeholderClub.id })
+        #expect(placeholder.federationTeamID == nil)
+        #expect(placeholder.seasonID == season.id)
+        let rest = try #require(await store.matches.first { $0.awayTeamID == placeholder.id })
+        #expect(rest.kickoff.date == Self.date("20-09-2025"))
+        #expect(rest.kickoff.time == nil)
+    }
+
+    /// **Un partido sin fecha que no es descanso sigue sin guardarse**: la
+    /// fecha de la jornada solo se presta al descanso. Inventarla para un
+    /// partido de verdad es lo que `D-75` prohíbe.
+    @Test("un partido normal sin fecha no toma la de su jornada (D-105, D-75)")
+    func aNormalMatchWithoutDateIsStillSkipped() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let calendar = try Self.calendar(matches: [
+            Self.match(federationMatchID: "1", date: Self.date("20-09-2025")),
+            Self.match(
+                federationMatchID: "2",
+                home: Self.teamRef(id: "8956086", name: "C.D. CHAMBERI DE MADRID", letter: "A", club: nil),
+                date: nil),
+        ])
+        let (useCase, _, _) = await Self.pass(
+            competition: competition, season: season, calendar: calendar)
+
+        let report = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        #expect(report.matchesCreated == 1)
+        #expect(report.skipped.contains { $0.reason == .missingMatchDate })
+    }
+
+    /// **El ficticio es uno por categoría**: sin el `-1`, el del alevín y el
+    /// del cadete de la misma temporada son dos filas, y la pasada del cadete
+    /// no le apunta su descanso al ficticio del alevín.
+    @Test("el ficticio de una categoría no es el de otra en la misma temporada (D-105)")
+    func eachCategoryHasItsOwnPlaceholder() async throws {
+        let season = try Self.season()
+        let cadete = try Self.competition(seasonID: season.id)
+        let alevin = try Self.competition(seasonID: season.id, ageCategory: .alevin)
+        let store = IngestionStore()
+        await store.seed(competitions: [alevin])
+
+        for competition in [cadete, alevin] {
+            let (useCase, _, _) = await Self.pass(
+                competition: competition, season: season,
+                calendar: try Self.roundWithRestDay(), store: store)
+            _ = try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        }
+
+        let clubs = await store.opponentClubs
+        let placeholderClub = try #require(clubs.first { $0.name == "Equipo Fuera (No asignado)" })
+        let placeholders = await store.teams.filter { $0.opponentClubID == placeholderClub.id }
+        #expect(Set(placeholders.map(\.category)) == [.cadete, .alevin])
     }
 }
 

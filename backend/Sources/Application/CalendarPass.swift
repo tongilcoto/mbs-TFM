@@ -69,7 +69,10 @@ final class CalendarPass {
         self.ids = ids
         self.now = now
         self.clubs = try await repositories.opponentClubs.list()
+        // `D-104`: los propios y los rivales de **esta** temporada. El de otra
+        // es otra fila, aunque lleve el mismo código.
         self.teams = try await repositories.teams.list()
+            .filter { $0.counts(in: competition.seasonID) }
         self.rounds = try await repositories.rounds.list(competitionID: competition.id)
         self.matches = try await repositories.matches.list(competitionID: competition.id)
         self.ownCodes = Dictionary(
@@ -165,7 +168,8 @@ final class CalendarPass {
         // fuente vuelva a decir la fecha. Y es el precio de no tener que decidir
         // aquí si un partido sin fecha es una fila nueva o una que ya está: sin
         // fecha no hay `INSERT` posible, así que el `UPDATE` tampoco se intenta.
-        guard let date = federationMatch.date else {
+        guard let date = federationMatch.date ?? restDayDate(federationMatch, roundID: roundID)
+        else {
             report.skipped.append(IngestionSkip(
                 reason: .missingMatchDate, detail: describe(federationMatch)))
             return
@@ -256,6 +260,19 @@ final class CalendarPass {
     /// - Returns: `nil` si la jornada no tiene **ninguna** fecha con la que
     ///   calcular su rango. Sus partidos se caen con ella, y cada uno se reporta
     ///   por su cuenta.
+    /// **La fecha de una jornada de descanso** (`D-105`): la federación no la
+    /// publica, y el partido se guarda para que se vea quién descansa. Toma el
+    /// primer día de su jornada, que sale de los otros partidos (`D-81`). Sin
+    /// hora, así que la hora queda sin confirmar, como en cualquier partido al
+    /// que la federación aún no se la ha puesto.
+    ///
+    /// Un partido normal sin fecha sigue sin ella: inventarla es lo que `D-75`
+    /// prohíbe.
+    private func restDayDate(_ federationMatch: FederationMatch, roundID: RoundID) -> Date? {
+        guard federationMatch.isRestDay else { return nil }
+        return rounds.first { $0.id == roundID }?.startDate
+    }
+
     private func resolveRound(_ federationRound: FederationRound) async throws -> RoundID? {
         let span = Round.span(ofMatchDates: federationRound.matches.compactMap(\.date))
 
@@ -369,6 +386,8 @@ final class CalendarPass {
             // produzca un equipo propio, y ésa es la mitad de la regla sin la
             // cual la otra —que `Team` tenga `POST`— no se sostiene.
             opponentClubID: clubID,
+            // `D-104`: el rival es de la temporada de la competición que se pasa.
+            seasonID: competition.seasonID,
             // Las tres que la fuente no publica, prestadas por la competición
             // (`D-07`, `D-58`). Las tres entran en la clave única de §3.5.
             category: competition.ageCategory,
