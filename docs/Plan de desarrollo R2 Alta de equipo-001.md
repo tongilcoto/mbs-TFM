@@ -446,7 +446,7 @@ Con el método del backend (§5).
 |---|---|---|
 | **R2.1** | ✅ 2026-10-23 (`a9eea44`) | `D-106` en la bitácora, con su fila en el índice, su enlace y las notas «Enmendado por [D-106]» en el paso 1 de la cascada de `D-67` y en la consecuencia 2 de `D-68`. Revisado por el desarrollador |
 | **R2.2** | ✅ 2026-10-23 | El plan escrito (`9ce3c33`) y sus decisiones 2 a 6 revisadas una a una con el desarrollador. Lo que cambió en la revisión: el ejemplo del catálogo en el mensaje del formato (2); cómo llega el catálogo a la web y qué supone para el despliegue (3); el botón al lado del selector, no dentro (4); el orden para elegir la temporada, con el vacío primero, y el formulario fuera del historial (5); y **el alta de un equipo que ya existe en otra temporada lo inscribe** (6), que pide `D-107` y un paso nuevo, R2.3: los pasos pasan de 16 a 17. Se diseña como si la rebanada 11 estuviera hecha |
-| **R2.3** | | |
+| **R2.3** | ✅ 2026-10-23 (`8ecdac4`) | `D-107` en la bitácora, con su fila en el índice, su enlace y la nota «Enmendado por [D-107]» en la consecuencia 2 de `D-68`. Deja escrita una tercera opción descartada que no salió en la revisión: meter la temporada en la clave del equipo propio. Revisado por el desarrollador |
 | **R2.4** | | |
 | **R2.5** | | |
 | **R2.6** | | |
