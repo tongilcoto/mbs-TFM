@@ -492,7 +492,7 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son DIECISÉIS migraciones por tenant:
+                                          # hoy son DIECINUEVE migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
@@ -513,6 +513,14 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   ingestion_runs por finished_at, que
                                           #   desde que la consulta ordena por
                                           #   started_at no tiene ningún lector)
+                                          #   -> (D-101: el código del equipo propio
+                                          #   pasa de teams a team_registrations)
+                                          #   -> (D-104: el rival es de una
+                                          #   temporada: teams.season_id, su CHECK y
+                                          #   las dos claves únicas rehechas)
+                                          #   -> (D-106: seasons.federation_season_id
+                                          #   ANULABLE; su revert se para si alguna
+                                          #   temporada no tiene código)
                                           #   Las que ALTERAN ingestion_runs son
                                           #   varias y no una porque cada una ya
                                           #   estaba aplicada cuando llegó la
@@ -520,7 +528,7 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   el CHECK de `kind` porque un enumerado
                                           #   derivado NO se mantiene solo: se
                                           #   deriva al migrar y ahí se congela.
-                                          #   Las dos últimas van SEPARADAS aunque
+                                          #   Las dos de F10 van SEPARADAS aunque
                                           #   sean de la misma fase: no son la misma
                                           #   razón, y una migración que hace dos
                                           #   cosas no se revierte a medias
