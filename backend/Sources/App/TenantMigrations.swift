@@ -110,6 +110,9 @@ public enum TenantMigrations {
             // datos, el `CHECK` y las dos claves únicas rehechas. Al final de lo
             // que altera, que es su único requisito de orden ([D-90]).
             AddSeasonToOpponentTeams(),
+            // `D-106`: la temporada puede nacer sin código de la federación. Al
+            // final de lo que altera, que es su único requisito de orden ([D-90]).
+            AllowSeasonWithoutFederationCode(),
         ]
     }
 }

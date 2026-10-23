@@ -4,7 +4,6 @@
     "DATABASE_UNAVAILABLE": "503 de ApplicationError.databaseUnavailable (ProblemMiddleware); provocarlo por HTTP exige Postgres caído a mitad de la petición. Ya en la lista de H-46",
     "EMPTY_PATCH": "PATCH /club con {} (minProperties: 1, que el generador ignora, D-65); ningún test nombra el código. Ya en la lista de H-46",
     "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
-    "INGESTION_FAILED": "502 de la pasada en línea que falla (IngestionHandler); ningún test nombra el código. Ya en la lista de H-46",
     "INVALID_LIMIT": "GET /ingestion-runs con un limit fuera de rango (§5.5); ningún test nombra el código. Ya en la lista de H-72",
     "NOT_EDITABLE_AFTER_SYNC": "traducido en ProblemMiddleware, pero inalcanzable por HTTP hoy: Competition.applying no tiene llamante en producción hasta que el filter incluya updateCompetition",
     "RUN_NOT_RECORDED": "500 de ApplicationError.runNotRecorded (ProblemMiddleware): la pasada no pudo escribir su fila; provocarlo por HTTP exige romper la escritura a mitad. Ya en la lista de H-46"

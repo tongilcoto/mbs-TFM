@@ -38,7 +38,7 @@ struct SeasonPersistenceTests {
     }
 
     static func season(
-        _ label: String, id: UUID = UUID(), federationSeasonID: String = "21",
+        _ label: String, id: UUID = UUID(), federationSeasonID: String? = "21",
         archivedAt: Date? = nil
     ) throws -> Season {
         try Season(
@@ -115,6 +115,30 @@ struct SeasonPersistenceTests {
                     try await $0.seasons.save(try Self.season("2026/27", federationSeasonID: "21"))
                 }
             }
+        }
+    }
+
+    /// `D-106`: la temporada nace en la web sin código, **y puede haber varias así**
+    /// —la de este año y la siguiente, creadas en julio—: el `UNIQUE` no cuenta los
+    /// vacíos. Y cuando el enganche le pone el código, se guarda.
+    @Test("varias temporadas sin código caben, y el código que les pone el enganche se guarda (D-106)")
+    func seasonsWithoutCodeFitAndGetOneLater() async throws {
+        try await Self.withTenant("season-no-code") { tenant in
+            let this = try Self.season("2026/27", federationSeasonID: nil)
+            let next = try Self.season("2027/28", federationSeasonID: nil)
+            try await tenant.scope {
+                try await $0.seasons.save(this)
+                try await $0.seasons.save(next)
+            }
+
+            let stored = try #require(try await tenant.scope { try await $0.seasons.find(this.id) })
+            #expect(stored.federationSeasonID == nil)
+
+            try await tenant.scope { try await $0.seasons.save(try stored.applying(federationSeasonID: "22")) }
+            let linked = try #require(try await tenant.scope { try await $0.seasons.find(this.id) })
+            #expect(linked.federationSeasonID == "22")
+            let other = try #require(try await tenant.scope { try await $0.seasons.find(next.id) })
+            #expect(other.federationSeasonID == nil)
         }
     }
 

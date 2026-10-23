@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **697 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **705 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -416,6 +416,10 @@ curl -s "http://atleti.localhost:8080/v1/seasons?includeArchived=true" | jq  # c
   o si la siguiente se creó por adelantado, que no está en curso hasta su 1 de julio.
 - `startDate` y `endDate` son días sin hora (`2026-07-01`), y salen de la etiqueta.
 - **`archivedAt` no viene si la temporada no está archivada**: el campo falta, no llega como `null`.
+- **`federationSeasonId` tampoco viene si la temporada no tiene código de la federación** (`D-106`): el club la
+  crea en la web solo con su etiqueta, y el primer enganche se lo pone. Mientras no lo tenga, **la ingesta no
+  puede sincronizar sus competiciones** —no debería tener ninguna, porque solo nacen en un enganche—, y si
+  alguna lo intenta, la pasada falla con `seasonWithoutFederationCode` en el motivo, sin llamar a la federación.
 
 <a id="competiciones"></a>
 ### 4.4 Las competiciones
@@ -480,7 +484,7 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 697 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 705 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

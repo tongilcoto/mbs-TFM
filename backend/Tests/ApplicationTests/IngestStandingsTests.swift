@@ -83,12 +83,13 @@ struct IngestStandingsTests {
         federation: FederationCode = .rffm,
         roundNumbers: [Int],
         played: Set<Int>,
-        lastSeasonTwin: Bool = false
+        lastSeasonTwin: Bool = false,
+        federationSeasonID: String? = "21"
     ) async throws -> Fixture {
         let store = IngestionStore()
         let season = try Season(
             id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
-            federationSeasonID: "21", createdAt: now, updatedAt: now)
+            federationSeasonID: federationSeasonID, createdAt: now, updatedAt: now)
         let competition = try Competition(
             id: CompetitionID(raw: UUID()), seasonID: season.id,
             modality: .futbol11, gender: .masculino,
@@ -201,6 +202,26 @@ struct IngestStandingsTests {
         #expect(client.asked.count == 1)
         #expect(client.asked.first?.round == 1)
         #expect(client.asked.first?.coordinate.federationGroupID == "24037549")
+    }
+
+    /// `D-106`, punto 7: sin código de temporada no se pide nada a la federación.
+    ///
+    /// **Y esta pasada no lo apunta**: falla al hacer su plan, que va antes del
+    /// bloque que registra los fallos, igual que `seasonNotFound`. No se pierde: el
+    /// recorrido pasa el calendario primero, y es esa pasada la que deja la fila.
+    @Test("una temporada sin código para la pasada antes de pedir (D-106)")
+    func aSeasonWithoutCodeStopsThePass() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1], federationSeasonID: nil)
+        let client = StandingsClient([1: Self.table(["111", "222"])])
+
+        await #expect {
+            try await Self.useCase(fixture, client: client)
+                .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+        } throws: { error in
+            error as? ApplicationError == .seasonWithoutFederationCode(label: "2025/26")
+        }
+        #expect(client.asked.isEmpty, "pidió la clasificación sin código de temporada")
+        #expect(await fixture.store.ingestionRuns.isEmpty)
     }
 
     @Test("un alta a mitad de temporada recompone las jornadas anteriores (D-55)")

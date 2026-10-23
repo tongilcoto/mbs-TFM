@@ -7,7 +7,7 @@ import Testing
 struct SeasonTests {
 
     static func make(
-        _ label: String, federationSeasonID: String = "21", archivedAt: Date? = nil
+        _ label: String, federationSeasonID: String? = "21", archivedAt: Date? = nil
     ) throws -> Season {
         try Season(
             id: SeasonID(raw: UUID()),
@@ -19,11 +19,25 @@ struct SeasonTests {
         )
     }
 
-    /// §3.2: **obligatorio**, toda temporada tiene contrapartida en la federación.
-    @Test("el federationSeasonId es obligatorio y no puede venir vacío (§3.2)")
-    func requiresFederationSeasonID() {
+    /// §3.2: si lo hay, no puede venir vacío. Una cadena vacía no es «sin código»:
+    /// sería un código que llama a la federación con `temporada=`.
+    @Test("el federationSeasonId, si viene, no puede venir vacío (§3.2)")
+    func rejectsAnEmptyFederationSeasonID() {
         #expect(throws: DomainError.self) { try Self.make("2025/26", federationSeasonID: "") }
         #expect(throws: DomainError.self) { try Self.make("2025/26", federationSeasonID: "   ") }
+    }
+
+    /// `D-106`: la temporada nace en la web solo con su etiqueta, en julio, cuando
+    /// la federación todavía no ha publicado nada. El primer enganche le pone el
+    /// código, que es un `applying` como cualquier otro.
+    @Test("la temporada puede nacer sin código, y el primer enganche se lo pone (D-106)")
+    func aSeasonCanBeBornWithoutItsCode() throws {
+        let born = try Self.make("2026/27", federationSeasonID: nil)
+        #expect(born.federationSeasonID == nil)
+
+        let linked = try born.applying(federationSeasonID: "22")
+        #expect(linked.federationSeasonID == "22")
+        #expect(linked.label == born.label)
     }
 
     /// §3.2: las dos fechas son **derivadas de `label`**, así que no hay forma de

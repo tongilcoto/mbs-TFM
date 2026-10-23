@@ -79,12 +79,13 @@ struct IngestScorersTests {
     static func seed(
         federation: FederationCode = .rffm,
         competitionName: String? = nil,
-        scorers: [LeagueScorer] = []
+        scorers: [LeagueScorer] = [],
+        federationSeasonID: String? = "21"
     ) async throws -> Fixture {
         let store = IngestionStore()
         let season = try Season(
             id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
-            federationSeasonID: "21", createdAt: now, updatedAt: now)
+            federationSeasonID: federationSeasonID, createdAt: now, updatedAt: now)
         let competition = try Competition(
             id: CompetitionID(raw: UUID()), seasonID: season.id,
             modality: .futbol11, gender: .masculino,
@@ -188,6 +189,26 @@ struct IngestScorersTests {
         #expect(client.asked.count == 1)
         #expect(client.asked.first?.federationGroupID == "24037549")
         #expect(client.asked.first?.federationCompetitionID == "24037548")
+    }
+
+    /// `D-106`, punto 7: sin código de temporada no se pide nada a la federación.
+    ///
+    /// **Y esta pasada no lo apunta**: falla al hacer su plan, que va antes del
+    /// bloque que registra los fallos, igual que `seasonNotFound`. No se pierde: el
+    /// recorrido pasa el calendario primero, y es esa pasada la que deja la fila.
+    @Test("una temporada sin código para la pasada antes de pedir (D-106)")
+    func aSeasonWithoutCodeStopsThePass() async throws {
+        let fixture = try await Self.seed(federationSeasonID: nil)
+        let client = ScorersClient(Self.table([Self.row("1", "A", goals: 3)]))
+
+        await #expect {
+            try await Self.useCase(fixture, client: client)
+                .execute(competitionID: fixture.competition, actor: Self.actor)
+        } throws: { error in
+            error as? ApplicationError == .seasonWithoutFederationCode(label: "2025/26")
+        }
+        #expect(client.asked.isEmpty, "pidió los goleadores sin código de temporada")
+        #expect(await fixture.store.ingestionRuns.isEmpty)
     }
 
     // ── El upsert por la clave de D-93 ───────────────────────────────────────

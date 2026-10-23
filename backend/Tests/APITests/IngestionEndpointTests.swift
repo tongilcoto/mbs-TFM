@@ -109,6 +109,7 @@ struct IngestionEndpointTests {
     static func withSeededClub(
         failingFederation: Bool = false,
         federation: FederationCode = .rffm,
+        federationSeasonID: String? = "21",
         _ body: @escaping @Sendable (Application, SeasonID, CompetitionID, CompetitionID) async throws -> Void
     ) async throws {
         try await TestEnvironment.withApp(
@@ -131,7 +132,7 @@ struct IngestionEndpointTests {
                 try await repositories.seasons.save(
                     try Season(
                         id: seasonID, label: try SeasonLabel("2025/26"),
-                        federationSeasonID: "21", createdAt: now, updatedAt: now))
+                        federationSeasonID: federationSeasonID, createdAt: now, updatedAt: now))
                 try await repositories.competitions.save(
                     try Competition(
                         id: competitionID, seasonID: seasonID,
@@ -697,6 +698,30 @@ struct IngestionEndpointTests {
                 let problem = try Self.decodeProblem(response)
                 #expect(problem.code == .FEDERATION_ADAPTER_MISSING)
                 #expect(problem.detail?.contains("fcf") == true)
+            }
+        }
+    }
+
+    /// `D-106`, punto 7: una competición sobre una temporada sin código no debería
+    /// existir —solo nace en un enganche, que le pone el código—, y si existe la
+    /// pasada se para **sin llamar a la federación**. Por esta puerta llega como
+    /// cualquier pasada fallida: **502 `INGESTION_FAILED`**, con el motivo dentro,
+    /// que nombra el caso y la temporada por su etiqueta.
+    @Test("una temporada sin código para la pasada, y el motivo la nombra (D-106)")
+    func aSeasonWithoutCodeFailsThePass() async throws {
+        try await Self.withSeededClub(federationSeasonID: nil) { app, _, competitionID, _ in
+            try await app.testing().test(
+                .POST, "/v1/ingestion-runs",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.body(&request, competitionIds: ["\(competitionID)"])
+                }
+            ) { response async throws in
+                #expect(response.status == .badGateway)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == .INGESTION_FAILED)
+                #expect(problem.detail?.contains("seasonWithoutFederationCode") == true)
+                #expect(problem.detail?.contains("2025/26") == true)
             }
         }
     }

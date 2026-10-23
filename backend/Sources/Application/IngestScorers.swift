@@ -321,7 +321,7 @@ public struct IngestScorers: Sendable {
 
             return Plan(
                 coordinate: FederationCoordinate(
-                    federationSeasonID: season.federationSeasonID,
+                    federationSeasonID: try season.requireFederationCode(),
                     federationCompetitionID: competition.federationCompetitionID,
                     federationGroupID: competition.federationGroupID,
                     modality: competition.modality),

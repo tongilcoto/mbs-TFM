@@ -55,10 +55,12 @@ struct SeasonEndpointTests {
                 archived: SeasonID(raw: UUID()))
             let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
             try await unitOfWork.withRepositories(actor: ActorContext(clubSlug: try Slug(slug))) {
+                // La más antigua, **sin código** (`D-106`): la que el club crea en la
+                // web y que ningún enganche ha tocado todavía.
                 for (id, label, federationID, archived) in [
-                    (seeded.current, "2025/26", "21", nil as Date?),
+                    (seeded.current, "2025/26", "21" as String?, nil as Date?),
                     (seeded.archived, "2026/27", "22", archivedAt),
-                    (seeded.older, "2024/25", "20", nil),
+                    (seeded.older, "2024/25", nil, nil),
                 ] {
                     try await $0.seasons.save(try Season(
                         id: id, label: try SeasonLabel(label), federationSeasonID: federationID,
@@ -110,6 +112,20 @@ struct SeasonEndpointTests {
                 #expect(current.startDate == "2025-07-01")
                 #expect(current.endDate == "2026-06-30")
                 #expect(current.archivedAt == nil)
+            }
+        }
+    }
+
+    /// `D-106`: una temporada sin código sale con `federationSeasonId` vacío, y la
+    /// respuesta sigue cumpliendo el catálogo, que ya no lo exige (R2.5).
+    @Test("una temporada sin código de la federación sale sin él (D-106)")
+    func aSeasonWithoutCodeComesWithoutIt() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(.GET, "/v1/seasons", beforeRequest: { Self.header(&$0) }) {
+                response async throws in
+                let older = try #require(try Self.decode(response).first { $0.id == "\(seeded.older)" })
+                #expect(older.federationSeasonId == nil)
+                #expect(older.label == "2024/25")
             }
         }
     }

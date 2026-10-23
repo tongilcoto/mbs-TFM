@@ -313,6 +313,22 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "Da de alta la temporada con su etiqueta y repite.",
                                base: typeBaseURI, slug: "season-label-unavailable")
 
+            case .seasonWithoutFederationCode(let label):
+                // **Hoy no lo alcanza ninguna ruta**: lo lanzan las pasadas, y el
+                // recorrido recoge sus fallos —por `/ingestion-runs` llega como
+                // `INGESTION_FAILED` (502), con este caso dentro del motivo—. Está
+                // porque el `switch` es exhaustivo, y con el criterio de
+                // `seasonNotFound`: **500**, porque no es un dato que alguien haya
+                // mandado mal, es una competición que no debería existir así —
+                // solo nace en un enganche, que le pone el código a su temporada
+                // (`D-106`)—. Sin código propio en la lista: es un fallo nuestro.
+                return Problem(status: .internalServerError, code: "INTERNAL",
+                               title: "Temporada sin código de la federación",
+                               detail: "La temporada \(label) no tiene código de la federación, y "
+                                   + "sin él no se puede sincronizar (D-106). Engancha un equipo "
+                                   + "de esa temporada para ponérselo.",
+                               base: typeBaseURI, slug: "season-without-federation-code")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha

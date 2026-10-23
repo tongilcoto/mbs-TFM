@@ -316,14 +316,16 @@ struct MigrationIntegrityTests {
     /// **18 con `D-104`**: el rival pasa a ser de una temporada, con su `CHECK` y
     /// las dos claves únicas de `teams` rehechas.
     ///
+    /// **19 con `D-106`**: la temporada puede nacer sin código de la federación.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 18, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 19, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 18,
+        #expect(nombres.count == 19,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -978,6 +980,42 @@ struct MigrationIntegrityTests {
             #expect(teams == 4, "la migración borró equipos antes de pararse")
 
             try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
+    /// `D-106`: **el revert no inventa códigos.** Con una temporada sin código,
+    /// volver a exigirlo no tiene con qué rellenarla, así que se para antes de
+    /// tocar nada, y la columna sigue admitiendo el vacío.
+    @Test("con una temporada sin código, el revert se para sin tocar nada (D-106)")
+    func aSeasonWithoutCodeStopsTheRevert() async throws {
+        try await Self.withApp { app in
+            try await Self.cleanUp(["d106"], on: app)
+            let schema = try await Self.provision("d106", on: app)
+            let sql = app.db(.control) as! any SQLDatabase
+            @Sendable func insert(_ label: String, _ start: String, _ end: String) async throws {
+                try await sql.raw("""
+                    INSERT INTO \(ident: schema).seasons (id, label, federation_season_id, start_date, end_date)
+                    VALUES (\(bind: UUID()), \(bind: label), NULL, \(bind: start)::date, \(bind: end)::date)
+                    """).run()
+            }
+            try await insert("2026/27", "2026-07-01", "2027-06-30")
+
+            // **El motivo tiene que ser el nuestro**, no el de Postgres: sin la
+            // guarda, `SET NOT NULL` también fallaría, y el test pasaría con un
+            // error que no dice qué temporada falta ni por qué.
+            await #expect {
+                try await MigrateTenantsCommand.revert(schema: schema, on: app)
+            } throws: { error in
+                String(reflecting: error).contains("AllowSeasonWithoutFederationCode")
+            }
+
+            try await insert("2027/28", "2027-07-01", "2028-06-30")
+            let seasons = try await sql.raw("""
+                SELECT count(*) AS n FROM \(ident: schema).seasons WHERE federation_season_id IS NULL
+                """).first(decodingColumn: "n", as: Int.self)
+            #expect(seasons == 2, "el revert tocó la columna antes de pararse")
+
+            try await Self.cleanUp(["d106"], on: app)
         }
     }
 }
