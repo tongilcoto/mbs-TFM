@@ -329,6 +329,18 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "de esa temporada para ponérselo.",
                                base: typeBaseURI, slug: "season-without-federation-code")
 
+            case .seasonAlreadyExists(let field, let value):
+                // **409**, el criterio de `FEDERATION_TEAM_ID_TAKEN`: lo que llega
+                // es válido, lo que no encaja es **el estado** —esa etiqueta o ese
+                // código ya son de otra temporada—, y tiene salida: elegirla en el
+                // selector, o recuperarla si está archivada. **El `detail` es
+                // `campo: motivo`**, como el de `INVALID_VALUE`, para que la web
+                // sepa de qué campo es (LLD-B §4.5 *a*).
+                return Problem(status: .conflict, code: "SEASON_ALREADY_EXISTS",
+                               title: "Esa temporada ya existe",
+                               detail: "\(field): ya hay una temporada con '\(value)'",
+                               base: typeBaseURI, slug: "season-already-exists")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha

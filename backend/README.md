@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **705 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **717 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -37,9 +37,10 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
 | `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
 | `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
+| `POST /v1/seasons`                                                                    | Backoffice R2 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
 | `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
-| Las otras 76 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| Las otras 75 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -421,6 +422,21 @@ curl -s "http://atleti.localhost:8080/v1/seasons?includeArchived=true" | jq  # c
   puede sincronizar sus competiciones** —no debería tener ninguna, porque solo nacen en un enganche—, y si
   alguna lo intenta, la pasada falla con `seasonWithoutFederationCode` en el motivo, sin llamar a la federación.
 
+**Dar de alta una temporada** (rebanada 2): basta la etiqueta. Es lo que hace el formulario de alta de equipo del
+backoffice, con «Crear nueva temporada».
+
+```sh
+curl -s -X POST http://atleti.localhost:8080/v1/seasons \
+     -H 'Content-Type: application/json' -d '{"label": "2027/28"}' | jq
+```
+
+- **201** con la temporada, **sin `federationSeasonId`**: se lo pone el primer enganche (`D-106`). Se puede mandar
+  también, para semillas y pruebas.
+- **409 `SEASON_ALREADY_EXISTS`** si ya hay una con esa etiqueta —**también archivada**, aunque no salga en la
+  lista— o con ese código. El `detail` dice cuál de los dos: `label: ya hay una temporada con '2027/28'`.
+- **422 `INVALID_VALUE`** si la etiqueta no es una temporada: `2027-28` o `2027/29`. Las dos las rechaza el
+  Dominio: el servidor no aplica el `pattern` del catálogo, que es para la web.
+
 <a id="competiciones"></a>
 ### 4.4 Las competiciones
 
@@ -484,7 +500,7 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 705 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 717 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

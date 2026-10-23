@@ -72,6 +72,12 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// que es lo que el administrador reconoce.
     case seasonWithoutFederationCode(label: String)
 
+    /// **Ya hay una temporada con esa etiqueta o con ese código** (`createSeason`,
+    /// R2.7 → **409** `SEASON_ALREADY_EXISTS`). También si está archivada: no se
+    /// enseña, pero lo que la identifica sigue ocupado. Lleva el campo que choca y
+    /// su valor, que es la forma `campo: motivo` del `detail`.
+    case seasonAlreadyExists(field: String, value: String)
+
     /// **La base no responde** (H-23, `D-86` enmendada).
     ///
     /// No es el fallo de una competición: es el fallo del sitio donde se apuntan

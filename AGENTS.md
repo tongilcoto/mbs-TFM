@@ -388,7 +388,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1, **697** con `D-104` y `D-105` (2026-10-21) y **705** con la temporada sin código de `D-106` (`R2.6`, 2026-10-24). Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1, **697** con `D-104` y `D-105` (2026-10-21) **705** con la temporada sin código de `D-106` (`R2.6`, 2026-10-24) y **717** con `createSeason` (`R2.7`). Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
@@ -416,7 +416,7 @@ código, como pedía §3.7), y la jornada de descanso de un grupo impar se guard
 ficticio de la federación, con la fecha de su jornada (`D-105`). **La rebanada 2** (el alta de equipos) tiene
 [su plan](./docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), con las decisiones revisadas el
 2026-10-23: la temporada nace en la web sin código de la federación y el primer enganche se lo pone (`D-106`), y
-dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). El catálogo, ya cambiado (`R2.5`, 35 códigos), y la temporada sin código en el servidor (`R2.6`, 19 migraciones por club); lo siguiente, `R2.7`: `createSeason`.
+dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). El catálogo, ya cambiado (`R2.5`, 35 códigos), y la temporada sin código en el servidor (`R2.6`, 19 migraciones por club); `createSeason` (`R2.7`, 10 operaciones servidas); lo siguiente, `R2.8`: el enganche que busca la temporada por su etiqueta.
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`

@@ -1,0 +1,69 @@
+{
+  "title": "R2.7 · createSeason: la temporada nace en la web (D-106)",
+  "filter": "CreateSeasonTests|SeasonEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-archivadas",
+      "description": "«ya existe» no mira las archivadas",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "let existing = try await seasons.list(includingArchived: true)",
+      "replace": "let existing = try await seasons.list(includingArchived: false)"
+    },
+    {
+      "id": "M2-etiqueta-libre",
+      "description": "una etiqueta repetida no es «ya existe»",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "if existing.contains(where: { $0.label == label }) {",
+      "replace": "if existing.contains(where: { _ in false }) {"
+    },
+    {
+      "id": "M3-codigo-libre",
+      "description": "un código repetido no es «ya existe»",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "           try await seasons.findByFederationID(code) != nil {",
+      "replace": "           try await seasons.findByFederationID(code) == nil, false {"
+    },
+    {
+      "id": "M4-codigo-perdido",
+      "description": "el código que llega no se guarda",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "            federationSeasonID: command.federationSeasonID,\n            createdAt: now, updatedAt: now)",
+      "replace": "            federationSeasonID: nil,\n            createdAt: now, updatedAt: now)"
+    },
+    {
+      "id": "M5-no-guarda",
+      "description": "la temporada no se guarda",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "        try await seasons.save(season)\n",
+      "replace": "\n"
+    },
+    {
+      "id": "M6-campo-cruzado",
+      "description": "el 409 del código dice que es la etiqueta",
+      "file": "Sources/Application/CreateSeason.swift",
+      "find": "seasonAlreadyExists(field: \"federationSeasonId\", value: code)",
+      "replace": "seasonAlreadyExists(field: \"label\", value: code)"
+    },
+    {
+      "id": "M7-409-generico",
+      "description": "«ya existe» sale con otro código",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .conflict, code: \"SEASON_ALREADY_EXISTS\",",
+      "replace": "return Problem(status: .conflict, code: \"INTERNAL\","
+    },
+    {
+      "id": "M8-handler-sin-codigo",
+      "description": "el handler no pasa el código al caso de uso",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "label: payload.label, federationSeasonID: payload.federationSeasonId)",
+      "replace": "label: payload.label, federationSeasonID: nil)"
+    },
+    {
+      "id": "M9-siempre-en-curso",
+      "description": "la nueva sale en curso aunque no lo esté",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "let isCurrent = [season].current(on: clock.now())?.id == season.id",
+      "replace": "let isCurrent = true"
+    }
+  ]
+}

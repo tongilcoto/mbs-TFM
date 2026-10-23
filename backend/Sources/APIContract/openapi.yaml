@@ -401,9 +401,11 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            El `label` tiene la forma `AAAA/AB` pero **los años no siguen** («2026/28»). El `pattern` del
-            catálogo no puede decirlo; lo rechaza el *Value Object* `SeasonLabel` del Dominio. El `code` es
-            `INVALID_VALUE`, con `label: <motivo>` en el `detail`.
+            El `label` no es una temporada: **los años no siguen** («2026/28»), o **no tiene la forma
+            `AAAA/AB`** («2026-27»). Lo segundo lo describe el `pattern`, pero el generador del servidor no
+            lo aplica (como no aplica `minLength`, D-65), así que las dos las rechaza el *Value Object*
+            `SeasonLabel` del Dominio. También un `federationSeasonId` que solo tiene espacios. El `code`
+            es `INVALID_VALUE`, con `<campo>: <motivo>` en el `detail`.
           content:
             application/problem+json:
               schema:
@@ -4208,10 +4210,12 @@ components:
       type: string
       pattern: '^\d{4}/\d{2}$'
       description: |
-        Etiqueta de la temporada. El `pattern` rechaza el cuerpo mal formado **en el borde**
-        (400); el *Value Object* `SeasonLabel` del dominio (§4.1) garantiza la misma
-        invariante en la ruta de **ingesta**, que no pasa por este contrato — validación en
-        **dos capas**, deliberada.
+        Etiqueta de la temporada. El `pattern` es la regla que **el cliente** comprueba antes de
+        enviar (la web, con Ajv). **El servidor no lo aplica en el borde**: su generador no valida
+        `pattern` (como no valida `minLength`, D-65). Quien rechaza es el *Value Object*
+        `SeasonLabel` del dominio (§4.1), que además exige que los años sigan y vale igual para la
+        ruta de **ingesta**, que no pasa por este contrato. Por eso una etiqueta mal formada es
+        **422** en `createSeason`, y **400** en el enganche, que no declara 422 (C-0.5).
       examples: ['2024/25']
 
     CreateSeasonRequest:

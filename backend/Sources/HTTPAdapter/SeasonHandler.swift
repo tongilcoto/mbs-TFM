@@ -24,6 +24,35 @@ extension APIHandler {
     }
 }
 
+/// `POST /v1/seasons` (§5.1, R2.7): la temporada nace en la web, sin código de
+/// la federación (`D-106`).
+extension APIHandler {
+    public func createSeason(_ input: Operations.createSeason.Input) async throws
+        -> Operations.createSeason.Output
+    {
+        let actor = try actors.currentActor()
+        let payload: Components.Schemas.CreateSeasonRequest
+        switch input.body {
+        case .json(let json): payload = json
+        }
+        let command = CreateSeason.Command(
+            label: payload.label, federationSeasonID: payload.federationSeasonId)
+        let (clock, ids) = (self.clock, self.ids)
+
+        // **Sin `do/catch`** (`A-14`·H-63): el 409 de «ya existe» y el 422 de la
+        // etiqueta o el código que no valen los traduce el middleware. Y el 422
+        // cubre también «2026-27»: el generador no aplica el `pattern` del
+        // catálogo, como no aplica `minLength` (`D-65`), así que la forma la
+        // rechaza `SeasonLabel`.
+        let season = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await CreateSeason(seasons: repositories.seasons, clock: clock, ids: ids)
+                .execute(command)
+        }
+        let isCurrent = [season].current(on: clock.now())?.id == season.id
+        return .created(.init(body: .json(season.toResponse(isCurrent: isCurrent))))
+    }
+}
+
 extension Domain.Season {
     /// Mapeo `Entidad → DTO` (§2.2). `isCurrent` llega de fuera porque no es de
     /// la temporada sola: lo decide el caso de uso con el reloj (§3.2).
