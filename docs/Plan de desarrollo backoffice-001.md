@@ -198,8 +198,9 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,P,NF enCurso
-    class mTem,mCom,mRiv,mIng,mClub,mPer,A,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
+    class mEq,NF hecha
+    class P,A enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
 
