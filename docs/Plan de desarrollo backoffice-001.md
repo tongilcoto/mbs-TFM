@@ -223,7 +223,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 |---|---|---|
 | **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
 | **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` ● · `listSeasonRegistrations` ● — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ● — con el estado de la ingesta (enmienda de `D-89`, desde R1.8) |
-| **2** · Alta de equipo | Alta de equipo · Portada: botón «Dar de alta» y enlace desde el vacío | `createTeam` · ⚠️ falta decidir cómo nace la primera temporada de un club: `createSeason` (rebanada 11) pide el código de temporada de la federación, que el club no tiene por qué conocer |
+| **2** · Alta de equipo | Alta de equipo, con «Crear nueva temporada» · Portada: botón «Dar de alta un equipo» y en los dos vacíos | `createTeam` ⚠️ — si el equipo ya existe, lo inscribe en la temporada (`D-107`) · `createSeason` ⚠️ — adelantada de la 11: la temporada nace sin código de la federación, y el primer enganche se lo pone (`D-106`) |
 | **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
@@ -232,7 +232,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
-| **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
+| **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
 | **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
 | **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` |
 | **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
@@ -255,8 +255,19 @@ activa con la rebanada que la usa**.
   salen de pedir la clasificación por jornada y los partidos por equipo. Se decide al escribir sus fichas si
   se acepta o si se diseña una petición que lo junte.
 
-**Pendiente de confirmar:** si la salida a la primera temporada (rebanada 2) es crearla desde la web, una parte
-de la rebanada 11 se adelanta a la 2. Se decide al revisar la ficha del alta.
+**Resuelto (2026-10-23, `D-106`):** la primera temporada se crea desde la web, en el formulario de alta de
+equipo, así que `createSeason` se adelanta de la rebanada 11 a la 2
+([Plan R2, decisión 1](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La 11 se queda con el resto de
+la gestión de temporadas.
+
+**Pendiente de la rebanada 16: cómo se coordina el despliegue de la web y del servidor**
+([Plan R2, decisión 3](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La web lleva dentro, al
+compilarse, los tipos y las reglas del catálogo. De ahí salen dos reglas:
+
+- La web y el servidor se compilan **desde el mismo commit**, y la web **con el repositorio entero a la vista**:
+  `npm run gen:api` lee `../backend/...`, y una compilación que solo vea `backoffice/` falla.
+- Si cambió el catálogo, **se despliegan los dos, primero el servidor**. Mientras conviven la web vieja y el
+  servidor nuevo, solo valen los cambios del catálogo que no rompen.
 
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
@@ -349,6 +360,7 @@ su comprobación.
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
+| **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | 🟡 en curso | 4/17 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

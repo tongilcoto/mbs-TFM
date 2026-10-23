@@ -203,6 +203,25 @@ ya exista un equipo igual, un nombre que solo tiene espacios…), y llega como e
 servidor sigue siendo quien manda**: la comprobación de la web solo ahorra un viaje y enseña todos los fallos
 juntos.
 
+**Cómo llega el catálogo a la web** (añadido el 2026-10-23, con la rebanada 2,
+[su decisión 3](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La web se ejecuta en el navegador y
+no puede leer `openapi.yaml`, y el servidor no lo publica. Así que llega **igual que las descripciones de los
+datos**: `npm run gen:api` genera, además de `schema.d.ts`, un `src/api/schemas.json` con solo los esquemas
+(`components/schemas`, con esa estructura para que sus `$ref` sigan valiendo), sin guardarlo en el repositorio.
+Tipos y reglas salen del mismo catálogo, a la vez: la web nunca comprueba con unas reglas distintas de las de los
+tipos con los que compiló. Se descartaron importar el `.yaml` al compilar (una pieza más de Vite, y el catálogo
+entero dentro de la web) y pedírselo al servidor al abrir (podría ser otro catálogo que el de los tipos).
+
+- **Las piezas**: `ajv` 8 con `Ajv2020` (el catálogo es OpenAPI 3.1, que es JSON Schema 2020-12), `ajv-formats`
+  para `format: uuid`, y `yaml` para leer el catálogo en `gen:api`.
+- **Ajv en modo estricto**: las palabras de OpenAPI que no son de JSON Schema (`discriminator`…) se le declaran,
+  en vez de apagarlo, para que una regla mal escrita siga saltando.
+- **El mensaje de un `pattern` lleva el ejemplo del catálogo** (`examples`): «El formato no es válido. Por
+  ejemplo: 2024/25». Sigue sin haber texto por campo escrito a mano.
+- **Lo que supone para el despliegue**: el fichero nace al compilar y viaja dentro de `dist/`. La web solo hay que
+  recompilarla cuando cambia el catálogo; las reglas de cómo se coordina con el servidor, pendientes de la
+  rebanada 16, están en el plan del backoffice (§4).
+
 ---
 
 ### DW-08 · Dos personas editando lo mismo: se queda lo último que se guardó

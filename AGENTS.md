@@ -413,8 +413,10 @@ axe en los dos modos. Los escenarios preparan sus datos **por la propia aplicaci
 solo como último recurso. **La tabla de equipos, revisada el 2026-10-21**, antes de la rebanada 2: el rival pasa a
 ser de una temporada (`D-104`), con el paso 2 de la cadena de equipos arreglado (ya no casa con un rival de otro
 código, como pedía §3.7), y la jornada de descanso de un grupo impar se guarda como partido contra el equipo
-ficticio de la federación, con la fecha de su jornada (`D-105`). Lo siguiente, el plan de la rebanada 2 (el alta
-de equipos).
+ficticio de la federación, con la fecha de su jornada (`D-105`). **La rebanada 2** (el alta de equipos) tiene
+[su plan](./docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), con las decisiones revisadas el
+2026-10-23: la temporada nace en la web sin código de la federación y el primer enganche se lo pone (`D-106`), y
+dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). Lo siguiente, `R2.5`: el catálogo.
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
