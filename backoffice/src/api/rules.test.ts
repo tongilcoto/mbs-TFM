@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { checkForm, requiredFields } from './rules'
+import { checkForm, exampleOf, requiredFields } from './rules'
 
 // Las pruebas usan los esquemas de verdad del catálogo: si una regla cambia allí, se nota aquí.
 const SEASON_ID = '0b7e7a52-4c1d-4f7e-9a51-3f7f0c2b8d11'
@@ -61,4 +61,10 @@ describe('cada tipo de regla, con su mensaje', () => {
 test('los obligatorios de un esquema salen de su `required` en el catálogo', () => {
   expect(requiredFields('CreateTeamRequest')).toEqual(['category', 'gender', 'modality', 'seasonId'])
   expect(requiredFields('UpdateClubRequest')).toEqual([])
+})
+
+test('el ejemplo de un campo sale del catálogo, también a través de su `$ref`', () => {
+  expect(exampleOf('CreateSeasonRequest', 'label')).toBe('2024/25')
+  expect(exampleOf('CreateTeamRequest', 'letter')).toBe('A')
+  expect(exampleOf('CreateTeamRequest', 'seasonId')).toBeUndefined()
 })

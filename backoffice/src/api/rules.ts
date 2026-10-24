@@ -58,6 +58,23 @@ export function requiredFields<N extends SchemaName>(name: N): (keyof components
   return required as (keyof components['schemas'][N] & string)[]
 }
 
+// El ejemplo que da el catálogo para un campo (`examples`), siguiendo su `$ref` si lo tiene: para la ayuda que se
+// enseña debajo del campo desde el principio, sin escribirla a mano. Sin ejemplo, nada.
+export function exampleOf<N extends SchemaName>(name: N, field: keyof components['schemas'][N] & string): string | undefined {
+  const schemas = catalog.components.schemas as unknown as Record<string, CatalogSchema>
+  let schema = schemas[name]?.properties?.[field]
+  const ref = schema?.$ref?.replace('#/components/schemas/', '')
+  if (ref !== undefined) schema = schemas[ref]
+  const example = schema?.examples?.[0]
+  return typeof example === 'string' ? example : undefined
+}
+
+interface CatalogSchema {
+  $ref?: string
+  examples?: unknown[]
+  properties?: Record<string, CatalogSchema>
+}
+
 // El campo de un fallo: el que falta, si es un `required`, o el del valor que no cumple (`/letter` → `letter`).
 function fieldOf(rule: ErrorObject): string {
   const path = rule.instancePath.slice(1).replaceAll('/', '.')

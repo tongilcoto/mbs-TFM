@@ -9,7 +9,7 @@ import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { api } from '../../api/client'
 import { placeSaveError, type ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
-import { checkForm, requiredFields } from '../../api/rules'
+import { checkForm, exampleOf, requiredFields } from '../../api/rules'
 import FormErrorList, { type FormError } from '../../components/FormErrorList.vue'
 import FormField from '../../components/FormField.vue'
 import LeaveDialog from '../../components/LeaveDialog.vue'
@@ -63,6 +63,9 @@ const listedErrors = computed<FormError[]>(() =>
 // «Crear nueva temporada» (§3.3, decisión 4): crea la temporada al pulsar «Crear», antes de guardar el equipo, y
 // lo que el usuario había rellenado en el formulario sigue ahí.
 const seasonLabelRequired = requiredFields('CreateSeasonRequest').includes('label')
+// El formato esperado, con el ejemplo del catálogo, igual que el mensaje de error (decisión 2).
+const seasonLabelExample = exampleOf('CreateSeasonRequest', 'label')
+const seasonLabelHelp = seasonLabelExample ? `Por ejemplo: ${seasonLabelExample}` : undefined
 const newSeason = reactive<{ open: boolean; saving: boolean; fieldError?: string; banner?: ShownError; created: boolean }>(
   { open: false, saving: false, created: false },
 )
@@ -369,6 +372,7 @@ onBeforeUnmount(() => {
   <NewSeasonDialog
     :visible="newSeason.open"
     :required="seasonLabelRequired"
+    :help="seasonLabelHelp"
     :saving="newSeason.saving"
     :field-error="newSeason.fieldError"
     :banner="newSeason.banner"

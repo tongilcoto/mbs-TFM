@@ -262,6 +262,14 @@ describe('«Crear nueva temporada» (§3.3)', () => {
     return screen.findByRole('dialog', { name: 'Crear nueva temporada' })
   }
 
+  test('desde que se abre, debajo del campo, el formato esperado con el ejemplo del catálogo', async () => {
+    fakeServer({})
+    await openForm()
+    await openDialog()
+
+    expect(labelField()).toHaveAccessibleDescription('Por ejemplo: 2024/25')
+  })
+
   test('mientras cargan las temporadas no está: no se sabe todavía cuáles hay', async () => {
     fakeServer({ seasons: () => new Promise<Response>(() => {}) as never })
     await openForm()
@@ -306,7 +314,9 @@ describe('«Crear nueva temporada» (§3.3)', () => {
     await fireEvent.update(labelField(), '2026-27')
     await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
 
-    await waitFor(() => expect(labelField()).toHaveAccessibleDescription('El formato no es válido. Por ejemplo: 2024/25'))
+    await waitFor(() =>
+      expect(labelField()).toHaveAccessibleDescription('Por ejemplo: 2024/25 El formato no es válido. Por ejemplo: 2024/25'),
+    )
     expect(labelField()).toHaveAttribute('aria-invalid', 'true')
     // El foco vuelve al campo, para que el lector lea el motivo.
     expect(labelField()).toHaveFocus()
@@ -341,7 +351,9 @@ describe('«Crear nueva temporada» (§3.3)', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
 
     await waitFor(() =>
-      expect(labelField()).toHaveAccessibleDescription('debe ser AAAA/AB con AB el año siguiente, como "2025/26"'),
+      expect(labelField()).toHaveAccessibleDescription(
+        'Por ejemplo: 2024/25 debe ser AAAA/AB con AB el año siguiente, como "2025/26"',
+      ),
     )
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })

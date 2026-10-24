@@ -12,6 +12,8 @@ import LoadError from './LoadError.vue'
 const props = defineProps<{
   visible: boolean
   required: boolean
+  // La ayuda debajo del campo, desde que se abre: «Por ejemplo: 2024/25».
+  help?: string
   saving: boolean
   // El error de la etiqueta, junto al campo: el formato, o el motivo del servidor.
   fieldError?: string
@@ -70,6 +72,7 @@ watch(
         v-slot="{ describedBy, invalid }"
         label="Temporada"
         :required="required"
+        :help="help"
         :error="fieldError"
       >
         <InputText
