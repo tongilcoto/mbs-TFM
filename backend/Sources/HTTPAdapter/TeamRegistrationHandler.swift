@@ -64,7 +64,8 @@ extension Domain.Team {
             federationTeamId: federationTeamID,
             isOwn: isOwn,
             clubName: club.shortName,
-            displayName: [club.shortName, category.displayLabel, letter]
+            // El nombre de la categoría, del catálogo (`D-109`).
+            displayName: [club.shortName, category.toContract().displayName, letter]
                 .compactMap { $0 }.joined(separator: " "),
             crestUrl: nil,
             createdAt: createdAt,

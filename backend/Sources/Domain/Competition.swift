@@ -111,15 +111,6 @@ public struct Competition: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// **Derivado en lectura** (§5.2): `ageCategory · divisionLabel · groupLabel`.
-    ///
-    /// No hay columna detrás. La federación sí publica un nombre propio, pero
-    /// llega truncado a 40 caracteres y con formato inestable ([Anexo RFFM
-    /// §F.11]), así que el rótulo que se muestra se compone de piezas nuestras.
-    public var displayName: String {
-        "\(ageCategory.displayLabel) · \(divisionLabel) · \(groupLabel)"
-    }
-
     /// `true` en cuanto ha habido una sincronización con éxito. Es lo que cierra
     /// la puerta a editar coordenadas y género (`D-22`).
     public var isSynced: Bool { lastSyncedAt != nil }

@@ -4961,6 +4961,14 @@ desarrollador lo pidió así: **una única fuente de la verdad, también en el s
    donde ya se monta el del equipo y donde se conoce el contrato.
 4. **Las respuestas no cambian**: los mismos campos, con los mismos textos. Lo que cambia es de dónde salen.
 
+> **Enmienda al punto 1** (2026-10-24, al construirla, revisada por el desarrollador). El generador solo fabrica
+> los tipos de las operaciones servidas: 9 de las 19 listas. Así que las 19 se le piden en
+> `openapi-generator-config.yaml`, en una lista `filter: schemas` aparte de las operaciones, y la herramienta
+> comprueba que estén todas: si falta una, para la compilación diciendo «añádela a `filter: schemas`». Lo que se
+> escribe a mano son los nombres de las listas, no los de sus valores. Se descartaron calcular qué listas genera
+> el contrato (copiar la lógica interna del generador) y una tabla por texto sin los tipos (sin comprobación al
+> compilar).
+
 **Lo que se asume a cambio.**
 
 - **Una pieza más al compilar**: la herramienta, su *plugin* y la dependencia declarada de Yams.
@@ -4971,6 +4979,15 @@ desarrollador lo pidió así: **una única fuente de la verdad, también en el s
 
 **Enmienda** a [D-108], punto 5 («el servidor no lo lee»): ahora lo lee, al compilar. Y al LLD, §5.2: los
 `displayName` se componen en el adaptador HTTP con los nombres del catálogo.
+
+**Hecho** (2026-10-24, T.2 del plan de la rebanada 2). `EnumNamesCore` (la lógica, sin ficheros), `EnumNamesTool` y
+`EnumNamesPlugin`, aplicado a `APIContract`; Yams, declarado. El Dominio, sin `displayLabel` ni
+`Competition.displayName`; los dos `displayName` se montan en el adaptador HTTP. Tests: 8 de la herramienta (rojo de
+aserción visto con un esqueleto vacío) y el rojo de los dos nombres en los tests HTTP, que ya los vigilaban; el test
+del Dominio sobre `displayName` y la línea de persistencia, retirados. **736 → 743**, leído del XML. Mutación
+(`Catalogs/T-2.json`): **7/7**; una octava, tratar `ProblemCode` como lista con nombres, la para la propia
+compilación y se retiró por inválida. Censo en `0`. Un catálogo con un nombre quitado a propósito para la
+compilación: «CardType: sin nombre para roja».
 
 **Lo que queda pendiente**, sin tocar aquí: `TeamResponse.displayName` («Celtic Alevín A») no distingue el
 masculino del femenino ni el fútbol 7 del fútbol 11, como le pasaba a la portada (bloque T, paso T.4). Lo

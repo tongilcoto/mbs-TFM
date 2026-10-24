@@ -75,7 +75,6 @@ struct CompetitionPersistenceTests {
             #expect(stored.federationGroupID == "24037549")
             #expect(stored.federationName == "TERCERA FEDERACION DE FÚTBOL FEMENINO")
             #expect(stored.isSynced)
-            #expect(stored.displayName == "Infantil · Primera · Grupo 1")
         }
     }
 

@@ -82,6 +82,9 @@ let package = Package(
         // y la segunda es la de siempre: `MemberImportVisibility` no acepta
         // miembros llegados por re-export, y cada target declara lo que importa.
         .package(url: "https://github.com/apple/swift-log.git", from: "1.15.0"),
+        // D-109: la herramienta que escribe en Swift los nombres de cada lista lee el catálogo, que es YAML. Ya
+        // estaba en el grafo —lo usa `swift-openapi-generator`— y se declara, como todo lo que se importa.
+        .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.0"),
     ],
     targets: [
         // ── Núcleo ────────────────────────────────────────────────────────────
@@ -109,7 +112,27 @@ let package = Package(
             swiftSettings: commonSwiftSettings,
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator"),
+                // D-109: los nombres en español de cada lista, al lado de los tipos, de `x-enum-names`.
+                .plugin(name: "EnumNamesPlugin"),
             ]
+        ),
+
+        // D-109: la herramienta de los nombres. La lógica, en una biblioteca sin ficheros ni red, que se prueba
+        // sola; el programa solo lee y escribe; y el *plugin* lo lanza al compilar `APIContract`.
+        .target(
+            name: "EnumNamesCore",
+            dependencies: [.product(name: "Yams", package: "Yams")],
+            swiftSettings: commonSwiftSettings
+        ),
+        .executableTarget(
+            name: "EnumNamesTool",
+            dependencies: ["EnumNamesCore"],
+            swiftSettings: commonSwiftSettings
+        ),
+        .plugin(
+            name: "EnumNamesPlugin",
+            capability: .buildTool(),
+            dependencies: ["EnumNamesTool"]
         ),
 
         // ── Adaptadores ───────────────────────────────────────────────────────
@@ -207,6 +230,11 @@ let package = Package(
         .testTarget(
             name: "DomainTests",
             dependencies: ["Domain"],
+            swiftSettings: commonSwiftSettings
+        ),
+        .testTarget(
+            name: "EnumNamesTests",
+            dependencies: ["EnumNamesCore"],
             swiftSettings: commonSwiftSettings
         ),
         .testTarget(
