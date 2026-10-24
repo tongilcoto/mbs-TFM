@@ -13,6 +13,14 @@ const modes = [
 /** Devuelve los fallos de accesibilidad de la página en los dos modos, ya escritos para leerlos. */
 export async function accessibilityProblems(page: Page): Promise<string[]> {
   const problems: string[] = []
+  // Antes de medir, que acabe lo que se esté moviendo: una ventana que aparece pasa unas décimas a medio color, y
+  // axe mediría el contraste de ese momento, que no es el de la pantalla (R2.16: 3,56 en vez de 4,8). Como mucho, 2 s.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+      new Promise((resolve) => setTimeout(resolve, 2_000)),
+    ]),
+  )
   const wasDark = await isDark(page)
   // Sin animaciones mientras se mide: las piezas de PrimeVue tardan 0,2 s en pasar al color del otro modo, y axe
   // mediría el color de en medio, que no es ninguno de los dos.
