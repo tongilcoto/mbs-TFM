@@ -56,7 +56,8 @@ describe('las filas de la portada', () => {
       [competition('liga', { ingestionHealth: 'ok', lastSyncedAt: '2026-10-17T21:40:00Z' })],
     )
 
-    expect(rows).toEqual([
+    // Lo que pinta la tabla; las claves de orden las prueba order.test.ts.
+    expect(rows).toMatchObject([
       {
         id: 'cadete-b',
         team: 'Cadete B',
