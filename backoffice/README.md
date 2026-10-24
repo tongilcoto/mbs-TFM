@@ -52,6 +52,11 @@ fabricar, y los dos salen siempre del mismo catálogo a la vez. Para fabricarlos
 Lo que se ha añadido para eso: **`ajv`** (el comprobador de reglas) y **`ajv-formats`** (los formatos, como el
 de los identificadores), que viajan con la web; y **`yaml`**, que solo usa `gen:api` para leer el catálogo.
 
+Dos cosas a tener en cuenta el día que se publique (están en los pendientes de la rebanada 16 del
+[plan](../docs/Plan%20de%20desarrollo%20backoffice-001.md)): Ajv fabrica sus comprobadores en el navegador, así que una
+política de seguridad estricta en la página tendría que permitirlo; y `schemas.json` lleva también las
+descripciones del catálogo, unos 157 KB, que se pueden quitar si el tamaño importa.
+
 ## Los escenarios de punta a punta
 
 `npm run e2e` pasa los escenarios de `e2e/features/` en un navegador de verdad (Chromium), contra un servidor y

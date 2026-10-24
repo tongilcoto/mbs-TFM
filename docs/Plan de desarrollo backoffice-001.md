@@ -270,6 +270,15 @@ compilarse, los tipos y las reglas del catálogo. De ahí salen dos reglas:
 - Si cambió el catálogo, **se despliegan los dos, primero el servidor**. Mientras conviven la web vieja y el
   servidor nuevo, solo valen los cambios del catálogo que no rompen.
 
+Y dos cosas que salieron al hacerlo (`R2.11`, 2026-10-24):
+
+- **Si la web se publica con una política de seguridad estricta** (la cabecera `Content-Security-Policy`, que
+  pondría Caddy), tiene que permitir que la página fabrique código al abrirse (`'unsafe-eval'`): Ajv convierte
+  cada regla del catálogo en un comprobador en el navegador. Hoy no hay ninguna política, y no hace falta nada.
+  Si se quiere evitar, Ajv puede fabricar los comprobadores al compilar en vez de en el navegador.
+- **`schemas.json` pesa unos 157 KB** (unos 36 KB comprimido al viajar) porque lleva también las descripciones del
+  catálogo, que Ajv no usa. Si el tamaño importa, `gen-schemas.mjs` puede quitarlas.
+
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
 bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
