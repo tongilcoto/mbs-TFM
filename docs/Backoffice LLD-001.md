@@ -873,14 +873,15 @@ navegador → web → Run serve → tfm_test
 
 **De dónde sale cada dato, por orden de preferencia** (la *skill* de escenarios del desarrollador, principio 9):
 
-1. **La API del servidor**: el enganche, la ingesta, el nombre del club. Nunca el *endpoint* que prueba el
-   escenario: si la portada lee `/competitions`, la hora esperada se saca de `/ingestion-runs`.
-2. **Los comandos del servidor**, donde la API aún no llega: `seed-team` hasta que exista `POST /teams`
-   (rebanada 2), y `seed-competition` para una temporada sin equipos.
+1. **La API del servidor**, como lo haría el club: la temporada (`POST /seasons`), el equipo (`POST /teams`),
+   el enganche, la ingesta y el nombre del club. Nunca el *endpoint* que prueba el escenario: si la portada lee
+   `/competitions`, la hora esperada se saca de `/ingestion-runs`.
+2. **Los comandos del servidor**, donde la API aún no llega. **Desde la rebanada 2, ninguno**: `seed-team` y
+   `seed-competition` los sustituyen `POST /teams` y `POST /seasons` (R2.15).
 3. **La base de datos**, solo para lo que ninguno de los dos produce, y cada caso dice por qué en el código:
    «Sin datos todavía» (el enganche siempre lanza una ingesta), «Desactualizada» (haría falta esperar una
-   semana), el equipo inscrito sin competición (hasta la rebanada 2) y el club a medio preparar (un estado
-   roto a propósito).
+   semana) y el club a medio preparar (un estado roto a propósito). El equipo inscrito sin competición ya no:
+   es lo que deja el alta.
 
 **Los datos, al azar; los literales, solo si deciden la rama.** La edad, la letra, el género y la modalidad
 del equipo, la división, el grupo, las temporadas pasadas y futuras y el nombre del club se eligen al azar en

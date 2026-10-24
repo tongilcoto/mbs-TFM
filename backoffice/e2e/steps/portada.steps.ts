@@ -56,12 +56,12 @@ function inMadrid(instant: Date): string {
 // ── Los datos ────────────────────────────────────────────────────────────────────────────────────────────────
 
 Given('mi club tiene la temporada en curso', async function (this: ScenarioWorld) {
-  await addSeason(this.club, this.random, currentSeason())
+  await addSeason(this.club, currentSeason())
 })
 
 async function addPastSeason(world: ScenarioWorld): Promise<Season> {
   const season = pastSeason(world.random, world.data.pastSeasons)
-  await addSeason(world.club, world.random, season)
+  await addSeason(world.club, season)
   world.data.pastSeasons.push(season)
   world.note(`temporada pasada ${season.label}`)
   return season
@@ -78,7 +78,7 @@ Given('mi club tiene dos temporadas pasadas', async function (this: ScenarioWorl
 
 Given('mi club tiene una temporada que todavía no ha empezado', async function (this: ScenarioWorld) {
   const season = futureSeason(this.random)
-  await addSeason(this.club, this.random, season)
+  await addSeason(this.club, season)
   this.data.futureSeason = season
   this.note(`temporada futura ${season.label}`)
 })

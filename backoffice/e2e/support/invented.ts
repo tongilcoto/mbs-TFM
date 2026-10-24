@@ -2,7 +2,7 @@
 // eligen al azar (random.ts) entre lo que el sistema acepta; ninguno decide por sí solo qué rama se prueba.
 //
 // La competición inventada la sirve la federación falsa (fake-federation.ts), y el servidor la da de alta por su
-// camino de siempre: el enganche o `seed-competition` (club-data.ts).
+// camino de siempre: el enganche (club-data.ts).
 import type { Random } from './random.ts'
 
 export type Category = 'prebenjamin' | 'benjamin' | 'alevin' | 'infantil' | 'cadete' | 'juvenil' | 'senior'
@@ -194,13 +194,4 @@ export function competition(random: Random, of: Season, forTeam: Pick<Team, 'cat
     rowName: `${division} · ${group}`,
     calendarUrl: `https://www.rffm.es/competicion/calendario?${query}`,
   }
-}
-
-/** Una competición cualquiera de la temporada: para darla de alta sin equipo. */
-export function anyCompetition(random: Random, of: Season): Competition {
-  return competition(random, of, {
-    category: random.pick(categories),
-    gender: random.pick(genders),
-    modality: random.pick(modalities),
-  })
 }
