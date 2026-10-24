@@ -8,23 +8,23 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
-**Lo que enseña hoy** (rebanada 1, cerrada el 2026-10-20): la **portada**, con los equipos del club en una
-temporada, la competición en la que juega cada uno, cómo va su ingesta y cuándo se sincronizó por última vez, en
-tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
-cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
+**Lo que enseña hoy** (rebanadas 1 y 2, cerradas el 2026-10-20 y el 2026-10-24):
 
-**En construcción** (rebanada 2): el **alta de equipo**. En la portada, **«Dar de alta un equipo»**, junto al
-selector de temporada, y también debajo del mensaje cuando no hay temporadas o la elegida no tiene equipos. El
-formulario (`/equipos/nuevo`) comprueba todos los campos a la vez antes de enviar y avisa si se sale con cambios
-sin guardar. Al lado de su selector de temporada, **«Crear nueva temporada»** la crea en ese momento, solo con su
-etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del equipo, con el aviso «Guardado».
+- **La portada**, con los equipos del club en una temporada: la competición en la que juega cada uno (sin la
+  categoría delante, «PRIMERA CADETE · Grupo 4»), cómo va su ingesta y cuándo se sincronizó por última vez, en tu
+  hora. Si dos equipos se llamarían igual, cada uno lleva lo que lo distingue («Alevín A · Fútbol 7»). La temporada
+  se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`).
+- **La tabla se ordena** pinchando la cabecera de cada columna: la primera vez en su orden, la segunda al revés y
+  la tercera vuelve al de siempre. El orden también queda en la dirección (`/?orden=ingesta`).
+- **El alta de equipo**: «Dar de alta un equipo», junto al selector de temporada y debajo del mensaje cuando no hay
+  temporadas o la elegida no tiene equipos. El formulario (`/equipos/nuevo`) comprueba todos los campos a la vez
+  antes de enviar y avisa si se sale con cambios sin guardar; al lado de su selector, «Crear nueva temporada» la
+  crea en ese momento, solo con su etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del
+  equipo, con el aviso «Guardado».
+- Alrededor, la cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
-**La tabla de la portada se ordena** pinchando la cabecera de cada columna: la primera vez en su orden, la segunda
-al revés y la tercera vuelve al de siempre. El orden queda en la dirección (`/?orden=ingesta`). La competición sale
-sin la categoría delante («PRIMERA CADETE · Grupo 4»), y si dos equipos se llamarían igual, cada uno lleva lo que
-lo distingue («Alevín A · Fútbol 7»). **Ojo:
-guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad**; borrar un equipo no se
-podrá hasta la rebanada 13, ni una temporada hasta la 11.
+**Ojo: guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad.** Borrar un
+equipo no se podrá hasta la rebanada 13, ni una temporada hasta la 11.
 
 ## Antes de empezar
 

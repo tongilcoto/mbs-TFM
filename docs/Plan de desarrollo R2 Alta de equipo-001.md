@@ -17,6 +17,10 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
+> **Cerrado el 2026-10-24**: los 17 pasos y los 7 del bloque T, hechos (§8). El servidor sirve 11 de las 85
+> operaciones; **743 tests** en el backend, y en la web **195 pruebas de piezas y 68 escenarios**. Pendiente, del
+> desarrollador: la revisión con VoiceOver (LLD-B §10.7 *b*). Lo aprendido, en la §9.
+>
 > **Estado del documento: decisiones revisadas.** El flujo (§1 y §3) se colocó con el desarrollador, y la
 > decisión 1 es `D-106`, ya grabada. Las decisiones 2 a 6 se revisaron una a una con él el 2026-10-23, y las
 > secciones 2, 3, 5, 6 y 7 están escritas con lo acordado. **La revisión cambió una cosa del servidor que no
@@ -412,7 +416,7 @@ Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cad
 bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
 solo, y lo que no venga en el plan va en su propio commit.
 
-### A · Los documentos de las decisiones
+### A · Los documentos de las decisiones ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -421,13 +425,13 @@ solo, y lo que no venga en el plan va en su propio commit.
 | **R2.3** | `D-107` en la bitácora (decisión 6), con su nota «Enmendado por» en `D-68` | El desarrollador lo revisa | Un commit |
 | **R2.4** | El LLD del backend (§3.2, §3.5 y §3.7: el código de la temporada puede faltar; §5.1: `createSeason`, el alta que reutiliza el equipo y la búsqueda por etiqueta del enganche). El LLD-B: §6.1 con `/equipos/nuevo` confirmado, y `DW-07` con la decisión 3. Y el plan del backoffice: `createSeason` se adelanta de la rebanada 11 a la 2, con lo «pendiente de confirmar» resuelto, y las dos reglas del despliegue (decisión 3) como pendiente de la 16 | El desarrollador lo revisa | Un commit para el backend y otro para la web (LLD-B §E.1) |
 
-### B · El catálogo (la mini-fase)
+### B · El catálogo (la mini-fase) ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R2.5** | `openapi.yaml`: lo de la primera fila de la §5. Y en el mismo paso, los tres mensajes nuevos de `errors.ts`, porque sin ellos la web no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, los tipos de la web regenerados y `npm run build` en verde. El censo, con los tres códigos que todavía nadie emite | Un commit |
 
-### C · El servidor
+### C · El servidor ✅
 
 Con el método del backend (§5).
 
@@ -439,7 +443,7 @@ Con el método del backend (§5).
 | **R2.9** | `createTeam` | Tests, mutación y `curl` | Un commit |
 | **R2.10** | Cierre del servidor: el recuento leído del XML, el censo con las dos operaciones, los catálogos de mutación de la rebanada pasados otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
-### D · La web
+### D · La web ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -448,7 +452,7 @@ Con el método del backend (§5).
 | **R2.13** | **«Crear nueva temporada»**: el diálogo, su comprobación, sus errores y la temporada nueva elegida en el selector | Vitest, y la web abierta | Un commit |
 | **R2.14** | **La portada**: el botón, el botón en los dos vacíos, y la vuelta a la temporada del equipo creado con «Guardado» | Vitest, y la web abierta con el club del desarrollador | Un commit |
 
-### E · Los escenarios y el cierre
+### E · Los escenarios y el cierre ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -456,7 +460,7 @@ Con el método del backend (§5).
 | **R2.16** | Los `.feature` de la §6, con la *skill* de escenarios del desarrollador | `npm run e2e` en verde, con axe en los dos modos; y la revisión a mano del LLD-B §10.7 *b* | Un commit |
 | **R2.17** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
 
-### T · La tabla de la portada y los nombres del servidor (bloque añadido)
+### T · La tabla de la portada y los nombres del servidor (bloque añadido) ✅
 
 **Añadido el 2026-10-24, entre R2.14 y R2.15, a petición del desarrollador**, que prefirió hacerlo ahora y no en la
 rebanada 5: la tabla todavía es pequeña, y deja hecha la forma de ordenar para las columnas que vengan. Y los
@@ -551,8 +555,38 @@ Los escenarios de la tabla se suman a la lista de la §6 y se escriben en R2.16,
 | **T.7** | ✅ 2026-10-24 | Dos commits, como manda el LLD-B §E.1. **Backend**: el LLD (§5.1 y §5.2), con los `displayName` montados en el adaptador HTTP con los nombres del catálogo (`D-108`, `D-109`); **y un desajuste viejo, corregido**: decía que el del equipo propio usa `Club.name`, y el adaptador usa el nombre corto desde R1.9. **Web**: el LLD-B con §3.6 nueva (las tablas se ordenan pinchando su cabecera, y cómo se hace para la siguiente), el orden en la dirección (§6.5), el nombre de un equipo distinguido cuando hace falta (§9.6) y las carpetas nuevas (§1.1); el README de la web; y `AGENTS.md`. El README del backend se escribió en T.2. **Con esto, el bloque T, cerrado** |
 | **R2.15** | ✅ 2026-10-24 | **Los datos de los escenarios, por la aplicación.** En `club-data.ts`: `addSeason` crea la temporada con `POST /seasons`, solo con la etiqueta, en vez de `seed-competition` con una competición inventada; el equipo del club nace con `POST /teams` en su temporada (que se crea si no está), en vez de `seed-team`; `addPlayingTeam` da de alta el equipo y lo engancha, así que **cada enganche de los escenarios pasa ahora por la búsqueda de la temporada por etiqueta** (`D-106`); y `addTeamWithoutCompetition` es solo el alta: **sale la inscripción escrita en la base**. Ya no queda ningún comando del servidor en los datos de los escenarios, y en la base solo «Sin datos todavía», «Desactualizada» y el club a medio preparar. `anyCompetition`, sin uso, fuera. El club vacío no necesita nada: es el que nace en cada escenario. **Comprobado con los escenarios que los usan**: `npm run e2e` **35/35** dos veces (semillas 532188 y 759062), en el mismo tiempo que antes (≈39 s). El LLD-B §11.3, al día. Los datos de los escenarios nuevos (una temporada archivada, los dos «Alevín A») se añaden en R2.16, con los `.feature` que los pidan |
 | **R2.16** | ✅ 2026-10-24, salvo la revisión a mano | **Los escenarios de la rebanada**, con la *skill* del desarrollador y revisados con él antes de programarlos: **33 nuevos** —`alta.feature` (16), `temporada-nueva.feature` (8), `tabla.feature` (7) y 2 más en `portada-vacia.feature`—. Lo que cambió en la revisión: **etiquetas `@e2e` / `@ui`** (principio 8; la ordenación de la tabla, toda `@ui`), puestas también a los 35 de la rebanada 1; un escenario **campo a campo** del formulario; el envío vacío partido en dos (con temporada elegida, y el club sin temporadas, el único en que falta); el orden **entrar → usar → salir**; **cada paso dice de qué pantalla parte**, también los `Then`, y los de la rebanada 1 que se reutilizan; y **al salir, el primer `Then` dice adónde lleva el flujo y los siguientes comprueban ahí lo que se metió**. Lo que cambió al programarlos: los de la tabla, **con tres equipos** («Al día», «Con fallos», «Desactualizada»), repartidos para que el orden del servidor, el de peor a mejor y el de mejor a peor sean distintos, porque con dos el tercer clic pasaba aunque no hiciera nada. Datos nuevos: la temporada archivada, por la API y archivada **por la base** (`archiveSeason` llega en la 11); y los dos equipos iguales, por `POST /teams`. Quitado de la lista de la §6: «un equipo con dos competiciones se mueve entero», que lo cubren las pruebas de piezas de las reglas. **Lo que encontraron, en commits aparte**: el arnés medía el contraste con el diálogo a medio aparecer (ahora espera a las animaciones); los enlaces de la lista de errores no llegaban a 24 px (arreglado); y **al recargar, el navegador conserva el estado de la navegación**, así que el formulario no pasa a la temporada en curso como decía la decisión 5: dado por bueno con el desarrollador, decisión enmendada y un escenario más para el caso que sí cumple la regla (escribir la dirección a mano). `npm run e2e`: **68/68 dos veces** (semillas 7403 y 785258; 2 min 6 s y 3 min 31 s), con axe en los dos modos. **Pendiente: la revisión a mano del LLD-B §10.7 *b*** —teclado, VoiceOver, zoom al 200 % y los dos modos—, que es del desarrollador |
-| **R2.17** | | |
+| **R2.17** | ✅ 2026-10-24 | **Cierre.** Los cinco pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **743** (740 + 3 omitidos), con el censo en `0`; en la web, **195 pruebas de piezas** (`npm test`) y **68 escenarios** (`npm run e2e`, R2.16); (2) el README del backend ya estaba al día desde T.2 (743 en §0 y §5); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada y lo siguiente; (4) los rótulos de la §7 con su ✅, el bloque T incluido, y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol: el plan del backoffice decía que el servidor sirve **9** de las 85 (son **11**), y su tabla de estado y su mapa tenían la rebanada en curso; el resto de apariciones (736, 80 pruebas, 35 escenarios, 32 códigos) son registros con fecha y no se tocan. El README de la web dice qué enseña hoy. Lo aprendido, en la §9 |
 
 ## 9. Lo aprendido
 
-Se escribe al cerrar la rebanada (R2.17).
+- **Los escenarios, escritos y revisados antes que sus pasos.** La revisión de los `.feature` con el desarrollador
+  cambió seis cosas antes de programar una línea: las etiquetas `@e2e` / `@ui`, el orden entrar → usar → salir,
+  que cada paso diga de qué pantalla parte, que la salida compruebe en la pantalla nueva lo que se metió, un
+  escenario campo a campo y el envío vacío partido en sus dos casos. Programados después, salieron a la primera en
+  lo que dependía de esa forma.
+- **Los escenarios encuentran lo que las pruebas de piezas no pueden ver.** Tres cosas de R2.16: el navegador
+  **conserva el estado de la navegación al recargar** (la decisión 5 daba por hecho lo contrario, y las pruebas de
+  piezas lo «simulaban» quitándolo); los enlaces de la lista de errores no llegaban a 24 px; y axe midiendo con una
+  ventana a medio aparecer. Las piezas prueban lo que uno cree que pasa; el navegador de verdad, lo que pasa.
+- **La herramienta que mide se vuelve a medir, y el arreglo se generaliza.** axe ya había medido en mitad de una
+  animación en R1.12 (el cambio de modo). Esta vez se arregló donde vale para todo: el arnés espera a que acabe lo
+  que se mueve antes de medir.
+- **Para probar un orden, datos en los que los órdenes difieran.** Con dos equipos, «al revés» y «el de siempre»
+  pueden coincidir, y el escenario del tercer clic pasaba sin hacer nada. Con tres, repartidos a propósito, cada
+  `Then` comprueba el orden entero. Lo mismo vale para las pruebas de piezas de las reglas.
+- **Una sola fuente de la verdad, también para los textos que se ven.** Los valores de las listas ya salían del
+  catálogo, pero sus nombres y su orden estaban escritos en la web, y el servidor tenía otra copia (`D-108`,
+  `D-109`). Llevarlo al catálogo costó una herramienta de compilación y descubrir que el generador solo fabrica los
+  tipos que se usan (`filter: schemas`).
+- **Un texto de pantalla no debe prometer lo que nadie ha decidido.** «Se engancha con la federación desde la ficha
+  del equipo» venía de la R1, cuando no había ni ficha ni enganche; ahora dice «Pendiente de sincronizar con la
+  Federación», y el camino lo decide la rebanada 3.
+- **Usar la web mientras se construye, otra vez.** El texto subrayado del botón, la categoría repetida en la tabla,
+  la tabla sin ordenar, los dos «Alevín A» y el tabulador de Safari los vio el desarrollador con la web abierta;
+  cada uno fue a su commit. Y mirar la web con un Chromium de verdad (Playwright, solo leyendo) sirvió cuando la
+  extensión del navegador no estaba.
+
+**Queda abierto, con dueño:** la revisión con VoiceOver (el desarrollador); las acciones de cada fila de la portada
+y el enganche (rebanada 3); cómo se llama un equipo en un partido y el `displayName` que no distingue género ni
+modalidad (rebanada 4); la política de seguridad de la página y el peso de `schemas.json` (rebanada 16); y vigilar
+cuánto tarda `npm run e2e`, que fue de 2 min 6 s a 3 min 31 s entre dos pasadas de R2.16.
