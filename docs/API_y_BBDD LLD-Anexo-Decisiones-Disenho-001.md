@@ -75,6 +75,7 @@
 | **D-106**              | La temporada puede nacer en la web sin código de la federación; el primer enganche se lo pone                                 | §3.2, §3.5, §3.7, §5.1             |
 | **D-107**              | Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409                                            | §3.5, §5.1                         |
 | **D-108**              | Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí                              | §5.1                               |
+| **D-109**              | El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP | §2.2, §5.1, §5.2                   |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -4899,7 +4900,7 @@ TeamCategory:
    le falta el nombre o si sobra uno que la lista no tiene. Y los nombres llegan a la web con el tipo de su lista,
    así que una pantalla que pida el nombre de un valor que no existe no compila.
 5. **Es solo descripción.** `x-` es la forma que tiene OpenAPI de añadir palabras propias, y los que no la conocen
-   la ignoran: el servidor no la lee, no cambia ninguna operación ni lo que valida, y el `lint` de Redocly la
+   la ignoran: el servidor no la lee *(enmendado por [D-109]: la lee al compilar)*, no cambia ninguna operación ni lo que valida, y el `lint` de Redocly la
    acepta. En la web, Ajv, que va en modo estricto, la recibe declarada, igual que `components`.
 6. **Las apps del móvil**, cuando existan, leen los mismos nombres del mismo catálogo.
 
@@ -4923,6 +4924,57 @@ build` las aceptan sin tocar nada; `REQUIRE_DB=1 swift test`, **736** (733 + 3 o
 tabla, un valor sin nombre y un nombre de más, salida `1`); Ajv recibe `x-enum-names` declarada; y `names.ts` lee
 los nombres con `namesOf` y las opciones de un selector, en el orden del `enum`, con `optionsOf`. Pedir los nombres
 de `ProblemCode` o de una lista que no lo es, o el de un valor que no existe, no compila.
+
+### D-109 · El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP
+
+**Lo que lo obligó a decidirse** (2026-10-24, con la tabla de la portada, bloque T del plan de la rebanada 2 del
+backoffice). [D-108] dejó los nombres en español de cada lista en el catálogo, y la web los lee de ahí. Pero el
+servidor tenía **su propia copia** de los de las categorías (`Domain/Enumerations.swift`, `displayLabel`), y con
+ella monta tres nombres que viajan en el contrato:
+
+| Campo | Cómo se monta | Ejemplo |
+|---|---|---|
+| `CompetitionResponse.displayName` | categoría · división · grupo (`Competition.displayName`, en el Dominio) | «Cadete · PRIMERA CADETE · Grupo 4» |
+| `TeamResponse.displayName` | club, categoría y letra (en el adaptador HTTP) | «Celtic Alevín A» |
+| `TeamRef.displayName` | igual que el de `TeamResponse` | (sin programar todavía) |
+
+Si un nombre cambia en el catálogo y no en Swift, la portada diría «Alevín» y el `displayName`, otra cosa. El
+desarrollador lo pidió así: **una única fuente de la verdad, también en el servidor**.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Se generan al compilar** | Una herramienta lee `x-enum-names` de `openapi.yaml` al compilar y escribe los nombres en Swift, como el generador escribe los tipos | **Elegida** |
+| (b) Se quedan en Swift, vigilados por un test | Dos copias, atadas: un test compara la de Swift con el catálogo | Descartada: sigue habiendo dos sitios donde escribir cada nombre |
+| (c) Se leen al arrancar | El servidor lleva el catálogo dentro y lee los nombres al ponerse en marcha | Descartada: un fallo se vería al arrancar, no al compilar |
+
+**Decisión: (a), y los nombres viven junto al contrato, no en el Dominio.**
+
+1. **Una herramienta y su *plugin* de compilación**, aplicados al target `APIContract`, al lado del de
+   `swift-openapi-generator`. La herramienta lee `openapi.yaml` y escribe, para cada lista, una extensión del tipo
+   que ya genera el contrato: `Components.Schemas.TeamCategory.alevin.displayName` es «Alevín». Lee el YAML con
+   **Yams**, que ya está en el grafo porque lo usa el generador; se declara, como todo lo que se importa.
+2. **La misma comprobación que la web** (`gen-schemas.mjs`): si a una lista le falta su tabla, o a un valor su
+   nombre, o sobra uno, **la compilación falla** diciendo cuál. Cada cliente comprueba lo que consume.
+3. **El Dominio pierde `displayLabel` y `Competition.displayName`.** Un nombre en español es cosa de cómo se
+   enseña un dato, no de las reglas del negocio, y el Dominio no depende de nada (§2.2): no puede leer el
+   catálogo. Los `displayName` los monta **el adaptador HTTP**, al pasar de la entidad a la respuesta, que es
+   donde ya se monta el del equipo y donde se conoce el contrato.
+4. **Las respuestas no cambian**: los mismos campos, con los mismos textos. Lo que cambia es de dónde salen.
+
+**Lo que se asume a cambio.**
+
+- **Una pieza más al compilar**: la herramienta, su *plugin* y la dependencia declarada de Yams.
+- **La comprobación de los nombres está dos veces**, en la web y en el servidor, escrita en dos lenguajes. Es lo
+  mismo que pasa con los tipos: cada lado genera los suyos del mismo catálogo.
+- **Los tests que miraban `Competition.displayName` en el Dominio y en la persistencia pasan al adaptador HTTP**,
+  que es donde vive ahora.
+
+**Enmienda** a [D-108], punto 5 («el servidor no lo lee»): ahora lo lee, al compilar. Y al LLD, §5.2: los
+`displayName` se componen en el adaptador HTTP con los nombres del catálogo.
+
+**Lo que queda pendiente**, sin tocar aquí: `TeamResponse.displayName` («Celtic Alevín A») no distingue el
+masculino del femenino ni el fútbol 7 del fútbol 11, como le pasaba a la portada (bloque T, paso T.4). Lo
+enseñarán las apps del móvil, y se decide con ellas.
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5069,5 +5121,6 @@ de `ProblemCode` o de una lista que no lo es, o el de un valor que no existe, no
 [D-106]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
