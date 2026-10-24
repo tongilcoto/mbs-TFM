@@ -13,12 +13,13 @@ temporada, la competición en la que juega cada uno, cómo va su ingesta y cuán
 tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
 cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
-**En construcción** (rebanada 2): el **alta de equipo**, en `/equipos/nuevo`. Ya se rellena, comprueba todos los
-campos a la vez antes de enviar y avisa si se sale con cambios sin guardar. Al lado del selector de
-temporada, **«Crear nueva temporada»** la crea en ese momento, solo con su etiqueta (`2027/28`). Todavía se llega
-escribiendo la dirección: el botón de la portada llega en el paso siguiente. **Ojo: guardar da de alta el equipo
-de verdad en tu club, y «Crear» crea la temporada de verdad**; borrar un equipo no se podrá hasta la rebanada 13,
-ni una temporada hasta la 11.
+**En construcción** (rebanada 2): el **alta de equipo**. En la portada, **«Dar de alta un equipo»**, junto al
+selector de temporada, y también debajo del mensaje cuando no hay temporadas o la elegida no tiene equipos. El
+formulario (`/equipos/nuevo`) comprueba todos los campos a la vez antes de enviar y avisa si se sale con cambios
+sin guardar. Al lado de su selector de temporada, **«Crear nueva temporada»** la crea en ese momento, solo con su
+etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del equipo, con el aviso «Guardado». **Ojo:
+guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad**; borrar un equipo no se
+podrá hasta la rebanada 13, ni una temporada hasta la 11.
 
 ## Antes de empezar
 
@@ -115,8 +116,9 @@ Sin el fichero, los dos usan el **8080**. Si cambias el puerto con la web ya arr
 cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl+C` y vuelve a lanzar
 `npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
 
-**Para que la portada tenga equipos**, el club tiene que tenerlos enganchados con su federación. Mientras la web
-no sepa dar de alta equipos (rebanada 2), se hace desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
+**Para que la portada tenga equipos**, se dan de alta con «Dar de alta un equipo»: salen con «Sin competición»
+hasta que se enganchan con su federación. Mientras la web no sepa engancharlos (rebanada 3), el enganche se hace
+desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
 
 Una forma rápida de ver que los dos se hablan:
 

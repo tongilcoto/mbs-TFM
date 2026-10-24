@@ -28,7 +28,9 @@ When('abro {string} en la web de mi club', async function (this: ScenarioWorld, 
 
 Given('estoy en la portada de mi club', async function (this: ScenarioWorld) {
   await open(this, this.clubUrl())
-  await this.page.locator('main').getByRole('status').waitFor({ state: 'detached' })
+  // Hasta que acaba de cargar. Se busca por su texto: la zona del aviso «Guardado» también es un `status`, y está
+  // siempre en la página, vacía (plan R2, R2.14).
+  await this.page.locator('main').getByRole('status').filter({ hasText: 'Cargando' }).waitFor({ state: 'detached' })
 })
 
 Given('estoy en {string} en la web de mi club', async function (this: ScenarioWorld, path: string) {

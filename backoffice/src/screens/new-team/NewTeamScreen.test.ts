@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { notice } from '../../notice'
 import { primeVueOptions } from '../../theme/primevue'
 import type { Season } from '../home/seasons'
 import NewTeamScreen from './NewTeamScreen.vue'
@@ -162,6 +163,8 @@ describe('al guardar', () => {
 
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2026-27'))
     expect(sent).toEqual([{ category: 'alevin', gender: 'femenino', modality: 'futbol_7', seasonId: seasons[0]!.id }])
+    // «Guardado» lo enseña el marco (App.vue), que sigue ahí después de cambiar de pantalla.
+    expect(notice.value).toBe('Guardado')
     // El formulario se ha sustituido: «Atrás» lleva a la portada de partida.
     router.back()
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
@@ -176,7 +179,9 @@ describe('al guardar', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
 
+    notice.value = undefined
     expect(await screen.findByRole('alert')).toHaveTextContent('Ese equipo ya está dado de alta en esta temporada')
+    expect(notice.value).toBeUndefined()
     expect(screen.getByRole('alert')).toHaveTextContent('Código: TEAM_ALREADY_REGISTERED')
     expect(field('Categoría')).toHaveTextContent('Alevín')
     expect(screen.getByRole('textbox', { name: 'Letra' })).toHaveValue('A')

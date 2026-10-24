@@ -10,6 +10,7 @@ import { api } from '../../api/client'
 import { placeSaveError, type ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
 import { checkForm, exampleOf, requiredFields } from '../../api/rules'
+import { announce } from '../../notice'
 import FormErrorList, { type FormError } from '../../components/FormErrorList.vue'
 import FormField from '../../components/FormField.vue'
 import LeaveDialog from '../../components/LeaveDialog.vue'
@@ -152,6 +153,8 @@ async function save() {
   if (result.ok) {
     // Da igual si el equipo era nuevo o ya existía en otra temporada (decisión 6): se vuelve a la portada en la
     // temporada en la que queda inscrito, y el formulario sale del historial (decisión 5).
+    // «Guardado» lo pone el marco, así que sigue a la vista en la portada (§3.4).
+    announce('Guardado')
     const season = seasonOptions.value.find((s) => s.value === request.seasonId)
     return leave(season?.label)
   }

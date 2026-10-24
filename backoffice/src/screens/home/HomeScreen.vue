@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import Button from 'primevue/button'
 import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
@@ -93,6 +94,13 @@ async function load() {
 watch(() => route.query.temporada, load, { immediate: true })
 onBeforeUnmount(() => pending?.abort())
 
+// «Dar de alta un equipo» lleva al formulario con la temporada que se está viendo, en el estado de la navegación y
+// no en la dirección (plan R2, decisión 5): `/equipos/nuevo` es siempre el mismo camino.
+const newTeam = computed(() => ({
+  path: '/equipos/nuevo',
+  state: chosen.value ? { seasonLabel: chosen.value.season.label } : {},
+}))
+
 // El selector cambia la dirección, así que «Atrás» vuelve a la anterior y el enlace se puede compartir.
 function pickSeason(label: string) {
   router.push({ query: { temporada: toAddress(label) } })
@@ -102,12 +110,22 @@ function pickSeason(label: string) {
 <template>
   <div class="heading">
     <h1>Equipos</h1>
-    <SeasonPicker
+    <div
       v-if="seasons && seasons.length > 0"
-      :labels="pickerLabels"
-      :model-value="chosen?.season.label ?? ''"
-      @update:model-value="pickSeason"
-    />
+      class="tools"
+    >
+      <SeasonPicker
+        :labels="pickerLabels"
+        :model-value="chosen?.season.label ?? ''"
+        @update:model-value="pickSeason"
+      />
+      <!-- Con texto, no solo un «+» (LLD-B §10.1). Va a otra pantalla: es un enlace con aspecto de botón. -->
+      <Button
+        as="router-link"
+        :to="newTeam"
+        label="Dar de alta un equipo"
+      />
+    </div>
   </div>
   <p
     v-if="chosen?.note"
@@ -141,12 +159,30 @@ function pickSeason(label: string) {
       </RouterLink>
     </p>
   </LoadError>
-  <p v-else-if="state.kind === 'noSeasons'">
-    Todavía no hay ninguna temporada.
-  </p>
-  <p v-else-if="state.kind === 'noTeams'">
-    No hay equipos en la temporada {{ chosen?.season.label }}.
-  </p>
+  <!-- La portada vacía tiene salida (plan R2, §3.1): el mismo botón, debajo del mensaje. -->
+  <div
+    v-else-if="state.kind === 'noSeasons'"
+    class="empty"
+  >
+    <p>Todavía no hay ninguna temporada.</p>
+    <p>Para empezar, da de alta el primer equipo. La temporada se crea desde el mismo formulario.</p>
+    <Button
+      as="router-link"
+      :to="newTeam"
+      label="Dar de alta un equipo"
+    />
+  </div>
+  <div
+    v-else-if="state.kind === 'noTeams'"
+    class="empty"
+  >
+    <p>No hay equipos en la temporada {{ chosen?.season.label }}.</p>
+    <Button
+      as="router-link"
+      :to="newTeam"
+      label="Dar de alta un equipo"
+    />
+  </div>
   <TeamsTable
     v-else
     :rows="state.rows"
@@ -161,6 +197,20 @@ function pickSeason(label: string) {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.empty p:first-child {
+  margin-bottom: 0;
 }
 .note {
   margin-top: 0;
