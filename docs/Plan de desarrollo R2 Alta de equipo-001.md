@@ -143,8 +143,9 @@ listas cerradas del catálogo, y la web ya las tiene (`schema.d.ts`).
 - La web vuelve a la portada **en la temporada en la que se ha inscrito el equipo** (`/?temporada=2026-27`), no
   en la de la que se vino (decisión 5), y **quita el formulario del historial**: «Atrás» lleva a la portada de
   partida, no a un formulario vacío.
-- El equipo sale en la tabla con «Sin competición» y el texto «Se engancha con la federación desde la ficha del
-  equipo», como cualquier equipo de junio (Plan R1, §3.2).
+- El equipo sale en la tabla con «Sin competición» y el texto «Pendiente de sincronizar con la Federación», como
+  cualquier equipo de junio (Plan R1, §3.2). *(Decía «Se engancha con la federación desde la ficha del equipo»;
+  cambiado el 2026-10-24: ese camino no estaba decidido.)*
 
 ---
 

@@ -279,6 +279,15 @@ Y dos cosas que salieron al hacerlo (`R2.11`, 2026-10-24):
 - **`schemas.json` pesa unos 157 KB** (unos 36 KB comprimido al viajar) porque lleva también las descripciones del
   catálogo, que Ajv no usa. Si el tamaño importa, `gen-schemas.mjs` puede quitarlas.
 
+**Pendiente de la rebanada 3: las acciones de cada fila de la portada** (decidido el 2026-10-24 con el
+desarrollador). La portada tiene que dejar hacer **rápido, desde la fila del equipo**, cosas que no deberían
+obligar a entrar en su ficha. **La 3 diseña cómo se ven esas acciones** —un menú de tres puntos verticales (⋮), un
+botón o icono por acción, u otra forma— y estrena la primera: **enganchar con la federación** el equipo que no
+tiene competición, que lleva a la pantalla del enganche con su `/preview`. Las siguientes se añaden a ese mismo
+diseño en su rebanada: **relanzar la ingesta**, en la 14 (no hay prisa; `triggerIngestion` ya está en el
+servidor); y lo que la 13 pone en el menú ⋮ de la ficha del equipo, si también tiene sentido en la fila. Mientras
+tanto, el equipo sin competición dice «Pendiente de sincronizar con la Federación», sin prometer desde dónde.
+
 **Pendiente de la rebanada 4: cómo se llama un equipo en un partido** (salió el 2026-10-24, en el bloque T de la
 [rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La federación manda en cada partido el nombre
 del equipo ya escrito por ella, del club y del rival: `"equipo_local": "CELTIC CASTILLA C.F. 'A'"`. La base no lo

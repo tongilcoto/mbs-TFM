@@ -17,7 +17,7 @@ Feature: La portada
     Given en la temporada en curso de mi club hay un equipo inscrito sin competición
     When abro la portada de mi club
     Then la fila del equipo dice "Sin competición"
-    And la fila del equipo dice "Se engancha con la federación desde la ficha del equipo"
+    And la fila del equipo dice "Pendiente de sincronizar con la Federación"
 
   Scenario Outline: La ingesta «<estado>»
     Given en la temporada en curso de mi club juega un equipo

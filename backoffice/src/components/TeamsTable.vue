@@ -53,7 +53,8 @@ const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending:
           </th>
           <td colspan="3">
             Sin competición
-            <span class="note">Se engancha con la federación desde la ficha del equipo</span>
+            <!-- Sin decir desde dónde se engancha: lo decide la rebanada 3, con las acciones de cada fila. -->
+            <span class="note">Pendiente de sincronizar con la Federación</span>
           </td>
         </tr>
         <tr

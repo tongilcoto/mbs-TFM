@@ -91,7 +91,7 @@ describe('la tabla de equipos', () => {
   test('un equipo sin competición: «Sin competición» y cómo se engancha', () => {
     renderTable([{ id: '1', team: 'Alevín A', competitions: [] }])
 
-    expect(rowTexts()).toEqual([['Alevín A', 'Sin competición Se engancha con la federación desde la ficha del equipo']])
+    expect(rowTexts()).toEqual([['Alevín A', 'Sin competición Pendiente de sincronizar con la Federación']])
   })
 })
 
