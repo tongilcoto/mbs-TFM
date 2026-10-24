@@ -159,7 +159,10 @@ La web saca todo lo que necesita para pintar una pantalla de **tres partes de la
 | Lo que va detrás de `?` | `?temporada=2025-26` | Lo que has elegido: temporada, filtros, orden |
 
 Así, **recargar o abrir un enlace guardado deja en la misma pantalla**, y un enlace que se manda a un
-compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**:
+compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**
+*(salvo el «estado de la navegación» de Vue Router, que el navegador guarda con su entrada del historial y
+conserva al recargar, pero no al abrir un enlace: así viaja la temporada de la portada al alta de equipo; plan R2,
+decisión 5)*:
 si una elección debe sobrevivir, su sitio es la dirección, no el navegador.
 
 #### 2.3 En el navegador no se guarda ningún dato del club

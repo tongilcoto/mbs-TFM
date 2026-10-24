@@ -15,8 +15,8 @@ export interface TeamForm {
 }
 
 // Lo que la portada le pasa al formulario al abrirlo, en el estado de la navegación de Vue Router, no en la
-// dirección: `/equipos/nuevo` es siempre el mismo camino (decisión 5). Al recargar, o al escribir la dirección
-// a mano, no hay.
+// dirección: `/equipos/nuevo` es siempre el mismo camino (decisión 5). Al recargar, el navegador lo conserva; al
+// escribir la dirección a mano o abrir un enlace guardado, no hay.
 export interface FromHome {
   // La temporada que enseñaba la portada, por su etiqueta: `2026/27`.
   seasonLabel?: string

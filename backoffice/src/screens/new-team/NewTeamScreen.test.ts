@@ -52,7 +52,7 @@ function problem(status: number, code: string, detail = 'No se enseña') {
 }
 
 // Abre el formulario desde la portada, como lo hará su botón: con la temporada que enseñaba en el estado de la
-// navegación. Sin `fromHome`, como al recargar.
+// navegación. Sin `fromHome`, como al escribir la dirección a mano.
 // `realTransitions`: con la animación de verdad de las ventanas, para las pruebas del foco. La de mentira de las
 // pruebas no avisa de que una ventana se ha abierto o cerrado.
 async function openForm(fromHome?: string, realTransitions = false) {
@@ -106,7 +106,7 @@ describe('el selector de temporada', () => {
     await waitFor(() => expect(field('Temporada')).toHaveTextContent('2025/26'))
   })
 
-  test('al recargar, sin temporada de la portada, la en curso', async () => {
+  test('escrita la dirección a mano, sin temporada de la portada, la en curso', async () => {
     fakeServer({})
     await openForm()
 

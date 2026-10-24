@@ -28,7 +28,7 @@ describe('qué temporada viene elegida (decisión 5)', () => {
     expect(initialSeason(seasons, '2025/26', today)?.label).toBe('2025/26')
   })
 
-  test('sin temporada de la portada (al recargar), la en curso', () => {
+  test('sin temporada de la portada (escrita la dirección a mano), la en curso', () => {
     expect(initialSeason(seasons, undefined, today)?.label).toBe('2026/27')
   })
 

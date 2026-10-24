@@ -94,7 +94,7 @@ listas cerradas del catálogo, y la web ya las tiene (`schema.d.ts`).
 - **Qué temporada viene elegida** (decisión 5), **en este orden**:
   1. **El club no tiene temporadas**: el selector sale vacío, con el botón al lado. No se calcula nada más.
   2. **Viene una temporada de la portada, y sigue en la lista**: esa.
-  3. **Si no** (se recargó, se escribió `/equipos/nuevo` a mano, o la de la portada ya no está): la regla de la
+  3. **Si no** (se escribió `/equipos/nuevo` a mano, se abrió un enlace guardado, o la de la portada ya no está): la regla de la
      portada, `chooseSeason` — la temporada en curso o, si no hay ninguna, la más reciente. **Sin error**: el
      usuario no ha escrito ninguna temporada.
 - **Al pulsar *Guardar***: la web comprueba todos los campos contra `CreateTeamRequest` y marca **todos** los que
@@ -256,7 +256,9 @@ archiva o se borra desde Temporadas (rebanada 11).
 | **Al cancelar** | La de partida | `/?temporada=2026-27`, o `/` si se llegó sin ninguna |
 
 - **El estado de la navegación** viaja con esa entrada del historial: «Atrás» y «Adelante» lo conservan; al
-  recargar o al escribir `/equipos/nuevo` a mano no hay.
+  escribir `/equipos/nuevo` a mano o al abrir un enlace guardado no hay. *(Decía «al recargar o al escribir…»:
+  **al recargar, el navegador lo conserva**, y el formulario sigue con la temporada con la que se abrió. Lo vio un
+  escenario de R2.16; se dio por bueno con el desarrollador el 2026-10-24.)*
 - **El orden para elegir la del selector** es el de la §3.2: **primero, si el club no tiene temporadas**; después,
   la que viene de la portada si sigue en la lista; y si no, `chooseSeason`, sin error. Es el mismo orden que ya
   sigue `chooseSeason` (`seasons.ts:27`: la lista vacía se mira antes de calcular nada).
@@ -377,7 +379,8 @@ desarrollador, y **los que valen son ellos**. Al final de cada escenario, axe en
 - Un equipo que ya está en esa temporada: el aviso arriba del formulario, y lo escrito sigue ahí.
 - Dar de alta un equipo solo con el teclado (LLD-B §10.7).
 - Después de guardar, «Atrás» lleva a la portada de partida, no al formulario.
-- Recargar el formulario: el selector pasa a la temporada en curso.
+- Recargar el formulario: conserva la temporada con la que se abrió. Abrirlo escribiendo su dirección: la temporada
+  en curso.
 - Salir con cambios sin guardar pregunta antes; «Cancelar» sin cambios vuelve sin preguntar.
 
 **La temporada nueva** (§3.3)
