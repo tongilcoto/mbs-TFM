@@ -173,7 +173,7 @@ public struct IngestCalendar: Sendable {
             }
             return (
                 coordinate: FederationCoordinate(
-                    federationSeasonID: season.federationSeasonID,
+                    federationSeasonID: try season.requireFederationCode(),
                     federationCompetitionID: competition.federationCompetitionID,
                     federationGroupID: competition.federationGroupID,
                     modality: competition.modality),

@@ -1,0 +1,83 @@
+{
+  "title": "R2.6 · la temporada sin código de la federación (D-106)",
+  "filter": "SeasonTests|SeasonPersistenceTests|SeasonEndpointTests|MigrationIntegrityTests|IngestCalendarTests|IngestStandingsTests|IngestScorersTests|IngestionEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-vacio-admitido",
+      "description": "el Dominio admite un código que es la cadena vacía",
+      "file": "Sources/Domain/Season.swift",
+      "find": "        if let federationSeasonID, federationSeasonID.trimmed.isEmpty {",
+      "replace": "        if false, let federationSeasonID, federationSeasonID.trimmed.isEmpty {"
+    },
+    {
+      "id": "M2-codigo-inventado",
+      "description": "el Dominio rellena el código que falta",
+      "file": "Sources/Domain/Season.swift",
+      "find": "        self.federationSeasonID = federationSeasonID\n",
+      "replace": "        self.federationSeasonID = federationSeasonID ?? \"0\"\n"
+    },
+    {
+      "id": "M3-guarda-vacia",
+      "description": "sin código, la pasada llama con temporada vacía",
+      "file": "Sources/Application/SeasonFederationCode.swift",
+      "find": "        guard let federationSeasonID else {\n            throw ApplicationError.seasonWithoutFederationCode(label: label.value)\n        }\n        return federationSeasonID\n",
+      "replace": "        federationSeasonID ?? \"\"\n"
+    },
+    {
+      "id": "M4-calendario-sin-guarda",
+      "description": "la pasada del calendario no pasa por la guarda",
+      "file": "Sources/Application/IngestCalendar.swift",
+      "find": "federationSeasonID: try season.requireFederationCode(),",
+      "replace": "federationSeasonID: season.federationSeasonID ?? \"\","
+    },
+    {
+      "id": "M5-clasificacion-sin-guarda",
+      "description": "la pasada de la clasificación no pasa por la guarda",
+      "file": "Sources/Application/IngestStandings.swift",
+      "find": "federationSeasonID: try season.requireFederationCode(),",
+      "replace": "federationSeasonID: season.federationSeasonID ?? \"\","
+    },
+    {
+      "id": "M6-goleadores-sin-guarda",
+      "description": "la pasada de goleadores no pasa por la guarda",
+      "file": "Sources/Application/IngestScorers.swift",
+      "find": "federationSeasonID: try season.requireFederationCode(),",
+      "replace": "federationSeasonID: season.federationSeasonID ?? \"\","
+    },
+    {
+      "id": "M7-etiqueta-equivocada",
+      "description": "el error no nombra la temporada",
+      "file": "Sources/Application/SeasonFederationCode.swift",
+      "find": "seasonWithoutFederationCode(label: label.value)",
+      "replace": "seasonWithoutFederationCode(label: \"\")"
+    },
+    {
+      "id": "M8-migracion-no-suelta",
+      "description": "la migración no quita el obligatorio",
+      "file": "Sources/Persistence/SeasonRecord.swift",
+      "find": "              ALTER COLUMN federation_season_id DROP NOT NULL",
+      "replace": "              ALTER COLUMN federation_season_id SET NOT NULL"
+    },
+    {
+      "id": "M9-revert-sin-guarda",
+      "description": "el revert no comprueba si hay temporadas sin código",
+      "file": "Sources/Persistence/SeasonRecord.swift",
+      "find": "        guard missing == 0 else {",
+      "replace": "        guard missing >= 0 else {"
+    },
+    {
+      "id": "M10-guardado-rellena",
+      "description": "el repositorio guarda un código que la temporada no tiene",
+      "file": "Sources/Persistence/FluentSeasonRepository.swift",
+      "find": "federationSeasonID = season.federationSeasonID\n",
+      "replace": "federationSeasonID = season.federationSeasonID ?? \"0\"\n"
+    },
+    {
+      "id": "M11-respuesta-rellena",
+      "description": "la respuesta pone un código a la temporada que no lo tiene",
+      "file": "Sources/HTTPAdapter/SeasonHandler.swift",
+      "find": "            federationSeasonId: federationSeasonID,",
+      "replace": "            federationSeasonId: federationSeasonID ?? \"\","
+    }
+  ]
+}

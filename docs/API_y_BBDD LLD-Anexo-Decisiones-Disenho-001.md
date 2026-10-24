@@ -72,6 +72,8 @@
 | **D-101**              | El código de la federación es de la inscripción del equipo en la competición, no del equipo                                   | §3.2, §3.5, §3.7, §5.1             |
 | **D-104**              | El equipo rival es de una temporada; el propio no                                                                             | §3.2, §3.5, §3.7, §5.1             |
 | **D-105**              | La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada                                     | §3.7                               |
+| **D-106**              | La temporada puede nacer en la web sin código de la federación; el primer enganche se lo pone                                 | §3.2, §3.5, §3.7, §5.1             |
+| **D-107**              | Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409                                            | §3.5, §5.1                         |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -2548,6 +2550,10 @@ dejar abierta una cuestión pendiente y **dejarla en el camino feliz**.
    («2024/25») **no es deducible del código** (`21`), pero el `preview` la lee de `seasons[]`, que va
    incrustado en la propia página del calendario ([Anexo RFFM §F.7]). El administrador no teclea nada.
    `POST /v1/seasons` se mantiene para el resto de casos.
+
+   > **Enmendado por [D-106].** La temporada también puede nacer antes, en la web, solo con su etiqueta. Por
+   > eso el enganche la busca primero por el código de la URL y, si no la encuentra, por la etiqueta: si la
+   > encuentra sin código, le pone el de la URL en vez de crear otra.
 2. **`Competition`** — creada, o **reutilizada** si ya existe: dos equipos del mismo club pueden caer en el
    mismo grupo (el A y el B del mismo Infantil), y el segundo pegado no puede volver a crearla. El `preview`
    ya lo anticipa con `alreadyRegistered`.
@@ -2685,6 +2691,12 @@ de firma. §3.4 conserva la composición de la competición como vista derivada,
    estado «equipo creado, inscrito en ninguna parte» — invisible en todas las pantallas, que es justo el
    fallo que esta decisión repara. Es el mismo movimiento que [D-67] hizo con `ownTeamFederationId`:
    obligatorio en el único camino que lleva ahí, para que el caso malo **no llegue a existir**.
+
+   > **Enmendado por [D-106].** La temporada que pide ya no la crea solo el enganche: el club la puede crear
+   > desde el formulario de alta, solo con su etiqueta, antes de que la federación publique el calendario.
+
+   > **Enmendado por [D-107].** Si ya existe un equipo propio con esa identidad, el alta no crea otro: lo
+   > inscribe en la temporada (200). Solo da 409 si ya estaba inscrito en ella.
 3. **La purga de [D-24] arrastra las inscripciones, no los equipos.** Una cascada más, declarada
    **explícitamente** en la migración. Es el fallo silencioso evidente: borrar la temporada y llevarse por
    delante los equipos del club.
@@ -4718,6 +4730,130 @@ sin el arreglo. **4/4 mutaciones** (`Tools/Mutate/Catalogs/D-105.json`).
 
 **Enmienda** a la fila `"(No asignado)"` del [Anexo RFFM §F.11].
 
+---
+
+### D-106 · La temporada puede nacer en la web sin código de la federación; el primer enganche se lo pone
+
+**Lo que lo obligó a decidirse** (2026-10-23, al colocar el flujo de la rebanada 2 del backoffice con el
+desarrollador). El alta de equipo pide una temporada que ya exista: `POST /teams` deja el equipo inscrito en ella
+al nacer ([D-68]). Pero hoy una temporada **solo nace en el enganche**, con el código que trae la URL de la
+federación ([D-67], `C-C.6`), y el enganche es una acción de un equipo que ya existe. Además:
+
+- **En julio no hay URL.** El club forma los equipos de la temporada siguiente antes de que la federación
+  publique nada, así que ni la temporada ni su código existen todavía.
+- **Un club nuevo no tiene ninguna temporada**, y la portada lo dice sin ofrecer salida ([Plan R1, decisión 6](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
+- **`createSeason` exige el código de la federación** (`federationSeasonId`), que el club no conoce: es el `22`
+  de la URL de la RFFM.
+
+El flujo que se colocó: el alta tiene **dos pasos**. Primero, el formulario da de alta el equipo en una temporada
+que se elige en un selector; el selector trae las temporadas del servidor y un «Crear nueva temporada», que es el
+mismo camino para la primera temporada del club y para las siguientes. Después, cuando hay calendario, una acción
+sobre el equipo pide la URL: es el enganche.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) La temporada nace solo con su etiqueta, y el primer enganche le pone el código** | El código deja de ser obligatorio; el enganche reconoce la temporada por su etiqueta | **Elegida** |
+| (b) La web pide también el código de la federación | Sin cambios en el servidor | Descartada: en julio no hay URL de la que sacarlo, y el club no lo sabe |
+| (c) El servidor crea la primera temporada al dar de alta el club | La web solo vería temporadas que ya existen | Descartada por el desarrollador: la primera temporada y las siguientes nacen igual, con «Crear nueva temporada» |
+
+**Decisión: (a).**
+
+1. **`seasons.federation_season_id` pasa a admitir vacío**, en la base, en el Dominio y en el catálogo. Su
+   `UNIQUE` se queda: muchas temporadas sin código, ningún código repetido. En la API,
+   `CreateSeasonRequest.federationSeasonId` deja de ser obligatorio y `SeasonResponse.federationSeasonId` puede
+   valer `null`.
+2. **`createSeason` se programa** (está en el catálogo, sin programar): recibe la etiqueta y, si la hay, el
+   código. Una etiqueta o un código que ya existen siguen dando **409**, como dice el catálogo.
+3. **El enganche y su `/preview` buscan la temporada en dos pasos.** Primero por el código de la URL, como
+   hoy. Si no la encuentran, por la **etiqueta**: si esa temporada no tiene código, el enganche le pone el de la
+   URL (el `/preview` solo lo anuncia, no escribe nada). Solo si no existe ninguna de las dos, la crean como
+   hoy.
+4. **Si la temporada de esa etiqueta ya tiene otro código, 409 `SEASON_ALREADY_LINKED`**, en el `/preview` y en
+   el enganche. Es el paralelo de `ALREADY_LINKED_TO_FEDERATION` del equipo: la temporada ya está enganchada a
+   otra cosa, y no se pisa. Es un código nuevo en la lista cerrada de `ProblemCode`, distinto de
+   `FEDERATION_SEASON_MISMATCH`, que es la guarda de fechas de [D-91].
+5. **Quién traduce la etiqueta de la federación: su conector**, al formato del Dominio (`SeasonLabel`). Nunca el
+   catálogo. El enganche compara **dos valores del Dominio**: la etiqueta que creó el club, que pasó por el
+   `pattern` del catálogo y por `SeasonLabel`, y la que el conector tradujo del calendario. La RFFM ya lo hace
+   (`RFFMSeasonLabel`: `"2026-2027"` → `2026/27`, [D-71]); cualquier federación nueva tendrá que hacerlo en su
+   conector ([D-97]). Si el conector no sabe traducirla (H-10), no se inventa: manda la etiqueta que el
+   administrador confirmó en el `/preview`, como hoy.
+6. **La red que no depende de la etiqueta**: la guarda de [D-91] sigue comprobando que las fechas del
+   calendario caen dentro de la temporada. Si la etiqueta casara con la temporada equivocada, el enganche se
+   pararía ahí.
+7. **La ingesta sigue necesitando el código**: es con lo que llama a la federación. Una competición solo nace en
+   un enganche, que ya se lo ha puesto a su temporada; si aun así faltara, la pasada falla con un error claro en
+   vez de llamar sin código.
+
+**La validación de la etiqueta en la web** usa el `pattern` del catálogo (`^\d{4}/\d{2}$`), que es la regla con la
+que el servidor rechaza en la puerta de la API. La de «el segundo año es el siguiente» solo la dice el servidor,
+en el Dominio, y la web enseña su 400 al guardar: siempre manda el servidor, y la validación de la web es una
+comodidad, no una garantía.
+
+**Lo que se asume a cambio.**
+
+- **Una temporada creada por error se queda**, sin código, hasta que la rebanada 11 traiga su borrado
+  ([D-24]). No estorba a la ingesta: sin competiciones, no hay nada que recorrer.
+- **La etiqueta pasa a ser la llave del primer enganche.** Por eso su traducción es responsabilidad explícita
+  del conector, y por eso la guarda de [D-91] importa más que antes.
+
+**Enmienda** a [D-68] (la temporada ya no la crea solo el enganche), a [D-67] (paso 1 de la cascada: la
+temporada se busca también por etiqueta), a `C-C.6` y a la descripción de `createSeason` en el catálogo.
+
+---
+
+### D-107 · Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409
+
+**Lo que lo obligó a decidirse** (2026-10-23, al revisar con el desarrollador los errores de la rebanada 2 del
+backoffice). El catálogo decía que `POST /teams` da **409** si ya hay un equipo del club con esa categoría, letra,
+género y modalidad. Esa regla **no mira la temporada**, y el equipo propio no la lleva: «Alevín A» es la misma
+entidad año tras año ([D-28], [D-68]), y desde [D-104] solo el rival es de una temporada. Lo que cambia cada año
+es su **inscripción** (`team_registrations`).
+
+Así que el caso más normal de julio —el club da de alta en 2027/28 el «Alevín A» que ya jugó en 2026/27— daba
+«ya existe», justo cuando el usuario está haciendo lo que el alta existe para hacer: poner el equipo en la
+temporada nueva.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) El alta reutiliza el equipo** | Si ya hay uno igual, no crea otro: le añade la inscripción en esa temporada | **Elegida** |
+| (b) 409 con un código propio, y la web ofrece «Inscribirlo en 2027/28» | La web llama después a `PUT /teams/{teamId}/registrations/{seasonId}` | Descartada: un paso de más, un aviso que confunde («¿ya existe? ¡si lo estoy creando!») y adelantar `registerTeamInSeason` desde la rebanada 11 |
+| (c) La clave única del equipo propio incluye la temporada | Un «Alevín A» por temporada | Descartada: deshace [D-28] y [D-68] para el propio, y su plantilla, su historia y su enganche dejarían de ser del mismo equipo |
+
+**Decisión: (a).** `POST /teams` busca primero un equipo **propio** con la misma identidad (categoría, letra,
+género y modalidad, la clave de §3.5):
+
+| Lo que encuentra | Qué hace | Responde |
+|---|---|---|
+| Ninguno | Crea el equipo, sin código, y su inscripción en la temporada, como hasta ahora | **201** con el equipo |
+| Uno, **sin inscripción** en esa temporada | No crea otro: añade la inscripción, con la competición vacía (la fila de junio de [D-68]) | **200** con el equipo que ya existía |
+| Uno, **ya inscrito** en esa temporada, con competición o sin ella | Nada | **409 `TEAM_ALREADY_REGISTERED`** |
+
+1. **El 200 y el 201 se distinguen** para quien lo necesite (un *script*, una prueba): el 201 dice «he creado», el
+   200 «ya estaba y lo he inscrito». A la web le da igual: en los dos vuelve a la portada con «Guardado».
+2. **`TEAM_ALREADY_REGISTERED` es un código nuevo** en la lista cerrada de `ProblemCode`. El 409 que el catálogo
+   describía («ya existe un equipo igual») **desaparece**: un equipo igual ya no es un conflicto.
+3. **Se comprueba antes de escribir**, no esperando al `23505` de Postgres, como se hizo en F10 con
+   `FEDERATION_TEAM_ID_TAKEN`. Si dos personas guardan lo mismo a la vez y las dos pasan la comprobación, la base
+   rechaza la segunda con su restricción de únicos y vuelve como 500: el límite de dos personas editando a la vez
+   que ya acepta el LLD del backoffice (§5.6).
+4. **Solo equipos propios.** La búsqueda no mira a los rivales: tienen club rival y temporada, y nunca son la
+   misma identidad que un propio.
+5. **La operación y su forma no cambian**: mismo cuerpo, misma respuesta. Cambian la descripción, el 200 y el 409
+   del catálogo.
+
+**Lo que se asume a cambio.**
+
+- **`POST` ya no siempre crea.** Es un alta que puede acabar en inscripción. Se acepta porque, para el club, lo
+  que pide es lo mismo: «este equipo, en esta temporada». Lo que cuenta es que el resultado sea el pedido, y el
+  código de estado dice cuál de los dos caminos se tomó.
+- **Un equipo dado de alta con la identidad equivocada no se puede «volver a crear bien»**: si «Alevín A» se dio
+  de alta como femenino por error, darlo de alta como masculino crea otro, y el primero se queda hasta la
+  rebanada 13 (`deleteTeam`). Es lo que ya pasaba antes.
+
+**Enmienda** a [D-68], consecuencia 2 (`seasonId` obligatorio: el equipo nace inscrito, y ahora también se
+inscribe si ya existía), a la descripción de `createTeam` y de `CreateTeamRequest` en el catálogo, y a §5.1 del LLD.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4860,5 +4996,7 @@ sin el arreglo. **4/4 mutaciones** (`Tools/Mutate/Catalogs/D-105.json`).
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-104]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-106]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

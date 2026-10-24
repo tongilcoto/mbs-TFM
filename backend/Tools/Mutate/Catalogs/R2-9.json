@@ -1,0 +1,76 @@
+{
+  "title": "R2.9 · createTeam: crea el equipo, o lo inscribe si ya existía (D-107)",
+  "filter": "CreateTeamTests|TeamCreationEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-temporada",
+      "description": "no comprueba que la temporada exista",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "        guard try await seasons.find(command.seasonID) != nil else {",
+      "replace": "        guard true else {"
+    },
+    {
+      "id": "M2-siempre-crea",
+      "description": "nunca reutiliza: siempre crea otro equipo",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "        if let existing {",
+      "replace": "        if false, let existing {"
+    },
+    {
+      "id": "M3-reutiliza-rival",
+      "description": "reutiliza también un rival con la misma identidad",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "            $0.isOwn && $0.category == command.category",
+      "replace": "            $0.category == command.category"
+    },
+    {
+      "id": "M4-sin-letra",
+      "description": "la letra no cuenta para la identidad",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": " && $0.letter == command.letter",
+      "replace": ""
+    },
+    {
+      "id": "M5-sin-conflicto",
+      "description": "ya inscrito en esa temporada no es conflicto",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "            guard try await registrations.list(teamID: existing.id, seasonID: command.seasonID).isEmpty",
+      "replace": "            guard true"
+    },
+    {
+      "id": "M6-reutiliza-sin-inscribir",
+      "description": "reutiliza el equipo pero no lo inscribe",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "            try await registrations.save(try TeamRegistration(\n                id: TeamRegistrationID(raw: ids.next()), team: existing,\n                seasonID: command.seasonID, createdAt: now, updatedAt: now))\n",
+      "replace": ""
+    },
+    {
+      "id": "M7-nuevo-sin-inscribir",
+      "description": "crea el equipo pero no lo inscribe",
+      "file": "Sources/Application/CreateTeam.swift",
+      "find": "        try await teams.save(team)\n        try await registrations.save(try TeamRegistration(\n            id: TeamRegistrationID(raw: ids.next()), team: team,\n            seasonID: command.seasonID, createdAt: now, updatedAt: now))\n",
+      "replace": "        try await teams.save(team)\n"
+    },
+    {
+      "id": "M8-siempre-201",
+      "description": "responde 201 también cuando solo inscribe",
+      "file": "Sources/HTTPAdapter/TeamHandler.swift",
+      "find": "        return result.created\n            ? .created(.init(body: .json(body)))\n            : .ok(.init(body: .json(body)))",
+      "replace": "        return .created(.init(body: .json(body)))"
+    },
+    {
+      "id": "M9-409-generico",
+      "description": "el 409 sale con otro código",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .conflict, code: \"TEAM_ALREADY_REGISTERED\",",
+      "replace": "return Problem(status: .conflict, code: \"INTERNAL\","
+    },
+    {
+      "id": "M10-modalidad-cruzada",
+      "description": "el handler traduce mal la modalidad",
+      "file": "Sources/HTTPAdapter/TeamHandler.swift",
+      "find": "modality: payload.modality.toDomain(),",
+      "replace": "modality: .futbol11,"
+    }
+  ]
+}

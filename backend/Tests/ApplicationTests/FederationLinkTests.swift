@@ -79,6 +79,46 @@ struct FederationLinkTests {
         #expect(await store.seasons.count == 1)
     }
 
+    /// **`D-106`: si no la encuentra por el código, la busca por la etiqueta**, y a
+    /// la que nació en la web sin código **le pone el de la URL** en vez de crear
+    /// otra. La etiqueta es la que el administrador confirmó en el `/preview`.
+    @Test("a la temporada sin código con esa etiqueta le pone el código, y no crea otra (D-106)")
+    func theLinkGivesItsCodeToASeasonWithoutOne() async throws {
+        let team = try Fixture.team()
+        let born = try Fixture.season("2025/26", federationSeasonID: nil)
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [born], teams: [team])
+
+        let result = try await Self.useCase(store: store, federation: Self.client())
+            .execute(try Self.request(teamID: team.id), actor: Self.actor)
+
+        #expect(result.seasonID == born.id)
+        let seasons = await store.seasons
+        #expect(seasons.count == 1)
+        #expect(seasons.first?.federationSeasonID == "21")
+        #expect(seasons.first?.label.value == "2025/26")
+    }
+
+    /// **Y no pisa un código que ya tiene** (`D-106`, punto 4): se para antes de
+    /// escribir nada, ni la competición ni la inscripción.
+    @Test("la temporada de esa etiqueta con otro código: SEASON_ALREADY_LINKED, sin escribir nada (D-106)")
+    func theLinkDoesNotOverwriteAnotherCode() async throws {
+        let team = try Fixture.team()
+        let store = IngestionStore()
+        await store.seed(club: try Fixture.club())
+        await store.seed(seasons: [try Fixture.season("2025/26", federationSeasonID: "20")], teams: [team])
+        let before = await store.writes
+
+        await #expect(throws: ApplicationError.seasonAlreadyLinked(
+            label: "2025/26", existing: "20", incoming: "21")) {
+            try await Self.useCase(store: store, federation: Self.client())
+                .execute(try Self.request(teamID: team.id), actor: Self.actor)
+        }
+        #expect(await store.writes == before)
+        #expect(await store.seasons.first?.federationSeasonID == "20")
+    }
+
     // ── C-C.7 · la competición se reutiliza: dos equipos en el mismo grupo ───
 
     /// **`Competition` se reutiliza si ese grupo ya está en esa temporada**

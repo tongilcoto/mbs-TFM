@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **697 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **736 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -37,9 +37,11 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/ingestion-runs` · `POST /v1/ingestion-runs`                                  | F6                                |
 | `POST /v1/teams/{id}/federation-link/preview` · `POST /v1/teams/{id}/federation-link` | F10 — [§4.1](#enganche)           |
 | `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
+| `POST /v1/seasons`                                                                    | Backoffice R2 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
 | `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
-| Las otras 76 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
+| Las otras 74 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -220,11 +222,17 @@ primero.
 su calendario en la web de la federación (`D-67`). Con eso se crean de una vez la temporada (si no existía),
 la competición y la inscripción del equipo, y se encola su primera ingesta.
 
+**La temporada se busca en dos pasos** (`D-106`): por el código de la URL (`temporada=21`) y, si no está, por su
+**etiqueta**. Así, la temporada que el club creó antes sin código ([§4.3](#temporadas)) la reconoce el primer
+enganche y **le pone el código**, en vez de crear otra. Si la temporada de esa etiqueta ya tiene **otro** código,
+las dos puertas responden **409 `SEASON_ALREADY_LINKED`**, con los dos códigos en el `detail`: o la URL es de
+otra temporada, o la del club se enganchó con otra cosa.
+
 > **Cuando exista la web**, esto se hace desde la ficha del equipo y los `curl` de aquí sobran. Hasta
 > entonces, este es el camino, y son tres pasos.
 
-**Paso 0 — el equipo.** `POST /v1/teams` es del *backoffice* y no está hecho, así que el equipo se crea con
-un comando ([§6.3](#seed-team)):
+**Paso 0 — el equipo.** Se crea con `POST /v1/teams` ([§4.6](#alta-de-equipo)), o con un comando
+([§6.3](#seed-team)), que no lo inscribe en ninguna temporada:
 
 ```sh
 swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
@@ -416,6 +424,25 @@ curl -s "http://atleti.localhost:8080/v1/seasons?includeArchived=true" | jq  # c
   o si la siguiente se creó por adelantado, que no está en curso hasta su 1 de julio.
 - `startDate` y `endDate` son días sin hora (`2026-07-01`), y salen de la etiqueta.
 - **`archivedAt` no viene si la temporada no está archivada**: el campo falta, no llega como `null`.
+- **`federationSeasonId` tampoco viene si la temporada no tiene código de la federación** (`D-106`): el club la
+  crea en la web solo con su etiqueta, y el primer enganche se lo pone. Mientras no lo tenga, **la ingesta no
+  puede sincronizar sus competiciones** —no debería tener ninguna, porque solo nacen en un enganche—, y si
+  alguna lo intenta, la pasada falla con `seasonWithoutFederationCode` en el motivo, sin llamar a la federación.
+
+**Dar de alta una temporada** (rebanada 2): basta la etiqueta. Es lo que hace el formulario de alta de equipo del
+backoffice, con «Crear nueva temporada».
+
+```sh
+curl -s -X POST http://atleti.localhost:8080/v1/seasons \
+     -H 'Content-Type: application/json' -d '{"label": "2027/28"}' | jq
+```
+
+- **201** con la temporada, **sin `federationSeasonId`**: se lo pone el primer enganche (`D-106`). Se puede mandar
+  también, para semillas y pruebas.
+- **409 `SEASON_ALREADY_EXISTS`** si ya hay una con esa etiqueta —**también archivada**, aunque no salga en la
+  lista— o con ese código. El `detail` dice cuál de los dos: `label: ya hay una temporada con '2027/28'`.
+- **422 `INVALID_VALUE`** si la etiqueta no es una temporada: `2027-28` o `2027/29`. Las dos las rechaza el
+  Dominio: el servidor no aplica el `pattern` del catálogo, que es para la web.
 
 <a id="competiciones"></a>
 ### 4.4 Las competiciones
@@ -475,12 +502,32 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
   (`Celtic Cadete B`).
 - Una temporada que no existe da **404**; un `id` que no es un UUID, **400**.
 
+<a id="alta-de-equipo"></a>
+### 4.6 El alta de un equipo
+
+**Un equipo del club, inscrito en una temporada** (`D-66`, `D-68`). Es el formulario de alta del backoffice
+(rebanada 2). No lleva ningún dato de la federación: se engancha después ([§4.1](#enganche)).
+
+```sh
+curl -s -X POST http://atleti.localhost:8080/v1/teams -H 'Content-Type: application/json' \
+     -d '{"category": "alevin", "letter": "A", "gender": "masculino", "modality": "futbol_7",
+          "seasonId": "<id de la temporada>"}' | jq
+```
+
+- **201** con el equipo nuevo, ya inscrito en esa temporada, sin competición.
+- **Si el equipo ya existe, lo inscribe y responde 200** (`D-107`): «el mismo» es uno propio con la misma
+  categoría, letra, género y modalidad. El «Alevín A» de este año y el del que viene son el mismo equipo; lo
+  que cambia es su inscripción. **Sin letra es otro equipo**, no «cualquiera».
+- **409 `TEAM_ALREADY_REGISTERED`** si ya estaba inscrito en esa temporada.
+- **404 `SEASON_NOT_FOUND`** si la temporada no existe; **400** si `seasonId` no es un UUID; **422** si la letra
+  solo tiene espacios.
+
 ---
 
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 697 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 736 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

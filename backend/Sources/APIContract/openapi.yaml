@@ -366,10 +366,15 @@ paths:
       operationId: createSeason
       summary: Crea una temporada
       description: |
-        Solo se reciben `label` y `federationSeasonId`. El servidor **deriva**
+        Solo se reciben `label` y, **opcional**, `federationSeasonId`. El servidor **deriva**
         `startDate`/`endDate` a partir de `label` (01/07/AAAA → 30/06/AABB) y calcula
         `isCurrent` **en lectura** — no hay campos de fechas ni de `isCurrent` en la
         entrada, lo que reduce la superficie de error (§5.1).
+
+        **La temporada nace sin código desde la web** (D-106): el club la crea en julio, desde el alta
+        de equipo, cuando la federación todavía no ha publicado nada. **El primer enganche le pone el
+        código** de la URL del calendario (`POST /teams/{teamId}/federation-link`). El código se sigue
+        aceptando aquí para semillas, *scripts* y pruebas.
       requestBody:
         required: true
         content:
@@ -387,8 +392,20 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409':
           description: |
-            Conflicto: ya existe una temporada con ese `label` o ese `federationSeasonId`
-            (ambos son únicos dentro del club, §3.5).
+            Ya existe una temporada con ese `label` o ese `federationSeasonId` (ambos son únicos dentro
+            del club, §3.5), **también si está archivada**: `listSeasons` no la enseña, pero su etiqueta
+            sigue ocupada. El `code` es `SEASON_ALREADY_EXISTS`. Se comprueba antes de escribir.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            El `label` no es una temporada: **los años no siguen** («2026/28»), o **no tiene la forma
+            `AAAA/AB`** («2026-27»). Lo segundo lo describe el `pattern`, pero el generador del servidor no
+            lo aplica (como no aplica `minLength`, D-65), así que las dos las rechaza el *Value Object*
+            `SeasonLabel` del Dominio. También un `federationSeasonId` que solo tiene espacios. El `code`
+            es `INVALID_VALUE`, con `<campo>: <motivo>` en el `detail`.
           content:
             application/problem+json:
               schema:
@@ -1043,6 +1060,12 @@ paths:
         ninguna temporada hasta tener calendario, que es justo lo que este alta adelanta. Para engancharlo
         con la federación, `POST /teams/{teamId}/federation-link`.
 
+        **Si el equipo ya existe, lo inscribe** (D-107). El equipo propio no lleva temporada: el "Alevín A"
+        de 2026/27 y el de 2027/28 son **el mismo equipo**. Así que, si ya hay uno propio con la misma
+        `category`, `letter`, `gender` y `modality`, no se crea otro: se le añade la inscripción en esa
+        temporada y se devuelve con **200**. Solo es conflicto si ya estaba inscrito en ella (**409**). Se
+        comprueba antes de escribir.
+
         Requiere **rol elevado** (§7.3).
       requestBody:
         required: true
@@ -1051,8 +1074,16 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateTeamRequest'
       responses:
+        '200':
+          description: |
+            El equipo **ya existía** y se ha inscrito en la temporada de `seasonId` (D-107). Se devuelve el
+            que ya existía, no uno nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
         '201':
-          description: Equipo creado.
+          description: Equipo creado, e inscrito en la temporada de `seasonId`.
           content:
             application/json:
               schema:
@@ -1061,14 +1092,25 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
-          description: La temporada de `seasonId` no existe.
+          description: La temporada de `seasonId` no existe. El `code` es `SEASON_NOT_FOUND`.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
           description: |
-            Ya existe un equipo del club con esa categoría, letra, género y modalidad (§3.5).
+            El equipo del club con esa categoría, letra, género y modalidad (§3.5) **ya está inscrito en
+            esa temporada** (D-107). El `code` es `TEAM_ALREADY_REGISTERED`. Que exista en otra temporada no es
+            conflicto: se inscribe (200).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Una `letter` que solo tiene espacios. El `minLength` del catálogo no lo caza —el espacio es un
+            carácter, y además el generador no lo aplica (D-65)—; lo rechaza el Dominio. El `code` es
+            `INVALID_VALUE`, con `letter: <motivo>` en el `detail`.
           content:
             application/problem+json:
               schema:
@@ -1196,6 +1238,16 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            La temporada del club con la **etiqueta** de la URL ya tiene **otro** código de la federación
+            (D-106). El `code` es `SEASON_ALREADY_LINKED`. No se pisa: o la URL es de otra temporada, o la
+            temporada del club se enganchó con otra cosa. Distinto de `FEDERATION_SEASON_MISMATCH`, que es la
+            guarda de fechas de D-91.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '501':
           description: |
             La federación de este club está en el catálogo pero **todavía no tiene adaptador de
@@ -1242,9 +1294,11 @@ paths:
 
         **Qué crea, en cascada:**
 
-        1. **`Season`** — si el `temporada=…` de la URL no corresponde a ninguna del club. La etiqueta
+        1. **`Season`** — se busca primero por el `temporada=…` de la URL y, si no, **por la etiqueta**
+           (D-106): si la del club no tiene código, **se lo pone**; si no hay ninguna, la crea. La etiqueta
            ("2024/25") no es deducible del código (`21`), pero el `preview` la lee de `seasons[]`, que va
-           incrustado en la propia página del calendario (§F.7 del anexo RFFM).
+           incrustado en la propia página del calendario (§F.7 del anexo RFFM), y el conector la traduce
+           al formato del modelo.
         2. **`Competition`** — creada, o **reutilizada** si ya existía: dos equipos del club pueden caer en
            el mismo grupo, y el segundo enganche no puede volver a crearla (`alreadyRegistered`).
         3. **`TeamRegistration`** — la inscripción del equipo en esa temporada, si no la tenía ya (D-68).
@@ -1289,7 +1343,9 @@ paths:
             competición, **ese `ownTeamFederationId` no es de ninguno de los equipos del calendario** (el
             `code` es `OWN_TEAM_NOT_IN_CALENDAR`), o la identidad no cuadra: la competición dice una
             `ageCategory`, un `gender` o una `modality` distintos de los que el equipo tiene congelados
-            desde su alta (D-66, D-58, §3.2). A diferencia del 409 de D-21, **este tiene salida**: se
+            desde su alta (D-66, D-58, §3.2). O la temporada del club con la etiqueta de la URL ya tiene
+            **otro** código de la federación (el `code` es `SEASON_ALREADY_LINKED`, D-106). A diferencia del
+            409 de D-21, **este tiene salida**: se
             engancha otro equipo, se elige uno de los de `teams[]`, o se corrige antes de confirmar.
 
             **La edad cuenta igual que las otras dos.** Enganchar un cadete a una competición juvenil
@@ -4023,8 +4079,11 @@ components:
         - NOT_FOUND
         - OWN_TEAM_NOT_IN_CALENDAR
         - RUN_NOT_RECORDED
+        - SEASON_ALREADY_EXISTS
+        - SEASON_ALREADY_LINKED
         - SEASON_LABEL_UNAVAILABLE
         - SEASON_NOT_FOUND
+        - TEAM_ALREADY_REGISTERED
         - TEAM_NOT_FOUND
         - TENANT_MISMATCH
         - TENANT_NOT_PROVISIONED
@@ -4160,15 +4219,17 @@ components:
       type: string
       pattern: '^\d{4}/\d{2}$'
       description: |
-        Etiqueta de la temporada. El `pattern` rechaza el cuerpo mal formado **en el borde**
-        (400); el *Value Object* `SeasonLabel` del dominio (§4.1) garantiza la misma
-        invariante en la ruta de **ingesta**, que no pasa por este contrato — validación en
-        **dos capas**, deliberada.
+        Etiqueta de la temporada. El `pattern` es la regla que **el cliente** comprueba antes de
+        enviar (la web, con Ajv). **El servidor no lo aplica en el borde**: su generador no valida
+        `pattern` (como no valida `minLength`, D-65). Quien rechaza es el *Value Object*
+        `SeasonLabel` del dominio (§4.1), que además exige que los años sigan y vale igual para la
+        ruta de **ingesta**, que no pasa por este contrato. Por eso una etiqueta mal formada es
+        **422** en `createSeason`, y **400** en el enganche, que no declara 422 (C-0.5).
       examples: ['2024/25']
 
     CreateSeasonRequest:
       type: object
-      required: [label, federationSeasonId]
+      required: [label]
       additionalProperties: false
       properties:
         label:
@@ -4178,8 +4239,8 @@ components:
           minLength: 1
           description: |
             Identificador de la temporada en la **API de la federación/liga** (§3.7).
-            Distinto del `id` UUID interno y **obligatorio**: toda temporada tiene
-            contrapartida federativa y este es el parámetro con el que se llama a esa API.
+            Distinto del `id` UUID interno. **Opcional** (D-106): lo normal es que la temporada
+            nazca sin él y que se lo ponga el primer enganche, con el de la URL del calendario.
 
     UpdateSeasonRequest:
       type: object
@@ -4195,7 +4256,7 @@ components:
 
     SeasonResponse:
       type: object
-      required: [id, label, federationSeasonId, startDate, endDate, isCurrent, createdAt, updatedAt]
+      required: [id, label, startDate, endDate, isCurrent, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -4204,7 +4265,10 @@ components:
         label:
           $ref: '#/components/schemas/SeasonLabel'
         federationSeasonId:
-          type: string
+          type: [string, 'null']
+          description: |
+            El código de la temporada en la federación, o **`null` mientras ningún enganche se lo haya
+            puesto** (D-106): la temporada creada desde la web nace sin él.
         startDate:
           type: string
           format: date
@@ -5041,7 +5105,8 @@ components:
         identidad inmutable de D-37). Crear no es corregir.
 
         **`seasonId` no es identidad**, y por eso no entra en la clave única: es la temporada en la que el
-        equipo queda **inscrito al nacer** (D-68), y se cambia después con `/registrations`. Es obligatorio
+        equipo queda **inscrito al nacer** (D-68), y se cambia después con `/registrations`. Si el equipo
+        ya existía, es la temporada en la que **se inscribe** (D-107). Es obligatorio
         porque sin él existiría el estado "equipo creado, inscrito en ninguna parte", **invisible en todas
         las pantallas** que filtran por temporada.
       required: [category, gender, modality, seasonId]
@@ -5146,6 +5211,10 @@ components:
           description: |
             `false` ⇒ al confirmar se **creará** la temporada en cascada. El administrador la ve antes,
             que es lo que hace aceptable que una URL pegada dé de alta una `Season`.
+
+            `true` ⇒ ya existe: con ese código, o **con esa etiqueta y sin código** (D-106), y entonces al
+            confirmar el enganche se lo pone. La etiqueta la traduce el conector de la federación al
+            formato del modelo, nunca el catálogo.
 
     FederationLinkRequest:
       type: object

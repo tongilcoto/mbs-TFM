@@ -36,3 +36,5 @@ filter:
     - listSeasons             # R1 — las temporadas, para el selector de la portada del backoffice
     - listCompetitions        # R1 — las competiciones, con sus filtros, para la portada del backoffice
     - listSeasonRegistrations # R1 — los equipos de una temporada, con sus competiciones (D-102)
+    - createSeason            # R2 — la temporada nace en la web, sin código de la federación (D-106)
+    - createTeam              # R2 — el alta de equipo; si ya existe, lo inscribe en la temporada (D-107)

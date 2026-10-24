@@ -388,7 +388,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1 y **697** con `D-104` y `D-105` (2026-10-21). Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1, **697** con `D-104` y `D-105` (2026-10-21) **705** con la temporada sin código de `D-106` (`R2.6`, 2026-10-24) **717** con `createSeason` (`R2.7`) **724** con el enganche que busca la temporada por su etiqueta (`R2.8`) y **736** con `createTeam` (`R2.9`). Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
@@ -413,8 +413,10 @@ axe en los dos modos. Los escenarios preparan sus datos **por la propia aplicaci
 solo como último recurso. **La tabla de equipos, revisada el 2026-10-21**, antes de la rebanada 2: el rival pasa a
 ser de una temporada (`D-104`), con el paso 2 de la cadena de equipos arreglado (ya no casa con un rival de otro
 código, como pedía §3.7), y la jornada de descanso de un grupo impar se guarda como partido contra el equipo
-ficticio de la federación, con la fecha de su jornada (`D-105`). Lo siguiente, el plan de la rebanada 2 (el alta
-de equipos).
+ficticio de la federación, con la fecha de su jornada (`D-105`). **La rebanada 2** (el alta de equipos) tiene
+[su plan](./docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), con las decisiones revisadas el
+2026-10-23: la temporada nace en la web sin código de la federación y el primer enganche se lo pone (`D-106`), y
+dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). El catálogo, ya cambiado (`R2.5`, 35 códigos), y la temporada sin código en el servidor (`R2.6`, 19 migraciones por club); `createSeason` (`R2.7`, 10 operaciones servidas); el enganche que busca la temporada por su etiqueta (`R2.8`); `createTeam`, que inscribe al equipo que ya existe (`R2.9`, 11 operaciones servidas); **el servidor de la rebanada 2, cerrado** (`R2.10`, 2026-10-24: 736 tests, mutaciones 38/38, censo en 0); lo siguiente, `R2.11`: las reglas del catálogo en la web, con Ajv.
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -490,7 +492,7 @@ swift test --filter FederationTests       # los adaptadores de federación: sin 
 swift run Run migrate --yes               # plano de control (public.tenants)
 swift run Run provision-tenant atleti     # alta de club: schema + registro + migraciones
 swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
-                                          # hoy son DIECISÉIS migraciones por tenant:
+                                          # hoy son DIECINUEVE migraciones por tenant:
                                           #   clubs -> seasons -> opponent_clubs ->
                                           #   teams -> competitions -> rounds ->
                                           #   matches -> standing_rows ->
@@ -511,6 +513,14 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   ingestion_runs por finished_at, que
                                           #   desde que la consulta ordena por
                                           #   started_at no tiene ningún lector)
+                                          #   -> (D-101: el código del equipo propio
+                                          #   pasa de teams a team_registrations)
+                                          #   -> (D-104: el rival es de una
+                                          #   temporada: teams.season_id, su CHECK y
+                                          #   las dos claves únicas rehechas)
+                                          #   -> (D-106: seasons.federation_season_id
+                                          #   ANULABLE; su revert se para si alguna
+                                          #   temporada no tiene código)
                                           #   Las que ALTERAN ingestion_runs son
                                           #   varias y no una porque cada una ya
                                           #   estaba aplicada cuando llegó la
@@ -518,7 +528,7 @@ swift run Run migrate-tenants             # recorre todos los clubes (§4.7)
                                           #   el CHECK de `kind` porque un enumerado
                                           #   derivado NO se mantiene solo: se
                                           #   deriva al migrar y ahí se congela.
-                                          #   Las dos últimas van SEPARADAS aunque
+                                          #   Las dos de F10 van SEPARADAS aunque
                                           #   sean de la misma fase: no son la misma
                                           #   razón, y una migración que hace dos
                                           #   cosas no se revierte a medias

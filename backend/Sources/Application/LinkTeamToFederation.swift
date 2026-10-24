@@ -149,11 +149,22 @@ public struct LinkTeamToFederation: Sendable {
             // indiferente: manda el cuerpo, que es lo que el administrador
             // confirmó sobre la propuesta del `/preview`; el sobre es el valor
             // por defecto de esa propuesta.
+            //
+            // **`D-106`: y si no está por el código, por la etiqueta.** La que el
+            // club creó en julio desde el alta de equipo no tiene código: se le
+            // pone el de la URL, en vez de crear otra con la misma etiqueta. Si
+            // la de esa etiqueta ya tiene **otro**, `findForLink` se para.
             let season: Season
-            if let existing = try await repositories.seasons
-                .findByFederationID(coordinate.federationSeasonID)
+            if let existing = try await repositories.seasons.findForLink(
+                federationSeasonID: coordinate.federationSeasonID,
+                label: request.seasonLabel ?? calendar.seasonLabel)
             {
-                season = existing
+                if existing.federationSeasonID == nil {
+                    season = try existing.applying(federationSeasonID: coordinate.federationSeasonID)
+                    try await repositories.seasons.save(season)
+                } else {
+                    season = existing
+                }
             } else {
                 guard let label = request.seasonLabel ?? calendar.seasonLabel else {
                     throw ApplicationError.seasonLabelUnavailable(

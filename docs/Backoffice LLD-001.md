@@ -385,6 +385,9 @@ letter   → minLength   (si se rellena, no puede quedar vacía)
 seasonId → required    (falta)
 ```
 
+**Cómo llega el catálogo a la web**: `npm run gen:api` saca sus esquemas a `src/api/schemas.json` al compilar,
+junto a `schema.d.ts`. Por qué así: [DW-07].
+
 **Lo que se escribe a mano es solo el texto de los mensajes, por tipo de regla y no por campo**: «Este campo
 es obligatorio», «No puede estar vacío», «Como mínimo {n}», «Como máximo {n}», «El formato no es válido»,
 «Elige un valor de la lista». Una tabla de unas seis entradas.
@@ -453,7 +456,7 @@ la competición arriba.
 | `/jugadores/:id` | Ficha del jugador | Borrador |
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
-**Solo las dos primeras están decididas.** El resto es un borrador: cada camino se confirma, o se cambia,
+**Solo las tres primeras están decididas** (el alta de equipo, con la rebanada 2). El resto es un borrador: cada camino se confirma, o se cambia,
 al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español

@@ -1447,3 +1447,106 @@ extension FederationLinkEndpointTests {
         }
     }
 }
+
+extension FederationLinkEndpointTests {
+
+    /// Siembra una temporada con esa etiqueta y ese código —o sin él, la que
+    /// nace en la web (`D-106`)— y devuelve su `id`.
+    static func seedSeason(
+        _ label: String, federationSeasonID: String?, archived: Bool = false, on app: Application
+    ) async throws -> SeasonID {
+        let id = SeasonID(raw: UUID())
+        try await unitOfWork(app).withRepositories(actor: actor()) { repositories in
+            try await repositories.seasons.save(try Season(
+                id: id, label: try SeasonLabel(label), federationSeasonID: federationSeasonID,
+                archivedAt: archived ? now : nil, createdAt: now, updatedAt: now))
+        }
+        return id
+    }
+
+    /// **También archivada**: no sale en el selector, pero la etiqueta es suya, y
+    /// una segunda «2025/26» reventaría el `UNIQUE` con un 500.
+    @Test("una temporada archivada sin código también la reconoce el enganche (D-106)")
+    func theLinkFindsAnArchivedSeasonWithoutCode() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            let born = try await Self.seedSeason(
+                "2025/26", federationSeasonID: nil, archived: true, on: app)
+
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .accepted)
+                #expect(try Self.decodeJob(response).seasonId == born.raw.uuidString.lowercased())
+            }
+            #expect(try await Self.rowCount("seasons", on: app) == 1)
+        }
+    }
+
+    /// `D-106`: la temporada que el club creó en julio, sin código, la reconoce el
+    /// primer enganche por su etiqueta y **le pone el código de la URL**. Contra
+    /// Postgres, porque es donde una segunda «2025/26» reventaría el `UNIQUE`.
+    @Test("el enganche pone el código a la temporada sin él, y no crea otra (D-106)")
+    func theLinkGivesItsCodeToTheSeasonBornOnTheWeb() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            let born = try await Self.seedSeason("2025/26", federationSeasonID: nil, on: app)
+
+            try await app.testing().test(
+                .POST, "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .accepted)
+                #expect(try Self.decodeJob(response).seasonId == born.raw.uuidString.lowercased())
+            }
+
+            #expect(try await Self.rowCount("seasons", on: app) == 1)
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) { repositories in
+                let stored = try await repositories.seasons.find(born)
+                #expect(stored?.federationSeasonID == "21")
+            }
+        }
+    }
+
+    /// `D-106`, punto 4: **si la de esa etiqueta ya tiene otro código, no se pisa**,
+    /// en las dos puertas. El `detail` lleva los dos códigos.
+    @Test("la temporada de esa etiqueta con otro código es 409 SEASON_ALREADY_LINKED en las dos puertas (D-106)")
+    func aSeasonLinkedToAnotherCodeIsAConflict() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            _ = try await Self.seedSeason("2025/26", federationSeasonID: "20", on: app)
+            let base = "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link"
+
+            try await app.testing().test(
+                .POST, "\(base)/preview",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.previewBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                let problem = try Self.decodeProblem(response)
+                #expect(problem.code == .SEASON_ALREADY_LINKED)
+                #expect(problem.detail == "la temporada 2025/26 ya tiene el código '20' y la URL trae '21'")
+            }
+
+            try await app.testing().test(
+                .POST, base,
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.linkBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .conflict)
+                #expect(try Self.decodeProblem(response).code == .SEASON_ALREADY_LINKED)
+            }
+
+            #expect(try await Self.rowCount("competitions", on: app) == 0)
+            #expect(try await Self.rowCount("team_registrations", on: app) == 0)
+        }
+    }
+}

@@ -62,6 +62,35 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// mismo que dice `seed-competition` desde F6.
     case seasonLabelUnavailable(federationSeasonID: String)
 
+    /// **La pasada encontró una temporada sin código de la federación** (`D-106`).
+    ///
+    /// Desde `D-106` una temporada puede nacer sin código, y el primer enganche
+    /// se lo pone. Una competición solo nace en un enganche, así que esto no
+    /// debería pasar: si pasa, es un dato inconsistente —una competición
+    /// sembrada a mano sobre una temporada sin código—, y la pasada **falla
+    /// diciéndolo** en vez de llamar a la federación sin él. Lleva la etiqueta,
+    /// que es lo que el administrador reconoce.
+    case seasonWithoutFederationCode(label: String)
+
+    /// **Ya hay una temporada con esa etiqueta o con ese código** (`createSeason`,
+    /// R2.7 → **409** `SEASON_ALREADY_EXISTS`). También si está archivada: no se
+    /// enseña, pero lo que la identifica sigue ocupado. Lleva el campo que choca y
+    /// su valor, que es la forma `campo: motivo` del `detail`.
+    case seasonAlreadyExists(field: String, value: String)
+
+    /// **La temporada del club con la etiqueta de la URL ya tiene otro código**
+    /// (`D-106`, punto 4 → **409** `SEASON_ALREADY_LINKED`), en el enganche y en su
+    /// `/preview`. No se pisa: o la URL es de otra temporada, o la del club se
+    /// enganchó con otra cosa. Distinto de `federationSeasonMismatch`, que es la
+    /// guarda de fechas de `D-91`.
+    case seasonAlreadyLinked(label: String, existing: String, incoming: String)
+
+    /// **El equipo ya está inscrito en esa temporada** (`createTeam`, `D-107` →
+    /// **409** `TEAM_ALREADY_REGISTERED`). Que exista en otra temporada no es
+    /// conflicto: se inscribe. Lleva los dos `id`, que es lo que hace falta para ir
+    /// a mirarlo.
+    case teamAlreadyRegistered(team: String, season: String)
+
     /// **La base no responde** (H-23, `D-86` enmendada).
     ///
     /// No es el fallo de una competición: es el fallo del sitio donde se apuntan

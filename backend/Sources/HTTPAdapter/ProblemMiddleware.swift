@@ -313,6 +313,56 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "Da de alta la temporada con su etiqueta y repite.",
                                base: typeBaseURI, slug: "season-label-unavailable")
 
+            case .seasonWithoutFederationCode(let label):
+                // **Hoy no lo alcanza ninguna ruta**: lo lanzan las pasadas, y el
+                // recorrido recoge sus fallos —por `/ingestion-runs` llega como
+                // `INGESTION_FAILED` (502), con este caso dentro del motivo—. Está
+                // porque el `switch` es exhaustivo, y con el criterio de
+                // `seasonNotFound`: **500**, porque no es un dato que alguien haya
+                // mandado mal, es una competición que no debería existir así —
+                // solo nace en un enganche, que le pone el código a su temporada
+                // (`D-106`)—. Sin código propio en la lista: es un fallo nuestro.
+                return Problem(status: .internalServerError, code: "INTERNAL",
+                               title: "Temporada sin código de la federación",
+                               detail: "La temporada \(label) no tiene código de la federación, y "
+                                   + "sin él no se puede sincronizar (D-106). Engancha un equipo "
+                                   + "de esa temporada para ponérselo.",
+                               base: typeBaseURI, slug: "season-without-federation-code")
+
+            case .seasonAlreadyExists(let field, let value):
+                // **409**, el criterio de `FEDERATION_TEAM_ID_TAKEN`: lo que llega
+                // es válido, lo que no encaja es **el estado** —esa etiqueta o ese
+                // código ya son de otra temporada—, y tiene salida: elegirla en el
+                // selector, o recuperarla si está archivada. **El `detail` es
+                // `campo: motivo`**, como el de `INVALID_VALUE`, para que la web
+                // sepa de qué campo es (LLD-B §4.5 *a*).
+                return Problem(status: .conflict, code: "SEASON_ALREADY_EXISTS",
+                               title: "Esa temporada ya existe",
+                               detail: "\(field): ya hay una temporada con '\(value)'",
+                               base: typeBaseURI, slug: "season-already-exists")
+
+            case .seasonAlreadyLinked(let label, let existing, let incoming):
+                // **409**, el criterio de `ALREADY_LINKED_TO_FEDERATION`, que es su
+                // paralelo en el equipo: la URL es válida, lo que no encaja es el
+                // estado —esa temporada ya está enganchada con otro código— y tiene
+                // salida: revisar que la URL sea de la temporada correcta. **El
+                // `detail` lleva los dos códigos**, que es lo que hace falta para
+                // saber cuál de los dos está mal (`D-106`).
+                return Problem(status: .conflict, code: "SEASON_ALREADY_LINKED",
+                               title: "La temporada ya está enganchada con otro código",
+                               detail: "la temporada \(label) ya tiene el código '\(existing)' y "
+                                   + "la URL trae '\(incoming)'",
+                               base: typeBaseURI, slug: "season-already-linked")
+
+            case .teamAlreadyRegistered(let team, let season):
+                // **409**: lo que llega es válido, lo que no encaja es el estado —el
+                // equipo ya está en esa temporada (`D-107`)—. Que exista en otra
+                // temporada no llega aquí: se inscribe.
+                return Problem(status: .conflict, code: "TEAM_ALREADY_REGISTERED",
+                               title: "El equipo ya está dado de alta en esta temporada",
+                               detail: "el equipo \(team) ya está inscrito en la temporada \(season)",
+                               base: typeBaseURI, slug: "team-already-registered")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha

@@ -24,10 +24,10 @@ struct IngestCalendarTests {
         return f.date(from: iso)!
     }
 
-    static func season() throws -> Season {
+    static func season(federationSeasonID: String? = "21") throws -> Season {
         try Season(
             id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
-            federationSeasonID: "21", createdAt: Date(), updatedAt: Date())
+            federationSeasonID: federationSeasonID, createdAt: Date(), updatedAt: Date())
     }
 
     static func competition(
@@ -178,6 +178,30 @@ struct IngestCalendarTests {
             guard case ApplicationError.seasonNotFound = error else { return false }
             return true
         }
+    }
+
+    /// `D-106`, punto 7: la temporada puede nacer sin código, y solo el enganche
+    /// se lo pone. Una pasada que se la encuentre así **no llama a la federación**
+    /// con `temporada=` vacío: falla diciendo qué temporada es, y lo deja apuntado.
+    @Test("una temporada sin código para la pasada antes de llamar, y lo deja apuntado (D-106)")
+    func aSeasonWithoutCodeStopsThePass() async throws {
+        let season = try Self.season(federationSeasonID: nil)
+        let competition = try Self.competition(seasonID: season.id)
+        let (useCase, store, spy) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.calendar())
+
+        await #expect {
+            try await useCase.execute(
+                competitionID: competition.id,
+                actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        } throws: { error in
+            error as? ApplicationError == .seasonWithoutFederationCode(label: "2025/26")
+        }
+        #expect(await spy.received.isEmpty, "llamó a la federación sin código de temporada")
+        let runs = await store.ingestionRuns
+        #expect(runs.count == 1)
+        #expect(runs.first?.outcome == .failed)
+        #expect(runs.first?.error?.contains("seasonWithoutFederationCode") == true)
     }
 
     @Test("compone la coordenada con la temporada y la competición (§3.7)")

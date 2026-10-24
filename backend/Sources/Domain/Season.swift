@@ -15,13 +15,16 @@ public struct Season: Identifiable, Equatable, Sendable {
 
     /// Identificador de la temporada en la API de la federación (`temporada=21`).
     ///
-    /// **Obligatorio** (§3.2): toda temporada tiene contrapartida federativa.
+    /// **Puede faltar** (`D-106`): el club crea la temporada en julio, desde la
+    /// web y solo con su etiqueta, antes de que la federación publique nada. **El
+    /// primer enganche se lo pone**, con el de la URL del calendario. Si lo hay,
+    /// no puede ser la cadena vacía.
+    ///
     /// Es un **secuencial propio de cada federación** —`21` no guarda relación
-    /// con "2024/25"— y **cambia cada temporada**: es la única pieza de
-    /// configuración que hay que actualizar cada año.
+    /// con "2024/25"— y **cambia cada temporada**.
     ///
     /// Nunca es clave de unión (`D-06`): la PK y las FK son el `id` UUID.
-    public let federationSeasonID: String
+    public let federationSeasonID: String?
 
     /// Archivado **reversible**, y deliberadamente distinto del *soft delete*
     /// (§4.4): oculta la temporada y, de facto, su subárbol. `Season` **sí**
@@ -34,12 +37,12 @@ public struct Season: Identifiable, Equatable, Sendable {
     public init(
         id: SeasonID,
         label: SeasonLabel,
-        federationSeasonID: String,
+        federationSeasonID: String?,
         archivedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date
     ) throws {
-        guard !federationSeasonID.trimmed.isEmpty else {
+        if let federationSeasonID, federationSeasonID.trimmed.isEmpty {
             throw DomainError.invalidValue(
                 field: "federationSeasonId", reason: "no puede estar vacío"
             )

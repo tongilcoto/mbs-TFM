@@ -36,9 +36,14 @@ const messages: Record<ProblemCode, string> = {
   INVALID_VALUE: 'Hay un dato que no es válido',
   NOT_EDITABLE_AFTER_SYNC: 'Este dato ya no se puede cambiar: la competición ya se ha sincronizado',
 
+  // Lo que ya está (Plan R2, decisión 6)
+  TEAM_ALREADY_REGISTERED: 'Ese equipo ya está dado de alta en esta temporada',
+  SEASON_ALREADY_EXISTS: 'Ya existe una temporada con esa etiqueta. Si no la ves en el selector, está archivada: se recupera desde Temporadas',
+
   // El enganche con la federación
   ALREADY_LINKED_TO_FEDERATION: 'Este equipo ya está enganchado a la federación',
   FEDERATION_TEAM_ID_TAKEN: 'Ese código de la federación ya es de otro equipo del club',
+  SEASON_ALREADY_LINKED: 'Esa temporada ya está enganchada con otro código de la federación. Revisa que el calendario sea de la temporada correcta',
   OWN_TEAM_NOT_IN_CALENDAR: 'Ese código no es de ningún equipo del calendario',
   COMPETITION_IDENTITY_MISMATCH: 'El equipo y la competición no cuadran: no son de la misma categoría o temporada',
   UNREADABLE_FEDERATION_URL: 'La dirección del calendario no se puede leer',
