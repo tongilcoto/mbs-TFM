@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { checkForm } from './rules'
+import { checkForm, requiredFields } from './rules'
 
 // Las pruebas usan los esquemas de verdad del catálogo: si una regla cambia allí, se nota aquí.
 const SEASON_ID = '0b7e7a52-4c1d-4f7e-9a51-3f7f0c2b8d11'
@@ -56,4 +56,9 @@ describe('cada tipo de regla, con su mensaje', () => {
     expect(checkForm('CreatePlayerRequest', { shirtNumber: 0 }).shirtNumber).toBe('Como mínimo 1')
     expect(checkForm('CreatePlayerRequest', { shirtNumber: 100 }).shirtNumber).toBe('Como máximo 99')
   })
+})
+
+test('los obligatorios de un esquema salen de su `required` en el catálogo', () => {
+  expect(requiredFields('CreateTeamRequest')).toEqual(['category', 'gender', 'modality', 'seasonId'])
+  expect(requiredFields('UpdateClubRequest')).toEqual([])
 })

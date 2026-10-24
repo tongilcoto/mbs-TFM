@@ -13,6 +13,11 @@ temporada, la competición en la que juega cada uno, cómo va su ingesta y cuán
 tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
 cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
+**En construcción** (rebanada 2): el **alta de equipo**, en `/equipos/nuevo`. Ya se rellena, comprueba todos los
+campos a la vez antes de enviar y avisa si se sale con cambios sin guardar. Todavía se llega escribiendo la
+dirección: el botón de la portada y «Crear nueva temporada» llegan en los pasos siguientes. **Ojo: guardar da de
+alta el equipo de verdad en tu club**, y borrarlo no se podrá hasta la rebanada 13.
+
 ## Antes de empezar
 
 - **Node 22.** La versión está fijada en `.nvmrc`; con nvm, basta con `nvm use` dentro de esta carpeta.

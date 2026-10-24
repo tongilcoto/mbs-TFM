@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeScreen from './screens/home/HomeScreen.vue'
+import NewTeamScreen from './screens/new-team/NewTeamScreen.vue'
 import NotFoundScreen from './screens/not-found/NotFoundScreen.vue'
 
 // Lo que cada pantalla pone delante del nombre del club en la pestaña del navegador (LLD-B §10.2).
@@ -16,6 +17,7 @@ export const router = createRouter({
     { path: '/', component: HomeScreen, meta: { title: 'Equipos' } },
     // La lista de equipos es la portada; /equipos lleva a ella, como el resto de secciones del menú (LLD-B §6.1).
     { path: '/equipos', redirect: '/' },
+    { path: '/equipos/nuevo', component: NewTeamScreen, meta: { title: 'Alta de equipo' } },
     // Cualquier otro camino (LLD-B §6.7).
     { path: '/:anything(.*)*', component: NotFoundScreen, meta: { title: 'Esta página no existe' } },
   ],

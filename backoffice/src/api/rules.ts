@@ -49,6 +49,13 @@ export function checkForm<N extends SchemaName>(
   return errors as FieldErrors<components['schemas'][N]>
 }
 
+// Los campos obligatorios de un esquema, según su `required`: los que llevan asterisco (LLD-B §5.2).
+export function requiredFields<N extends SchemaName>(name: N): (keyof components['schemas'][N] & string)[] {
+  const schema: unknown = catalog.components.schemas[name]
+  const required = typeof schema === 'object' && schema !== null && 'required' in schema ? schema.required : []
+  return required as (keyof components['schemas'][N] & string)[]
+}
+
 // El campo de un fallo: el que falta, si es un `required`, o el del valor que no cumple (`/letter` → `letter`).
 function fieldOf(rule: ErrorObject): string {
   const path = rule.instancePath.slice(1).replaceAll('/', '.')
