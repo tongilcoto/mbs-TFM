@@ -388,6 +388,15 @@ desarrollador, y **los que valen son ellos**. Al final de cada escenario, axe en
 - Una etiqueta que ya existe, archivada: su mensaje arriba del diálogo.
 - Cancelar el diálogo, o *Escape*, deja el selector como estaba, y el foco vuelve al botón.
 
+**La tabla de la portada** (bloque T)
+
+- Ordenar por cada columna: la primera vez en su orden, la segunda al revés, la tercera vuelta al de siempre; y
+  el lector dice cómo está ordenada.
+- El orden en la dirección: recargar lo conserva, y «Atrás» vuelve al anterior.
+- Un equipo con dos competiciones se mueve entero al ordenar por Ingesta.
+- Dos «Alevín A», masculino y femenino: cada uno con lo que lo distingue.
+- La competición, sin la categoría delante.
+
 **El enganche de una temporada sin código** (decisión 1). En la rebanada 3 tendrá su pantalla; aquí se prueba en
 el servidor, con los tests de la §5. Los escenarios de la web llegan con la pantalla del enganche.
 
@@ -443,6 +452,71 @@ Con el método del backend (§5).
 | **R2.16** | Los `.feature` de la §6, con la *skill* de escenarios del desarrollador | `npm run e2e` en verde, con axe en los dos modos; y la revisión a mano del LLD-B §10.7 *b* | Un commit |
 | **R2.17** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
 
+### T · La tabla de la portada y los nombres del servidor (bloque añadido)
+
+**Añadido el 2026-10-24, entre R2.14 y R2.15, a petición del desarrollador**, que prefirió hacerlo ahora y no en la
+rebanada 5: la tabla todavía es pequeña, y deja hecha la forma de ordenar para las columnas que vengan. Y los
+nombres del servidor, cuanto antes, porque son la otra mitad de `D-108`.
+
+**Lo que se vio:**
+
+- **El servidor tiene su propia copia de los nombres de las categorías** (`Domain/Enumerations.swift`,
+  `displayLabel`), y con ella monta `CompetitionResponse.displayName` («Cadete · PRIMERA CADETE · Grupo 4»),
+  `TeamResponse.displayName` y `TeamRef.displayName` («Celtic Alevín A»). `D-108` dejó una sola fuente para los
+  clientes; el servidor seguía con la suya.
+- **La portada repite la categoría**: «Cadete B» al lado de «Cadete · PRIMERA CADETE · Grupo 4».
+- **Dos equipos pueden salir iguales**: el nombre en la tabla es categoría y letra, así que el «Alevín A»
+  masculino y el femenino, o el de fútbol 7 y el de fútbol 11, son dos filas idénticas. Con la rebanada 2 ya se
+  pueden dar de alta los dos.
+- **Las columnas no se ordenan.**
+
+**Lo decidido con el desarrollador:**
+
+| # | Pregunta | Decidido |
+|---|---|---|
+| 1 | Cómo saca el servidor los nombres del catálogo | **Se generan al compilar**: una herramienta lee `x-enum-names` de `openapi.yaml` y escribe los nombres en Swift, como el generador escribe los tipos. Ningún nombre escrito a mano en Swift. Si se complica más de lo razonable, se para y se habla antes de caer a un test que vigile dos copias |
+| 2 | Un equipo con varias competiciones, al ordenar por Competición, Ingesta o Última sincronización | **Se ordenan los equipos**, y cada uno conserva sus competiciones juntas: se coloca por la peor ingesta, la sincronización más antigua o la primera competición por orden alfabético |
+| 3 | El orden de cada columna | **Equipo**: edad y después letra. **Competición**: alfabético. **Ingesta**: de peor a mejor —con fallos, desactualizada, en marcha, sin datos, al día—. **Última sincronización**: de la más antigua a la más reciente, con «Nunca» arriba. Los equipos sin competición, siempre al final en las tres últimas |
+| 4 | ¿El orden va en la dirección? | **Sí** (LLD-B §2.2): se comparte con el enlace, sobrevive a una recarga y «Atrás» lo respeta |
+| 5 | Pinchar varias veces | La primera, en el orden de la fila 3; la segunda, al revés; la tercera, vuelta al orden de siempre (el del servidor) |
+| 6 | Los dos equipos iguales | **Ahora**, en este bloque |
+
+**Lo que se propone, para revisar antes de cada paso:**
+
+- **Dónde viven los nombres en el servidor (T.1).** Un nombre en español es cosa de cómo se enseña un dato, no del
+  Dominio. Se propone que los nombres generados vivan junto al contrato (`APIContract`, al lado de los tipos que
+  ya genera), que **el Dominio pierda `displayLabel`**, y que los `displayName` los monte el adaptador HTTP, que ya
+  conoce el contrato. Es una decisión de diseño del servidor: va a la bitácora como `D-109`, y se revisa antes de
+  construirla.
+- **La competición en la portada (T.3)**: «PRIMERA CADETE · Grupo 4», con `divisionLabel` y `groupLabel`, que ya
+  vienen en la respuesta. La categoría que repite la federación dentro de su propio nombre no se recorta: cada
+  federación escribe a su manera. `displayName` no cambia: hace falta donde no hay un equipo al lado.
+- **Los equipos iguales (T.4)**: solo cuando en la tabla hay **dos con la misma categoría y letra**, a cada uno se
+  le añade **lo que los distingue**, con los nombres del catálogo: «Alevín A · Femenino» y «Alevín A ·
+  Masculino»; o «Alevín A · Fútbol 7»; o los dos, si difieren en los dos. Si no hay otro igual, se queda como hoy.
+  El `displayName` del servidor («Celtic Alevín A») tiene el mismo problema; lo enseñarán las apps del móvil, y se
+  apunta como pendiente del backend, sin tocarlo aquí.
+- **El orden en la dirección (T.6)**: `?orden=ingesta`, y al revés, `?orden=ingesta-inverso`. Los nombres:
+  `equipo`, `competicion`, `ingesta`, `sincronizacion`. Un valor que no se entiende se ignora y la tabla sale en
+  el orden de siempre, sin error: no es un dato que el usuario busque, como la temporada.
+- **La forma de ordenar, para las columnas que vengan (T.5)**: la tabla sigue siendo la escrita a mano —la de
+  PrimeVue ordena mal las filas agrupadas de un equipo con varias competiciones—. Una **pieza de cabecera
+  ordenable** (un botón dentro de la cabecera, con `aria-sort` para que el lector diga cómo está ordenada) y **una
+  regla de orden por columna**, una función sin pantalla que se prueba sola. Una columna nueva es una regla nueva
+  y una cabecera más. Se escribe en el LLD-B.
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **T.1** | `D-109` en la bitácora: los nombres del servidor se generan del catálogo, y dónde viven | El desarrollador lo revisa | Un commit |
+| **T.2** | **Los nombres del servidor, generados**: la herramienta y su *plugin* de compilación, el Dominio sin `displayLabel`, y los `displayName` montados en el adaptador HTTP | Con el método del backend: rojo de aserción, implementación y mutación. `swift build`, `REQUIRE_DB=1 swift test` (736 más los nuevos, leído del XML), el censo en `0`, y un catálogo roto a propósito que haga fallar la compilación | Un commit |
+| **T.3** | **La competición sin la categoría delante**, en la portada | Vitest | Un commit |
+| **T.4** | **Los equipos iguales, distinguidos** | Vitest | Un commit |
+| **T.5** | **La forma de ordenar**: la cabecera ordenable, las reglas de las cuatro columnas y el orden en la dirección | Vitest, con rotura a mano | Un commit |
+| **T.6** | **Las cuatro columnas, ordenables** en la portada | Vitest, los escenarios (`npm run e2e`) y Chromium contra la web del desarrollador, solo leyendo | Un commit |
+| **T.7** | Documentos: el LLD-B (la forma de ordenar y los nombres de los equipos), el README de la web y del backend, y `AGENTS.md` | El desarrollador lo revisa | Un commit para el backend y otro para la web |
+
+Los escenarios de la tabla se suman a la lista de la §6 y se escriben en R2.16, con los demás.
+
 ## 8. Estado
 
 | Paso | Hecho | Lo que se comprobó |
@@ -464,6 +538,13 @@ Con el método del backend (§5).
 | **R2.13 (ayuda)** | ✅ 2026-10-24 | **Además de lo previsto, a petición del desarrollador**: debajo del campo del diálogo, «Por ejemplo: 2024/25», leído de `examples` del catálogo con `exampleOf` (nueva en `rules.ts`, que sigue el `$ref` del campo). Decisión 2 ampliada. Pruebas: 1 de `exampleOf` y 1 del diálogo, y dos del diálogo ajustadas (la ayuda va delante del error en lo que lee el lector). **143 → 145**; sin la ayuda en la ventana, 3 fallan |
 | **R2.14** | ✅ 2026-10-24 | **La portada.** «Dar de alta un equipo» junto al selector de temporada y, debajo del mensaje, en los dos vacíos: «Todavía no hay ninguna temporada.» con «Para empezar, da de alta el primer equipo. La temporada se crea desde el mismo formulario.», y «No hay equipos en la temporada 2025/26.» (cada mensaje sigue en su propio párrafo, porque así lo buscan los escenarios). **Es un enlace con aspecto de botón** (`Button as="router-link"`): va a otra pantalla, se puede abrir en otra pestaña y el lector lo anuncia como enlace. Lleva la temporada que se ve en el **estado de la navegación** (decisión 5). **«Guardado»**: lo pide el formulario (`announce`, en `src/notice.ts`, nuevo) y lo enseña el marco, en `App.vue`, en una zona `role="status"` que está **siempre en la página, vacía** si no hay aviso, para que el lector lo lea al llenarse; desaparece sola a los 5 s. La vuelta a la temporada del equipo ya la hacía R2.12. **Además de lo previsto, por esa zona siempre presente**: el paso de los escenarios «estoy en la portada de mi club» esperaba a que desapareciera *el* `status` de la página, y ahora hay dos; espera al que dice «Cargando». Pruebas: 2 del aviso, 1 del marco (la primera de `App.vue`), 3 de la portada (la primera de `HomeScreen`, con lo que añade esta rebanada) y 2 comprobaciones en las del formulario («Guardado» al guardar bien, y no al fallar). **145 → 151**. Comprobadas rompiendo el código a mano: las 7 roturas, cazadas. `typecheck`, `lint` y `build` en verde. **Los escenarios, `npm run e2e`**: con el cambio, 3 de 35 fallaban por el paso de arriba; arreglado, **35/35** con la misma semilla (67259) y con otra nueva (940021), axe incluido en los dos modos. **La web no se abrió en el navegador**: sin la extensión de Chrome |
 | **R2.14 (subrayado)** | ✅ 2026-10-24 | **Lo vio el desarrollador**: «Dar de alta un equipo» salía con el texto subrayado. Es un enlace, y el navegador subraya los enlaces; Aura solo pinta como botón la forma y el color. Arreglado en el tema (`primevue.ts`, `components.button.css`): `a.p-button` sin subrayado, para todo enlace con aspecto de botón. **Comprobado en un Chromium de verdad** contra la web del desarrollador, solo leyendo (Playwright): antes, `underline`; después, `none`, con su captura. La prueba de piezas no puede verlo —su navegador de mentira no subraya nada—, así que comprueba que la regla llega a la página con el tema; sin la regla, falla. **151 → 152** |
+| **T.1** | | |
+| **T.2** | | |
+| **T.3** | | |
+| **T.4** | | |
+| **T.5** | | |
+| **T.6** | | |
+| **T.7** | | |
 | **R2.15** | | |
 | **R2.16** | | |
 | **R2.17** | | |
