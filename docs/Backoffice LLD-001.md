@@ -667,6 +667,12 @@ calendario empieza en lunes**.
 | Hora aún sin fijar (`kickoffTime` vacío) | «Hora por confirmar» |
 | Números | A la española: `1.234,5` |
 
+**Los nombres de los valores de las listas cerradas** («Alevín», «Fútbol 7», «Al día») tampoco los escribe ninguna
+pantalla, y tampoco la web: **vienen del catálogo**, de la tabla `x-enum-names` de cada lista
+([D-108](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)), y llegan con `schemas.json`. Se leen en
+`src/theme/names.ts`; un selector enseña las opciones **en el orden del catálogo**. Los mensajes de error no son
+nombres de un dato y siguen en `errors.ts` (§4.2).
+
 #### 9.7 Las fechas sin hora son texto, no un instante
 
 El servidor manda la fecha de un partido sin hora: `2025-05-18` (`matchDate`, `format: date`). Si la web la
