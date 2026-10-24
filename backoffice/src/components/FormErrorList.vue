@@ -64,4 +64,14 @@ function goTo(fieldId: string) {
 ul {
   margin-bottom: 0;
 }
+/* Cada enlace, al menos 24 px de alto y con aire entre uno y otro: lo que se pulsa mide 24 × 24 (LLD-B §10.5,
+   WCAG 2.2, 2.5.8). Lo vio axe en los escenarios de R2.16. */
+a {
+  display: inline-block;
+  min-height: 1.5rem;
+  line-height: 1.5rem;
+}
+li + li {
+  margin-top: 0.25rem;
+}
 </style>
