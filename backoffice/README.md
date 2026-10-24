@@ -37,9 +37,20 @@ Todas las órdenes de abajo se escriben **dentro de `backoffice/`**.
 | **Revisar** el código | `npm run lint` | El revisor de código: avisa si una pieza de `components/` usa `api/` y de los fallos de accesibilidad que se ven sin ejecutar (imagen sin texto alternativo, campo sin etiqueta…) |
 | **Fabricar** la web para publicarla | `npm run build` | Comprueba los tipos y deja la web lista en `dist/` |
 
-**Los tipos del catálogo se fabrican solos** antes de `dev`, `typecheck` y `build`, en
-`src/api/schema.d.ts`. Ese fichero no se toca a mano ni se guarda en git: si el catálogo cambia, la próxima
-orden lo vuelve a fabricar.
+**Los tipos y las reglas del catálogo se fabrican solos** antes de `dev`, `test`, `typecheck` y `build`, con
+`npm run gen:api`, en dos ficheros:
+
+| Fichero | Qué tiene | Para qué |
+|---|---|---|
+| `src/api/schema.d.ts` | La forma de cada dato | Que cada petición encaje con el catálogo al compilar |
+| `src/api/schemas.json` | Las reglas de cada dato (obligatorio, formato, lista cerrada…) | Que los formularios las comprueben antes de enviar, con Ajv |
+
+Ninguno de los dos se toca a mano ni se guarda en git: si el catálogo cambia, la próxima orden los vuelve a
+fabricar, y los dos salen siempre del mismo catálogo a la vez. Para fabricarlos, `npm run gen:api` lee
+`../backend/`: la web se compila con el repositorio entero a la vista, no solo con esta carpeta.
+
+Lo que se ha añadido para eso: **`ajv`** (el comprobador de reglas) y **`ajv-formats`** (los formatos, como el
+de los identificadores), que viajan con la web; y **`yaml`**, que solo usa `gen:api` para leer el catálogo.
 
 ## Los escenarios de punta a punta
 

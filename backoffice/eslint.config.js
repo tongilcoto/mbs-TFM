@@ -19,9 +19,9 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser } },
   },
-  // Los escenarios y su arnés corren en Node, no en el navegador.
+  // Los escenarios, su arnés y los scripts de `gen:api` corren en Node, no en el navegador.
   {
-    files: ['e2e/**'],
+    files: ['e2e/**', 'scripts/**'],
     languageOptions: { globals: { ...globals.node } },
   },
 

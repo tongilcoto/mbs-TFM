@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { errorFromResponse, noConnection } from './errors'
+import { errorFromResponse, noConnection, placeSaveError } from './errors'
 
 // Un error como los que manda el servidor (LLD-B §4): aquí solo cuentan el número y el código.
 function problem(status: number, code: string) {
@@ -86,5 +86,60 @@ describe('una respuesta sin código', () => {
 
   test('un 404 sin código es «no se ha encontrado»', () => {
     expect(errorFromResponse(404, { status: 404 })).toEqual({ message: 'No se ha encontrado', retry: false })
+  })
+})
+
+describe('el campo de un error de valor, leído del detail (LLD-B §4.5 a)', () => {
+  // Como lo escribe el servidor en un error de valor: `<campo>: <motivo>`.
+  function valueError(code: string, detail: string) {
+    return { ...problem(422, code), detail }
+  }
+  const seasonForm = ['label']
+
+  test('un INVALID_VALUE con la forma «campo: motivo» va junto a su campo, con el motivo del servidor', () => {
+    const body = valueError('INVALID_VALUE', 'label: debe ser AAAA/AB con AB el año siguiente, como "2025/26"')
+    expect(placeSaveError(errorFromResponse(422, body), seasonForm)).toEqual({
+      field: 'label',
+      reason: 'debe ser AAAA/AB con AB el año siguiente, como "2025/26"',
+    })
+  })
+
+  test('se separa por el primer «: »: el motivo puede llevar otros', () => {
+    const body = valueError('NOT_EDITABLE_AFTER_SYNC', 'label: no se cambia: ya se ha sincronizado')
+    expect(placeSaveError(errorFromResponse(409, body), seasonForm)).toEqual({
+      field: 'label',
+      reason: 'no se cambia: ya se ha sincronizado',
+    })
+  })
+
+  test.each([
+    ['sin la forma «campo: motivo»', 'la etiqueta no vale'],
+    ['sin campo delante', ': no vale'],
+    ['sin motivo detrás', 'label: '],
+  ])('un detail %s va al aviso de arriba, con el mensaje del código', (_, detail) => {
+    const error = errorFromResponse(422, valueError('INVALID_VALUE', detail))
+    expect(placeSaveError(error, seasonForm)).toEqual({
+      banner: { message: 'Hay un dato que no es válido', code: 'INVALID_VALUE', retry: false },
+    })
+  })
+
+  test('un campo que el formulario no tiene va al aviso de arriba', () => {
+    const error = errorFromResponse(422, valueError('INVALID_VALUE', 'federationSeasonId: no puede estar vacío'))
+    expect(placeSaveError(error, seasonForm)).toEqual({ banner: error })
+  })
+
+  test('solo en los errores de valor: el detail de un 409 «ya existe» no se lee, aunque tenga la forma', () => {
+    const error = errorFromResponse(409, valueError('SEASON_ALREADY_EXISTS', "label: ya hay una temporada con '2026/27'"))
+    expect(placeSaveError(error, seasonForm)).toEqual({
+      banner: {
+        message: 'Ya existe una temporada con esa etiqueta. Si no la ves en el selector, está archivada: se recupera desde Temporadas',
+        code: 'SEASON_ALREADY_EXISTS',
+        retry: false,
+      },
+    })
+  })
+
+  test('un error sin respuesta del servidor va al aviso de arriba', () => {
+    expect(placeSaveError(noConnection, seasonForm)).toEqual({ banner: noConnection })
   })
 })
