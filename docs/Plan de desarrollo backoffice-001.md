@@ -279,6 +279,17 @@ Y dos cosas que salieron al hacerlo (`R2.11`, 2026-10-24):
 - **`schemas.json` pesa unos 157 KB** (unos 36 KB comprimido al viajar) porque lleva también las descripciones del
   catálogo, que Ajv no usa. Si el tamaño importa, `gen-schemas.mjs` puede quitarlas.
 
+**Pendiente de la rebanada 4: cómo se llama un equipo en un partido** (salió el 2026-10-24, en el bloque T de la
+[rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La federación manda en cada partido el nombre
+del equipo ya escrito por ella, del club y del rival: `"equipo_local": "CELTIC CASTILLA C.F. 'A'"`. La base no lo
+guarda: la ingesta lo desmonta en piezas (club, categoría, letra), y el catálogo vuelve a montar el equipo de un
+partido (`TeamRef`) con ellas: `displayName`, club + categoría + letra («Celtic Alevín A»), y `shortDisplayName`,
+club + letra («Celtic A»); el club propio, con el nombre corto que pone el club, y el rival, con el que dio la
+federación. Al diseñar la pantalla de Resultados se revisa con el desarrollador **si eso es lo que se quiere
+ver**, o el nombre que publica la federación. Y con ello lo que dejó pendiente
+[D-109](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md): ese nombre no distingue el masculino del femenino ni
+el fútbol 7 del fútbol 11.
+
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
 bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
