@@ -172,7 +172,7 @@ When('abro la portada de mi club en una temporada pasada que mi club no tiene', 
 // ── Lo que se ve ─────────────────────────────────────────────────────────────────────────────────────────────
 
 Then('la fila del equipo tiene su competición', async function (this: ScenarioWorld) {
-  const name = this.data.competition!.displayName
+  const name = this.data.competition!.rowName
   await this.check('la competición', () =>
     shows(teamRow(this).getByRole('cell', { name, exact: true }), `«${name}» en la fila del ${theTeam(this).name}`),
   )

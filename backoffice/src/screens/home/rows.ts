@@ -24,7 +24,10 @@ export function teamRows(registrations: Registration[], competitions: Competitio
 function cell(competition: Competition): CompetitionCell {
   const health = competition.ingestionHealth
   return {
-    name: competition.displayName,
+    // La división y el grupo: «PRIMERA CADETE · Grupo 4». Sin la categoría que el servidor pone delante en
+    // `displayName`, porque en la misma fila ya la dice el equipo (bloque T del plan R2). La que repite la
+    // federación dentro de su propio nombre no se recorta: cada federación escribe a su manera.
+    name: `${competition.divisionLabel} · ${competition.groupLabel}`,
     health,
     healthName: health && healthNames[health],
     previousFailed: health === 'pending' && competition.previousIngestionHealth === 'failing',

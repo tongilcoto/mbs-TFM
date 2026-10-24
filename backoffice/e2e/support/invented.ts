@@ -145,8 +145,10 @@ export interface Competition {
   federationGroupId: string
   /** Los equipos del grupo; el primero es el del club. */
   teams: FederationTeam[]
-  /** Como la escribe la web: «Cadete · PRIMERA CADETE · Grupo 4». */
+  /** Como la escribe el servidor: «Cadete · PRIMERA CADETE · Grupo 4». */
   displayName: string
+  /** Como la enseña la portada, sin la categoría que ya dice el equipo: «PRIMERA CADETE · Grupo 4». */
+  rowName: string
   /** La dirección de su calendario en la web de la RFFM: la que se pega para engancharla. */
   calendarUrl: string
   /** El `id` que le da el servidor. */
@@ -189,6 +191,7 @@ export function competition(random: Random, of: Season, forTeam: Pick<Team, 'cat
     federationGroupId,
     teams,
     displayName: `${categoryLabels[forTeam.category]} · ${division} · ${group}`,
+    rowName: `${division} · ${group}`,
     calendarUrl: `https://www.rffm.es/competicion/calendario?${query}`,
   }
 }

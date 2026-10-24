@@ -56,7 +56,8 @@ describe('las filas de la portada', () => {
         team: 'Cadete B',
         competitions: [
           {
-            name: 'Competición liga',
+            // La división y el grupo, sin la categoría delante: el equipo ya la dice (bloque T).
+            name: 'PRIMERA CADETE · Grupo 4',
             health: 'ok',
             healthName: 'Al día',
             previousFailed: false,
@@ -70,11 +71,11 @@ describe('las filas de la portada', () => {
   test('un equipo con dos competiciones sale en una sola fila, con las dos', () => {
     const rows = teamRows(
       [registration('cadete-b', 'cadete', 'B', ['liga', 'copa'])],
-      [competition('liga', {}), competition('copa', {})],
+      [competition('liga', {}), competition('copa', { divisionLabel: 'COPA CADETE', groupLabel: 'Grupo Único' })],
     )
 
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.competitions.map((c) => c.name)).toEqual(['Competición liga', 'Competición copa'])
+    expect(rows[0]!.competitions.map((c) => c.name)).toEqual(['PRIMERA CADETE · Grupo 4', 'COPA CADETE · Grupo Único'])
   })
 
   test('un equipo sin competición todavía sale con la lista vacía', () => {
