@@ -17,7 +17,12 @@ cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo
 selector de temporada, y también debajo del mensaje cuando no hay temporadas o la elegida no tiene equipos. El
 formulario (`/equipos/nuevo`) comprueba todos los campos a la vez antes de enviar y avisa si se sale con cambios
 sin guardar. Al lado de su selector de temporada, **«Crear nueva temporada»** la crea en ese momento, solo con su
-etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del equipo, con el aviso «Guardado». **Ojo:
+etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del equipo, con el aviso «Guardado».
+
+**La tabla de la portada se ordena** pinchando la cabecera de cada columna: la primera vez en su orden, la segunda
+al revés y la tercera vuelve al de siempre. El orden queda en la dirección (`/?orden=ingesta`). La competición sale
+sin la categoría delante («PRIMERA CADETE · Grupo 4»), y si dos equipos se llamarían igual, cada uno lleva lo que
+lo distingue («Alevín A · Fútbol 7»). **Ojo:
 guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad**; borrar un equipo no se
 podrá hasta la rebanada 13, ni una temporada hasta la 11.
 

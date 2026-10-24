@@ -39,10 +39,15 @@ backoffice/
 │   ├── router.ts        el mapa de pantallas (§6)
 │   ├── api/             ← la ÚNICA carpeta que habla con el servidor
 │   │   ├── schema.d.ts  generado del openapi.yaml; no se toca a mano ni se guarda en el repositorio
+│   │   ├── schemas.json las reglas y los nombres del catálogo, generados igual (§5.1, §9.6)
 │   │   ├── client.ts    la pieza que hace las peticiones
-│   │   └── errors.ts    traduce los errores del servidor (§4)
+│   │   ├── errors.ts    traduce los errores del servidor (§4)
+│   │   └── rules.ts     comprueba un formulario con las reglas del catálogo (§5.1)
+│   ├── sorting.ts       cómo se ordena una tabla (§3.6)
+│   ├── notice.ts        el aviso breve del marco, como «Guardado» (§5.4)
 │   ├── screens/         una carpeta por pantalla: pide los datos y se los pasa a las piezas
-│   │   └── home/        la portada
+│   │   ├── home/        la portada
+│   │   └── new-team/    el alta de equipo
 │   ├── components/      piezas que solo pintan: reciben datos y avisan de los clics
 │   └── theme/           colores e idioma de PrimeVue (§9)
 └── e2e/
@@ -246,6 +251,29 @@ servidor, hay que subir este por encima.** Por qué: [DW-04].
 
 Se enseña **en cuanto se pide**, sin esperar unos milisegundos a ver si la respuesta llega antes. Por qué, y
 el parpadeo que se acepta: [DW-05].
+
+#### 3.6 Las tablas se ordenan pinchando su cabecera
+
+*(Añadido el 2026-10-24, con la tabla de la portada: bloque T del
+[plan de la rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md).)*
+
+- **Cada cabecera es un botón**, con una flecha al lado (↕ sin ordenar, ▲ o ▼ ordenada). **El primer clic ordena
+  por esa columna en su orden; el segundo, al revés; el tercero vuelve al orden de siempre**, el que manda el
+  servidor. Los empates conservan ese orden.
+- **El orden de cada columna lo decide su regla**, sobre los datos de verdad y no sobre el texto que se ve: una
+  fecha por fecha y no por «23/10/2026 20:24»; una categoría por edad y no por el alfabeto. **Las filas que no
+  tienen nada en esa columna** (un equipo sin competición) **van siempre al final**, en los dos sentidos.
+- **El orden va en la dirección** (§2.2, §6.5): `?orden=ingesta`, y al revés, `?orden=ingesta-inverso`. Un valor
+  que no se entiende se ignora, sin error. Ordenar no vuelve a pedir nada al servidor.
+- **Con el teclado y con el lector** (§10.1): el botón se alcanza con el tabulador y se pulsa con Intro o
+  Espacio, y el foco se queda en él; la columna ordenada lleva `aria-sort`, y el lector dice «orden ascendente»
+  o «descendente». La flecha no se lee. Es el modelo de tabla ordenable del W3C.
+
+**Cómo se hace**, para la tabla que venga: `src/sorting.ts` pone lo que es igual en todas (ordenar, los tres clics
+y el orden en la dirección); `components/SortableHeader.vue`, la cabecera; y cada pantalla, sus reglas (las de la
+portada, en `screens/home/order.ts`) y las **claves de orden** de cada fila. Una columna nueva es una regla más y
+una cabecera más. La tabla de PrimeVue no se usa: ordena mal las filas agrupadas, como un equipo con varias
+competiciones.
 
 **Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
 «cargando…» a un lector de pantalla (§10).
@@ -485,6 +513,9 @@ la web con la lista de temporadas. *(Decidido con la portada, [Plan R1, decisió
 temporada lleve barra (`2025/26`, esquema `SeasonLabel`), porque una barra dentro de un valor del camino
 tiene que codificarse y quedaría `2025%2F26`.
 
+**El orden de una tabla también va detrás de `?`** (§3.6): `/?temporada=2026-27&orden=ingesta`. Cambiar de
+temporada lo conserva.
+
 #### 6.6 El menú solo enseña lo que ya existe
 
 **El menú crece con cada rebanada**: no hay entradas que lleven a pantallas a medio hacer. En la rebanada 1,
@@ -672,6 +703,11 @@ pantalla, y tampoco la web: **vienen del catálogo**, de la tabla `x-enum-names`
 ([D-108](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)), y llegan con `schemas.json`. Se leen en
 `src/theme/names.ts`; un selector enseña las opciones **en el orden del catálogo**. Los mensajes de error no son
 nombres de un dato y siguen en `errors.ts` (§4.2).
+
+**El nombre de un equipo** en una lista es su categoría y su letra («Alevín A»). **Si en la misma lista hay otro
+que se llamaría igual**, a cada uno se le añade lo que los distingue, con esos mismos nombres: el género («Alevín A
+· Femenino»), la modalidad («Alevín A · Fútbol 7») o los dos. Si no hay otro igual, se queda como está
+(`teamNames`, en `names.ts`; bloque T del plan de la rebanada 2).
 
 #### 9.7 Las fechas sin hora son texto, no un instante
 
