@@ -10,6 +10,11 @@ openapi: 3.1.0
 # `tags` y `security` los **ignora** — se conservan aquí como contrato documentado y los
 # comprueba el linter. Quién hace cumplir cada cosa: LLD §5.5 (tabla) y D-65.
 #
+# Cada lista cerrada de datos (un esquema con `enum`) lleva debajo `x-enum-names`: el nombre en
+# español de cada valor, tal como lo ve el usuario (D-108). El servidor no lo lee; los clientes,
+# sí, y enseñan los valores en el orden del `enum`. `ProblemCode` no lleva: sus mensajes los
+# escribe cada cliente. Al añadir un valor, se escribe su nombre al lado.
+#
 # Estado: **completo** — las 20 entidades de §3.2 del LLD tienen contrato.
 #
 # Referencias `§x` → docs/API_y_BBDD LLD-001.md
@@ -4358,6 +4363,14 @@ components:
         Categoría del equipo. `senior` cubre tanto el "Primer Equipo" como los filiales; se distinguen
         por `letter` (§3.2).
       enum: [prebenjamin, benjamin, alevin, infantil, cadete, juvenil, senior]
+      x-enum-names:
+        prebenjamin: Prebenjamín
+        benjamin: Benjamín
+        alevin: Alevín
+        infantil: Infantil
+        cadete: Cadete
+        juvenil: Juvenil
+        senior: Senior
 
     Gender:
       type: string
@@ -4375,6 +4388,10 @@ components:
 
         **`mixto` no es expresable en la fuente**: solo lo puede poner un humano.
       enum: [masculino, femenino, mixto]
+      x-enum-names:
+        masculino: Masculino
+        femenino: Femenino
+        mixto: Mixto
 
     Modality:
       type: string
@@ -4388,6 +4405,12 @@ components:
         `federationTeamId`. Sin este campo, un club con equipos en dos modalidades no se podía
         representar.
       enum: [futbol_11, futbol_7, futbol_5, futbol_sala, futbol_playa]
+      x-enum-names:
+        futbol_11: Fútbol 11
+        futbol_7: Fútbol 7
+        futbol_5: Fútbol 5
+        futbol_sala: Fútbol sala
+        futbol_playa: Fútbol playa
 
     MatchStatus:
       type: string
@@ -4403,6 +4426,11 @@ components:
         lo que es del club (D-57). Ninguna pantalla necesita saber que el partido de otros dos equipos se
         aplazó, y la clasificación tampoco.
       enum: [programado, finalizado, aplazado, suspendido]
+      x-enum-names:
+        programado: Programado
+        finalizado: Finalizado
+        aplazado: Aplazado
+        suspendido: Suspendido
 
     MatchOutcome:
       type: string
@@ -4411,6 +4439,10 @@ components:
         un mismo partido es `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el
         otro. Solo aparece dentro de la racha (`StandingResponse.form`, D-34).
       enum: [victoria, empate, derrota]
+      x-enum-names:
+        victoria: Victoria
+        empate: Empate
+        derrota: Derrota
 
     PlayerPosition:
       type: string
@@ -4420,6 +4452,11 @@ components:
         decisiones donde solo hacía falta un rótulo. La pantalla de plantilla imprime exactamente esto
         (`PORTERO`, `DEFENSA`…).
       enum: [portero, defensa, centrocampista, delantero]
+      x-enum-names:
+        portero: Portero
+        defensa: Defensa
+        centrocampista: Centrocampista
+        delantero: Delantero
 
     AbsenceType:
       type: string
@@ -4432,6 +4469,11 @@ components:
         caso de `otro` se repite lo bastante como para querer contarlo aparte, la salida es **un valor
         nuevo** en este enumerado, no un campo de texto libre que nadie podría agregar.
       enum: [lesion, enfermedad, sancion, otro]
+      x-enum-names:
+        lesion: Lesión
+        enfermedad: Enfermedad
+        sancion: Sanción
+        otro: Otro motivo
 
     AppearanceStatus:
       type: string
@@ -4449,6 +4491,11 @@ components:
         **hecho por partido**: el periodo dice por qué no estaba, la fila dice qué pasó ese domingo. Ni
         una alimenta a la otra — las dos las escribe el administrador (D-41).
       enum: [jugado, baja_medica, sancionado, no_convocado]
+      x-enum-names:
+        jugado: Jugado
+        baja_medica: Baja médica
+        sancionado: Sancionado
+        no_convocado: No convocado
 
     CardType:
       type: string
@@ -4457,6 +4504,9 @@ components:
         `isSecondYellow = true` (D-45). Así "¿expulsado?" es `type = 'roja'` y la cuenta de acumulación
         (D-10) es `type = 'amarilla'`, las dos sin excepciones que recordar.
       enum: [amarilla, roja]
+      x-enum-names:
+        amarilla: Amarilla
+        roja: Roja
 
     GoalZone:
       type: string
@@ -4468,11 +4518,19 @@ components:
         finamente añadiría decisiones donde solo hacía falta un rótulo, y el mockup imprime exactamente
         estos tres.
       enum: [area_chica, area_penalti, fuera_area]
+      x-enum-names:
+        area_chica: Área chica
+        area_penalti: Área de penalti
+        fuera_area: Fuera del área
 
     GoalSide:
       type: string
       description: Lado del campo desde el que llega el gol.
       enum: [derecha, izquierda, centro]
+      x-enum-names:
+        derecha: Derecha
+        izquierda: Izquierda
+        centro: Centro
 
     GoalBodyPart:
       type: string
@@ -4481,6 +4539,10 @@ components:
         `AbsenceType.otro`: si un caso se repite lo bastante como para querer contarlo aparte, la salida es
         **un valor nuevo** en el enumerado, no un texto libre que nadie podría agregar.
       enum: [pie, cabeza, otro]
+      x-enum-names:
+        pie: Pie
+        cabeza: Cabeza
+        otro: Otra
 
     GoalPlayType:
       type: string
@@ -4492,6 +4554,11 @@ components:
         Es también el motivo de que este campo no sea un simple rótulo estadístico como `zone` o `side`:
         cambiarlo cambia qué es válido en el resto de la fila.
       enum: [juego_abierto, penalti, falta, en_propia_puerta]
+      x-enum-names:
+        juego_abierto: Jugada
+        penalti: Penalti
+        falta: Falta
+        en_propia_puerta: En propia puerta
 
     FederationCode:
       type: string
@@ -4504,6 +4571,9 @@ components:
         Es propiedad **del tenant**, no de cada competición: un club de Madrid compite en la RFFM y uno
         catalán en la FCF, y no son el mismo tenant.
       enum: [rffm, fcf]
+      x-enum-names:
+        rffm: Real Federación de Fútbol de Madrid
+        fcf: Federación Catalana de Fútbol
 
     # ─────────────────────── Competition (§5.2) ───────────────────────
     PreviewCompetitionRequest:
@@ -6498,6 +6568,12 @@ components:
         con distinto ámbito, en vez de siete puestos que hay que mantener a mano cada vez que la
         federación toca las categorías.
       enum: [club, modality, category, gender, team]
+      x-enum-names:
+        club: Todo el club
+        modality: Una modalidad
+        category: Una categoría
+        gender: Un género
+        team: Un equipo
 
     Scope:
       type: object
@@ -6939,6 +7015,10 @@ components:
         vigente único, no *snapshot* por jornada (§3.2), así que su endpoint devuelve la competición
         entera en una petición.
       enum: [calendar, standings, scorers]
+      x-enum-names:
+        calendar: Calendario
+        standings: Clasificación
+        scorers: Goleadores
 
     IngestionHealth:
       type: string
@@ -6973,6 +7053,12 @@ components:
         | 5 | `stale` | el último éxito es de hace **más de una semana**: §5.6 dice que eso no debe pasar |
         | 6 | `ok` | el resto |
       enum: [ok, failing, stale, never, pending]
+      x-enum-names:
+        ok: Al día
+        failing: Con fallos
+        stale: Desactualizada
+        never: Sin datos todavía
+        pending: En marcha
 
     IngestionOutcome:
       type: string
@@ -6995,6 +7081,10 @@ components:
         **Enmienda a D-88**, que decía *"el `POST` no crea la fila"*: sigue sin llevar ni un campo de la
         pasada. Lo que crea no es el resultado, es la constancia de que se lo pidieron.
       enum: [accepted, succeeded, failed]
+      x-enum-names:
+        accepted: Pendiente
+        succeeded: Terminada bien
+        failed: Fallida
 
     IngestionCounters:
       type: object
@@ -7103,6 +7193,17 @@ components:
         - unknown_standing_team
         - unidentified_scorer
         - unidentified_team
+      x-enum-names:
+        ambiguous_opponent_club: Hay más de un club rival que encaja
+        ambiguous_team: Hay más de un equipo que encaja
+        ambiguous_match: Hay más de un partido que encaja
+        unresolved_team: Partido con un equipo sin reconocer
+        missing_match_date: Partido sin fecha
+        unsluggable_club_name: Nombre de club que no se puede usar
+        duplicate_club_name: Nombre de club repetido
+        unknown_standing_team: Equipo de la clasificación sin reconocer
+        unidentified_scorer: Goleador sin código de la federación
+        unidentified_team: Equipo sin código de la federación
 
     TriggerIngestionRequest:
       type: object

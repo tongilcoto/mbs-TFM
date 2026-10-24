@@ -4917,6 +4917,13 @@ TeamCategory:
 (§9.6, los nombres de los valores salen de un solo sitio, y ese sitio es el catálogo); y a la descripción de las
 listas en el catálogo.
 
+**Hecho** (2026-10-24). Las 19 tablas en `openapi.yaml`, y la regla en su cabecera. El `lint` de Redocly y `swift
+build` las aceptan sin tocar nada; `REQUIRE_DB=1 swift test`, **736** (733 + 3 omitidos), sin cambios; el censo, en
+`0`. En la web: `gen-schemas.mjs` comprueba las tablas (probado con un catálogo roto a propósito: una lista sin
+tabla, un valor sin nombre y un nombre de más, salida `1`); Ajv recibe `x-enum-names` declarada; y `names.ts` lee
+los nombres con `namesOf` y las opciones de un selector, en el orden del `enum`, con `optionsOf`. Pedir los nombres
+de `ProblemCode` o de una lista que no lo es, o el de un valor que no existe, no compila.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

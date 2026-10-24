@@ -11,10 +11,12 @@ export type SchemaName = keyof components['schemas']
 export type FieldErrors<T> = Partial<Record<keyof T & string, string>>
 
 // En modo estricto, para que una regla mal escrita en el catálogo salte en vez de ignorarse. Solo se le declaran
-// las palabras de OpenAPI que no son de JSON Schema: `components`, el cajón donde el catálogo guarda los esquemas.
+// las palabras que no son de JSON Schema: `components`, el cajón donde el catálogo guarda los esquemas, y
+// `x-enum-names`, los nombres de los valores de cada lista (D-108), que no son una regla.
 const ajv = new Ajv2020({ strict: true, allErrors: true, verbose: true })
 addFormats(ajv)
 ajv.addKeyword('components')
+ajv.addKeyword('x-enum-names')
 ajv.addSchema(catalog, 'catalog')
 
 // El texto de cada tipo de regla, no de cada campo (LLD-B §5.1). El resto de tipos no los puede provocar un

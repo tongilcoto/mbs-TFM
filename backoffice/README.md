@@ -48,7 +48,10 @@ Todas las órdenes de abajo se escriben **dentro de `backoffice/`**.
 | Fichero | Qué tiene | Para qué |
 |---|---|---|
 | `src/api/schema.d.ts` | La forma de cada dato | Que cada petición encaje con el catálogo al compilar |
-| `src/api/schemas.json` | Las reglas de cada dato (obligatorio, formato, lista cerrada…) | Que los formularios las comprueben antes de enviar, con Ajv |
+| `src/api/schemas.json` | Las reglas de cada dato (obligatorio, formato, lista cerrada…) y el nombre en español de cada valor de las listas cerradas («Alevín», «Fútbol 7») | Que los formularios las comprueben antes de enviar, con Ajv; y que la web enseñe los valores con su nombre y en el orden del catálogo |
+
+**Si a una lista del catálogo le falta el nombre de algún valor, o le sobra uno, `gen:api` se para y dice
+cuál**: los nombres se escriben en el catálogo, junto a la lista (`x-enum-names`), no en la web.
 
 Ninguno de los dos se toca a mano ni se guarda en git: si el catálogo cambia, la próxima orden los vuelve a
 fabricar, y los dos salen siempre del mismo catálogo a la vez. Para fabricarlos, `npm run gen:api` lee

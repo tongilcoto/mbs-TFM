@@ -14,7 +14,7 @@ import FormErrorList, { type FormError } from '../../components/FormErrorList.vu
 import FormField from '../../components/FormField.vue'
 import LeaveDialog from '../../components/LeaveDialog.vue'
 import LoadError from '../../components/LoadError.vue'
-import { categoryNames, genderNames, modalityNames } from '../../theme/names'
+import { optionsOf } from '../../theme/names'
 import { newestFirst, type Season, todayHere, toAddress } from '../home/seasons'
 import { type CreateTeamRequest, type FromHome, hasChanges, initialSeason, type TeamForm, toRequest } from './form'
 
@@ -30,10 +30,9 @@ const fields: Record<Field, { id: string; label: string }> = {
 }
 const required = new Set<Field>(requiredFields('CreateTeamRequest'))
 
-const options = (names: Record<string, string>) => Object.entries(names).map(([value, label]) => ({ value, label }))
-const categoryOptions = options(categoryNames)
-const genderOptions = options(genderNames)
-const modalityOptions = options(modalityNames)
+const categoryOptions = optionsOf('TeamCategory')
+const genderOptions = optionsOf('Gender')
+const modalityOptions = optionsOf('Modality')
 
 // Los cuatro estados del selector de temporada (§3.2): el resto del formulario se puede rellenar mientras tanto.
 type SeasonsState = { kind: 'loading' } | { kind: 'error'; error: ShownError } | { kind: 'ready'; seasons: Season[] }
