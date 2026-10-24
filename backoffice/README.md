@@ -14,9 +14,11 @@ tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?
 cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
 **En construcción** (rebanada 2): el **alta de equipo**, en `/equipos/nuevo`. Ya se rellena, comprueba todos los
-campos a la vez antes de enviar y avisa si se sale con cambios sin guardar. Todavía se llega escribiendo la
-dirección: el botón de la portada y «Crear nueva temporada» llegan en los pasos siguientes. **Ojo: guardar da de
-alta el equipo de verdad en tu club**, y borrarlo no se podrá hasta la rebanada 13.
+campos a la vez antes de enviar y avisa si se sale con cambios sin guardar. Al lado del selector de
+temporada, **«Crear nueva temporada»** la crea en ese momento, solo con su etiqueta (`2027/28`). Todavía se llega
+escribiendo la dirección: el botón de la portada llega en el paso siguiente. **Ojo: guardar da de alta el equipo
+de verdad en tu club, y «Crear» crea la temporada de verdad**; borrar un equipo no se podrá hasta la rebanada 13,
+ni una temporada hasta la 11.
 
 ## Antes de empezar
 

@@ -14,6 +14,7 @@ import FormErrorList, { type FormError } from '../../components/FormErrorList.vu
 import FormField from '../../components/FormField.vue'
 import LeaveDialog from '../../components/LeaveDialog.vue'
 import LoadError from '../../components/LoadError.vue'
+import NewSeasonDialog from '../../components/NewSeasonDialog.vue'
 import { optionsOf } from '../../theme/names'
 import { newestFirst, type Season, todayHere, toAddress } from '../home/seasons'
 import { type CreateTeamRequest, type FromHome, hasChanges, initialSeason, type TeamForm, toRequest } from './form'
@@ -58,6 +59,54 @@ const listedErrors = computed<FormError[]>(() =>
     .filter((field) => fieldErrors.value[field] !== undefined)
     .map((field) => ({ fieldId: fields[field].id, label: fields[field].label, message: fieldErrors.value[field]! })),
 )
+
+// «Crear nueva temporada» (§3.3, decisión 4): crea la temporada al pulsar «Crear», antes de guardar el equipo, y
+// lo que el usuario había rellenado en el formulario sigue ahí.
+const seasonLabelRequired = requiredFields('CreateSeasonRequest').includes('label')
+const newSeason = reactive<{ open: boolean; saving: boolean; fieldError?: string; banner?: ShownError; created: boolean }>(
+  { open: false, saving: false, created: false },
+)
+
+function openNewSeason() {
+  Object.assign(newSeason, { open: true, saving: false, fieldError: undefined, banner: undefined, created: false })
+}
+
+async function createSeason(label: string) {
+  newSeason.banner = undefined
+  newSeason.fieldError = undefined
+  // El formato, con el `pattern` del catálogo y sin llegar al servidor (decisión 2).
+  const errors = checkForm('CreateSeasonRequest', { label })
+  if (errors.label !== undefined) {
+    newSeason.fieldError = errors.label
+    return
+  }
+
+  // Solo la etiqueta: la temporada nace sin código de la federación (D-106).
+  newSeason.saving = true
+  const result = await asResult(api.POST('/seasons', { body: { label } }))
+  newSeason.saving = false
+
+  if (!result.ok) {
+    // «2026/28» lo rechaza el servidor diciendo que es de la etiqueta: junto al campo. «Ya existe», arriba.
+    const placed = placeSaveError(result.error, ['label'])
+    if ('banner' in placed) newSeason.banner = placed.banner
+    else newSeason.fieldError = placed.reason
+    return
+  }
+
+  // Entra en el selector, en su sitio por fecha, y queda elegida.
+  if (seasonsState.value.kind === 'ready') {
+    seasonsState.value = { kind: 'ready', seasons: newestFirst([...seasonsState.value.seasons, result.data]) }
+  }
+  form.seasonId = result.data.id
+  newSeason.created = true
+  newSeason.open = false
+}
+
+// Al cerrarse, PrimeVue devuelve el foco al botón; si se creó la temporada, va al selector, donde está elegida.
+function afterNewSeason() {
+  if (newSeason.created) document.getElementById(fields.seasonId.id)?.focus()
+}
 
 // Si se sale antes de la respuesta, la petición se cancela (LLD-B §3.2).
 let pending: AbortController | undefined
@@ -275,19 +324,31 @@ onBeforeUnmount(() => {
         :retry="seasonsState.error.retry"
         @retry="loadSeasons"
       />
-      <!-- Sin temporadas, el selector sale vacío; la temporada nueva se crea al lado (rebanada 2, R2.13). -->
-      <Select
+      <!-- El botón va al lado del selector y no dentro (decisión 4): una opción que abre un diálogo se dispara sin
+           querer al recorrer la lista con las flechas, y el lector la anuncia como una temporada más. Sin
+           temporadas, el selector sale vacío y el botón está ahí mismo. -->
+      <div
         v-else
-        v-model="form.seasonId"
-        :label-id="fields.seasonId.id"
-        :aria-labelledby="`${fields.seasonId.id}-label`"
-        :options="seasonOptions"
-        option-label="label"
-        option-value="value"
-        empty-message="Todavía no hay ninguna temporada"
-        :invalid="invalid"
-        :pt="{ label: { 'aria-describedby': describedBy } }"
-      />
+        class="season-row"
+      >
+        <Select
+          v-model="form.seasonId"
+          :label-id="fields.seasonId.id"
+          :aria-labelledby="`${fields.seasonId.id}-label`"
+          :options="seasonOptions"
+          option-label="label"
+          option-value="value"
+          empty-message="Todavía no hay ninguna temporada"
+          :invalid="invalid"
+          :pt="{ label: { 'aria-describedby': describedBy } }"
+        />
+        <Button
+          type="button"
+          label="Crear nueva temporada"
+          severity="secondary"
+          @click="openNewSeason"
+        />
+      </div>
     </FormField>
 
     <div class="actions">
@@ -305,6 +366,16 @@ onBeforeUnmount(() => {
     </div>
   </form>
 
+  <NewSeasonDialog
+    :visible="newSeason.open"
+    :required="seasonLabelRequired"
+    :saving="newSeason.saving"
+    :field-error="newSeason.fieldError"
+    :banner="newSeason.banner"
+    @create="createSeason"
+    @cancel="newSeason.open = false"
+    @closed="afterNewSeason"
+  />
   <LeaveDialog
     :visible="asking"
     @stay="answerLeave(false)"
@@ -321,6 +392,12 @@ onBeforeUnmount(() => {
 }
 .letter {
   max-width: 6rem;
+}
+.season-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 .actions {
   display: flex;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
@@ -23,7 +23,11 @@ const seasons = [season('2026/27', true), season('2025/26')]
 
 // Un servidor de mentira: contesta la lista de temporadas y el alta como diga cada prueba, y apunta lo que se
 // envió al dar de alta.
-function fakeServer(answers: { seasons?: () => Response; createTeam?: () => Response }) {
+function fakeServer(answers: {
+  seasons?: () => Response
+  createTeam?: () => Response
+  createSeason?: (body: { label: string }) => Response
+}) {
   const sent: unknown[] = []
   vi.stubGlobal('fetch', async (request: Request) => {
     const path = new URL(request.url).pathname
@@ -31,6 +35,11 @@ function fakeServer(answers: { seasons?: () => Response; createTeam?: () => Resp
     if (request.method === 'POST' && path === '/api/v1/teams') {
       sent.push(await request.json())
       return (answers.createTeam ?? (() => Response.json({}, { status: 201 })))()
+    }
+    if (request.method === 'POST' && path === '/api/v1/seasons') {
+      const body = (await request.json()) as { label: string }
+      sent.push(body)
+      return (answers.createSeason ?? ((b) => Response.json(season(b.label), { status: 201 })))(body)
     }
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
@@ -43,7 +52,9 @@ function problem(status: number, code: string, detail = 'No se enseña') {
 
 // Abre el formulario desde la portada, como lo hará su botón: con la temporada que enseñaba en el estado de la
 // navegación. Sin `fromHome`, como al recargar.
-async function openForm(fromHome?: string) {
+// `realTransitions`: con la animación de verdad de las ventanas, para las pruebas del foco. La de mentira de las
+// pruebas no avisa de que una ventana se ha abierto o cerrado.
+async function openForm(fromHome?: string, realTransitions = false) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -53,7 +64,9 @@ async function openForm(fromHome?: string) {
   })
   await router.push('/?temporada=2025-26')
   await router.push({ path: '/equipos/nuevo', state: fromHome ? { seasonLabel: fromHome } : {} })
-  render(RouterView, { global: { plugins: [router, [PrimeVue, primeVueOptions]] } })
+  render(RouterView, {
+    global: { plugins: [router, [PrimeVue, primeVueOptions]], stubs: realTransitions ? { transition: false } : {} },
+  })
   return router
 }
 
@@ -237,5 +250,156 @@ describe('al salir', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
     await fireEvent.click(await screen.findByRole('button', { name: 'Salir sin guardar' }))
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
+  })
+})
+
+describe('«Crear nueva temporada» (§3.3)', () => {
+  const newSeasonButton = () => screen.getByRole('button', { name: 'Crear nueva temporada' })
+  const labelField = () => screen.getByRole('textbox', { name: /^Temporada/ })
+
+  async function openDialog() {
+    await fireEvent.click(await screen.findByRole('button', { name: 'Crear nueva temporada' }))
+    return screen.findByRole('dialog', { name: 'Crear nueva temporada' })
+  }
+
+  test('mientras cargan las temporadas no está: no se sabe todavía cuáles hay', async () => {
+    fakeServer({ seasons: () => new Promise<Response>(() => {}) as never })
+    await openForm()
+
+    expect(screen.queryByRole('button', { name: 'Crear nueva temporada' })).not.toBeInTheDocument()
+  })
+
+  test('el club sin temporadas: crea la primera, que entra en el selector elegida, y lo rellenado sigue ahí', async () => {
+    const sent = fakeServer({ seasons: () => Response.json([]) })
+    await openForm()
+    await choose('Categoría', 'Cadete')
+
+    await openDialog()
+    await fireEvent.update(labelField(), '2027/28')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(sent).toEqual([{ label: '2027/28' }])
+    expect(field('Temporada')).toHaveTextContent('2027/28')
+    expect(field('Categoría')).toHaveTextContent('Cadete')
+  })
+
+  test('con temporadas, la nueva entra en su sitio por fecha, la primera', async () => {
+    fakeServer({})
+    await openForm('2025/26')
+    await waitFor(() => expect(field('Temporada')).toHaveTextContent('2025/26'))
+
+    await openDialog()
+    await fireEvent.update(labelField(), '2027/28')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    await waitFor(() => expect(field('Temporada')).toHaveTextContent('2027/28'))
+
+    await fireEvent.click(field('Temporada'))
+    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual(['2027/28', '2026/27', '2025/26'])
+  })
+
+  test('con mal formato, el error del catálogo junto al campo, con su ejemplo, y sin llegar al servidor', async () => {
+    const sent = fakeServer({})
+    await openForm()
+    await openDialog()
+
+    await fireEvent.update(labelField(), '2026-27')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() => expect(labelField()).toHaveAccessibleDescription('El formato no es válido. Por ejemplo: 2024/25'))
+    expect(labelField()).toHaveAttribute('aria-invalid', 'true')
+    // El foco vuelve al campo, para que el lector lea el motivo.
+    expect(labelField()).toHaveFocus()
+    expect(sent).toEqual([])
+  })
+
+  test('al volver a abrirlo, el campo está vacío y sin el error de antes', async () => {
+    fakeServer({})
+    await openForm()
+    const dialog = await openDialog()
+    await fireEvent.update(labelField(), '2026-27')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    await waitFor(() => expect(labelField()).toHaveAttribute('aria-invalid', 'true'))
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    await openDialog()
+
+    expect(labelField()).toHaveValue('')
+    expect(labelField()).not.toHaveAttribute('aria-invalid')
+  })
+
+  test('con años que no siguen, el motivo del servidor junto al campo', async () => {
+    fakeServer({
+      createSeason: () =>
+        problem(422, 'INVALID_VALUE', 'label: debe ser AAAA/AB con AB el año siguiente, como "2025/26"'),
+    })
+    await openForm()
+    await openDialog()
+
+    await fireEvent.update(labelField(), '2026/28')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() =>
+      expect(labelField()).toHaveAccessibleDescription('debe ser AAAA/AB con AB el año siguiente, como "2025/26"'),
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  test('una que ya existe (archivada, por ejemplo): el aviso arriba del diálogo, que sigue abierto', async () => {
+    fakeServer({ createSeason: () => problem(409, 'SEASON_ALREADY_EXISTS', "label: ya hay una temporada con '2024/25'") })
+    await openForm('2026/27')
+    const dialog = await openDialog()
+
+    await fireEvent.update(labelField(), '2024/25')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        'Ya existe una temporada con esa etiqueta. Si no la ves en el selector, está archivada: se recupera desde Temporadas',
+      ),
+    )
+    expect(labelField()).toHaveValue('2024/25')
+    expect(labelField()).not.toHaveAttribute('aria-invalid')
+  })
+
+  test('«Cancelar» no crea nada, deja el selector como estaba y el foco vuelve al botón', async () => {
+    const sent = fakeServer({})
+    await openForm('2025/26', true)
+    await waitFor(() => expect(field('Temporada')).toHaveTextContent('2025/26'))
+    newSeasonButton().focus()
+
+    const dialog = await openDialog()
+    await waitFor(() => expect(labelField()).toHaveFocus())
+    await fireEvent.update(labelField(), '2027/28')
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(sent).toEqual([])
+    expect(field('Temporada')).toHaveTextContent('2025/26')
+    await waitFor(() => expect(newSeasonButton()).toHaveFocus())
+  })
+
+  test('Escape la cierra como «Cancelar»', async () => {
+    const sent = fakeServer({})
+    await openForm('2025/26', true)
+    const dialog = await openDialog()
+
+    await fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(sent).toEqual([])
+    expect(field('Temporada')).toHaveTextContent('2025/26')
+  })
+
+  test('al crearla, el foco va al selector, donde está elegida', async () => {
+    fakeServer({ seasons: () => Response.json([]) })
+    await openForm(undefined, true)
+
+    await openDialog()
+    await fireEvent.update(labelField(), '2027/28')
+    await fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+
+    await waitFor(() => expect(field('Temporada')).toHaveFocus())
   })
 })
