@@ -6,7 +6,13 @@ import { teamRows } from './rows'
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
 
-function registration(id: string, category: 'alevin' | 'cadete', letter: string, competitionIds: string[]): Registration {
+function registration(
+  id: string,
+  category: 'alevin' | 'cadete',
+  letter: string,
+  competitionIds: string[],
+  gender: 'masculino' | 'femenino' = 'masculino',
+): Registration {
   return {
     seasonId: 'temporada',
     competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '824' })),
@@ -14,7 +20,7 @@ function registration(id: string, category: 'alevin' | 'cadete', letter: string,
       id,
       category,
       letter,
-      gender: 'masculino',
+      gender,
       modality: 'futbol_11',
       isOwn: true,
       clubName: 'Celtic',
@@ -76,6 +82,15 @@ describe('las filas de la portada', () => {
 
     expect(rows).toHaveLength(1)
     expect(rows[0]!.competitions.map((c) => c.name)).toEqual(['PRIMERA CADETE · Grupo 4', 'COPA CADETE · Grupo Único'])
+  })
+
+  test('dos equipos con la misma categoría y letra salen distinguidos por lo que los diferencia', () => {
+    const rows = teamRows(
+      [registration('alevin-a-m', 'alevin', 'A', []), registration('alevin-a-f', 'alevin', 'A', [], 'femenino')],
+      [],
+    )
+
+    expect(rows.map((row) => row.team)).toEqual(['Alevín A · Masculino', 'Alevín A · Femenino'])
   })
 
   test('un equipo sin competición todavía sale con la lista vacía', () => {

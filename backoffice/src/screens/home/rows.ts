@@ -2,7 +2,7 @@
 import type { components } from '../../api/schema'
 import { formatInstant } from '../../theme/format'
 import type { CompetitionCell, TeamRow } from '../../components/teamRow'
-import { healthNames, teamName } from '../../theme/names'
+import { healthNames, teamNames } from '../../theme/names'
 
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
@@ -11,9 +11,11 @@ type Competition = components['schemas']['CompetitionResponse']
 // menor a mayor edad, y por letra.
 export function teamRows(registrations: Registration[], competitions: Competition[]): TeamRow[] {
   const byId = new Map(competitions.map((c) => [c.id, c]))
+  // Si dos equipos se llamarían igual («Alevín A» masculino y femenino), cada uno con lo que lo distingue.
+  const names = teamNames(registrations.map((registration) => registration.team))
   return registrations.map((registration) => ({
     id: registration.team.id,
-    team: teamName(registration.team.category, registration.team.letter),
+    team: names.get(registration.team.id)!,
     competitions: registration.competitions.flatMap(({ competitionId }) => {
       const competition = byId.get(competitionId)
       return competition ? [cell(competition)] : []

@@ -52,3 +52,37 @@ export const healthNames = namesOf('IngestionHealth')
 export function teamName(category: TeamCategory, letter?: string | null): string {
   return letter ? `${categoryNames[category]} ${letter}` : categoryNames[category]
 }
+
+const genderNames = namesOf('Gender')
+const modalityNames = namesOf('Modality')
+
+interface NamedTeam {
+  id: string
+  category: TeamCategory
+  letter?: string | null
+  gender: Gender
+  modality: Modality
+}
+
+// Los nombres de los equipos de una lista, por su `id`. Categoría y letra, como `teamName`; y solo si en la lista
+// hay otro con la misma categoría y letra —el «Alevín A» masculino y el femenino—, lo que los distingue: el
+// género si en ese grupo cambia, la modalidad si cambia, o los dos. «Alevín A · Femenino» (bloque T del plan R2).
+export function teamNames(teams: NamedTeam[]): Map<string, string> {
+  const groups = new Map<string, NamedTeam[]>()
+  for (const team of teams) {
+    const base = teamName(team.category, team.letter)
+    groups.set(base, [...(groups.get(base) ?? []), team])
+  }
+  const names = new Map<string, string>()
+  for (const [base, group] of groups) {
+    const byGender = new Set(group.map((team) => team.gender)).size > 1
+    const byModality = new Set(group.map((team) => team.modality)).size > 1
+    for (const team of group) {
+      const parts = [base]
+      if (byGender) parts.push(genderNames[team.gender])
+      if (byModality) parts.push(modalityNames[team.modality])
+      names.set(team.id, parts.join(' · '))
+    }
+  }
+  return names
+}
