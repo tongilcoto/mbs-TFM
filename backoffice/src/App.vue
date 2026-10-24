@@ -9,6 +9,7 @@ import type { components } from './api/schema'
 import AppHeader from './components/AppHeader.vue'
 import FullPageError from './components/FullPageError.vue'
 import SideMenu from './components/SideMenu.vue'
+import { notice } from './notice'
 
 type Club = components['schemas']['ClubResponse']
 
@@ -81,6 +82,15 @@ function exampleAddress(): string {
       class="content"
       tabindex="-1"
     >
+      <!-- «Guardado» (LLD-B §5.4): siempre en la página, vacío si no hay aviso, para que el lector lo lea en voz
+           alta al llenarse sin mover el foco (§10.3). -->
+      <p
+        role="status"
+        class="notice"
+        :class="{ shown: notice }"
+      >
+        {{ notice }}
+      </p>
       <RouterView v-if="club" />
       <!-- Se lee en voz alta sin mover el foco (LLD-B §10.3). -->
       <p
@@ -115,6 +125,17 @@ function exampleAddress(): string {
 }
 .content:focus {
   outline: none;
+}
+.notice {
+  margin: 0;
+}
+.notice.shown {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--p-content-border-color);
+  border-left: 4px solid var(--p-estado-bien);
+  background: var(--p-content-background);
+  font-weight: 600;
 }
 /* En una pantalla estrecha, el menú pasa arriba, debajo de la cabecera. */
 @media (max-width: 40rem) {

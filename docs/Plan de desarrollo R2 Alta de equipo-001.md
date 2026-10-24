@@ -17,6 +17,10 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
+> **Cerrado el 2026-10-24**: los 17 pasos y los 7 del bloque T, hechos (§8). El servidor sirve 11 de las 85
+> operaciones; **743 tests** en el backend, y en la web **195 pruebas de piezas y 68 escenarios**. Pendiente, del
+> desarrollador: la revisión con VoiceOver (LLD-B §10.7 *b*). Lo aprendido, en la §9.
+>
 > **Estado del documento: decisiones revisadas.** El flujo (§1 y §3) se colocó con el desarrollador, y la
 > decisión 1 es `D-106`, ya grabada. Las decisiones 2 a 6 se revisaron una a una con él el 2026-10-23, y las
 > secciones 2, 3, 5, 6 y 7 están escritas con lo acordado. **La revisión cambió una cosa del servidor que no
@@ -94,7 +98,7 @@ listas cerradas del catálogo, y la web ya las tiene (`schema.d.ts`).
 - **Qué temporada viene elegida** (decisión 5), **en este orden**:
   1. **El club no tiene temporadas**: el selector sale vacío, con el botón al lado. No se calcula nada más.
   2. **Viene una temporada de la portada, y sigue en la lista**: esa.
-  3. **Si no** (se recargó, se escribió `/equipos/nuevo` a mano, o la de la portada ya no está): la regla de la
+  3. **Si no** (se escribió `/equipos/nuevo` a mano, se abrió un enlace guardado, o la de la portada ya no está): la regla de la
      portada, `chooseSeason` — la temporada en curso o, si no hay ninguna, la más reciente. **Sin error**: el
      usuario no ha escrito ninguna temporada.
 - **Al pulsar *Guardar***: la web comprueba todos los campos contra `CreateTeamRequest` y marca **todos** los que
@@ -143,8 +147,9 @@ listas cerradas del catálogo, y la web ya las tiene (`schema.d.ts`).
 - La web vuelve a la portada **en la temporada en la que se ha inscrito el equipo** (`/?temporada=2026-27`), no
   en la de la que se vino (decisión 5), y **quita el formulario del historial**: «Atrás» lleva a la portada de
   partida, no a un formulario vacío.
-- El equipo sale en la tabla con «Sin competición» y el texto «Se engancha con la federación desde la ficha del
-  equipo», como cualquier equipo de junio (Plan R1, §3.2).
+- El equipo sale en la tabla con «Sin competición» y el texto «Pendiente de sincronizar con la Federación», como
+  cualquier equipo de junio (Plan R1, §3.2). *(Decía «Se engancha con la federación desde la ficha del equipo»;
+  cambiado el 2026-10-24: ese camino no estaba decidido.)*
 
 ---
 
@@ -176,6 +181,9 @@ web escribe a mano solo el texto de cada **tipo** de regla, en una tabla de unas
   `SeasonLabel` ya trae `examples: ['2024/25']`, y la web lo lee de ahí igual que la regla, así que no hay
   ningún texto por campo escrito a mano. Se descartó dejar el mensaje genérico con una ayuda fija debajo del
   campo: sería una copia a mano que puede quedarse atrás.
+- **Y una ayuda debajo del campo, leída del mismo ejemplo** (añadido el 2026-10-24, a petición del desarrollador
+  al ver el diálogo): «Por ejemplo: 2024/25», visible desde que se abre, para no tener que equivocarse primero.
+  No es la ayuda descartada arriba: no se escribe a mano, sale de `examples` del catálogo con `exampleOf`.
 - **Que el segundo año sea el siguiente** («2026/28» no vale) solo lo sabe el servidor, en el Dominio: llega como
   `INVALID_VALUE` con `label: debe ser AAAA/AB con AB el año siguiente, como "2025/26"` en el `detail`, y la web
   enseña el motivo junto al campo (LLD-B §4.5 *a*).
@@ -252,7 +260,9 @@ archiva o se borra desde Temporadas (rebanada 11).
 | **Al cancelar** | La de partida | `/?temporada=2026-27`, o `/` si se llegó sin ninguna |
 
 - **El estado de la navegación** viaja con esa entrada del historial: «Atrás» y «Adelante» lo conservan; al
-  recargar o al escribir `/equipos/nuevo` a mano no hay.
+  escribir `/equipos/nuevo` a mano o al abrir un enlace guardado no hay. *(Decía «al recargar o al escribir…»:
+  **al recargar, el navegador lo conserva**, y el formulario sigue con la temporada con la que se abrió. Lo vio un
+  escenario de R2.16; se dio por bueno con el desarrollador el 2026-10-24.)*
 - **El orden para elegir la del selector** es el de la §3.2: **primero, si el club no tiene temporadas**; después,
   la que viene de la portada si sigue en la lista; y si no, `chooseSeason`, sin error. Es el mismo orden que ya
   sigue `chooseSeason` (`seasons.ts:27`: la lista vacía se mira antes de calcular nada).
@@ -373,7 +383,8 @@ desarrollador, y **los que valen son ellos**. Al final de cada escenario, axe en
 - Un equipo que ya está en esa temporada: el aviso arriba del formulario, y lo escrito sigue ahí.
 - Dar de alta un equipo solo con el teclado (LLD-B §10.7).
 - Después de guardar, «Atrás» lleva a la portada de partida, no al formulario.
-- Recargar el formulario: el selector pasa a la temporada en curso.
+- Recargar el formulario: conserva la temporada con la que se abrió. Abrirlo escribiendo su dirección: la temporada
+  en curso.
 - Salir con cambios sin guardar pregunta antes; «Cancelar» sin cambios vuelve sin preguntar.
 
 **La temporada nueva** (§3.3)
@@ -384,6 +395,15 @@ desarrollador, y **los que valen son ellos**. Al final de cada escenario, axe en
 - Etiqueta con años que no siguen («2026/28»): el error del servidor junto al campo.
 - Una etiqueta que ya existe, archivada: su mensaje arriba del diálogo.
 - Cancelar el diálogo, o *Escape*, deja el selector como estaba, y el foco vuelve al botón.
+
+**La tabla de la portada** (bloque T)
+
+- Ordenar por cada columna: la primera vez en su orden, la segunda al revés, la tercera vuelta al de siempre; y
+  el lector dice cómo está ordenada.
+- El orden en la dirección: recargar lo conserva, y «Atrás» vuelve al anterior.
+- Un equipo con dos competiciones se mueve entero al ordenar por Ingesta.
+- Dos «Alevín A», masculino y femenino: cada uno con lo que lo distingue.
+- La competición, sin la categoría delante.
 
 **El enganche de una temporada sin código** (decisión 1). En la rebanada 3 tendrá su pantalla; aquí se prueba en
 el servidor, con los tests de la §5. Los escenarios de la web llegan con la pantalla del enganche.
@@ -396,7 +416,7 @@ Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cad
 bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
 solo, y lo que no venga en el plan va en su propio commit.
 
-### A · Los documentos de las decisiones
+### A · Los documentos de las decisiones ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -405,13 +425,13 @@ solo, y lo que no venga en el plan va en su propio commit.
 | **R2.3** | `D-107` en la bitácora (decisión 6), con su nota «Enmendado por» en `D-68` | El desarrollador lo revisa | Un commit |
 | **R2.4** | El LLD del backend (§3.2, §3.5 y §3.7: el código de la temporada puede faltar; §5.1: `createSeason`, el alta que reutiliza el equipo y la búsqueda por etiqueta del enganche). El LLD-B: §6.1 con `/equipos/nuevo` confirmado, y `DW-07` con la decisión 3. Y el plan del backoffice: `createSeason` se adelanta de la rebanada 11 a la 2, con lo «pendiente de confirmar» resuelto, y las dos reglas del despliegue (decisión 3) como pendiente de la 16 | El desarrollador lo revisa | Un commit para el backend y otro para la web (LLD-B §E.1) |
 
-### B · El catálogo (la mini-fase)
+### B · El catálogo (la mini-fase) ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R2.5** | `openapi.yaml`: lo de la primera fila de la §5. Y en el mismo paso, los tres mensajes nuevos de `errors.ts`, porque sin ellos la web no compila | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, los tipos de la web regenerados y `npm run build` en verde. El censo, con los tres códigos que todavía nadie emite | Un commit |
 
-### C · El servidor
+### C · El servidor ✅
 
 Con el método del backend (§5).
 
@@ -423,7 +443,7 @@ Con el método del backend (§5).
 | **R2.9** | `createTeam` | Tests, mutación y `curl` | Un commit |
 | **R2.10** | Cierre del servidor: el recuento leído del XML, el censo con las dos operaciones, los catálogos de mutación de la rebanada pasados otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
-### D · La web
+### D · La web ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -432,13 +452,78 @@ Con el método del backend (§5).
 | **R2.13** | **«Crear nueva temporada»**: el diálogo, su comprobación, sus errores y la temporada nueva elegida en el selector | Vitest, y la web abierta | Un commit |
 | **R2.14** | **La portada**: el botón, el botón en los dos vacíos, y la vuelta a la temporada del equipo creado con «Guardado» | Vitest, y la web abierta con el club del desarrollador | Un commit |
 
-### E · Los escenarios y el cierre
+### E · Los escenarios y el cierre ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R2.15** | Los datos de los escenarios: el club vacío y el club con temporadas, por la aplicación (LLD-B §11.3) | Un escenario que los use | Un commit |
 | **R2.16** | Los `.feature` de la §6, con la *skill* de escenarios del desarrollador | `npm run e2e` en verde, con axe en los dos modos; y la revisión a mano del LLD-B §10.7 *b* | Un commit |
 | **R2.17** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
+
+### T · La tabla de la portada y los nombres del servidor (bloque añadido) ✅
+
+**Añadido el 2026-10-24, entre R2.14 y R2.15, a petición del desarrollador**, que prefirió hacerlo ahora y no en la
+rebanada 5: la tabla todavía es pequeña, y deja hecha la forma de ordenar para las columnas que vengan. Y los
+nombres del servidor, cuanto antes, porque son la otra mitad de `D-108`.
+
+**Lo que se vio:**
+
+- **El servidor tiene su propia copia de los nombres de las categorías** (`Domain/Enumerations.swift`,
+  `displayLabel`), y con ella monta `CompetitionResponse.displayName` («Cadete · PRIMERA CADETE · Grupo 4»),
+  `TeamResponse.displayName` y `TeamRef.displayName` («Celtic Alevín A»). `D-108` dejó una sola fuente para los
+  clientes; el servidor seguía con la suya.
+- **La portada repite la categoría**: «Cadete B» al lado de «Cadete · PRIMERA CADETE · Grupo 4».
+- **Dos equipos pueden salir iguales**: el nombre en la tabla es categoría y letra, así que el «Alevín A»
+  masculino y el femenino, o el de fútbol 7 y el de fútbol 11, son dos filas idénticas. Con la rebanada 2 ya se
+  pueden dar de alta los dos.
+- **Las columnas no se ordenan.**
+
+**Lo decidido con el desarrollador:**
+
+| # | Pregunta | Decidido |
+|---|---|---|
+| 1 | Cómo saca el servidor los nombres del catálogo | **Se generan al compilar**: una herramienta lee `x-enum-names` de `openapi.yaml` y escribe los nombres en Swift, como el generador escribe los tipos. Ningún nombre escrito a mano en Swift. Si se complica más de lo razonable, se para y se habla antes de caer a un test que vigile dos copias |
+| 2 | Un equipo con varias competiciones, al ordenar por Competición, Ingesta o Última sincronización | **Se ordenan los equipos**, y cada uno conserva sus competiciones juntas: se coloca por la peor ingesta, la sincronización más antigua o la primera competición por orden alfabético |
+| 3 | El orden de cada columna | **Equipo**: edad y después letra. **Competición**: alfabético. **Ingesta**: de peor a mejor —con fallos, desactualizada, en marcha, sin datos, al día—. **Última sincronización**: de la más antigua a la más reciente, con «Nunca» arriba. Los equipos sin competición, siempre al final en las tres últimas |
+| 4 | ¿El orden va en la dirección? | **Sí** (LLD-B §2.2): se comparte con el enlace, sobrevive a una recarga y «Atrás» lo respeta |
+| 5 | Pinchar varias veces | La primera, en el orden de la fila 3; la segunda, al revés; la tercera, vuelta al orden de siempre (el del servidor) |
+| 6 | Los dos equipos iguales | **Ahora**, en este bloque |
+
+**Lo que se propone, para revisar antes de cada paso:**
+
+- **Dónde viven los nombres en el servidor (T.1).** Un nombre en español es cosa de cómo se enseña un dato, no del
+  Dominio. Se propone que los nombres generados vivan junto al contrato (`APIContract`, al lado de los tipos que
+  ya genera), que **el Dominio pierda `displayLabel`**, y que los `displayName` los monte el adaptador HTTP, que ya
+  conoce el contrato. Es una decisión de diseño del servidor: va a la bitácora como `D-109`, y se revisa antes de
+  construirla.
+- **La competición en la portada (T.3)**: «PRIMERA CADETE · Grupo 4», con `divisionLabel` y `groupLabel`, que ya
+  vienen en la respuesta. La categoría que repite la federación dentro de su propio nombre no se recorta: cada
+  federación escribe a su manera. `displayName` no cambia: hace falta donde no hay un equipo al lado.
+- **Los equipos iguales (T.4)**: solo cuando en la tabla hay **dos con la misma categoría y letra**, a cada uno se
+  le añade **lo que los distingue**, con los nombres del catálogo: «Alevín A · Femenino» y «Alevín A ·
+  Masculino»; o «Alevín A · Fútbol 7»; o los dos, si difieren en los dos. Si no hay otro igual, se queda como hoy.
+  El `displayName` del servidor («Celtic Alevín A») tiene el mismo problema; lo enseñarán las apps del móvil, y se
+  apunta como pendiente del backend, sin tocarlo aquí.
+- **El orden en la dirección (T.6)**: `?orden=ingesta`, y al revés, `?orden=ingesta-inverso`. Los nombres:
+  `equipo`, `competicion`, `ingesta`, `sincronizacion`. Un valor que no se entiende se ignora y la tabla sale en
+  el orden de siempre, sin error: no es un dato que el usuario busque, como la temporada.
+- **La forma de ordenar, para las columnas que vengan (T.5)**: la tabla sigue siendo la escrita a mano —la de
+  PrimeVue ordena mal las filas agrupadas de un equipo con varias competiciones—. Una **pieza de cabecera
+  ordenable** (un botón dentro de la cabecera, con `aria-sort` para que el lector diga cómo está ordenada) y **una
+  regla de orden por columna**, una función sin pantalla que se prueba sola. Una columna nueva es una regla nueva
+  y una cabecera más. Se escribe en el LLD-B.
+
+| Paso | Qué | Cómo se comprueba | Se graba |
+|---|---|---|---|
+| **T.1** | `D-109` en la bitácora: los nombres del servidor se generan del catálogo, y dónde viven | El desarrollador lo revisa | Un commit |
+| **T.2** | **Los nombres del servidor, generados**: la herramienta y su *plugin* de compilación, el Dominio sin `displayLabel`, y los `displayName` montados en el adaptador HTTP | Con el método del backend: rojo de aserción, implementación y mutación. `swift build`, `REQUIRE_DB=1 swift test` (736 más los nuevos, leído del XML), el censo en `0`, y un catálogo roto a propósito que haga fallar la compilación | Un commit |
+| **T.3** | **La competición sin la categoría delante**, en la portada | Vitest | Un commit |
+| **T.4** | **Los equipos iguales, distinguidos** | Vitest | Un commit |
+| **T.5** | **La forma de ordenar**: la cabecera ordenable, las reglas de las cuatro columnas y el orden en la dirección | Vitest, con rotura a mano | Un commit |
+| **T.6** | **Las cuatro columnas, ordenables** en la portada | Vitest, los escenarios (`npm run e2e`) y Chromium contra la web del desarrollador, solo leyendo | Un commit |
+| **T.7** | Documentos: el LLD-B (la forma de ordenar y los nombres de los equipos), el README de la web y del backend, y `AGENTS.md` | El desarrollador lo revisa | Un commit para el backend y otro para la web |
+
+Los escenarios de la tabla se suman a la lista de la §6 y se escriben en R2.16, con los demás.
 
 ## 8. Estado
 
@@ -454,14 +539,54 @@ Con el método del backend (§5).
 | **R2.8** | ✅ 2026-10-24 | **El enganche y su `/preview` buscan la temporada en dos pasos** (`D-106`): una pieza compartida, `SeasonRepository.findForLink`, que busca por el código de la URL y, si no, por la etiqueta —**con las archivadas**— y lanza `seasonAlreadyLinked` si la de esa etiqueta ya tiene otro código. El enganche le pone el código a la que no lo tiene y la guarda, dentro de su transacción; el `/preview` solo la cuenta como existente (`exists: true`). Error nuevo → **409 `SEASON_ALREADY_LINKED`**, con los dos códigos en el `detail`. **Distinto de lo previsto**: el repositorio **no gana una lectura por etiqueta**; se usa la lista, como `createSeason`, porque un club tiene un puñado de temporadas y así no cambian el puerto ni sus dobles. **Hallazgo**: antes de esto, el enganche sobre una temporada sin código creaba otra con la misma etiqueta; el doble no lo notaba, y en Postgres habría sido un 500 por el `UNIQUE`. Tests: 2 del enganche y 2 del `/preview` (rojo de aserción visto) y 3 de extremo a extremo (sin código, archivada sin código, y el 409 en las dos puertas sin escribir nada); el de la archivada se añadió **antes de la mutación**, porque sin él la M3 sobrevivía. **717 → 724**. Mutación (`Catalogs/R2-8.json`): **8/8**. Censo en `0`. **A medio paso se colgó el Docker del desarrollador**: lo forzó a cerrar, se levantó `backend-db-1` con `docker compose up -d` y sus datos seguían. **Sin el enganche de verdad contra la RFFM que pedía el paso**: escribiría en el club una temporada, una competición y una ingesta que no se pueden borrar, y con la base de hoy (la 2026/27 ya tiene código) no pasaría por el caso nuevo. README del backend (§4.1) y `AGENTS.md` |
 | **R2.9** | ✅ 2026-10-24 | `createTeam` activada (**11** operaciones servidas). Aplicación: `CreateTeam` (`D-107`): la temporada tiene que existir (404 `unknownSeason`); «el mismo equipo» es uno **propio** con la misma categoría, letra, género y modalidad —un rival nunca, y sin letra es otro—; si no lo hay, lo crea sin código e inscrito, con la fila de junio (**201**); si lo hay y no está en esa temporada, le añade la inscripción (**200**); si ya está, **409 `TEAM_ALREADY_REGISTERED`**, con los dos `id` en el `detail`. Todo antes de escribir. HTTP: `TeamHandler.swift`, con el `seasonId` validado como UUID (400) y el 201/200 según lo que diga el caso de uso. **Además de lo previsto, en el catálogo**: `createTeam` **no declaraba 422**, y una letra en blanco la rechaza el Dominio con 422; declarado, como en `createSeason`. Tests: 6 del caso de uso y 6 del endpoint, en una suite con su propio club. Rojo de aserción visto en los dos niveles. **724 → 736**, leído del XML. Mutación (`Catalogs/R2-9.json`): **10/10**. Censo en `0`; con esto, los tres códigos nuevos de R2.5 ya los emite el servidor y los nombra un test. README del backend (§0, el paso 0 de §4.1 y §4.6 nueva) y `AGENTS.md` |
 | **R2.10** | ✅ 2026-10-24 | **Cierre del servidor.** El recuento, leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **736** (733 + 3 omitidos); **697 → 736** en la parte del servidor de la rebanada. El censo, salida `0`: **11 operaciones**, los 35 códigos de la lista y solo `NOT_FOUND` sin un test que lo nombre (sale de una condición). Los cuatro catálogos de la rebanada, pasados otra vez sobre el código final: R2-6 **11/11**, R2-7 **9/9**, R2-8 **8/8**, R2-9 **10/10** (38/38). El README del backend se fue escribiendo en cada paso (§0, §4.1, §4.3 y §4.6), y `AGENTS.md`, con el servidor de la rebanada 2 cerrado y lo siguiente, `R2.11` |
-| **R2.11** | | |
-| **R2.12** | | |
-| **R2.13** | | |
-| **R2.14** | | |
-| **R2.15** | | |
-| **R2.16** | | |
-| **R2.17** | | |
+| **R2.11** | ✅ 2026-10-24 | **Las reglas del catálogo en la web.** `npm run gen:api` lanza, tras `openapi-typescript`, `scripts/gen-schemas.mjs`, que deja en `src/api/schemas.json` solo `components/schemas`, con esa estructura para que los `$ref` sigan valiendo; fuera de git (`.gitignore`). **Además de lo previsto**: `npm test` también lo fabrica antes (`pretest`), porque las pruebas lo cargan y en una copia recién bajada no existe; y el revisor trata `scripts/` como Node, igual que `e2e/`. Piezas: `ajv` 8.20 y `ajv-formats` 3, que viajan con la web, y `yaml` solo entre las de desarrollo, porque solo lo usa `gen:api`. `src/api/rules.ts`: `checkForm(esquema, formulario)` devuelve todos los campos que fallan a la vez, cada uno con su primer fallo, y la tabla de mensajes por tipo de regla (obligatorio, vacío, mínimo y máximo de caracteres, mínimo y máximo, formato —con el ejemplo del catálogo si lo tiene— y lista cerrada; el resto, «El valor no es válido»). **Ajv en modo estricto**: los 95 esquemas del catálogo compilan declarándole una sola palabra, `components`, porque para llegar a un esquema por su dirección mira primero el cajón que los guarda; `discriminator` no hizo falta, el catálogo no lo usa. Un campo sin rellenar se pasa como `undefined`, y `null` queda para los que lo admiten (la letra). En `errors.ts`, el `detail` de `INVALID_VALUE` y `NOT_EDITABLE_AFTER_SYNC` se separa por el primer «: » (LLD-B §4.5 *a*), y `placeSaveError` decide si el error va junto a su campo o al aviso de arriba. Pruebas, con los esquemas de verdad: 8 de las reglas (`CreateTeamRequest` vacío nombra sus cuatro obligatorios y no la letra; «2026-27» con el ejemplo; «2026/28» pasa, porque eso solo lo sabe el servidor) y 8 del `detail` (sin la forma, sin campo o sin motivo, va arriba; un campo que el formulario no tiene, arriba; el `detail` de `SEASON_ALREADY_EXISTS`, aunque tenga la forma, no se lee). **80 → 96**. Comprobadas rompiendo el código a mano: de las 10 roturas, una sobrevivía (que cada campo salga con un solo mensaje) y se añadió su prueba. **Sin probar**, porque ningún campo del catálogo lo pide: el «Como mínimo {n} caracteres» con más de uno. `npm test` desde cero, `typecheck`, `lint` y `build` en verde. Las reglas todavía no las usa ninguna pantalla: llegan con el formulario (R2.12). README de la web y `AGENTS.md` |
+| **R2.12** | ✅ 2026-10-24 | **El formulario** (`/equipos/nuevo`, «Alta de equipo» en la pestaña). `screens/new-team/`: la lógica sin pintar en `form.ts` —qué temporada viene elegida (vacío primero, después la de la portada si sigue, y si no `chooseSeason`), qué se envía (la letra en blanco no; con espacios sí, y la rechaza el servidor) y cuándo hay cambios sin guardar (la temporada que pone la web no cuenta)— y la pantalla, `NewTeamScreen.vue`. La temporada de la portada llega en el **estado de la navegación**, leído del historial de Vue Router (en el navegador es `history.state`, y así sirve también el de las pruebas). Guardar y cancelar **sustituyen** al formulario en el historial. Tres piezas nuevas: `FormField` (etiqueta visible, asterisco que se ve y «obligatorio» que se lee, ayuda y error unidos al campo), `FormErrorList` (la lista de arriba, con un enlace a cada campo y el foco en ella, LLD-B §10.3) y `LeaveDialog` («Tienes cambios sin guardar. ¿Salir sin guardar?», con «Seguir editando» primero y Escape como él); al cerrar la pestaña o recargar, pregunta el navegador. El asterisco sale del `required` del catálogo (`requiredFields`, nueva en `rules.ts`), y los nombres de género y modalidad, nuevos en `theme/names.ts`. El aviso de arriba reutiliza `LoadError`. **Lo que no trae, porque es de sus pasos**: el botón «Crear nueva temporada» (R2.13, el club sin temporadas ve de momento el selector vacío), y el botón de la portada y el aviso «Guardado» (R2.14): hasta entonces al formulario se llega escribiendo la dirección, y guardar vuelve a la portada sin aviso. **Hallazgos de las pruebas**: PrimeVue elige una opción al apretar el botón del ratón, no al hacer clic; su selector no tiene propiedad para unir el error al campo y se le pasa con `pt`. Pruebas: 14 de `form.ts`, 4 de `FormField`, 2 de `FormErrorList`, 1 más de `rules.ts` y 13 de la pantalla con un servidor de mentira (los cuatro estados del selector, el envío vacío con el foco en la lista, el alta que vuelve a la temporada del equipo y sin el formulario detrás, el 409 arriba sin borrar lo escrito, el 422 junto a la letra, el botón bloqueado, y salir con y sin cambios). **96 → 130**. Comprobadas rompiendo la pantalla a mano: las 11 roturas, cazadas. **Sin prueba automática**: el aviso del navegador al cerrar la pestaña. `typecheck`, `lint` y `build` en verde; **la web compilada pasa de 107 a 195 KB comprimida** (Ajv y las reglas del catálogo), por encima del aviso de Vite de 500 KB sin comprimir. Contra el servidor del desarrollador, **con `curl` a través de Vite y solo con casos que no escriben**: el equipo que ya está, 409 con un `detail` sin forma de campo (al aviso de arriba); la letra en blanco, 422 `letter: …` (junto al campo); las inscripciones del club, las mismas. **La web no se abrió en el navegador**: la extensión de Chrome no estaba conectada |
+| **D-108** | ✅ 2026-10-24 | **Además de lo previsto, entre R2.12 y R2.13.** Revisando el formulario, el desarrollador preguntó de dónde salían las opciones de los selectores: los valores, del catálogo, pero los nombres y el orden estaban escritos a mano en `names.ts`, y el orden no lo vigilaba nada. Decidido con él: **una sola fuente**, los nombres en el catálogo. Tres commits: la decisión en la bitácora (`D-108`), revisada por el desarrollador; el cambio, con las 19 listas del catálogo, la comprobación de `gen:api` y `names.ts` leyendo de ahí (130 → **132** pruebas de piezas; el servidor, 736 y el censo en `0`, sin cambios); y este renglón con el LLD-B §9.6. **Los nombres de las listas que aún no tienen pantalla son propuesta**, pendientes de que el desarrollador los lea |
+| **R2.13** | ✅ 2026-10-24 | **«Crear nueva temporada».** El botón, al lado del selector y no dentro (decisión 4), solo cuando la lista de temporadas ha llegado, con temporadas o sin ellas. Abre `NewSeasonDialog` (pieza nueva): un campo, «Temporada», con asterisco del `required` de `CreateSeasonRequest`. La pantalla comprueba el formato con `checkForm` —«El formato no es válido. Por ejemplo: 2024/25», sin llegar al servidor— y envía `createSeason` **solo con la etiqueta** (`D-106`). Si va bien, la temporada entra en el selector en su sitio por fecha, queda elegida, y lo rellenado del equipo sigue ahí. «2026/28» (422 `label: …`) sale junto al campo con el motivo del servidor; «ya existe» (409), arriba del diálogo, que sigue abierto. Con el teclado: al abrirse, el foco va al campo; un error lo devuelve a él; Escape cierra como «Cancelar»; al cancelar, PrimeVue devuelve el foco al botón; y al crear, la pantalla lo lleva al selector. **Hallazgo, grabado aparte** (`fix(R2.12)`): la ventana de PrimeVue solo mete el foco si un elemento lleva `autofocus`, que el revisor de accesibilidad prohíbe, así que el aviso de cambios sin guardar de R2.12 **dejaba el foco detrás**; ahora lo pone la web al abrirse (`@show`), y aquí igual. Las pruebas del foco usan **la animación de verdad** (`stubs: { transition: false }`): la de mentira de las pruebas no avisa de que una ventana se abre o se cierra. Pruebas: 1 del aviso (el arreglo) y 10 del diálogo en las de la pantalla (no está mientras cargan; el club vacío crea la primera y lo rellenado sigue; la nueva entra primera por fecha; formato, con el foco en el campo; años que no siguen; ya existe; volver a abrir lo deja vacío; cancelar con el foco en el botón; Escape; y el foco en el selector al crear). **132 → 133 → 143**. Comprobadas rompiendo el código a mano: de 12 roturas, 2 sobrevivían (vaciar el campo al volver a abrir, y el foco al campo con un error) y se añadieron sus pruebas; una tercera rotura no cambiaba nada y se repitió bien. `typecheck`, `lint` y `build` en verde. Contra el servidor del desarrollador, **con `curl` y solo casos que no escriben**: «2026/27», 409 `SEASON_ALREADY_EXISTS`; «2026/28», 422 con `label: …`; la lista, con su única temporada. **La web no se abrió en el navegador**: sin la extensión de Chrome |
+| **R2.13 (ayuda)** | ✅ 2026-10-24 | **Además de lo previsto, a petición del desarrollador**: debajo del campo del diálogo, «Por ejemplo: 2024/25», leído de `examples` del catálogo con `exampleOf` (nueva en `rules.ts`, que sigue el `$ref` del campo). Decisión 2 ampliada. Pruebas: 1 de `exampleOf` y 1 del diálogo, y dos del diálogo ajustadas (la ayuda va delante del error en lo que lee el lector). **143 → 145**; sin la ayuda en la ventana, 3 fallan |
+| **R2.14** | ✅ 2026-10-24 | **La portada.** «Dar de alta un equipo» junto al selector de temporada y, debajo del mensaje, en los dos vacíos: «Todavía no hay ninguna temporada.» con «Para empezar, da de alta el primer equipo. La temporada se crea desde el mismo formulario.», y «No hay equipos en la temporada 2025/26.» (cada mensaje sigue en su propio párrafo, porque así lo buscan los escenarios). **Es un enlace con aspecto de botón** (`Button as="router-link"`): va a otra pantalla, se puede abrir en otra pestaña y el lector lo anuncia como enlace. Lleva la temporada que se ve en el **estado de la navegación** (decisión 5). **«Guardado»**: lo pide el formulario (`announce`, en `src/notice.ts`, nuevo) y lo enseña el marco, en `App.vue`, en una zona `role="status"` que está **siempre en la página, vacía** si no hay aviso, para que el lector lo lea al llenarse; desaparece sola a los 5 s. La vuelta a la temporada del equipo ya la hacía R2.12. **Además de lo previsto, por esa zona siempre presente**: el paso de los escenarios «estoy en la portada de mi club» esperaba a que desapareciera *el* `status` de la página, y ahora hay dos; espera al que dice «Cargando». Pruebas: 2 del aviso, 1 del marco (la primera de `App.vue`), 3 de la portada (la primera de `HomeScreen`, con lo que añade esta rebanada) y 2 comprobaciones en las del formulario («Guardado» al guardar bien, y no al fallar). **145 → 151**. Comprobadas rompiendo el código a mano: las 7 roturas, cazadas. `typecheck`, `lint` y `build` en verde. **Los escenarios, `npm run e2e`**: con el cambio, 3 de 35 fallaban por el paso de arriba; arreglado, **35/35** con la misma semilla (67259) y con otra nueva (940021), axe incluido en los dos modos. **La web no se abrió en el navegador**: sin la extensión de Chrome |
+| **R2.14 (subrayado)** | ✅ 2026-10-24 | **Lo vio el desarrollador**: «Dar de alta un equipo» salía con el texto subrayado. Es un enlace, y el navegador subraya los enlaces; Aura solo pinta como botón la forma y el color. Arreglado en el tema (`primevue.ts`, `components.button.css`): `a.p-button` sin subrayado, para todo enlace con aspecto de botón. **Comprobado en un Chromium de verdad** contra la web del desarrollador, solo leyendo (Playwright): antes, `underline`; después, `none`, con su captura. La prueba de piezas no puede verlo —su navegador de mentira no subraya nada—, así que comprueba que la regla llega a la página con el tema; sin la regla, falla. **151 → 152** |
+| **T.1** | ✅ 2026-10-24 | `D-109` en la bitácora, con su fila en el índice, su enlace y la nota en el punto 5 de `D-108`. Revisada por el desarrollador |
+| **T.2** | ✅ 2026-10-24 | **Los nombres del servidor, generados del catálogo** (`D-109`). `EnumNamesCore` lee `openapi.yaml` y la configuración del generador con Yams (declarado; ya estaba en el grafo) y escribe una extensión por lista —`Components.Schemas.TeamCategory.alevin.displayName` es «Alevín»—, con un `switch` por valor en el orden del catálogo; `EnumNamesTool` lee y escribe los ficheros, y `EnumNamesPlugin` lo lanza al compilar `APIContract`. **Distinto de lo previsto, revisado con el desarrollador**: el generador solo fabrica 9 de las 19 listas (las de las operaciones servidas), así que las 19 van en `filter: schemas`, y la herramienta para la compilación si falta alguna; enmienda en `D-109`. El Dominio pierde `displayLabel` y `Competition.displayName`; los dos `displayName` (competición y equipo) se montan en el adaptador HTTP. Tests: 8 de la herramienta, con rojo de aserción visto (esqueleto vacío); el rojo de los dos nombres, visto en los tests HTTP que ya los vigilaban; el de `displayName` del Dominio y su línea de persistencia, retirados (una comprobación del Dominio pasó a mirar los rótulos). **736 → 743**, leído del XML. Mutación (`Catalogs/T-2.json`): **7/7**; tratar `ProblemCode` como lista con nombres no compila —el catálogo de verdad no los tiene y la compilación se para—, así que se retiró por inválida. Censo en `0`. Y un catálogo con un nombre quitado a propósito para la compilación: «CardType: sin nombre para roja». README del backend (§0, §5 y §7) |
+| **T.3** | ✅ 2026-10-24 | **La competición sin la categoría delante.** `rows.ts` monta el nombre de la celda con `divisionLabel · groupLabel` en vez de `displayName`: «PRIMERA CADETE · Grupo 4». La categoría que repite la federación dentro de su nombre se queda. Pruebas: las dos de las filas que miran el nombre, cambiadas antes del código y vistas en rojo; la de dos competiciones, con división y grupo distintos. **152**, sin cambio en el recuento. **El escenario** «la fila del equipo tiene su competición» buscaba el `displayName`: sus datos inventados ganan `rowName`, y el paso lo busca. `npm run e2e`: **35/35** (semilla 422616), con el servidor ya compilado con T.2. **Visto en Chromium contra la web del desarrollador**, solo leyendo: «Alevín A · PRIMERA ALEVIN · Grupo 8» y «Cadete B · PRIMERA CADETE · Grupo 4» |
+| **T.4** | ✅ 2026-10-24 | **Los equipos iguales, distinguidos.** `teamNames` (nueva en `theme/names.ts`) agrupa los equipos de la lista por categoría y letra, y solo en un grupo de más de uno añade lo que cambia dentro del grupo: el género, la modalidad o los dos, con los nombres del catálogo («Alevín A · Femenino», «Alevín A · Masculino · Fútbol 7»). Sin letra, igual («Alevín · Femenino»). `rows.ts` la usa para toda la tabla. Pruebas, escritas antes del código y vistas en rojo con un esqueleto que no distinguía: 6 de la regla y 1 de las filas. **152 → 159**. Comprobadas rompiendo el código a mano: las 7 roturas, cazadas. `npm run e2e`: **35/35** (semilla 514782). Los datos inventados de los escenarios evitan a propósito dos equipos con el mismo nombre (`invented.ts`), así que el escenario de los dos «Alevín A» de la §6 tendrá que crearlos adrede. **Visto en Chromium contra la web del desarrollador**, solo leyendo, con el caso que él acababa de crear en su club: «Alevín A · Fútbol 11» y «Alevín A · Fútbol 7» (mismo género: solo la modalidad), y «Cadete B» sin cambios |
+| **T.5** | ✅ 2026-10-24 | **La forma de ordenar**, en tres piezas. **`src/sorting.ts`**, para cualquier tabla: `sortRows` con una regla (`compare`, el orden del primer clic, e `isEmpty`, las filas que van siempre al final en los dos sentidos; los empates conservan el orden del servidor), `nextOrder` (los tres clics) y el orden en la dirección (`orderToAddress`, `orderFromAddress`: `ingesta`, `ingesta-inverso`, y lo que no se entiende es el orden de siempre). **`components/SortableHeader.vue`**: la cabecera con un botón con el nombre de la columna, `aria-sort` solo en la ordenada y la flecha que se ve pero no se lee (el patrón de tabla ordenable del W3C). **`screens/home/order.ts`**: las cuatro reglas de la portada (equipo por edad y letra; competición por orden alfabético con `Intl.Collator`, y un equipo con varias, por la primera; ingesta de peor a mejor, por la peor; sincronización de la más antigua a la más reciente, con «Nunca» arriba, por la más antigua), sobre las **claves de orden** que cada fila gana en `rows.ts` (`HomeRow.keys`: los datos de verdad, no los textos que se ven). Pruebas, escritas antes del código y vistas en rojo con esqueletos: 14 de `sorting`, 10 de las reglas y 5 de la cabecera. **159 → 188**. Comprobadas rompiendo el código a mano: de 20 roturas, todas cazadas salvo una **equivalente** (ordenar con «todo empate» no cambia nada); dos, repetidas porque la primera vez no cambiaron el fichero. `typecheck`, `lint` y `build` en verde. La portada todavía no las usa: eso es T.6 |
+| **T.6** | ✅ 2026-10-24 | **Las cuatro columnas, ordenables.** `TeamsTable` pinta sus cabeceras con `SortableHeader`, recibe el orden (`order`) y avisa de qué columna pinchan (`sort`); no ordena: las filas le llegan ordenadas. `HomeScreen` lee el orden de la dirección (`?orden=`), ordena las filas que ya tiene —cambiar el orden no vuelve a pedir nada— y al pinchar pone el siguiente en la dirección con `push`, así que «Atrás» vuelve al anterior. **Cambiar de temporada conserva el orden** (el selector copiaba solo la temporada). Pruebas, escritas antes y vistas en rojo: 3 de la tabla (las cabeceras son botones y avisan con el nombre de su columna, y `aria-sort` en su sentido) y 4 de la portada (sin orden, el del servidor; `?orden=ingesta`; los tres clics en la dirección con «Atrás»; y la temporada que conserva el orden); la de las cabeceras se cambió a buscarlas por su nombre, porque la flecha no se lee. **188 → 195**. Rompiendo el código a mano: de 7 roturas, 6 cazadas; la que sobrevivió señalaba una línea que sobraba (borrar `orden` de la dirección, que Vue Router ya quita sin valor) y se quitó. `npm run e2e`: **35/35** (semilla 263262). **Visto en Chromium contra la web del desarrollador, pulsando de verdad**: los tres clics de Equipo (en su orden, al revés con «Cadete B» primero, y vuelta sin `?orden`), con `aria-sort` y la dirección en cada uno; Ingesta, con el equipo sin competición al final; Competición con el teclado (Intro), con el foco que se queda en la cabecera; y el orden que sobrevive a recargar |
+| **T.7** | ✅ 2026-10-24 | Dos commits, como manda el LLD-B §E.1. **Backend**: el LLD (§5.1 y §5.2), con los `displayName` montados en el adaptador HTTP con los nombres del catálogo (`D-108`, `D-109`); **y un desajuste viejo, corregido**: decía que el del equipo propio usa `Club.name`, y el adaptador usa el nombre corto desde R1.9. **Web**: el LLD-B con §3.6 nueva (las tablas se ordenan pinchando su cabecera, y cómo se hace para la siguiente), el orden en la dirección (§6.5), el nombre de un equipo distinguido cuando hace falta (§9.6) y las carpetas nuevas (§1.1); el README de la web; y `AGENTS.md`. El README del backend se escribió en T.2. **Con esto, el bloque T, cerrado** |
+| **R2.15** | ✅ 2026-10-24 | **Los datos de los escenarios, por la aplicación.** En `club-data.ts`: `addSeason` crea la temporada con `POST /seasons`, solo con la etiqueta, en vez de `seed-competition` con una competición inventada; el equipo del club nace con `POST /teams` en su temporada (que se crea si no está), en vez de `seed-team`; `addPlayingTeam` da de alta el equipo y lo engancha, así que **cada enganche de los escenarios pasa ahora por la búsqueda de la temporada por etiqueta** (`D-106`); y `addTeamWithoutCompetition` es solo el alta: **sale la inscripción escrita en la base**. Ya no queda ningún comando del servidor en los datos de los escenarios, y en la base solo «Sin datos todavía», «Desactualizada» y el club a medio preparar. `anyCompetition`, sin uso, fuera. El club vacío no necesita nada: es el que nace en cada escenario. **Comprobado con los escenarios que los usan**: `npm run e2e` **35/35** dos veces (semillas 532188 y 759062), en el mismo tiempo que antes (≈39 s). El LLD-B §11.3, al día. Los datos de los escenarios nuevos (una temporada archivada, los dos «Alevín A») se añaden en R2.16, con los `.feature` que los pidan |
+| **R2.16** | ✅ 2026-10-24, salvo la revisión a mano | **Los escenarios de la rebanada**, con la *skill* del desarrollador y revisados con él antes de programarlos: **33 nuevos** —`alta.feature` (16), `temporada-nueva.feature` (8), `tabla.feature` (7) y 2 más en `portada-vacia.feature`—. Lo que cambió en la revisión: **etiquetas `@e2e` / `@ui`** (principio 8; la ordenación de la tabla, toda `@ui`), puestas también a los 35 de la rebanada 1; un escenario **campo a campo** del formulario; el envío vacío partido en dos (con temporada elegida, y el club sin temporadas, el único en que falta); el orden **entrar → usar → salir**; **cada paso dice de qué pantalla parte**, también los `Then`, y los de la rebanada 1 que se reutilizan; y **al salir, el primer `Then` dice adónde lleva el flujo y los siguientes comprueban ahí lo que se metió**. Lo que cambió al programarlos: los de la tabla, **con tres equipos** («Al día», «Con fallos», «Desactualizada»), repartidos para que el orden del servidor, el de peor a mejor y el de mejor a peor sean distintos, porque con dos el tercer clic pasaba aunque no hiciera nada. Datos nuevos: la temporada archivada, por la API y archivada **por la base** (`archiveSeason` llega en la 11); y los dos equipos iguales, por `POST /teams`. Quitado de la lista de la §6: «un equipo con dos competiciones se mueve entero», que lo cubren las pruebas de piezas de las reglas. **Lo que encontraron, en commits aparte**: el arnés medía el contraste con el diálogo a medio aparecer (ahora espera a las animaciones); los enlaces de la lista de errores no llegaban a 24 px (arreglado); y **al recargar, el navegador conserva el estado de la navegación**, así que el formulario no pasa a la temporada en curso como decía la decisión 5: dado por bueno con el desarrollador, decisión enmendada y un escenario más para el caso que sí cumple la regla (escribir la dirección a mano). `npm run e2e`: **68/68 dos veces** (semillas 7403 y 785258; 2 min 6 s y 3 min 31 s), con axe en los dos modos. **Pendiente: la revisión a mano del LLD-B §10.7 *b*** —teclado, VoiceOver, zoom al 200 % y los dos modos—, que es del desarrollador |
+| **R2.17** | ✅ 2026-10-24 | **Cierre.** Los cinco pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **743** (740 + 3 omitidos), con el censo en `0`; en la web, **195 pruebas de piezas** (`npm test`) y **68 escenarios** (`npm run e2e`, R2.16); (2) el README del backend ya estaba al día desde T.2 (743 en §0 y §5); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada y lo siguiente; (4) los rótulos de la §7 con su ✅, el bloque T incluido, y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol: el plan del backoffice decía que el servidor sirve **9** de las 85 (son **11**), y su tabla de estado y su mapa tenían la rebanada en curso; el resto de apariciones (736, 80 pruebas, 35 escenarios, 32 códigos) son registros con fecha y no se tocan. El README de la web dice qué enseña hoy. Lo aprendido, en la §9 |
 
 ## 9. Lo aprendido
 
-Se escribe al cerrar la rebanada (R2.17).
+- **Los escenarios, escritos y revisados antes que sus pasos.** La revisión de los `.feature` con el desarrollador
+  cambió seis cosas antes de programar una línea: las etiquetas `@e2e` / `@ui`, el orden entrar → usar → salir,
+  que cada paso diga de qué pantalla parte, que la salida compruebe en la pantalla nueva lo que se metió, un
+  escenario campo a campo y el envío vacío partido en sus dos casos. Programados después, salieron a la primera en
+  lo que dependía de esa forma.
+- **Los escenarios encuentran lo que las pruebas de piezas no pueden ver.** Tres cosas de R2.16: el navegador
+  **conserva el estado de la navegación al recargar** (la decisión 5 daba por hecho lo contrario, y las pruebas de
+  piezas lo «simulaban» quitándolo); los enlaces de la lista de errores no llegaban a 24 px; y axe midiendo con una
+  ventana a medio aparecer. Las piezas prueban lo que uno cree que pasa; el navegador de verdad, lo que pasa.
+- **La herramienta que mide se vuelve a medir, y el arreglo se generaliza.** axe ya había medido en mitad de una
+  animación en R1.12 (el cambio de modo). Esta vez se arregló donde vale para todo: el arnés espera a que acabe lo
+  que se mueve antes de medir.
+- **Para probar un orden, datos en los que los órdenes difieran.** Con dos equipos, «al revés» y «el de siempre»
+  pueden coincidir, y el escenario del tercer clic pasaba sin hacer nada. Con tres, repartidos a propósito, cada
+  `Then` comprueba el orden entero. Lo mismo vale para las pruebas de piezas de las reglas.
+- **Una sola fuente de la verdad, también para los textos que se ven.** Los valores de las listas ya salían del
+  catálogo, pero sus nombres y su orden estaban escritos en la web, y el servidor tenía otra copia (`D-108`,
+  `D-109`). Llevarlo al catálogo costó una herramienta de compilación y descubrir que el generador solo fabrica los
+  tipos que se usan (`filter: schemas`).
+- **Un texto de pantalla no debe prometer lo que nadie ha decidido.** «Se engancha con la federación desde la ficha
+  del equipo» venía de la R1, cuando no había ni ficha ni enganche; ahora dice «Pendiente de sincronizar con la
+  Federación», y el camino lo decide la rebanada 3.
+- **Usar la web mientras se construye, otra vez.** El texto subrayado del botón, la categoría repetida en la tabla,
+  la tabla sin ordenar, los dos «Alevín A» y el tabulador de Safari los vio el desarrollador con la web abierta;
+  cada uno fue a su commit. Y mirar la web con un Chromium de verdad (Playwright, solo leyendo) sirvió cuando la
+  extensión del navegador no estaba.
+
+**Queda abierto, con dueño:** la revisión con VoiceOver (el desarrollador); las acciones de cada fila de la portada
+y el enganche (rebanada 3); cómo se llama un equipo en un partido y el `displayName` que no distingue género ni
+modalidad (rebanada 4); la política de seguridad de la página y el peso de `schemas.json` (rebanada 16); y vigilar
+cuánto tarda `npm run e2e`, que fue de 2 min 6 s a 3 min 31 s entre dos pasadas de R2.16.

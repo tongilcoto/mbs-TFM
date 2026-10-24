@@ -6,7 +6,13 @@ import { teamRows } from './rows'
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
 
-function registration(id: string, category: 'alevin' | 'cadete', letter: string, competitionIds: string[]): Registration {
+function registration(
+  id: string,
+  category: 'alevin' | 'cadete',
+  letter: string,
+  competitionIds: string[],
+  gender: 'masculino' | 'femenino' = 'masculino',
+): Registration {
   return {
     seasonId: 'temporada',
     competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '824' })),
@@ -14,7 +20,7 @@ function registration(id: string, category: 'alevin' | 'cadete', letter: string,
       id,
       category,
       letter,
-      gender: 'masculino',
+      gender,
       modality: 'futbol_11',
       isOwn: true,
       clubName: 'Celtic',
@@ -50,13 +56,15 @@ describe('las filas de la portada', () => {
       [competition('liga', { ingestionHealth: 'ok', lastSyncedAt: '2026-10-17T21:40:00Z' })],
     )
 
-    expect(rows).toEqual([
+    // Lo que pinta la tabla; las claves de orden las prueba order.test.ts.
+    expect(rows).toMatchObject([
       {
         id: 'cadete-b',
         team: 'Cadete B',
         competitions: [
           {
-            name: 'Competición liga',
+            // La división y el grupo, sin la categoría delante: el equipo ya la dice (bloque T).
+            name: 'PRIMERA CADETE · Grupo 4',
             health: 'ok',
             healthName: 'Al día',
             previousFailed: false,
@@ -70,11 +78,20 @@ describe('las filas de la portada', () => {
   test('un equipo con dos competiciones sale en una sola fila, con las dos', () => {
     const rows = teamRows(
       [registration('cadete-b', 'cadete', 'B', ['liga', 'copa'])],
-      [competition('liga', {}), competition('copa', {})],
+      [competition('liga', {}), competition('copa', { divisionLabel: 'COPA CADETE', groupLabel: 'Grupo Único' })],
     )
 
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.competitions.map((c) => c.name)).toEqual(['Competición liga', 'Competición copa'])
+    expect(rows[0]!.competitions.map((c) => c.name)).toEqual(['PRIMERA CADETE · Grupo 4', 'COPA CADETE · Grupo Único'])
+  })
+
+  test('dos equipos con la misma categoría y letra salen distinguidos por lo que los diferencia', () => {
+    const rows = teamRows(
+      [registration('alevin-a-m', 'alevin', 'A', []), registration('alevin-a-f', 'alevin', 'A', [], 'femenino')],
+      [],
+    )
+
+    expect(rows.map((row) => row.team)).toEqual(['Alevín A · Masculino', 'Alevín A · Femenino'])
   })
 
   test('un equipo sin competición todavía sale con la lista vacía', () => {

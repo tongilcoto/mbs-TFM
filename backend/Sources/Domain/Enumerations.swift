@@ -164,25 +164,6 @@ extension TeamCategory {
     }
 }
 
-extension TeamCategory {
-    /// Rótulo legible, con los acentos que el *raw value* no lleva.
-    ///
-    /// Vive en el Dominio porque de él se compone `Competition.displayName`
-    /// (§5.2), que es un campo derivado del contrato. El *raw value* se queda sin
-    /// acentos: es lo que viaja al `enum` del *spec* y a la columna.
-    public var displayLabel: String {
-        switch self {
-        case .prebenjamin: "Prebenjamín"
-        case .benjamin: "Benjamín"
-        case .alevin: "Alevín"
-        case .infantil: "Infantil"
-        case .cadete: "Cadete"
-        case .juvenil: "Juvenil"
-        case .senior: "Senior"
-        }
-    }
-}
-
 extension CaseIterable where Self: RawRepresentable, Self.RawValue == String {
     /// Los valores del enumerado listados para un `IN (…)` de SQL.
     ///

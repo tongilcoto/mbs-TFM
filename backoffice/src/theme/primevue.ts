@@ -40,6 +40,13 @@ const preset = definePreset(Aura, {
       },
     },
   },
+  components: {
+    button: {
+      // Un enlace con aspecto de botón («Dar de alta un equipo», que va a otra pantalla) se ve como un botón: sin
+      // el subrayado que el navegador pone a todos los enlaces y que Aura solo quita a los botones de verdad.
+      css: () => 'a.p-button { text-decoration: none; }',
+    },
+  },
 })
 
 // Los textos de sus piezas, en español, y la semana desde el lunes (LLD-B §9.5).

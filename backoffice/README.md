@@ -8,10 +8,23 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
-**Lo que enseña hoy** (rebanada 1, cerrada el 2026-10-20): la **portada**, con los equipos del club en una
-temporada, la competición en la que juega cada uno, cómo va su ingesta y cuándo se sincronizó por última vez, en
-tu hora. La temporada se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`). Alrededor, la
-cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
+**Lo que enseña hoy** (rebanadas 1 y 2, cerradas el 2026-10-20 y el 2026-10-24):
+
+- **La portada**, con los equipos del club en una temporada: la competición en la que juega cada uno (sin la
+  categoría delante, «PRIMERA CADETE · Grupo 4»), cómo va su ingesta y cuándo se sincronizó por última vez, en tu
+  hora. Si dos equipos se llamarían igual, cada uno lleva lo que lo distingue («Alevín A · Fútbol 7»). La temporada
+  se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`).
+- **La tabla se ordena** pinchando la cabecera de cada columna: la primera vez en su orden, la segunda al revés y
+  la tercera vuelve al de siempre. El orden también queda en la dirección (`/?orden=ingesta`).
+- **El alta de equipo**: «Dar de alta un equipo», junto al selector de temporada y debajo del mensaje cuando no hay
+  temporadas o la elegida no tiene equipos. El formulario (`/equipos/nuevo`) comprueba todos los campos a la vez
+  antes de enviar y avisa si se sale con cambios sin guardar; al lado de su selector, «Crear nueva temporada» la
+  crea en ese momento, solo con su etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del
+  equipo, con el aviso «Guardado».
+- Alrededor, la cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
+
+**Ojo: guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad.** Borrar un
+equipo no se podrá hasta la rebanada 13, ni una temporada hasta la 11.
 
 ## Antes de empezar
 
@@ -37,9 +50,28 @@ Todas las órdenes de abajo se escriben **dentro de `backoffice/`**.
 | **Revisar** el código | `npm run lint` | El revisor de código: avisa si una pieza de `components/` usa `api/` y de los fallos de accesibilidad que se ven sin ejecutar (imagen sin texto alternativo, campo sin etiqueta…) |
 | **Fabricar** la web para publicarla | `npm run build` | Comprueba los tipos y deja la web lista en `dist/` |
 
-**Los tipos del catálogo se fabrican solos** antes de `dev`, `typecheck` y `build`, en
-`src/api/schema.d.ts`. Ese fichero no se toca a mano ni se guarda en git: si el catálogo cambia, la próxima
-orden lo vuelve a fabricar.
+**Los tipos y las reglas del catálogo se fabrican solos** antes de `dev`, `test`, `typecheck` y `build`, con
+`npm run gen:api`, en dos ficheros:
+
+| Fichero | Qué tiene | Para qué |
+|---|---|---|
+| `src/api/schema.d.ts` | La forma de cada dato | Que cada petición encaje con el catálogo al compilar |
+| `src/api/schemas.json` | Las reglas de cada dato (obligatorio, formato, lista cerrada…) y el nombre en español de cada valor de las listas cerradas («Alevín», «Fútbol 7») | Que los formularios las comprueben antes de enviar, con Ajv; y que la web enseñe los valores con su nombre y en el orden del catálogo |
+
+**Si a una lista del catálogo le falta el nombre de algún valor, o le sobra uno, `gen:api` se para y dice
+cuál**: los nombres se escriben en el catálogo, junto a la lista (`x-enum-names`), no en la web.
+
+Ninguno de los dos se toca a mano ni se guarda en git: si el catálogo cambia, la próxima orden los vuelve a
+fabricar, y los dos salen siempre del mismo catálogo a la vez. Para fabricarlos, `npm run gen:api` lee
+`../backend/`: la web se compila con el repositorio entero a la vista, no solo con esta carpeta.
+
+Lo que se ha añadido para eso: **`ajv`** (el comprobador de reglas) y **`ajv-formats`** (los formatos, como el
+de los identificadores), que viajan con la web; y **`yaml`**, que solo usa `gen:api` para leer el catálogo.
+
+Dos cosas a tener en cuenta el día que se publique (están en los pendientes de la rebanada 16 del
+[plan](../docs/Plan%20de%20desarrollo%20backoffice-001.md)): Ajv fabrica sus comprobadores en el navegador, así que una
+política de seguridad estricta en la página tendría que permitirlo; y `schemas.json` lleva también las
+descripciones del catálogo, unos 157 KB, que se pueden quitar si el tamaño importa.
 
 ## Los escenarios de punta a punta
 
@@ -64,6 +96,9 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
   cada pasada prueba con otros. Al empezar, la pasada escribe su semilla; **para repetir los mismos datos**:
   `SEMILLA=255079 npm run e2e`. Si un escenario falla, el informe dice qué datos le tocaron. La semilla y esos
   datos quedan también en `e2e-results/datos.log`, que se rehace en cada pasada.
+- **Cada escenario es `@e2e` o `@ui`** (la *skill* de escenarios, principio 8): los `@e2e` comprueban el flujo y
+  adónde lleva, y los `@ui`, lo que se ve (textos, avisos, orden, foco). Para pasar solo unos:
+  `npm run e2e -- --tags @e2e`. Para pasar uno por su nombre: `npm run e2e -- --name "Escape cierra"`.
 - **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
   viejo probaría código que ya no es el tuyo.
 
@@ -89,8 +124,9 @@ Sin el fichero, los dos usan el **8080**. Si cambias el puerto con la web ya arr
 cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl+C` y vuelve a lanzar
 `npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
 
-**Para que la portada tenga equipos**, el club tiene que tenerlos enganchados con su federación. Mientras la web
-no sepa dar de alta equipos (rebanada 2), se hace desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
+**Para que la portada tenga equipos**, se dan de alta con «Dar de alta un equipo»: salen con «Sin competición»
+hasta que se enganchan con su federación. Mientras la web no sepa engancharlos (rebanada 3), el enganche se hace
+desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
 
 Una forma rápida de ver que los dos se hablan:
 

@@ -1,10 +1,11 @@
 // Los datos que necesita cada escenario, dados de alta en su club por los caminos de la aplicación (la skill de
 // escenarios, principio 9), en este orden de preferencia:
 //
-//   1. Los endpoints de la API: el enganche (`POST /teams/{id}/federation-link`), la ingesta
-//      (`POST /ingestion-runs`) y el nombre del club (`PATCH /club`). Nunca el que prueba el escenario.
-//   2. Los comandos del servidor, donde la API todavía no llega: `seed-team` hasta que exista `POST /teams`
-//      (rebanada 2), y `seed-competition` para una temporada sin equipos, que la API no puede crear.
+//   1. Los endpoints de la API, como lo haría un usuario: la temporada (`POST /seasons`), el equipo
+//      (`POST /teams`), el enganche (`POST /teams/{id}/federation-link`), la ingesta (`POST /ingestion-runs`) y
+//      el nombre del club (`PATCH /club`). Nunca el que prueba el escenario.
+//   2. Los comandos del servidor, donde la API todavía no llega. Desde la rebanada 2 (R2.15), ninguno: `seed-team`
+//      y `seed-competition` los sustituyen `POST /teams` y `POST /seasons`.
 //   3. La base de datos, solo para lo que ninguno de los dos produce. Cada caso dice por qué.
 //
 // Las competiciones las inventa el escenario (invented.ts) y las sirve la federación falsa, así que el servidor
@@ -13,8 +14,7 @@ import { expectApi } from './club-api.ts'
 import type { ScenarioClub } from './clubs.ts'
 import { config } from './config.ts'
 import { fakeFederation } from './fake-federation.ts'
-import { anyCompetition, competition, team, type Competition, type Season, type Team } from './invented.ts'
-import { run } from './processes.ts'
+import { competition, team, type Competition, type Season, type Team } from './invented.ts'
 import type { Random } from './random.ts'
 import { withDatabase } from './test-database.ts'
 
@@ -27,9 +27,6 @@ export interface PlayingTeam {
 /** Cómo va la ingesta de una competición: las palabras de la pantalla (plan R1, decisión 2). */
 export type HealthWords = 'Al día' | 'Con fallos' | 'En marcha' | 'Sin datos todavía' | 'Desactualizada'
 
-// Lo que necesitan los comandos del servidor: la base de las pruebas y la federación falsa.
-const commandEnv = { DB_NAME: config.database.name, RFFM_BASE_URL: `http://127.0.0.1:${config.federationPort}` }
-
 // ── 1 y 2: por la aplicación ────────────────────────────────────────────────────────────────────────────────
 
 /** Le pone al club su nombre corto, el de la cabecera. */
@@ -38,34 +35,42 @@ export async function setShortName(club: ScenarioClub, shortName: string): Promi
 }
 
 /**
- * Da de alta la temporada, con una competición cualquiera y sin equipos. La API solo crea temporadas al
- * enganchar un equipo, así que va por `seed-competition`, el comando que el servidor tiene para esto.
+ * Da de alta la temporada, sin equipos y sin código de la federación, como «Crear nueva temporada» (`D-106`).
+ * Devuelve su `id`.
  */
-export async function addSeason(club: ScenarioClub, random: Random, season: Season): Promise<void> {
-  const invented = anyCompetition(random, season)
-  fakeFederation().invent(invented)
-  await run(
-    config.serverBinary,
-    ['seed-competition', '-t', club.slug, '-u', invented.calendarUrl, '-c', invented.category, '-g', invented.gender],
-    commandEnv,
-  )
+export async function addSeason(club: ScenarioClub, season: Season): Promise<string> {
+  const created = await expectApi<{ id: string }>(club, 'POST', '/seasons', { label: season.label }, 201)
+  return created.id
 }
 
-/** Crea un equipo del club, que no choque con los de `taken`. Devuelve el equipo con su `id`. */
-async function seedTeam(club: ScenarioClub, random: Random, taken: Team[]): Promise<Team> {
-  const created = team(random, taken)
-  const args = ['seed-team', '-t', club.slug, '-c', created.category, '-g', created.gender, '-m', created.modality]
-  if (created.letter) args.push('-l', created.letter)
-  const output = await run(config.serverBinary, args, commandEnv)
-  const id = /Equipo listo: ([0-9a-f-]{36})/.exec(output)?.[1]
-  if (!id) throw new Error(`seed-team no dijo qué equipo creó:\n${output}`)
+/** El `id` de la temporada; si el club no la tiene, la da de alta. */
+async function seasonIdOf(club: ScenarioClub, season: Season): Promise<string> {
+  const seasons = await expectApi<{ id: string; label: string }[]>(club, 'GET', '/seasons?includeArchived=true', undefined, 200)
+  return seasons.find((s) => s.label === season.label)?.id ?? (await addSeason(club, season))
+}
+
+/**
+ * Da de alta un equipo del club en la temporada, que no choque con los de `taken`, como el formulario: queda
+ * inscrito sin competición, la fila de junio (`D-68`). Devuelve el equipo con su `id`.
+ */
+async function createTeam(club: ScenarioClub, random: Random, season: Season, taken: Team[]): Promise<Team> {
+  return addTeam(club, season, team(random, taken))
+}
+
+/** Da de alta en la temporada el equipo que se le pasa, como el formulario. Devuelve el equipo con su `id`. */
+export async function addTeam(club: ScenarioClub, season: Season, created: Team): Promise<Team> {
+  const seasonId = await seasonIdOf(club, season)
+  const { category, letter, gender, modality } = created
+  const body = { category, gender, modality, seasonId, ...(letter ? { letter } : {}) }
+  const { id } = await expectApi<{ id: string }>(club, 'POST', '/teams', body, 201)
   return { ...created, id }
 }
 
 /**
- * Un equipo nuevo del club, enganchado a una competición de la temporada: el enganche crea la temporada (si no
- * estaba), la competición y la inscripción, y lanza la primera ingesta. Vuelve cuando la ingesta ha acabado:
- * la competición queda «Al día».
+ * Un equipo nuevo del club, enganchado a una competición de la temporada. Como lo haría el club: da de alta el
+ * equipo en la temporada (y la temporada, si no estaba), y después lo engancha. El enganche encuentra la temporada
+ * por su etiqueta y le pone el código de la federación (`D-106`), crea la competición, llena la inscripción y
+ * lanza la primera ingesta. Vuelve cuando la ingesta ha acabado: la competición queda «Al día».
  */
 export async function addPlayingTeam(
   club: ScenarioClub,
@@ -73,7 +78,7 @@ export async function addPlayingTeam(
   season: Season,
   taken: Team[] = [],
 ): Promise<PlayingTeam> {
-  const created = await seedTeam(club, random, taken)
+  const created = await createTeam(club, random, season, taken)
   const plays = competition(random, season, created)
   fakeFederation().invent(plays)
   const linked = await expectApi<{ competitionId: string }>(
@@ -86,6 +91,11 @@ export async function addPlayingTeam(
   plays.id = linked.competitionId
   await ingestionFinished(club, plays.id)
   return { team: created, competition: plays }
+}
+
+/** Un equipo nuevo del club, inscrito en la temporada sin competición (el estado de junio), por el alta. */
+export function addTeamWithoutCompetition(club: ScenarioClub, random: Random, season: Season, taken: Team[] = []): Promise<Team> {
+  return createTeam(club, random, season, taken)
 }
 
 interface IngestionRun {
@@ -203,34 +213,14 @@ async function ageIngestions(club: ScenarioClub, competitionId: string, days: nu
   })
 }
 
+
 /**
- * Un equipo nuevo del club, inscrito en la temporada sin competición (el estado de junio). La inscripción sin
- * competición llega a la API con la rebanada 2; hasta entonces, el equipo se crea con `seed-team` y solo la
- * inscripción va por la base. La temporada se busca en la API; si el club no la tiene, se da de alta.
+ * Una temporada archivada: no sale en las listas, pero su etiqueta sigue ocupada (plan R2, decisión 6). Se da de
+ * alta por la API y se archiva por la base: archivar (`archiveSeason`) no llega a la API hasta la rebanada 11.
  */
-export async function addTeamWithoutCompetition(
-  club: ScenarioClub,
-  random: Random,
-  season: Season,
-  taken: Team[] = [],
-): Promise<Team> {
-  const findSeason = async () =>
-    (await expectApi<{ id: string; label: string }[]>(club, 'GET', '/seasons?includeArchived=true', undefined, 200))
-      .find((s) => s.label === season.label)?.id
-  let seasonId = await findSeason()
-  if (!seasonId) {
-    await addSeason(club, random, season)
-    seasonId = await findSeason()
-  }
-  const created = await seedTeam(club, random, taken)
-  await sql(club, (query) =>
-    query(
-      `INSERT INTO $schema.team_registrations (id, team_id, season_id, competition_id, federation_team_id, created_at, updated_at)
-       VALUES (gen_random_uuid(), $1, $2, NULL, NULL, now(), now())`,
-      [created.id, seasonId],
-    ),
-  )
-  return created
+export async function addArchivedSeason(club: ScenarioClub, season: Season): Promise<void> {
+  const id = await addSeason(club, season)
+  await sql(club, (query) => query('UPDATE $schema.seasons SET archived_at = now() WHERE id = $1', [id]))
 }
 
 /**

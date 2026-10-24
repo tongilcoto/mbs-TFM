@@ -1,0 +1,55 @@
+{
+  "title": "T.2 · los nombres del servidor se generan del catálogo (D-109)",
+  "filter": "EnumNamesTests|CompetitionEndpointTests|SeasonRegistrationEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-comprobar-nombres",
+      "description": "no comprueba que cada valor tenga su nombre",
+      "file": "Sources/EnumNamesCore/EnumNames.swift",
+      "find": "            problems += list.problems\n",
+      "replace": ""
+    },
+    {
+      "id": "M2-sin-comprobar-filtro",
+      "description": "no comprueba que la lista esté en filter: schemas",
+      "file": "Sources/EnumNamesCore/EnumNames.swift",
+      "find": "            if !generated.contains(list.name) {",
+      "replace": "            if false {"
+    },
+    {
+      "id": "M3-nombre-de-mas",
+      "description": "no avisa de un nombre que la lista no tiene",
+      "file": "Sources/EnumNamesCore/EnumNames.swift",
+      "find": "            if !extra.isEmpty {",
+      "replace": "            if false {"
+    },
+    {
+      "id": "M4-sin-escapar",
+      "description": "no escapa las comillas de un nombre",
+      "file": "Sources/EnumNamesCore/EnumNames.swift",
+      "find": "            .replacing(\"\\\"\", with: \"\\\\\\\"\")",
+      "replace": ""
+    },
+    {
+      "id": "M5-orden-al-reves",
+      "description": "escribe los valores en otro orden que el del catálogo",
+      "file": "Sources/EnumNamesCore/EnumNames.swift",
+      "find": "            let cases = values.map {",
+      "replace": "            let cases = values.reversed().map {"
+    },
+    {
+      "id": "M7-competicion-sin-nombre",
+      "description": "la competición con el valor del contrato y no con su nombre",
+      "file": "Sources/HTTPAdapter/CompetitionHandler.swift",
+      "find": "ageCategory.toContract().displayName",
+      "replace": "ageCategory.toContract().rawValue"
+    },
+    {
+      "id": "M8-equipo-sin-nombre",
+      "description": "el equipo con el valor del contrato y no con su nombre",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "category.toContract().displayName",
+      "replace": "category.toContract().rawValue"
+    }
+  ]
+}

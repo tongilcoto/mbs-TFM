@@ -14,22 +14,22 @@ import { currentSeason, futureSeason, pastSeason, type Season } from '../support
 import { absent, becomes, shows } from '../support/look.ts'
 import type { ScenarioWorld } from '../support/world.ts'
 
-const content = (world: ScenarioWorld) => world.page.getByRole('main')
-const picker = (world: ScenarioWorld) => world.page.getByRole('combobox', { name: 'Temporada' })
+export const content = (world: ScenarioWorld) => world.page.getByRole('main')
+export const picker = (world: ScenarioWorld) => world.page.getByRole('combobox', { name: 'Temporada' })
 // La fila de un equipo: la que tiene su nombre como cabecera (LLD-B §10.4).
-const row = (world: ScenarioWorld, team: string) =>
+export const row = (world: ScenarioWorld, team: string) =>
   world.page.getByRole('row').filter({ has: world.page.getByRole('rowheader', { name: team, exact: true }) })
 // La fila del equipo del escenario.
 const teamRow = (world: ScenarioWorld) => row(world, theTeam(world).name)
 // En la dirección, la temporada va con guion: `2025-26` (plan R1, decisión 5).
-const inAddress = (season: Season) => season.label.replace('/', '-')
+export const inAddress = (season: Season) => season.label.replace('/', '-')
 
-function theTeam(world: ScenarioWorld) {
+export function theTeam(world: ScenarioWorld) {
   if (!world.data.team) throw new Error('El escenario no ha dado de alta ningún equipo')
   return world.data.team
 }
 
-function lastPastSeason(world: ScenarioWorld): Season {
+export function lastPastSeason(world: ScenarioWorld): Season {
   const season = world.data.pastSeasons.at(-1)
   if (!season) throw new Error('El escenario no ha dado de alta ninguna temporada pasada')
   return season
@@ -56,12 +56,12 @@ function inMadrid(instant: Date): string {
 // ── Los datos ────────────────────────────────────────────────────────────────────────────────────────────────
 
 Given('mi club tiene la temporada en curso', async function (this: ScenarioWorld) {
-  await addSeason(this.club, this.random, currentSeason())
+  await addSeason(this.club, currentSeason())
 })
 
-async function addPastSeason(world: ScenarioWorld): Promise<Season> {
+export async function addPastSeason(world: ScenarioWorld): Promise<Season> {
   const season = pastSeason(world.random, world.data.pastSeasons)
-  await addSeason(world.club, world.random, season)
+  await addSeason(world.club, season)
   world.data.pastSeasons.push(season)
   world.note(`temporada pasada ${season.label}`)
   return season
@@ -78,12 +78,12 @@ Given('mi club tiene dos temporadas pasadas', async function (this: ScenarioWorl
 
 Given('mi club tiene una temporada que todavía no ha empezado', async function (this: ScenarioWorld) {
   const season = futureSeason(this.random)
-  await addSeason(this.club, this.random, season)
+  await addSeason(this.club, season)
   this.data.futureSeason = season
   this.note(`temporada futura ${season.label}`)
 })
 
-async function addTeamPlaying(world: ScenarioWorld, season: Season) {
+export async function addTeamPlaying(world: ScenarioWorld, season: Season) {
   const { team, competition } = await addPlayingTeam(world.club, world.random, season, world.data.teams)
   world.data.teams.push(team)
   world.data.team = team
@@ -143,7 +143,7 @@ Given('la portada de mi club enseña que no se ha podido conectar con el servido
 
 // ── La temporada ─────────────────────────────────────────────────────────────────────────────────────────────
 
-async function chooseSeason(world: ScenarioWorld, label: string) {
+export async function chooseSeason(world: ScenarioWorld, label: string) {
   await picker(world).click()
   await world.page.getByRole('option', { name: label }).click()
   // Hasta que la lista de opciones se ha cerrado del todo: a medio cerrar, axe la mediría.
@@ -151,7 +151,7 @@ async function chooseSeason(world: ScenarioWorld, label: string) {
   await world.page.waitForURL((url) => url.searchParams.get('temporada') === label.replace('/', '-'))
 }
 
-When('elijo la temporada pasada', async function (this: ScenarioWorld) {
+When('elijo la temporada pasada en el selector de la portada', async function (this: ScenarioWorld) {
   await chooseSeason(this, lastPastSeason(this).label)
 })
 
@@ -171,28 +171,28 @@ When('abro la portada de mi club en una temporada pasada que mi club no tiene', 
 
 // ── Lo que se ve ─────────────────────────────────────────────────────────────────────────────────────────────
 
-Then('la fila del equipo tiene su competición', async function (this: ScenarioWorld) {
-  const name = this.data.competition!.displayName
+Then('la fila del equipo en la portada tiene su competición', async function (this: ScenarioWorld) {
+  const name = this.data.competition!.rowName
   await this.check('la competición', () =>
     shows(teamRow(this).getByRole('cell', { name, exact: true }), `«${name}» en la fila del ${theTeam(this).name}`),
   )
 })
 
-Then('la fila del equipo tiene la ingesta {string}', async function (this: ScenarioWorld, state: string) {
+Then('la fila del equipo en la portada tiene la ingesta {string}', async function (this: ScenarioWorld, state: string) {
   // El estado va con su icono delante, que el lector de pantalla no lee: se busca la palabra.
   await this.check('la ingesta', () =>
     shows(teamRow(this).getByText(state, { exact: true }), `«${state}» en la fila del ${theTeam(this).name}`),
   )
 })
 
-Then('la fila del equipo tiene su última sincronización, en hora de Madrid', async function (this: ScenarioWorld) {
+Then('la fila del equipo en la portada tiene su última sincronización, en hora de Madrid', async function (this: ScenarioWorld) {
   const expected = inMadrid(await lastSynced(this.club, this.data.competition!.id!))
   await this.check('la última sincronización', () =>
     shows(teamRow(this).getByRole('cell', { name: expected, exact: true }), `«${expected}» en la fila del ${theTeam(this).name}`),
   )
 })
 
-Then('la fila del equipo dice {string}', async function (this: ScenarioWorld, text: string) {
+Then('la fila del equipo en la portada dice {string}', async function (this: ScenarioWorld, text: string) {
   await this.check(`«${text}»`, () => shows(teamRow(this).getByText(text), `«${text}» en la fila del ${theTeam(this).name}`))
 })
 
@@ -221,7 +221,7 @@ Then('la portada no tiene selector de temporada', async function (this: Scenario
   await this.check('el selector', () => absent(picker(this), 'el selector de temporada'))
 })
 
-Then('el selector de temporada tiene elegida la temporada en curso', async function (this: ScenarioWorld) {
+Then('el selector de temporada de la portada tiene elegida la temporada en curso', async function (this: ScenarioWorld) {
   const expected = currentSeason().label
   await this.check('el selector', () =>
     becomes(this.page, async () => (await picker(this).textContent())?.trim(), expected, 'la temporada del selector'),
@@ -245,7 +245,7 @@ Then('la portada dice que no hay esa temporada', async function (this: ScenarioW
   await this.check(`«${text}»`, () => shows(content(this).getByText(text, { exact: true }), `«${text}»`))
 })
 
-Then('la dirección lleva la temporada pasada', async function (this: ScenarioWorld) {
+Then('la dirección de la portada lleva la temporada pasada', async function (this: ScenarioWorld) {
   const expected = `/?temporada=${inAddress(lastPastSeason(this))}`
   await this.check('la dirección', () =>
     becomes(

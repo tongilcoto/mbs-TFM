@@ -26,7 +26,7 @@
 necesita** (el borrador, §2). No se hace «todo el servidor y luego toda la web»: cada unidad de trabajo es una
 **rebanada**, que entrega una pantalla funcionando de punta a punta.
 
-Hoy el servidor sirve **9 de las 85 operaciones** del catálogo (desde la rebanada 1). Cada rebanada activa las suyas, y una operación
+Hoy el servidor sirve **11 de las 85 operaciones** del catálogo (desde la rebanada 2). Cada rebanada activa las suyas, y una operación
 **solo se activa con la rebanada que la usa**.
 
 **Cada rebanada se da por terminada cuando:**
@@ -198,8 +198,7 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,NF hecha
-    class P,A enCurso
+    class mEq,NF,P,A hecha
     class mTem,mCom,mRiv,mIng,mClub,mPer,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
@@ -269,6 +268,35 @@ compilarse, los tipos y las reglas del catálogo. De ahí salen dos reglas:
   `npm run gen:api` lee `../backend/...`, y una compilación que solo vea `backoffice/` falla.
 - Si cambió el catálogo, **se despliegan los dos, primero el servidor**. Mientras conviven la web vieja y el
   servidor nuevo, solo valen los cambios del catálogo que no rompen.
+
+Y dos cosas que salieron al hacerlo (`R2.11`, 2026-10-24):
+
+- **Si la web se publica con una política de seguridad estricta** (la cabecera `Content-Security-Policy`, que
+  pondría Caddy), tiene que permitir que la página fabrique código al abrirse (`'unsafe-eval'`): Ajv convierte
+  cada regla del catálogo en un comprobador en el navegador. Hoy no hay ninguna política, y no hace falta nada.
+  Si se quiere evitar, Ajv puede fabricar los comprobadores al compilar en vez de en el navegador.
+- **`schemas.json` pesa unos 157 KB** (unos 36 KB comprimido al viajar) porque lleva también las descripciones del
+  catálogo, que Ajv no usa. Si el tamaño importa, `gen-schemas.mjs` puede quitarlas.
+
+**Pendiente de la rebanada 3: las acciones de cada fila de la portada** (decidido el 2026-10-24 con el
+desarrollador). La portada tiene que dejar hacer **rápido, desde la fila del equipo**, cosas que no deberían
+obligar a entrar en su ficha. **La 3 diseña cómo se ven esas acciones** —un menú de tres puntos verticales (⋮), un
+botón o icono por acción, u otra forma— y estrena la primera: **enganchar con la federación** el equipo que no
+tiene competición, que lleva a la pantalla del enganche con su `/preview`. Las siguientes se añaden a ese mismo
+diseño en su rebanada: **relanzar la ingesta**, en la 14 (no hay prisa; `triggerIngestion` ya está en el
+servidor); y lo que la 13 pone en el menú ⋮ de la ficha del equipo, si también tiene sentido en la fila. Mientras
+tanto, el equipo sin competición dice «Pendiente de sincronizar con la Federación», sin prometer desde dónde.
+
+**Pendiente de la rebanada 4: cómo se llama un equipo en un partido** (salió el 2026-10-24, en el bloque T de la
+[rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La federación manda en cada partido el nombre
+del equipo ya escrito por ella, del club y del rival: `"equipo_local": "CELTIC CASTILLA C.F. 'A'"`. La base no lo
+guarda: la ingesta lo desmonta en piezas (club, categoría, letra), y el catálogo vuelve a montar el equipo de un
+partido (`TeamRef`) con ellas: `displayName`, club + categoría + letra («Celtic Alevín A»), y `shortDisplayName`,
+club + letra («Celtic A»); el club propio, con el nombre corto que pone el club, y el rival, con el que dio la
+federación. Al diseñar la pantalla de Resultados se revisa con el desarrollador **si eso es lo que se quiere
+ver**, o el nombre que publica la federación. Y con ello lo que dejó pendiente
+[D-109](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md): ese nombre no distingue el masculino del femenino ni
+el fútbol 7 del fútbol 11.
 
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
@@ -361,7 +389,7 @@ su comprobación.
 |---|---|---|---|
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
-| **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | 🟡 en curso | 10/17 | — |
+| **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

@@ -47,6 +47,13 @@ extension CompetitionListing {
 }
 
 extension Domain.Competition {
+    /// **Derivado en lectura** (§5.2): `ageCategory · divisionLabel · groupLabel`, con el nombre de la categoría del
+    /// catálogo (`D-109`). No hay columna detrás: la federación publica un nombre propio, pero llega truncado a 40
+    /// caracteres y con formato inestable ([Anexo RFFM §F.11]), así que se compone de piezas nuestras.
+    var displayName: String {
+        "\(ageCategory.toContract().displayName) · \(divisionLabel) · \(groupLabel)"
+    }
+
     /// Mapeo `Entidad → DTO` (§2.2), con lo que es de la competición sola.
     func toResponse() -> Components.Schemas.CompetitionResponse {
         .init(

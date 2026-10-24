@@ -39,10 +39,15 @@ backoffice/
 │   ├── router.ts        el mapa de pantallas (§6)
 │   ├── api/             ← la ÚNICA carpeta que habla con el servidor
 │   │   ├── schema.d.ts  generado del openapi.yaml; no se toca a mano ni se guarda en el repositorio
+│   │   ├── schemas.json las reglas y los nombres del catálogo, generados igual (§5.1, §9.6)
 │   │   ├── client.ts    la pieza que hace las peticiones
-│   │   └── errors.ts    traduce los errores del servidor (§4)
+│   │   ├── errors.ts    traduce los errores del servidor (§4)
+│   │   └── rules.ts     comprueba un formulario con las reglas del catálogo (§5.1)
+│   ├── sorting.ts       cómo se ordena una tabla (§3.6)
+│   ├── notice.ts        el aviso breve del marco, como «Guardado» (§5.4)
 │   ├── screens/         una carpeta por pantalla: pide los datos y se los pasa a las piezas
-│   │   └── home/        la portada
+│   │   ├── home/        la portada
+│   │   └── new-team/    el alta de equipo
 │   ├── components/      piezas que solo pintan: reciben datos y avisan de los clics
 │   └── theme/           colores e idioma de PrimeVue (§9)
 └── e2e/
@@ -154,7 +159,10 @@ La web saca todo lo que necesita para pintar una pantalla de **tres partes de la
 | Lo que va detrás de `?` | `?temporada=2025-26` | Lo que has elegido: temporada, filtros, orden |
 
 Así, **recargar o abrir un enlace guardado deja en la misma pantalla**, y un enlace que se manda a un
-compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**:
+compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**
+*(salvo el «estado de la navegación» de Vue Router, que el navegador guarda con su entrada del historial y
+conserva al recargar, pero no al abrir un enlace: así viaja la temporada de la portada al alta de equipo; plan R2,
+decisión 5)*:
 si una elección debe sobrevivir, su sitio es la dirección, no el navegador.
 
 #### 2.3 En el navegador no se guarda ningún dato del club
@@ -246,6 +254,29 @@ servidor, hay que subir este por encima.** Por qué: [DW-04].
 
 Se enseña **en cuanto se pide**, sin esperar unos milisegundos a ver si la respuesta llega antes. Por qué, y
 el parpadeo que se acepta: [DW-05].
+
+#### 3.6 Las tablas se ordenan pinchando su cabecera
+
+*(Añadido el 2026-10-24, con la tabla de la portada: bloque T del
+[plan de la rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md).)*
+
+- **Cada cabecera es un botón**, con una flecha al lado (↕ sin ordenar, ▲ o ▼ ordenada). **El primer clic ordena
+  por esa columna en su orden; el segundo, al revés; el tercero vuelve al orden de siempre**, el que manda el
+  servidor. Los empates conservan ese orden.
+- **El orden de cada columna lo decide su regla**, sobre los datos de verdad y no sobre el texto que se ve: una
+  fecha por fecha y no por «23/10/2026 20:24»; una categoría por edad y no por el alfabeto. **Las filas que no
+  tienen nada en esa columna** (un equipo sin competición) **van siempre al final**, en los dos sentidos.
+- **El orden va en la dirección** (§2.2, §6.5): `?orden=ingesta`, y al revés, `?orden=ingesta-inverso`. Un valor
+  que no se entiende se ignora, sin error. Ordenar no vuelve a pedir nada al servidor.
+- **Con el teclado y con el lector** (§10.1): el botón se alcanza con el tabulador y se pulsa con Intro o
+  Espacio, y el foco se queda en él; la columna ordenada lleva `aria-sort`, y el lector dice «orden ascendente»
+  o «descendente». La flecha no se lee. Es el modelo de tabla ordenable del W3C.
+
+**Cómo se hace**, para la tabla que venga: `src/sorting.ts` pone lo que es igual en todas (ordenar, los tres clics
+y el orden en la dirección); `components/SortableHeader.vue`, la cabecera; y cada pantalla, sus reglas (las de la
+portada, en `screens/home/order.ts`) y las **claves de orden** de cada fila. Una columna nueva es una regla más y
+una cabecera más. La tabla de PrimeVue no se usa: ordena mal las filas agrupadas, como un equipo con varias
+competiciones.
 
 **Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
 «cargando…» a un lector de pantalla (§10).
@@ -485,6 +516,9 @@ la web con la lista de temporadas. *(Decidido con la portada, [Plan R1, decisió
 temporada lleve barra (`2025/26`, esquema `SeasonLabel`), porque una barra dentro de un valor del camino
 tiene que codificarse y quedaría `2025%2F26`.
 
+**El orden de una tabla también va detrás de `?`** (§3.6): `/?temporada=2026-27&orden=ingesta`. Cambiar de
+temporada lo conserva.
+
 #### 6.6 El menú solo enseña lo que ya existe
 
 **El menú crece con cada rebanada**: no hay entradas que lleven a pantallas a medio hacer. En la rebanada 1,
@@ -667,6 +701,17 @@ calendario empieza en lunes**.
 | Hora aún sin fijar (`kickoffTime` vacío) | «Hora por confirmar» |
 | Números | A la española: `1.234,5` |
 
+**Los nombres de los valores de las listas cerradas** («Alevín», «Fútbol 7», «Al día») tampoco los escribe ninguna
+pantalla, y tampoco la web: **vienen del catálogo**, de la tabla `x-enum-names` de cada lista
+([D-108](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)), y llegan con `schemas.json`. Se leen en
+`src/theme/names.ts`; un selector enseña las opciones **en el orden del catálogo**. Los mensajes de error no son
+nombres de un dato y siguen en `errors.ts` (§4.2).
+
+**El nombre de un equipo** en una lista es su categoría y su letra («Alevín A»). **Si en la misma lista hay otro
+que se llamaría igual**, a cada uno se le añade lo que los distingue, con esos mismos nombres: el género («Alevín A
+· Femenino»), la modalidad («Alevín A · Fútbol 7») o los dos. Si no hay otro igual, se queda como está
+(`teamNames`, en `names.ts`; bloque T del plan de la rebanada 2).
+
 #### 9.7 Las fechas sin hora son texto, no un instante
 
 El servidor manda la fecha de un partido sin hora: `2025-05-18` (`matchDate`, `format: date`). Si la web la
@@ -752,7 +797,9 @@ foco (§10.2).
 
 **b. Una revisión a mano al cerrar cada rebanada**, con esta lista en el PR (unos diez minutos):
 
-- [ ] Recorrer la pantalla **solo con el teclado**.
+- [ ] Recorrer la pantalla **solo con el teclado**. *En Safari, el tabulador se salta botones y enlaces salvo que
+  se active Ajustes → Avanzado → «Pulsar Tab para resaltar cada ítem de una página web» (o se use ⌥ + Tab); en
+  Chrome pasa por todo. Lo vio el desarrollador en la revisión de la rebanada 2.*
 - [ ] Escucharla con **VoiceOver** (viene con el Mac).
 - [ ] Verla con el **zoom al 200 %**.
 - [ ] Verla en los **dos modos**.
@@ -831,14 +878,15 @@ navegador → web → Run serve → tfm_test
 
 **De dónde sale cada dato, por orden de preferencia** (la *skill* de escenarios del desarrollador, principio 9):
 
-1. **La API del servidor**: el enganche, la ingesta, el nombre del club. Nunca el *endpoint* que prueba el
-   escenario: si la portada lee `/competitions`, la hora esperada se saca de `/ingestion-runs`.
-2. **Los comandos del servidor**, donde la API aún no llega: `seed-team` hasta que exista `POST /teams`
-   (rebanada 2), y `seed-competition` para una temporada sin equipos.
+1. **La API del servidor**, como lo haría el club: la temporada (`POST /seasons`), el equipo (`POST /teams`),
+   el enganche, la ingesta y el nombre del club. Nunca el *endpoint* que prueba el escenario: si la portada lee
+   `/competitions`, la hora esperada se saca de `/ingestion-runs`.
+2. **Los comandos del servidor**, donde la API aún no llega. **Desde la rebanada 2, ninguno**: `seed-team` y
+   `seed-competition` los sustituyen `POST /teams` y `POST /seasons` (R2.15).
 3. **La base de datos**, solo para lo que ninguno de los dos produce, y cada caso dice por qué en el código:
    «Sin datos todavía» (el enganche siempre lanza una ingesta), «Desactualizada» (haría falta esperar una
-   semana), el equipo inscrito sin competición (hasta la rebanada 2) y el club a medio preparar (un estado
-   roto a propósito).
+   semana) y el club a medio preparar (un estado roto a propósito). El equipo inscrito sin competición ya no:
+   es lo que deja el alta.
 
 **Los datos, al azar; los literales, solo si deciden la rama.** La edad, la letra, el género y la modalidad
 del equipo, la división, el grupo, las temporadas pasadas y futuras y el nombre del club se eligen al azar en

@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **736 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **743 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -527,7 +527,7 @@ curl -s -X POST http://atleti.localhost:8080/v1/teams -H 'Content-Type: applicat
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 736 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 743 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -996,6 +996,12 @@ y se compila. **No compilará**, porque falta su método; se implementa y ya com
 lo que está entregado de la API (`D-69`), y ese error de compilación es lo que garantiza que el código sigue
 al *spec* y no al revés.
 
+- **Los nombres en español de cada lista cerrada también salen del *spec*** (`D-108`, `D-109`): cada lista
+  lleva su tabla `x-enum-names`, y al compilar, `EnumNamesTool` los escribe en Swift junto a los tipos
+  (`Components.Schemas.TeamCategory.alevin.displayName` es «Alevín»). **Un nombre se cambia en el YAML, nunca en
+  Swift.** Si a una lista le falta un nombre, le sobra uno, o no está en `filter.schemas` de
+  `openapi-generator-config.yaml` —el generador solo fabrica los tipos que usan las operaciones servidas—, la
+  compilación se para y dice cuál. Una lista nueva: su tabla en el YAML y una línea en `filter.schemas`.
 - **El generador crea los tipos, pero no valida** (`D-65`): ignora `pattern`, `minLength`, `readOnly`,
   `minProperties`, `default`, `tags` y `security`. Que algo esté en el YAML **no** significa que se compruebe.
 - **Los errores se traducen a HTTP en un solo sitio: `ProblemMiddleware`.** También los que se escapan de un

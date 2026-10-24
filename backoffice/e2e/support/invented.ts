@@ -2,7 +2,7 @@
 // eligen al azar (random.ts) entre lo que el sistema acepta; ninguno decide por sí solo qué rama se prueba.
 //
 // La competición inventada la sirve la federación falsa (fake-federation.ts), y el servidor la da de alta por su
-// camino de siempre: el enganche o `seed-competition` (club-data.ts).
+// camino de siempre: el enganche (club-data.ts).
 import type { Random } from './random.ts'
 
 export type Category = 'prebenjamin' | 'benjamin' | 'alevin' | 'infantil' | 'cadete' | 'juvenil' | 'senior'
@@ -10,12 +10,13 @@ export type Gender = 'masculino' | 'femenino'
 // Sin `futbol_playa`: la RFFM no tiene `tipojuego` para él.
 export type Modality = 'futbol_11' | 'futbol_7' | 'futbol_sala' | 'futbol_5'
 
-const categories: Category[] = ['prebenjamin', 'benjamin', 'alevin', 'infantil', 'cadete', 'juvenil', 'senior']
+/** De menor a mayor edad: el orden del catálogo, y el de la portada. */
+export const categories: Category[] = ['prebenjamin', 'benjamin', 'alevin', 'infantil', 'cadete', 'juvenil', 'senior']
 const genders: Gender[] = ['masculino', 'femenino']
 const modalities: Modality[] = ['futbol_11', 'futbol_7', 'futbol_sala', 'futbol_5']
 
 /** Cómo la escribe la web (theme/names.ts): es lo que se busca en la pantalla. */
-const categoryLabels: Record<Category, string> = {
+export const categoryLabels: Record<Category, string> = {
   prebenjamin: 'Prebenjamín',
   benjamin: 'Benjamín',
   alevin: 'Alevín',
@@ -78,6 +79,11 @@ export function futureSeason(random: Random, taken: Season[] = []): Season {
   return seasonBetween(random, now + 1, now + 30, taken)
 }
 
+/** La temporada que viene después de la en curso: la que un club crea en julio. */
+export function nextSeason(): Season {
+  return season(currentSeason().start + 1)
+}
+
 function seasonBetween(random: Random, from: number, to: number, taken: Season[]): Season {
   for (;;) {
     const start = random.int(from, to)
@@ -119,6 +125,14 @@ export function team(random: Random, taken: Team[] = []): Team {
   }
 }
 
+/**
+ * El equipo que se llamaría igual que `of`, con el otro género: mismas edad, letra y modalidad. Es lo que el
+ * club puede tener («Alevín A» masculino y femenino), y lo que la portada tiene que distinguir (bloque T del plan R2).
+ */
+export function twinOf(of: Team): Team {
+  return { ...of, id: undefined, gender: of.gender === 'masculino' ? 'femenino' : 'masculino' }
+}
+
 /** Un nombre corto de club. */
 export function clubName(random: Random): string {
   return random.pick(clubNames)
@@ -145,8 +159,10 @@ export interface Competition {
   federationGroupId: string
   /** Los equipos del grupo; el primero es el del club. */
   teams: FederationTeam[]
-  /** Como la escribe la web: «Cadete · PRIMERA CADETE · Grupo 4». */
+  /** Como la escribe el servidor: «Cadete · PRIMERA CADETE · Grupo 4». */
   displayName: string
+  /** Como la enseña la portada, sin la categoría que ya dice el equipo: «PRIMERA CADETE · Grupo 4». */
+  rowName: string
   /** La dirección de su calendario en la web de la RFFM: la que se pega para engancharla. */
   calendarUrl: string
   /** El `id` que le da el servidor. */
@@ -189,15 +205,7 @@ export function competition(random: Random, of: Season, forTeam: Pick<Team, 'cat
     federationGroupId,
     teams,
     displayName: `${categoryLabels[forTeam.category]} · ${division} · ${group}`,
+    rowName: `${division} · ${group}`,
     calendarUrl: `https://www.rffm.es/competicion/calendario?${query}`,
   }
-}
-
-/** Una competición cualquiera de la temporada: para darla de alta sin equipo. */
-export function anyCompetition(random: Random, of: Season): Competition {
-  return competition(random, of, {
-    category: random.pick(categories),
-    gender: random.pick(genders),
-    modality: random.pick(modalities),
-  })
 }

@@ -74,6 +74,8 @@
 | **D-105**              | La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada                                     | §3.7                               |
 | **D-106**              | La temporada puede nacer en la web sin código de la federación; el primer enganche se lo pone                                 | §3.2, §3.5, §3.7, §5.1             |
 | **D-107**              | Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409                                            | §3.5, §5.1                         |
+| **D-108**              | Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí                              | §5.1                               |
+| **D-109**              | El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP | §2.2, §5.1, §5.2                   |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -4854,6 +4856,143 @@ género y modalidad, la clave de §3.5):
 **Enmienda** a [D-68], consecuencia 2 (`seasonId` obligatorio: el equipo nace inscrito, y ahora también se
 inscribe si ya existía), a la descripción de `createTeam` y de `CreateTeamRequest` en el catálogo, y a §5.1 del LLD.
 
+### D-108 · Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí
+
+**Lo que lo obligó a decidirse** (2026-10-24, con el formulario de alta de equipo de la rebanada 2 del
+backoffice). Los selectores de categoría, género y modalidad enseñan «Alevín», «Femenino», «Fútbol 7». Los
+**valores** salen del catálogo: son las listas cerradas `TeamCategory`, `Gender` y `Modality`, que las operaciones
+usan para sus campos (`CreateTeamRequest.category`, `TeamResponse.category`, el filtro `?category=` de
+`listTeams`…). Pero **los nombres** están escritos a mano en la web, en `backoffice/src/theme/names.ts`, y el
+**orden** en que salen en el selector es el orden en que están escritos ahí. Nada comprueba que ese orden sea el
+del catálogo, y las apps del móvil tendrían que escribir otra vez los mismos nombres.
+
+El desarrollador lo dijo así: **una única fuente de la verdad**.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Los nombres, en el catálogo** | Junto a cada lista, una tabla con el nombre de cada valor, y los clientes la leen de ahí | **Elegida** |
+| (b) Los nombres, en cada cliente; valores y orden, del catálogo | La web sigue escribiendo «Alevín»; cada app, el suyo | Descartada: el mismo nombre escrito en cada cliente, con el riesgo de que digan cosas distintas |
+
+**Decisión: (a).** Cada lista cerrada del catálogo (`components/schemas` con `enum`) lleva, al lado, una palabra
+propia **`x-enum-names`**: a cada valor, su nombre en español, tal como lo ve el usuario.
+
+```yaml
+TeamCategory:
+  type: string
+  enum: [prebenjamin, benjamin, alevin, infantil, cadete, juvenil, senior]
+  x-enum-names:
+    prebenjamin: Prebenjamín
+    benjamin: Benjamín
+    alevin: Alevín
+    # …
+```
+
+1. **Una tabla, no una lista en paralelo.** Cada nombre va con su valor (`alevin: Alevín`), en vez de una segunda
+   lista que dependa de la posición: así reordenar o añadir un valor no puede descolocar los nombres.
+2. **El orden es el del `enum`.** El catálogo ya escribe las categorías de menor a mayor edad; los clientes enseñan
+   las opciones en ese orden, y no en el de la tabla de nombres.
+3. **Todas las listas, menos `ProblemCode`.** Las 19 listas de datos llevan sus nombres, las enseñe ya una
+   pantalla o no: así la regla es «toda lista, con sus nombres», sin excepciones que recordar. **`ProblemCode` se
+   queda fuera**: lo que la web dice ante un error no es el nombre de un dato, sino un mensaje sobre lo que ha pasado
+   en su pantalla («Si no la ves en el selector, está archivada…»), y sigue escribiéndolo cada cliente (LLD del
+   backoffice, §4.2).
+4. **Lo comprueba quien genera.** En la web, `npm run gen:api` falla si una lista no tiene su tabla, si a un valor
+   le falta el nombre o si sobra uno que la lista no tiene. Y los nombres llegan a la web con el tipo de su lista,
+   así que una pantalla que pida el nombre de un valor que no existe no compila.
+5. **Es solo descripción.** `x-` es la forma que tiene OpenAPI de añadir palabras propias, y los que no la conocen
+   la ignoran: el servidor no la lee *(enmendado por [D-109]: la lee al compilar)*, no cambia ninguna operación ni lo que valida, y el `lint` de Redocly la
+   acepta. En la web, Ajv, que va en modo estricto, la recibe declarada, igual que `components`.
+6. **Las apps del móvil**, cuando existan, leen los mismos nombres del mismo catálogo.
+
+**Lo que se asume a cambio.**
+
+- **El catálogo deja de ser solo de datos**: lleva también textos que ve el usuario. Se acepta porque son el nombre
+  del dato, no un texto de pantalla: «Alevín» es lo mismo en la portada, en el formulario y en el móvil.
+- **Cambiar un nombre es cambiar el catálogo**, y por tanto recompilar la web (Plan R2 del backoffice, decisión 3).
+- **Un solo idioma.** Si algún día la web se traduce, la tabla pasaría a tener un nombre por idioma. Hoy todo el
+  producto es en español.
+- **Hay que escribir ahora unos 70 nombres** (las 19 listas), aunque muchas no tengan pantalla hasta rebanadas
+  posteriores. Los revisa el desarrollador al hacerlo.
+
+**Enmienda** a `backoffice/src/theme/names.ts`, cuyas tablas pasan a leerse del catálogo; al LLD del backoffice
+(§9.6, los nombres de los valores salen de un solo sitio, y ese sitio es el catálogo); y a la descripción de las
+listas en el catálogo.
+
+**Hecho** (2026-10-24). Las 19 tablas en `openapi.yaml`, y la regla en su cabecera. El `lint` de Redocly y `swift
+build` las aceptan sin tocar nada; `REQUIRE_DB=1 swift test`, **736** (733 + 3 omitidos), sin cambios; el censo, en
+`0`. En la web: `gen-schemas.mjs` comprueba las tablas (probado con un catálogo roto a propósito: una lista sin
+tabla, un valor sin nombre y un nombre de más, salida `1`); Ajv recibe `x-enum-names` declarada; y `names.ts` lee
+los nombres con `namesOf` y las opciones de un selector, en el orden del `enum`, con `optionsOf`. Pedir los nombres
+de `ProblemCode` o de una lista que no lo es, o el de un valor que no existe, no compila.
+
+### D-109 · El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP
+
+**Lo que lo obligó a decidirse** (2026-10-24, con la tabla de la portada, bloque T del plan de la rebanada 2 del
+backoffice). [D-108] dejó los nombres en español de cada lista en el catálogo, y la web los lee de ahí. Pero el
+servidor tenía **su propia copia** de los de las categorías (`Domain/Enumerations.swift`, `displayLabel`), y con
+ella monta tres nombres que viajan en el contrato:
+
+| Campo | Cómo se monta | Ejemplo |
+|---|---|---|
+| `CompetitionResponse.displayName` | categoría · división · grupo (`Competition.displayName`, en el Dominio) | «Cadete · PRIMERA CADETE · Grupo 4» |
+| `TeamResponse.displayName` | club, categoría y letra (en el adaptador HTTP) | «Celtic Alevín A» |
+| `TeamRef.displayName` | igual que el de `TeamResponse` | (sin programar todavía) |
+
+Si un nombre cambia en el catálogo y no en Swift, la portada diría «Alevín» y el `displayName`, otra cosa. El
+desarrollador lo pidió así: **una única fuente de la verdad, también en el servidor**.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Se generan al compilar** | Una herramienta lee `x-enum-names` de `openapi.yaml` al compilar y escribe los nombres en Swift, como el generador escribe los tipos | **Elegida** |
+| (b) Se quedan en Swift, vigilados por un test | Dos copias, atadas: un test compara la de Swift con el catálogo | Descartada: sigue habiendo dos sitios donde escribir cada nombre |
+| (c) Se leen al arrancar | El servidor lleva el catálogo dentro y lee los nombres al ponerse en marcha | Descartada: un fallo se vería al arrancar, no al compilar |
+
+**Decisión: (a), y los nombres viven junto al contrato, no en el Dominio.**
+
+1. **Una herramienta y su *plugin* de compilación**, aplicados al target `APIContract`, al lado del de
+   `swift-openapi-generator`. La herramienta lee `openapi.yaml` y escribe, para cada lista, una extensión del tipo
+   que ya genera el contrato: `Components.Schemas.TeamCategory.alevin.displayName` es «Alevín». Lee el YAML con
+   **Yams**, que ya está en el grafo porque lo usa el generador; se declara, como todo lo que se importa.
+2. **La misma comprobación que la web** (`gen-schemas.mjs`): si a una lista le falta su tabla, o a un valor su
+   nombre, o sobra uno, **la compilación falla** diciendo cuál. Cada cliente comprueba lo que consume.
+3. **El Dominio pierde `displayLabel` y `Competition.displayName`.** Un nombre en español es cosa de cómo se
+   enseña un dato, no de las reglas del negocio, y el Dominio no depende de nada (§2.2): no puede leer el
+   catálogo. Los `displayName` los monta **el adaptador HTTP**, al pasar de la entidad a la respuesta, que es
+   donde ya se monta el del equipo y donde se conoce el contrato.
+4. **Las respuestas no cambian**: los mismos campos, con los mismos textos. Lo que cambia es de dónde salen.
+
+> **Enmienda al punto 1** (2026-10-24, al construirla, revisada por el desarrollador). El generador solo fabrica
+> los tipos de las operaciones servidas: 9 de las 19 listas. Así que las 19 se le piden en
+> `openapi-generator-config.yaml`, en una lista `filter: schemas` aparte de las operaciones, y la herramienta
+> comprueba que estén todas: si falta una, para la compilación diciendo «añádela a `filter: schemas`». Lo que se
+> escribe a mano son los nombres de las listas, no los de sus valores. Se descartaron calcular qué listas genera
+> el contrato (copiar la lógica interna del generador) y una tabla por texto sin los tipos (sin comprobación al
+> compilar).
+
+**Lo que se asume a cambio.**
+
+- **Una pieza más al compilar**: la herramienta, su *plugin* y la dependencia declarada de Yams.
+- **La comprobación de los nombres está dos veces**, en la web y en el servidor, escrita en dos lenguajes. Es lo
+  mismo que pasa con los tipos: cada lado genera los suyos del mismo catálogo.
+- **Los tests que miraban `Competition.displayName` en el Dominio y en la persistencia pasan al adaptador HTTP**,
+  que es donde vive ahora.
+
+**Enmienda** a [D-108], punto 5 («el servidor no lo lee»): ahora lo lee, al compilar. Y al LLD, §5.2: los
+`displayName` se componen en el adaptador HTTP con los nombres del catálogo.
+
+**Hecho** (2026-10-24, T.2 del plan de la rebanada 2). `EnumNamesCore` (la lógica, sin ficheros), `EnumNamesTool` y
+`EnumNamesPlugin`, aplicado a `APIContract`; Yams, declarado. El Dominio, sin `displayLabel` ni
+`Competition.displayName`; los dos `displayName` se montan en el adaptador HTTP. Tests: 8 de la herramienta (rojo de
+aserción visto con un esqueleto vacío) y el rojo de los dos nombres en los tests HTTP, que ya los vigilaban; el test
+del Dominio sobre `displayName` y la línea de persistencia, retirados. **736 → 743**, leído del XML. Mutación
+(`Catalogs/T-2.json`): **7/7**; una octava, tratar `ProblemCode` como lista con nombres, la para la propia
+compilación y se retiró por inválida. Censo en `0`. Un catálogo con un nombre quitado a propósito para la
+compilación: «CardType: sin nombre para roja».
+
+**Lo que queda pendiente**, sin tocar aquí: `TeamResponse.displayName` («Celtic Alevín A») no distingue el
+masculino del femenino ni el fútbol 7 del fútbol 11, como le pasaba a la portada (bloque T, paso T.4). Lo
+enseñarán las apps del móvil, y se decide con ellas.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4998,5 +5137,7 @@ inscribe si ya existía), a la descripción de `createTeam` y de `CreateTeamRequ
 [D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-106]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

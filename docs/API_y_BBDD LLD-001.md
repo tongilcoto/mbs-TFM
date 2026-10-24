@@ -1242,8 +1242,11 @@ Tres lecturas que no son evidentes en la tabla:
   competiciones salen **solo de la inscripción**. `TeamResponse` no cambia de forma: lo de la temporada viaja
   en la pareja.
 - **`displayName` se compone en el servidor** y solo aparece en las **respuestas**: no se envía en el `POST`,
-  no se almacena en BD. Se forma con el nombre del club (`Club.name` si es propio, `OpponentClub.name` si es
-  rival) + `category` + `letter`. Mismo patrón que `isCurrent` en `Season`: **derivado en lectura**.
+  no se almacena en BD. Se forma con el nombre del club + `category` + `letter`: el **nombre corto** del club
+  si es propio (`Club.shortName`, como lo monta el adaptador desde la rebanada 1 del backoffice; aquí decía
+  `Club.name`) y `OpponentClub.name` si es rival. Mismo patrón que `isCurrent` en `Season`: **derivado en
+  lectura**. El nombre de la categoría («Alevín») **no lo escribe el servidor**: sale del catálogo, de
+  `x-enum-names`, generado al compilar, y lo monta el adaptador HTTP ([D-108], [D-109]).
 - **`isOwn` sigue existiendo en la respuesta, pero como campo derivado** (`opponentClubId == null`), no como
   columna (§3.6). Los clientes lo siguen leyendo igual; la BD ya no puede contradecirse.
 - **`gender` salió del `PATCH`** ([D-58]). Estaba ahí como campo corregible cuando el modelo aún no sabía de
@@ -1901,7 +1904,9 @@ struct SeasonResponse: Content {
   `Round.isCurrent`; `Match.isKickoffConfirmed` (`kickoffTime != null`, [D-30]) y todo `MatchTeam` salvo
   `teamId` y `score`; `Club.federationProvidesRoundStandings` (del catálogo en código, [D-17]);
   `Player.photoUrl` (URL firmada desde `photo_key`, [D-35]). Ninguno se
-  almacena. `TeamResponse` es deliberadamente "gordo" en derivados para que **la app móvil pinte una fila de
+  almacena. **Los que llevan un nombre en español** (los `displayName`) los monta el **adaptador HTTP**, con los
+  nombres de cada lista que se generan del catálogo al compilar (`x-enum-names`, [D-108], [D-109]): el Dominio
+  no los conoce, porque un nombre es cosa de cómo se enseña un dato. `TeamResponse` es deliberadamente "gordo" en derivados para que **la app móvil pinte una fila de
   equipo con una sola llamada**, sin resolver el club por su cuenta — el mismo compromiso pro-lectura que ya
   se aceptó al denormalizar `Goal` ([D-04]).
 - **Campos de propiedad de la ingesta, `readOnly`:** `federationTeamId`, `federationClubId`,
@@ -2826,6 +2831,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-106]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

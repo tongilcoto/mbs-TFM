@@ -1,9 +1,26 @@
 <!-- La tabla de la portada: los equipos de una temporada, con su competición y cómo va su ingesta (plan R1, §3.2).
      Un equipo con dos competiciones ocupa dos líneas, con su nombre una sola vez (rowspan). -->
 <script setup lang="ts">
+import SortableHeader from './SortableHeader.vue'
 import type { HealthState, TeamRow } from './teamRow'
 
-defineProps<{ rows: TeamRow[]; caption: string }>()
+// `order`, por qué columna está ordenada y si al revés; sin él, el orden del servidor. Las filas llegan ya
+// ordenadas: la tabla solo dice cómo, y avisa de qué cabecera pinchan (bloque T del plan R2).
+const props = defineProps<{ rows: TeamRow[]; caption: string; order?: { column: string; reversed: boolean } }>()
+defineEmits<{ sort: [column: string] }>()
+
+// Las columnas, con su nombre en la dirección (`?orden=ingesta`) y el que se ve.
+const columns = [
+  { column: 'equipo', label: 'Equipo' },
+  { column: 'competicion', label: 'Competición' },
+  { column: 'ingesta', label: 'Ingesta' },
+  { column: 'sincronizacion', label: 'Última sincronización' },
+]
+
+function sortOf(column: string): 'ascending' | 'descending' | undefined {
+  if (props.order?.column !== column) return undefined
+  return props.order.reversed ? 'descending' : 'ascending'
+}
 
 // Cada estado, con su icono y su color. Nunca solo el color: la palabra va siempre al lado (LLD-B §9.4).
 const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending: '↻', stale: '◷', never: '○' }
@@ -16,18 +33,13 @@ const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending:
     </caption>
     <thead>
       <tr>
-        <th scope="col">
-          Equipo
-        </th>
-        <th scope="col">
-          Competición
-        </th>
-        <th scope="col">
-          Ingesta
-        </th>
-        <th scope="col">
-          Última sincronización
-        </th>
+        <SortableHeader
+          v-for="header in columns"
+          :key="header.column"
+          :label="header.label"
+          :sort="sortOf(header.column)"
+          @sort="$emit('sort', header.column)"
+        />
       </tr>
     </thead>
     <tbody>
@@ -41,7 +53,8 @@ const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending:
           </th>
           <td colspan="3">
             Sin competición
-            <span class="note">Se engancha con la federación desde la ficha del equipo</span>
+            <!-- Sin decir desde dónde se engancha: lo decide la rebanada 3, con las acciones de cada fila. -->
+            <span class="note">Pendiente de sincronizar con la Federación</span>
           </td>
         </tr>
         <tr

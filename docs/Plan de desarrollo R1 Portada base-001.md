@@ -118,6 +118,9 @@ temporadas ya está. Nunca una por equipo.
   la respuesta ya trae una lista (decisión 1) y la pantalla la pinta entera.
 - **Un equipo inscrito sin competición todavía** (el estado de junio, `D-68`) sale con «Sin competición» y el
   texto «Se engancha con la federación desde la ficha del equipo». El enganche llega con la rebanada 3.
+  *(Cambiado el 2026-10-24, con el desarrollador: el texto prometía un camino que nadie había decidido —la ficha
+  del equipo no existe hasta la rebanada 4, y desde dónde se engancha lo decide la 3—. Ahora dice «Pendiente de
+  sincronizar con la Federación».)*
 - **Hacer clic en un equipo no hace nada todavía**: la ficha del equipo llega con la rebanada 4.
 - **La fecha y hora se escriben desde `src/theme/format.ts`** (LLD-B §9.6), así que ese fichero **se adelanta**
   a esta rebanada, solo con la fecha y la hora de un instante. La fecha sin hora de los partidos y su prueba en

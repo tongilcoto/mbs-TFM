@@ -2,8 +2,8 @@ import Foundation
 import Testing
 @testable import Domain
 
-/// Nivel 1 (§8.1): la guarda de mutabilidad de `D-22`/`D-58` y el rótulo
-/// derivado, **cero I/O**. Es la regla más delicada que entrega F1.
+/// Nivel 1 (§8.1): la guarda de mutabilidad de `D-22`/`D-58`, **cero I/O**. El
+/// rótulo derivado (`displayName`) se compone en el adaptador HTTP (`D-109`). Es la regla más delicada que entrega F1.
 @Suite("Competition · D-22 · lo que se sincronizó deja de ser editable")
 struct CompetitionTests {
 
@@ -38,15 +38,6 @@ struct CompetitionTests {
         #expect(throws: DomainError.self) { try base.applying(divisionLabel: "") }
         #expect(throws: DomainError.self) { try base.applying(groupLabel: "  ") }
         #expect(throws: DomainError.self) { try base.applying(federationCompetitionID: "") }
-    }
-
-    /// §5.2: derivado de los **tres rótulos nuestros**, no del nombre que publica
-    /// la federación — que llega truncado a 40 caracteres (Anexo RFFM §F.11).
-    @Test("displayName se compone de los tres rótulos, no hay columna (§5.2)")
-    func displayNameIsDerived() throws {
-        let competition = try Self.make(federationName: "INFANTIL PRIMERA DIVISION GRUPO 1")
-
-        #expect(competition.displayName == "Infantil · Primera · Grupo 1")
     }
 
     // ── La guarda de D-22 ────────────────────────────────────────────────────
@@ -107,7 +98,9 @@ struct CompetitionTests {
         let updated = try competition.applying(
             ageCategory: .cadete, divisionLabel: "Preferente", groupLabel: "Grupo Único")
 
-        #expect(updated.displayName == "Cadete · Preferente · Grupo Único")
+        #expect(updated.ageCategory == .cadete)
+        #expect(updated.divisionLabel == "Preferente")
+        #expect(updated.groupLabel == "Grupo Único")
         #expect(updated.isSynced, "corregir un rótulo no deshace la sincronización")
     }
 

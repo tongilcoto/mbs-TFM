@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "gen:api": "openapi-typescript ../backend/Sources/APIContract/openapi.yaml -o src/api/schema.d.ts",
+    "gen:api": "openapi-typescript ../backend/Sources/APIContract/openapi.yaml -o src/api/schema.d.ts && node scripts/gen-schemas.mjs ../backend/Sources/APIContract/openapi.yaml src/api/schemas.json",
     "predev": "npm run gen:api",
     "dev": "vite",
     "prebuild": "npm run gen:api",
@@ -13,6 +13,7 @@
     "pretypecheck": "npm run gen:api",
     "typecheck": "vue-tsc -b",
     "lint": "eslint .",
+    "pretest": "npm run gen:api",
     "test": "vitest run",
     "test:watch": "vitest",
     "pree2e": "swift build --package-path ../backend --product Run",
@@ -21,6 +22,8 @@
   "dependencies": {
     "@primeuix/styled": "0.7.4",
     "@primeuix/themes": "2.0.3",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "openapi-fetch": "^0.17.0",
     "primelocale": "^2.6.0",
     "primevue": "4.5.5",
@@ -50,7 +53,8 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.5",
-    "vue-tsc": "^3.3.11"
+    "vue-tsc": "^3.3.11",
+    "yaml": "^2.9.1"
   },
   "overrides": {
     "@testing-library/vue": {

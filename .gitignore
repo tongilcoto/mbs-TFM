@@ -62,6 +62,7 @@ ios/**/GoogleService-Info.plist
 backoffice/node_modules/
 backoffice/dist/
 backoffice/src/api/schema.d.ts
+backoffice/src/api/schemas.json
 backoffice/build/
 backoffice/.next/
 backoffice/out/

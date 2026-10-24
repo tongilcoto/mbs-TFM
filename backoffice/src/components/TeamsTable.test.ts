@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/vue'
+import { fireEvent, render, screen } from '@testing-library/vue'
 import { describe, expect, test } from 'vitest'
 import TeamsTable from './TeamsTable.vue'
 import type { CompetitionCell, TeamRow } from './teamRow'
@@ -38,12 +38,11 @@ describe('la tabla de equipos', () => {
   test('tiene cabeceras de verdad y un título para el lector de pantalla', () => {
     renderTable([])
 
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual([
-      'Equipo',
-      'Competición',
-      'Ingesta',
-      'Última sincronización',
-    ])
+    // Por su nombre, el que lee el lector: la flecha de ordenar no se lee.
+    for (const name of ['Equipo', 'Competición', 'Ingesta', 'Última sincronización']) {
+      expect(screen.getByRole('columnheader', { name })).toBeInTheDocument()
+    }
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4)
     expect(screen.getByRole('table', { name: 'Equipos de la temporada 2026/27' })).toBeInTheDocument()
   })
 
@@ -92,6 +91,31 @@ describe('la tabla de equipos', () => {
   test('un equipo sin competición: «Sin competición» y cómo se engancha', () => {
     renderTable([{ id: '1', team: 'Alevín A', competitions: [] }])
 
-    expect(rowTexts()).toEqual([['Alevín A', 'Sin competición Se engancha con la federación desde la ficha del equipo']])
+    expect(rowTexts()).toEqual([['Alevín A', 'Sin competición Pendiente de sincronizar con la Federación']])
+  })
+})
+
+describe('ordenar (bloque T)', () => {
+  test('cada cabecera es un botón, y al pulsarlo avisa de qué columna', async () => {
+    const { emitted } = render(TeamsTable, { props: { rows: [], caption: 'x' } })
+
+    for (const name of ['Equipo', 'Competición', 'Ingesta', 'Última sincronización']) {
+      await fireEvent.click(screen.getByRole('button', { name }))
+    }
+
+    expect(emitted('sort')).toEqual([['equipo'], ['competicion'], ['ingesta'], ['sincronizacion']])
+  })
+
+  test('la columna ordenada lo dice, en su sentido; las demás, nada', () => {
+    render(TeamsTable, { props: { rows: [], caption: 'x', order: { column: 'ingesta', reversed: true } } })
+
+    expect(screen.getByRole('columnheader', { name: 'Ingesta' })).toHaveAttribute('aria-sort', 'descending')
+    expect(screen.getByRole('columnheader', { name: 'Equipo' })).not.toHaveAttribute('aria-sort')
+  })
+
+  test('en su orden es «ascendente»', () => {
+    render(TeamsTable, { props: { rows: [], caption: 'x', order: { column: 'equipo', reversed: false } } })
+
+    expect(screen.getByRole('columnheader', { name: 'Equipo' })).toHaveAttribute('aria-sort', 'ascending')
   })
 })

@@ -32,7 +32,7 @@ El caso base es **un único club**. Como ampliación de alcance de negocio, el p
   desarrollador: los objetivos, cómo se trabaja (qué va en el plan y qué en los anexos), el mapa de pantallas
   revisado contra el catálogo y **las 16 rebanadas** con las operaciones de cada una (las 85, repartidas; eran 83 hasta `D-102`). La
   10, Estadísticas, necesita peticiones que **no están en el catálogo**. Desde la rebanada 1, cada una tiene
-  su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó: la 1, [Portada base](./docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), **cerrada el 2026-10-20**. El primer intento, con fichas y decisiones sin revisar, se borró el
+  su propio plan, `docs/Plan de desarrollo R<n> <nombre>-001.md`, con su ficha, sus pasos y lo que se comprobó: la 1, [Portada base](./docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), **cerrada el 2026-10-20**; la 2, [Alta de equipo](./docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), **cerrada el 2026-10-24**. El primer intento, con fichas y decisiones sin revisar, se borró el
   2026-10-16; queda en la historia de git (commit `d6a16e6`).
 
 **Por módulo** (ADR = decisiones; LLD = diseño de bajo nivel; Docs = material de apoyo):
@@ -388,7 +388,7 @@ en el Mac contra la base de desarrollo, con un binario instalado desde un commit
 falla (H-59). La medida del `null` y su reintento (H-92) quedan **aplazados al despliegue**. Y una lección
 medida: con la tapa cerrada, `launchd` **no espera a que se abra el portátil**, sino que lanza el disparo en un
 despertar en segundo plano sin red; por eso el envoltorio espera a la red (`L-L.6`).
-**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1, **697** con `D-104` y `D-105` (2026-10-21) **705** con la temporada sin código de `D-106` (`R2.6`, 2026-10-24) **717** con `createSeason` (`R2.7`) **724** con el enganche que busca la temporada por su etiqueta (`R2.8`) y **736** con `createTeam` (`R2.9`). Y el **backoffice, empezado** el 2026-10-16 con su
+**612 tests**, **632** desde `D-101` (2026-10-18), **682** tras el servidor de la rebanada 1, **697** con `D-104` y `D-105` (2026-10-21) **705** con la temporada sin código de `D-106` (`R2.6`, 2026-10-24) **717** con `createSeason` (`R2.7`) **724** con el enganche que busca la temporada por su etiqueta (`R2.8`) **736** con `createTeam` (`R2.9`) y **743** con los nombres del servidor generados del catálogo (`D-109`, bloque T). Y el **backoffice, empezado** el 2026-10-16 con su
 [plan](./docs/Plan%20de%20desarrollo%20backoffice-001.md): la primera parte de la rebanada 0 (`R0.1`–`R0.7`) deja la web
 vacía que arranca, con los tipos sacados del catálogo, la conexión con el servidor, el revisor de código,
 PrimeVue (4.5.5, fija: la 5 cambió de licencia) y **4 pruebas de piezas**. Cómo se usa, en
@@ -416,7 +416,7 @@ código, como pedía §3.7), y la jornada de descanso de un grupo impar se guard
 ficticio de la federación, con la fecha de su jornada (`D-105`). **La rebanada 2** (el alta de equipos) tiene
 [su plan](./docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), con las decisiones revisadas el
 2026-10-23: la temporada nace en la web sin código de la federación y el primer enganche se lo pone (`D-106`), y
-dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). El catálogo, ya cambiado (`R2.5`, 35 códigos), y la temporada sin código en el servidor (`R2.6`, 19 migraciones por club); `createSeason` (`R2.7`, 10 operaciones servidas); el enganche que busca la temporada por su etiqueta (`R2.8`); `createTeam`, que inscribe al equipo que ya existe (`R2.9`, 11 operaciones servidas); **el servidor de la rebanada 2, cerrado** (`R2.10`, 2026-10-24: 736 tests, mutaciones 38/38, censo en 0); lo siguiente, `R2.11`: las reglas del catálogo en la web, con Ajv.
+dar de alta un equipo que ya existe lo inscribe en la temporada (`D-107`). **Cerrada el 2026-10-24** (`R2.1`–`R2.17` y el bloque T): en el servidor, la temporada sin código, `createSeason` y `createTeam` (**11 de las 85** operaciones, 35 códigos de error) y los nombres de cada lista cerrada en el catálogo, que el servidor genera al compilar y la web lee (`D-108`, `D-109`); en la web, las reglas del catálogo con Ajv, el formulario de alta con «Crear nueva temporada», «Dar de alta un equipo» en la portada y «Guardado» al volver, y la tabla de la portada ordenable por sus columnas, con la competición sin la categoría delante y los equipos iguales distinguidos. **743 tests** en el backend; en la web, **195 pruebas de piezas y 68 escenarios**, con las etiquetas `@e2e` y `@ui`. Lo aprendido, en la §9 de su plan. **Pendiente**: la revisión con VoiceOver de la rebanada (LLD-B §10.7 *b*), que hará el desarrollador. Lo siguiente, la **rebanada 3**: el enganche desde la web, que estrena las acciones de cada fila de la portada.
 **App iOS y app Android siguen sin empezar.**
 
 **F5 es la fase que junta lo que F3 y F4 entregaron sueltos**: la cadena decide qué fila es, `UpsertPolicy`
@@ -464,6 +464,8 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
             ├─► Federation ─────► Application   (adaptadores RFFM / FCF)
             ├─► Tenancy
             └─► Application ────► Domain        (Domain no depende de nada)
+
+APIContract ◄── EnumNamesPlugin ─► EnumNamesTool ─► EnumNamesCore   (al compilar: los nombres, D-109)
 ```
 
 **`Federation` cuelga de `App` desde F6**, y hasta entonces no colgaba: de F2 a F5 lo mantuvo en el grafo de
@@ -474,7 +476,8 @@ Run ─► App ─┬─► HTTPAdapter ─┬─► APIContract   (tipos genera
 |---|---|---|
 | `Domain` | Dominio | Entidades, *Value Objects*, catálogo de federaciones y **las dos mitades de §3.7**: la política de *upsert* (F3) y la **cadena de emparejamiento** (F4). F5 añade las cuatro entidades de la **salida** de la ingesta —`Round`, `OpponentClub`, `Team`, `Match`— y `IngestionRun`. F7, `StandingRow` y `StandingTable`, el *fallback* calculado de `D-15`. F8, `LeagueScorer` — con eso la salida de la ingesta está **completa**. **Sin** `import Vapor/Fluent` |
 | `Application` | Aplicación | Casos de uso y **puertos** (`ClubRepository`, `TenantUnitOfWork`, `FederationClientProvider`). F6 añade `IngestClubCalendars`: **el recorrido de un club**, con sus reglas de alcance y de fallo. F7 añade `StandingsSyncPlan` —qué jornadas entran y de dónde sale cada una— y `IngestStandings`, cuya **unidad es la jornada** y no la competición. F8 añade `IngestScorers`, cuya unidad **vuelve a ser la competición** (§3.2) y que es la única pasada con una operación de **retirada** (`D-94`). F10 añade al puerto de federación **la inversa de la coordenada** —leer la URL que el administrador pega—, que es su **única operación que no habla con la fuente** (`D-97`)— y los **dos casos de uso del enganche** (`PreviewFederationLink`, `LinkTeamToFederation`), con `TeamRegistrationRepository` y `TeamRepository.find(_:)` como puertos nuevos |
-| `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano** |
+| `APIContract` | — | Generado del *spec* por el plugin. **No se edita a mano**. Desde `D-109`, también los nombres en español de cada lista (`displayName`), que escribe `EnumNamesPlugin` desde `x-enum-names` |
+| `EnumNamesCore` · `EnumNamesTool` · `EnumNamesPlugin` | Herramienta de compilación | `D-109`: leen el *spec* y la configuración del generador (con Yams) y escriben los nombres de las listas en `APIContract`; paran la compilación si falta o sobra un nombre, o si una lista no está en `filter.schemas`. No viajan al binario |
 | `HTTPAdapter` | Adaptador primario | Conforma el `APIProtocol` generado; mapea DTO ↔ dominio |
 | `Persistence` | Adaptador secundario | `…Record` de Fluent, repositorios, migraciones |
 | `Federation` | Adaptador secundario | Adaptadores de las APIs de federación. **Sin Vapor ni Fluent**: lo que hace es parsear texto ajeno |
