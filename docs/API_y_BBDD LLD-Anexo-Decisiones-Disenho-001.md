@@ -74,6 +74,7 @@
 | **D-105**              | La jornada de descanso es un partido contra un rival ficticio, con la fecha de su jornada                                     | §3.7                               |
 | **D-106**              | La temporada puede nacer en la web sin código de la federación; el primer enganche se lo pone                                 | §3.2, §3.5, §3.7, §5.1             |
 | **D-107**              | Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409                                            | §3.5, §5.1                         |
+| **D-108**              | Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí                              | §5.1                               |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -4854,6 +4855,68 @@ género y modalidad, la clave de §3.5):
 **Enmienda** a [D-68], consecuencia 2 (`seasonId` obligatorio: el equipo nace inscrito, y ahora también se
 inscribe si ya existía), a la descripción de `createTeam` y de `CreateTeamRequest` en el catálogo, y a §5.1 del LLD.
 
+### D-108 · Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí
+
+**Lo que lo obligó a decidirse** (2026-10-24, con el formulario de alta de equipo de la rebanada 2 del
+backoffice). Los selectores de categoría, género y modalidad enseñan «Alevín», «Femenino», «Fútbol 7». Los
+**valores** salen del catálogo: son las listas cerradas `TeamCategory`, `Gender` y `Modality`, que las operaciones
+usan para sus campos (`CreateTeamRequest.category`, `TeamResponse.category`, el filtro `?category=` de
+`listTeams`…). Pero **los nombres** están escritos a mano en la web, en `backoffice/src/theme/names.ts`, y el
+**orden** en que salen en el selector es el orden en que están escritos ahí. Nada comprueba que ese orden sea el
+del catálogo, y las apps del móvil tendrían que escribir otra vez los mismos nombres.
+
+El desarrollador lo dijo así: **una única fuente de la verdad**.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Los nombres, en el catálogo** | Junto a cada lista, una tabla con el nombre de cada valor, y los clientes la leen de ahí | **Elegida** |
+| (b) Los nombres, en cada cliente; valores y orden, del catálogo | La web sigue escribiendo «Alevín»; cada app, el suyo | Descartada: el mismo nombre escrito en cada cliente, con el riesgo de que digan cosas distintas |
+
+**Decisión: (a).** Cada lista cerrada del catálogo (`components/schemas` con `enum`) lleva, al lado, una palabra
+propia **`x-enum-names`**: a cada valor, su nombre en español, tal como lo ve el usuario.
+
+```yaml
+TeamCategory:
+  type: string
+  enum: [prebenjamin, benjamin, alevin, infantil, cadete, juvenil, senior]
+  x-enum-names:
+    prebenjamin: Prebenjamín
+    benjamin: Benjamín
+    alevin: Alevín
+    # …
+```
+
+1. **Una tabla, no una lista en paralelo.** Cada nombre va con su valor (`alevin: Alevín`), en vez de una segunda
+   lista que dependa de la posición: así reordenar o añadir un valor no puede descolocar los nombres.
+2. **El orden es el del `enum`.** El catálogo ya escribe las categorías de menor a mayor edad; los clientes enseñan
+   las opciones en ese orden, y no en el de la tabla de nombres.
+3. **Todas las listas, menos `ProblemCode`.** Las 19 listas de datos llevan sus nombres, las enseñe ya una
+   pantalla o no: así la regla es «toda lista, con sus nombres», sin excepciones que recordar. **`ProblemCode` se
+   queda fuera**: lo que la web dice ante un error no es el nombre de un dato, sino un mensaje sobre lo que ha pasado
+   en su pantalla («Si no la ves en el selector, está archivada…»), y sigue escribiéndolo cada cliente (LLD del
+   backoffice, §4.2).
+4. **Lo comprueba quien genera.** En la web, `npm run gen:api` falla si una lista no tiene su tabla, si a un valor
+   le falta el nombre o si sobra uno que la lista no tiene. Y los nombres llegan a la web con el tipo de su lista,
+   así que una pantalla que pida el nombre de un valor que no existe no compila.
+5. **Es solo descripción.** `x-` es la forma que tiene OpenAPI de añadir palabras propias, y los que no la conocen
+   la ignoran: el servidor no la lee, no cambia ninguna operación ni lo que valida, y el `lint` de Redocly la
+   acepta. En la web, Ajv, que va en modo estricto, la recibe declarada, igual que `components`.
+6. **Las apps del móvil**, cuando existan, leen los mismos nombres del mismo catálogo.
+
+**Lo que se asume a cambio.**
+
+- **El catálogo deja de ser solo de datos**: lleva también textos que ve el usuario. Se acepta porque son el nombre
+  del dato, no un texto de pantalla: «Alevín» es lo mismo en la portada, en el formulario y en el móvil.
+- **Cambiar un nombre es cambiar el catálogo**, y por tanto recompilar la web (Plan R2 del backoffice, decisión 3).
+- **Un solo idioma.** Si algún día la web se traduce, la tabla pasaría a tener un nombre por idioma. Hoy todo el
+  producto es en español.
+- **Hay que escribir ahora unos 70 nombres** (las 19 listas), aunque muchas no tengan pantalla hasta rebanadas
+  posteriores. Los revisa el desarrollador al hacerlo.
+
+**Enmienda** a `backoffice/src/theme/names.ts`, cuyas tablas pasan a leerse del catálogo; al LLD del backoffice
+(§9.6, los nombres de los valores salen de un solo sitio, y ese sitio es el catálogo); y a la descripción de las
+listas en el catálogo.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -4998,5 +5061,6 @@ inscribe si ya existía), a la descripción de `createTeam` y de `CreateTeamRequ
 [D-105]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-106]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
