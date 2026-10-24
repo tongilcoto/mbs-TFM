@@ -1106,6 +1106,15 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Una `letter` que solo tiene espacios. El `minLength` del catálogo no lo caza —el espacio es un
+            carácter, y además el generador no lo aplica (D-65)—; lo rechaza el Dominio. El `code` es
+            `INVALID_VALUE`, con `letter: <motivo>` en el `detail`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   /teams/{teamId}:

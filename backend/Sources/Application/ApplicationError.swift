@@ -85,6 +85,12 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// guarda de fechas de `D-91`.
     case seasonAlreadyLinked(label: String, existing: String, incoming: String)
 
+    /// **El equipo ya está inscrito en esa temporada** (`createTeam`, `D-107` →
+    /// **409** `TEAM_ALREADY_REGISTERED`). Que exista en otra temporada no es
+    /// conflicto: se inscribe. Lleva los dos `id`, que es lo que hace falta para ir
+    /// a mirarlo.
+    case teamAlreadyRegistered(team: String, season: String)
+
     /// **La base no responde** (H-23, `D-86` enmendada).
     ///
     /// No es el fallo de una competición: es el fallo del sitio donde se apuntan

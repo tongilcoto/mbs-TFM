@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **724 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **736 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -40,7 +40,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `POST /v1/seasons`                                                                    | Backoffice R2 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
 | `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
-| Las otras 75 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
+| Las otras 74 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -230,8 +231,8 @@ otra temporada, o la del club se enganchó con otra cosa.
 > **Cuando exista la web**, esto se hace desde la ficha del equipo y los `curl` de aquí sobran. Hasta
 > entonces, este es el camino, y son tres pasos.
 
-**Paso 0 — el equipo.** `POST /v1/teams` es del *backoffice* y no está hecho, así que el equipo se crea con
-un comando ([§6.3](#seed-team)):
+**Paso 0 — el equipo.** Se crea con `POST /v1/teams` ([§4.6](#alta-de-equipo)), o con un comando
+([§6.3](#seed-team)), que no lo inscribe en ninguna temporada:
 
 ```sh
 swift run Run seed-team -t atleti -c cadete -g masculino -m futbol_11 -l A
@@ -501,12 +502,32 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
   (`Celtic Cadete B`).
 - Una temporada que no existe da **404**; un `id` que no es un UUID, **400**.
 
+<a id="alta-de-equipo"></a>
+### 4.6 El alta de un equipo
+
+**Un equipo del club, inscrito en una temporada** (`D-66`, `D-68`). Es el formulario de alta del backoffice
+(rebanada 2). No lleva ningún dato de la federación: se engancha después ([§4.1](#enganche)).
+
+```sh
+curl -s -X POST http://atleti.localhost:8080/v1/teams -H 'Content-Type: application/json' \
+     -d '{"category": "alevin", "letter": "A", "gender": "masculino", "modality": "futbol_7",
+          "seasonId": "<id de la temporada>"}' | jq
+```
+
+- **201** con el equipo nuevo, ya inscrito en esa temporada, sin competición.
+- **Si el equipo ya existe, lo inscribe y responde 200** (`D-107`): «el mismo» es uno propio con la misma
+  categoría, letra, género y modalidad. El «Alevín A» de este año y el del que viene son el mismo equipo; lo
+  que cambia es su inscripción. **Sin letra es otro equipo**, no «cualquiera».
+- **409 `TEAM_ALREADY_REGISTERED`** si ya estaba inscrito en esa temporada.
+- **404 `SEASON_NOT_FOUND`** si la temporada no existe; **400** si `seasonId` no es un UUID; **422** si la letra
+  solo tiene espacios.
+
 ---
 
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 724 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 736 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

@@ -354,6 +354,15 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                    + "la URL trae '\(incoming)'",
                                base: typeBaseURI, slug: "season-already-linked")
 
+            case .teamAlreadyRegistered(let team, let season):
+                // **409**: lo que llega es válido, lo que no encaja es el estado —el
+                // equipo ya está en esa temporada (`D-107`)—. Que exista en otra
+                // temporada no llega aquí: se inscribe.
+                return Problem(status: .conflict, code: "TEAM_ALREADY_REGISTERED",
+                               title: "El equipo ya está dado de alta en esta temporada",
+                               detail: "el equipo \(team) ya está inscrito en la temporada \(season)",
+                               base: typeBaseURI, slug: "team-already-registered")
+
             case .federationAdapterMissing(let federation):
                 // **501 y no 500**: no se ha roto nada. La federación del club
                 // está en el catálogo (`D-17`) y su adaptador todavía no se ha
