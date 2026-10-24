@@ -116,3 +116,77 @@ describe('«Dar de alta un equipo»', () => {
     expect(screen.getAllByRole('link', { name: 'Dar de alta un equipo' })).toHaveLength(2)
   })
 })
+
+describe('ordenar la tabla (bloque T)', () => {
+  const competitions = [
+    { id: 'c-ok', seasonId: 'id-2026', modality: 'futbol_11', gender: 'masculino', ageCategory: 'cadete', divisionLabel: 'PRIMERA', groupLabel: 'Grupo 1', federationCompetitionId: '1', federationGroupId: '2', displayName: 'x', ingestionHealth: 'ok', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+    { id: 'c-mal', seasonId: 'id-2026', modality: 'futbol_11', gender: 'masculino', ageCategory: 'cadete', divisionLabel: 'SEGUNDA', groupLabel: 'Grupo 1', federationCompetitionId: '3', federationGroupId: '4', displayName: 'y', ingestionHealth: 'failing', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
+  ]
+  const teamIn = (id: string, category: string, letter: string, competitionIds: string[]) => ({
+    ...aTeam,
+    competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '1' })),
+    team: { ...aTeam.team, id, category, letter, displayName: id },
+  })
+  // El orden del servidor: por edad. El alevín, al día; el cadete, con fallos.
+  const registrations = [teamIn('alevin', 'alevin', 'A', ['c-ok']), teamIn('cadete', 'cadete', 'B', ['c-mal'])]
+
+  function serverWithTeams() {
+    vi.stubGlobal('fetch', async (request: Request) => {
+      const path = new URL(request.url).pathname
+      if (path === '/api/v1/seasons') return Response.json([season('2026/27', true), season('2025/26')])
+      if (path.endsWith('/registrations')) return Response.json(registrations)
+      if (path === '/api/v1/competitions') return Response.json(competitions)
+      throw new Error(`Petición no esperada: ${path}`)
+    })
+  }
+
+  const teamOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent?.trim())
+
+  test('sin orden en la dirección, el del servidor', async () => {
+    serverWithTeams()
+    await openHome()
+    await screen.findByRole('table')
+
+    expect(teamOrder()).toEqual(['Alevín A', 'Cadete B'])
+  })
+
+  test('con ?orden=ingesta, de peor a mejor; y la cabecera lo dice', async () => {
+    serverWithTeams()
+    await openHome('/?orden=ingesta')
+    await screen.findByRole('table')
+
+    expect(teamOrder()).toEqual(['Cadete B', 'Alevín A'])
+    expect(screen.getByRole('columnheader', { name: 'Ingesta' })).toHaveAttribute('aria-sort', 'ascending')
+  })
+
+  test('pinchar la cabecera pone el orden en la dirección, y «Atrás» vuelve al anterior', async () => {
+    serverWithTeams()
+    const router = await openHome('/?temporada=2026-27')
+    await screen.findByRole('table')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Ingesta' }))
+    await waitFor(() => expect(router.currentRoute.value.query).toEqual({ temporada: '2026-27', orden: 'ingesta' }))
+    expect(teamOrder()).toEqual(['Cadete B', 'Alevín A'])
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Ingesta' }))
+    await waitFor(() => expect(router.currentRoute.value.query.orden).toBe('ingesta-inverso'))
+    expect(teamOrder()).toEqual(['Alevín A', 'Cadete B'])
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Ingesta' }))
+    await waitFor(() => expect(router.currentRoute.value.query).toEqual({ temporada: '2026-27' }))
+
+    router.back()
+    await waitFor(() => expect(router.currentRoute.value.query.orden).toBe('ingesta-inverso'))
+  })
+
+  test('cambiar de temporada conserva el orden', async () => {
+    serverWithTeams()
+    const router = await openHome('/?temporada=2026-27&orden=equipo-inverso')
+    await screen.findByRole('table')
+
+    await fireEvent.click(screen.getByRole('combobox', { name: 'Temporada' }))
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: '2025/26' }))
+
+    await waitFor(() => expect(router.currentRoute.value.query).toEqual({ temporada: '2025-26', orden: 'equipo-inverso' }))
+  })
+})
