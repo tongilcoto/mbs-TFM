@@ -10,12 +10,13 @@ export type Gender = 'masculino' | 'femenino'
 // Sin `futbol_playa`: la RFFM no tiene `tipojuego` para él.
 export type Modality = 'futbol_11' | 'futbol_7' | 'futbol_sala' | 'futbol_5'
 
-const categories: Category[] = ['prebenjamin', 'benjamin', 'alevin', 'infantil', 'cadete', 'juvenil', 'senior']
+/** De menor a mayor edad: el orden del catálogo, y el de la portada. */
+export const categories: Category[] = ['prebenjamin', 'benjamin', 'alevin', 'infantil', 'cadete', 'juvenil', 'senior']
 const genders: Gender[] = ['masculino', 'femenino']
 const modalities: Modality[] = ['futbol_11', 'futbol_7', 'futbol_sala', 'futbol_5']
 
 /** Cómo la escribe la web (theme/names.ts): es lo que se busca en la pantalla. */
-const categoryLabels: Record<Category, string> = {
+export const categoryLabels: Record<Category, string> = {
   prebenjamin: 'Prebenjamín',
   benjamin: 'Benjamín',
   alevin: 'Alevín',
@@ -78,6 +79,11 @@ export function futureSeason(random: Random, taken: Season[] = []): Season {
   return seasonBetween(random, now + 1, now + 30, taken)
 }
 
+/** La temporada que viene después de la en curso: la que un club crea en julio. */
+export function nextSeason(): Season {
+  return season(currentSeason().start + 1)
+}
+
 function seasonBetween(random: Random, from: number, to: number, taken: Season[]): Season {
   for (;;) {
     const start = random.int(from, to)
@@ -117,6 +123,14 @@ export function team(random: Random, taken: Team[] = []): Team {
     // Dos filas con el mismo nombre no se distinguen en la pantalla: tampoco se repite el nombre.
     if (!taken.some((t) => same(t) || t.name === candidate.name)) return candidate
   }
+}
+
+/**
+ * El equipo que se llamaría igual que `of`, con el otro género: mismas edad, letra y modalidad. Es lo que el
+ * club puede tener («Alevín A» masculino y femenino), y lo que la portada tiene que distinguir (bloque T del plan R2).
+ */
+export function twinOf(of: Team): Team {
+  return { ...of, id: undefined, gender: of.gender === 'masculino' ? 'femenino' : 'masculino' }
 }
 
 /** Un nombre corto de club. */

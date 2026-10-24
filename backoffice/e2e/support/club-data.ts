@@ -54,7 +54,11 @@ async function seasonIdOf(club: ScenarioClub, season: Season): Promise<string> {
  * inscrito sin competición, la fila de junio (`D-68`). Devuelve el equipo con su `id`.
  */
 async function createTeam(club: ScenarioClub, random: Random, season: Season, taken: Team[]): Promise<Team> {
-  const created = team(random, taken)
+  return addTeam(club, season, team(random, taken))
+}
+
+/** Da de alta en la temporada el equipo que se le pasa, como el formulario. Devuelve el equipo con su `id`. */
+export async function addTeam(club: ScenarioClub, season: Season, created: Team): Promise<Team> {
   const seasonId = await seasonIdOf(club, season)
   const { category, letter, gender, modality } = created
   const body = { category, gender, modality, seasonId, ...(letter ? { letter } : {}) }
@@ -209,6 +213,15 @@ async function ageIngestions(club: ScenarioClub, competitionId: string, days: nu
   })
 }
 
+
+/**
+ * Una temporada archivada: no sale en las listas, pero su etiqueta sigue ocupada (plan R2, decisión 6). Se da de
+ * alta por la API y se archiva por la base: archivar (`archiveSeason`) no llega a la API hasta la rebanada 11.
+ */
+export async function addArchivedSeason(club: ScenarioClub, season: Season): Promise<void> {
+  const id = await addSeason(club, season)
+  await sql(club, (query) => query('UPDATE $schema.seasons SET archived_at = now() WHERE id = $1', [id]))
+}
 
 /**
  * Deja el club a medias: existe y tiene sus tablas, pero no su fila en `clubs`. Es lo que el servidor llama

@@ -25,6 +25,16 @@ export interface ScenarioData {
   missingSeason?: Season
   /** Las competiciones de las que se ha lanzado una ingesta: al acabar, se espera a que acaben. */
   ingesting: string[]
+  /** El equipo que el escenario ha escrito en el formulario de alta (plan R2). */
+  entered?: Team
+  /** La temporada archivada del club. */
+  archivedSeason?: Season
+  /** Los equipos de la tabla por el estado de su ingesta: «Al día» → el equipo (bloque T). */
+  byHealth: Record<string, Team>
+  /** Los dos equipos que se llamarían igual (bloque T). */
+  twins?: Team[]
+  /** Los equipos de la tabla en el orden en que los manda el servidor (bloque T). */
+  inServerOrder?: Team[]
 }
 
 export class ScenarioWorld extends World {
@@ -38,7 +48,7 @@ export class ScenarioWorld extends World {
   held?: HeldRequest
   /** El azar del escenario (random.ts): con la misma semilla, los mismos datos. */
   random!: Random
-  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [] }
+  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [], byHealth: {} }
   /** Los datos que le tocaron al escenario, en palabras: salen en el informe si falla. */
   chosen: string[] = []
 

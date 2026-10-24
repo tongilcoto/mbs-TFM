@@ -96,6 +96,9 @@ una base de verdad. **Arranca su propia copia de todo** y la para al terminar; l
   cada pasada prueba con otros. Al empezar, la pasada escribe su semilla; **para repetir los mismos datos**:
   `SEMILLA=255079 npm run e2e`. Si un escenario falla, el informe dice qué datos le tocaron. La semilla y esos
   datos quedan también en `e2e-results/datos.log`, que se rehace en cada pasada.
+- **Cada escenario es `@e2e` o `@ui`** (la *skill* de escenarios, principio 8): los `@e2e` comprueban el flujo y
+  adónde lleva, y los `@ui`, lo que se ve (textos, avisos, orden, foco). Para pasar solo unos:
+  `npm run e2e -- --tags @e2e`. Para pasar uno por su nombre: `npm run e2e -- --name "Escape cierra"`.
 - **Compila el servidor antes de empezar** (`swift build`): los escenarios usan el programa ya compilado, y uno
   viejo probaría código que ya no es el tuyo.
 
