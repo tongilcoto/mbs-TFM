@@ -797,7 +797,9 @@ foco (§10.2).
 
 **b. Una revisión a mano al cerrar cada rebanada**, con esta lista en el PR (unos diez minutos):
 
-- [ ] Recorrer la pantalla **solo con el teclado**.
+- [ ] Recorrer la pantalla **solo con el teclado**. *En Safari, el tabulador se salta botones y enlaces salvo que
+  se active Ajustes → Avanzado → «Pulsar Tab para resaltar cada ítem de una página web» (o se use ⌥ + Tab); en
+  Chrome pasa por todo. Lo vio el desarrollador en la revisión de la rebanada 2.*
 - [ ] Escucharla con **VoiceOver** (viene con el Mac).
 - [ ] Verla con el **zoom al 200 %**.
 - [ ] Verla en los **dos modos**.
