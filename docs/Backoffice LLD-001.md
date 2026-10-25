@@ -184,6 +184,13 @@ menores (requisito 7, RGPD).
 nada en memoria entre pantallas. Tras guardar un cambio, la pantalla vuelve a pedir lo que enseña. Por qué, lo
 que cuesta y cuándo se revisa: [DW-03].
 
+**Y mientras algo esté «en marcha», se vuelven a pedir solos** *(añadido el 2026-10-25, con la portada de la
+[rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md))*. Si una pantalla enseña algo que el servidor
+está haciendo todavía —una ingesta, el estado `pending`—, pide otra vez sus datos **cada 10 s**, solo con la
+pestaña a la vista y **como mucho 5 minutos** seguidos; para cuando ya no queda nada en marcha. El refresco **no
+enseña «Cargando…»**, conserva el orden y el foco, y si falla se deja lo que había y se prueba en el siguiente:
+un refresco no pinta errores. No se anuncia al lector de pantalla. Por qué: [DW-20].
+
 ### 3. El recorrido de una petición
 
 El equivalente, en la web, al §2.3 del LLD del backend: qué pasa desde que el usuario entra en una pantalla
@@ -277,6 +284,29 @@ y el orden en la dirección); `components/SortableHeader.vue`, la cabecera; y ca
 portada, en `screens/home/order.ts`) y las **claves de orden** de cada fila. Una columna nueva es una regla más y
 una cabecera más. La tabla de PrimeVue no se usa: ordena mal las filas agrupadas, como un equipo con varias
 competiciones.
+
+#### 3.7 Las acciones de una fila son iconos, con su texto por ratón y por teclado
+
+*(Añadido el 2026-10-25, con la portada de la [rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md).)*
+
+- **Lo que se hace desde una fila** sin entrar en su ficha va como **un icono por acción**, sin menú.
+- **Cada icono va donde está lo que afecta**: las acciones de la fila entera, en una **columna «Acciones»** al
+  final, una vez aunque la fila ocupe varias líneas; las de una parte de la fila, **en su celda** (relanzar la
+  ingesta de una competición, en la celda de su ingesta).
+- **El texto de la acción no se ve hasta pasar el ratón o llegar con el teclado**, y los dos caminos funcionan;
+  *Escape* lo cierra (WCAG 1.4.13). El `Tooltip` de PrimeVue hace uno u otro, no los dos: la web tiene su propia
+  pieza.
+- **El lector de pantalla lee siempre el nombre, con la fila detrás**: «Sincronizar otra competición, Cadete A».
+  Diez botones iguales no se distinguen en la lista de botones de VoiceOver. El texto visible está dentro del
+  nombre (WCAG 2.5.3).
+- **40 × 40 px** cada icono (WCAG 2.5.8 pide 24). La columna «Acciones» no se ordena; su cabecera no se ve, pero el
+  lector la lee.
+- **Lo que se permite a veces** sigue la regla de §7.4: desactivado, y con el motivo **escrito a la vista**, no
+  solo en el texto del icono.
+- **El caso que más lo pide puede llevar además un enlace con texto**, en su celda: «Sincronizar con la
+  Federación» debajo de «Sin competición».
+
+Por qué iconos, y no un menú ⋮ ni botones con texto: [DW-19].
 
 **Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
 «cargando…» a un lector de pantalla (§10).
@@ -482,12 +512,12 @@ la competición arriba.
 | `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
 | `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |
 | `/equipos/:id/estadisticas` | Pestaña Estadísticas | Borrador |
-| `/equipos/:id/federacion` | Enganche con la federación: pegar la URL del calendario | Borrador |
+| `/equipos/:id/federacion` | **Sincronizar con la Federación** (el enganche): dos pasos, la dirección y el equipo, en el mismo camino | Decidido en la rebanada 3 |
 | `/partidos/:id` | El acta del partido: goles, tarjetas, minutos | Borrador |
 | `/jugadores/:id` | Ficha del jugador | Borrador |
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
-**Solo las tres primeras están decididas** (el alta de equipo, con la rebanada 2). El resto es un borrador: cada camino se confirma, o se cambia,
+**Solo están decididas las tres primeras y la del enganche** (el alta de equipo, con la rebanada 2; el enganche, con la 3). El resto es un borrador: cada camino se confirma, o se cambia,
 al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español
@@ -574,7 +604,7 @@ sigue siendo quien manda**: si la web se equivoca, responde con un error del §4
 
 - **Lo que no se permite nunca, no aparece.** En un partido no hay botón «Borrar».
 - **Lo que se permite a veces aparece desactivado y con el motivo escrito a la vista**, por ejemplo: «No se
-  puede borrar: el equipo está enganchado a la federación. Para dejar de gestionarlo, libéralo». **El motivo
+  puede borrar: el equipo está sincronizado con la Federación». **El motivo
   va escrito en la pantalla, no solo en un globo al pasar el ratón.**
 
 Por qué: [DW-10].
@@ -721,6 +751,13 @@ ver, porque en España funciona.
 
 **Regla:** `format.ts` formatea esas fechas directamente desde el texto, **sin pasar por la zona horaria**. Lo
 vigila una prueba de Vitest que ejecuta el formateo con el navegador en otra zona horaria.
+
+#### 9.8 En la pantalla se dice «sincronizar», no «enganchar»
+
+*(Añadido el 2026-10-25, con la [rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md).)* Lo que hace
+`linkTeamToFederation` se llama **«Sincronizar con la Federación»** en todo lo que lee el usuario: botones,
+avisos, títulos y mensajes de error. «El enganche» sigue siendo el nombre en los documentos y en el código
+(`D-67`), que no lee el usuario.
 
 ### 10. La accesibilidad en concreto
 
@@ -968,3 +1005,5 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-17]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-18]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-19]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-20]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
