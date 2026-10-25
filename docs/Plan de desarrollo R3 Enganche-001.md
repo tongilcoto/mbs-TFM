@@ -17,8 +17,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
 > **Estado del documento: en revisión.** Las decisiones de la §4 se revisan una a una con el desarrollador antes
-> de construir nada (plan del backoffice, §2.2). **La 1, decidida el 2026-10-25**, con una maqueta en HTML de las
-> opciones y de cómo crecen con las rebanadas 13 y 14. Las 2 a 6 siguen siendo **propuestas**.
+> de construir nada (plan del backoffice, §2.2). **La 1 y la 2, decididas el 2026-10-25**, sobre una maqueta en HTML
+> de las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 3 a 6 siguen siendo **propuestas**.
 >
 > **En la pantalla se dice «Sincronizar», no «Enganchar»** (decidido con la decisión 1). En los documentos sigue
 > siendo «el enganche», el nombre de `D-67` y de la operación; lo que lee el usuario es «Sincronizar con la
@@ -88,17 +88,29 @@ de la portada: al recargar o al abrir la dirección a mano no hay nada más de d
 **Arriba**: el título «Sincronizar con la Federación» y el equipo, con el mismo nombre que en la portada (el que
 distingue género y modalidad, bloque T de la R2), no el `displayName` del servidor, que no lo distingue (`D-109`).
 
-**Primer paso, comprobar** (decisión 2):
+**Dos pasos, en la misma dirección** (decisión 2): «1 La dirección» y «2 Tu equipo», con una línea arriba que
+dice en cuál se está.
+
+**Paso 1, la dirección:**
 
 | Campo | Pieza | Obligatorio | Ayuda |
 |---|---|---|---|
 | **Dirección del calendario** | Texto, ancho | Sí | «Cópiala de la web de la Federación, en la página del calendario del grupo. Por ejemplo: …», con el ejemplo leído del catálogo (`FederationLinkPreviewRequest`, como en la R2) |
 
-- **«Comprobar»** envía `previewFederationLink`. Mientras tanto el botón se bloquea y dice «Comprobando…»: la
-  federación puede tardar (LLD §5.4).
-- **Lo que hay en la dirección sale debajo**, en la misma página (§3.3). **Si se cambia la dirección** después de
-  comprobarla, lo de abajo desaparece y hay que comprobar otra vez: lo que se confirma es siempre lo que se ha
-  visto.
+- **«Comprobar en la Federación»** envía `previewFederationLink`. Mientras tanto el botón se bloquea y dice
+  «Comprobando…»: la federación puede tardar (LLD §5.4). Si va bien, se pasa al paso 2; si no, el error sale en
+  el paso 1 (decisión 6).
+- **«Cancelar»**, al lado.
+
+**Paso 2, tu equipo** (§3.3): arriba, **la dirección comprobada en una línea**, con dos iconos a la derecha:
+
+- **Editar** (lápiz, «Editar la dirección»): vuelve al paso 1 con la dirección escrita. Lo comprobado se borra:
+  lo que se sincroniza es siempre lo que se ha visto.
+- **Volver a comprobar** (flecha circular, «Volver a comprobar en la Federación»): repite el `/preview` con la
+  misma dirección, sin salir del paso 2, por si la federación ha cambiado algo. Se conserva el equipo elegido
+  si sigue en la lista.
+
+Los dos, con las reglas de los iconos de la decisión 1 (texto con ratón y teclado, nombre para el lector).
 
 **Los cuatro estados** (LLD-B §3.1), de lo que se pide al abrir:
 
@@ -107,7 +119,7 @@ distingue género y modalidad, bloque T de la R2), no el `displayName` del servi
 | **Cargando** | «Cargando equipo…» en el sitio del título |
 | **Error** | El mensaje del código, con *Reintentar* si puede ser pasajero (LLD-B §4.4). Si el equipo no existe, «No se ha encontrado el equipo» y un enlace a la portada |
 | **Vacío** | No tiene: un equipo existe o no |
-| **Con datos** | El campo de la dirección y «Comprobar» |
+| **Con datos** | El paso 1: el campo de la dirección y «Comprobar en la Federación» |
 
 ### 3.3 Lo que hay en la dirección, y confirmar
 
@@ -117,16 +129,22 @@ Lo que devuelve el `/preview`, para que una persona reconozca su equipo (`D-16`)
 - **La temporada**: su etiqueta. Si no existe en el club: «Se creará la temporada 2026/27» (`season.exists`).
 - **Si la competición ya la usa otro equipo del club**: «Esta competición ya está en el club; se reutiliza»
   (`alreadyRegistered`). Es informativo, no impide nada.
-- **Los equipos del grupo**, para elegir **cuál es el del club** (decisión 4): uno por línea, con el nombre tal
-  como lo escribe la federación (`rawName`). **Ninguno viene elegido.** Los que llegan sin código se ven, pero no
-  se pueden elegir, con el motivo.
+- **Los equipos del grupo**, para elegir **cuál es el del club** (decisión 4): botones de opción, uno solo y
+  obligatorio, con el nombre tal como lo escribe la federación (`rawName`). **Ninguno viene elegido.** Los que
+  llegan sin código se ven, pero no se pueden elegir, con el motivo.
 - **El género**, un selector con el que propone el `/preview` ya elegido, que se puede cambiar (`D-58`).
 - **Si no cuadra con el equipo** (`identityMatches = false`): un aviso que dice **qué** no cuadra («El equipo es
   Cadete y la competición es Juvenil»), y **«Sincronizar» bloqueado**: el servidor lo rechazaría (409).
 - **Si la edad no se ha podido comprobar** (`ageCategoryChecked = false`): un aviso de que el nombre de la
   competición no dice la edad, y de que se usará la del equipo. No bloquea.
-- **«Sincronizar»** envía `linkTeamToFederation` con la dirección **comprobada**, el código del equipo elegido, el
-  género y, si la temporada no existe, la etiqueta que propuso el `/preview` (decisión 3).
+- **El botón dice lo que va a sincronizar** (idea del desarrollador): «Sincronizar» sin equipo elegido, y
+  **«Sincronizar CELTIC CASTILLA C.F. 'B'»** en cuanto se elige uno. Se lee antes de pulsar, y el lector de
+  pantalla lo anuncia igual.
+- **Sin equipo elegido, el botón se puede pulsar**: sale arriba «Falta un dato: Elige tu equipo» con el enlace a
+  la lista, y la lista marcada, como en el alta (LLD-B §5.1). No se bloquea: un botón bloqueado no dice por qué.
+- **Al pulsarlo con equipo**, envía `linkTeamToFederation` con la dirección **comprobada**, el código del equipo
+  elegido, el género y, si la temporada no existe, la etiqueta que propuso el `/preview` (decisión 3).
+- **Solo dos botones**: «Sincronizar…» y «Cancelar». Volver al paso 1 es el icono de editar; no hay «Atrás».
 - **«Cancelar»** vuelve a la portada de la que se vino, y quita la pantalla del historial (como el alta).
 - **Salir con algo escrito o comprobado** pregunta antes (LLD-B §5.5), con el aviso de la R2 (`LeaveDialog`).
 
@@ -195,18 +213,33 @@ para otra temporada).
 **Dónde se escribe**: es una regla para todas las tablas con acciones (Rivales, Temporadas, Personal…), así que
 va al LLD-B, con su porqué en `DW-19` (R3.2).
 
-### Decisión 2 · La pantalla del enganche: una sola página, comprobar y después confirmar
+### Decisión 2 · La pantalla del enganche: dos pasos, comprobar y después elegir el equipo
 
-**Propuesta: una página, con lo que hay en la dirección apareciendo debajo del campo.**
+**Decidido el 2026-10-25**, sobre la maqueta: **un asistente de dos pasos en la misma dirección**, con lo que
+el desarrollador cambió al verlo (abajo).
 
 | Opción | Veredicto |
 |---|---|
-| **(a) Una página: el campo arriba, lo comprobado debajo, «Sincronizar» al final** | **Propuesta.** Se ve a la vez lo que se pegó y lo que hay en ello; no hace falta un «Atrás» propio |
-| (b) Dos pasos con un asistente (paso 1: pegar; paso 2: confirmar) | Más piezas, y la dirección deja de verse cuando hay que reconocer el equipo |
-| (c) Un diálogo sobre la portada | La lista de equipos del grupo (de 12 a 18) no cabe bien en un diálogo, y la pantalla ya tiene su camino en el LLD-B §6.1 |
+| (a) Una página: el campo arriba, lo comprobado debajo | Descartada: el desarrollador prefiere separar los dos momentos, pegar y reconocer |
+| **(b) Dos pasos: 1, la dirección; 2, tu equipo** | **Elegida.** Cada paso hace una cosa; en el 2 la dirección sigue a la vista en una línea |
+| (c) Un diálogo sobre la portada | Descartada: la lista de equipos del grupo (de 12 a 18) necesita su propia barra de desplazamiento justo donde hay que fijarse, y la pantalla ya tiene su camino en el LLD-B §6.1 |
 
-- **Lo que se envía al confirmar es la dirección comprobada**, no la del campo: si el campo cambia, lo comprobado
-  se borra (§3.2). Así no se engancha nunca algo distinto de lo que se ha visto.
+**Lo que cambió en la revisión** (pensando más en una app del móvil que en una web, en palabras del
+desarrollador):
+
+- El botón del paso 1 es **«Comprobar en la Federación»**, no «Siguiente»: dice lo que hace.
+- El paso 2 tiene **solo «Sincronizar…» y «Cancelar»**. En vez de «Atrás», dos iconos en la línea de la
+  dirección: **editar** (vuelve al paso 1) y **volver a comprobar** (repite el `/preview` sin salir).
+- **El botón dice el equipo elegido**: «Sincronizar CELTIC CASTILLA C.F. 'B'».
+- **Sin equipo elegido, el botón se puede pulsar** y dice qué falta, como el alta de la R2.
+
+**Los dos pasos comparten dirección** (`/equipos/:id/federacion`), sin una entrada propia en el historial para
+el paso 2. El «Atrás» del navegador sale de la pantalla, preguntando antes si hay algo escrito (§3.3). Se
+descartó darle al paso 2 su propia entrada: al recargar en él habría que volver a llamar a la federación, y es
+un caso más que probar.
+
+- **Lo que se envía al sincronizar es la dirección comprobada**: al editarla, lo comprobado se borra. Así no se
+  engancha nunca algo distinto de lo que se ha visto.
 - **El camino** `/equipos/:id/federacion` del LLD-B §6.1 pasa de «Borrador» a confirmado.
 
 ### Decisión 3 · La temporada que no existe: se crea con la etiqueta del `/preview`, sin corregirla
@@ -322,7 +355,10 @@ uno.
 - Una dirección que no es de un calendario: el error junto al campo.
 - Una dirección que no lleva a nada: el error junto al campo.
 - La federación no contesta: el aviso con *Reintentar*.
-- Cambiar la dirección después de comprobar: lo comprobado desaparece.
+- Editar la dirección desde el paso 2: vuelve al paso 1 con la dirección escrita, y hay que comprobar otra vez.
+- Volver a comprobar desde el paso 2: se queda en el paso 2, con el equipo elegido.
+- Pulsar «Sincronizar» sin elegir equipo: «Falta un dato: Elige tu equipo», y la lista marcada.
+- Al elegir un equipo, el botón dice su nombre.
 - Una competición de otra edad: el aviso dice qué no cuadra, y «Sincronizar» está bloqueado.
 - Una temporada que el club no tiene: «Se creará la temporada…».
 
@@ -374,8 +410,8 @@ Con el método del backend (§5).
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R3.7** | **Las acciones de la fila**: el juego de iconos elegido, el icono con su texto por ratón y por teclado (decisión 1), la columna nueva y el enlace del equipo sin competición | Vitest (el nombre según tenga o no competición y con el equipo, una vez por equipo aunque tenga dos competiciones, la columna no ordenable), y la web abierta en Chrome y en Safari | Un commit |
-| **R3.8** | **La pantalla del enganche, primer paso**: `getTeam` con sus cuatro estados, el campo, «Comprobar» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
-| **R3.9** | **Lo comprobado y confirmar**: la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, «Sincronizar» y sus errores | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
+| **R3.8** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
+| **R3.9** | **El paso 2**: la línea de la dirección con editar y volver a comprobar, la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, el botón con el nombre del equipo elegido, «Falta un dato» y los errores al sincronizar | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
 | **R3.10** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
 
 ### D · Los escenarios en verde y el cierre
