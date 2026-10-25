@@ -17,8 +17,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
 > **Estado del documento: en revisión.** Las decisiones de la §4 se revisan una a una con el desarrollador antes
-> de construir nada (plan del backoffice, §2.2). **La 1 y la 2, decididas el 2026-10-25**, sobre una maqueta en HTML
-> de las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 3 a 6 siguen siendo **propuestas**.
+> de construir nada (plan del backoffice, §2.2). **La 1, la 2 y la 3, decididas el 2026-10-25**, sobre una maqueta en
+> HTML de las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 4 a 6 siguen siendo **propuestas**.
 >
 > **En la pantalla se dice «Sincronizar», no «Enganchar»** (decidido con la decisión 1). En los documentos sigue
 > siendo «el enganche», el nombre de `D-67` y de la operación; lo que lee el usuario es «Sincronizar con la
@@ -126,7 +126,8 @@ Los dos, con las reglas de los iconos de la decisión 1 (texto con ratón y tecl
 Lo que devuelve el `/preview`, para que una persona reconozca su equipo (`D-16`):
 
 - **La competición**: división, grupo, edad, modalidad y número de jornadas.
-- **La temporada**: su etiqueta. Si no existe en el club: «Se creará la temporada 2026/27» (`season.exists`).
+- **La temporada**: su etiqueta. Si no existe en el club, «· nueva» y el aviso de que se creará al sincronizar
+  (`season.exists`, decisión 3).
 - **Si la competición ya la usa otro equipo del club**: «Esta competición ya está en el club; se reutiliza»
   (`alreadyRegistered`). Es informativo, no impide nada.
 - **Los equipos del grupo**, para elegir **cuál es el del club** (decisión 4): botones de opción, uno solo y
@@ -143,7 +144,7 @@ Lo que devuelve el `/preview`, para que una persona reconozca su equipo (`D-16`)
 - **Sin equipo elegido, el botón se puede pulsar**: sale arriba «Falta un dato: Elige tu equipo» con el enlace a
   la lista, y la lista marcada, como en el alta (LLD-B §5.1). No se bloquea: un botón bloqueado no dice por qué.
 - **Al pulsarlo con equipo**, envía `linkTeamToFederation` con la dirección **comprobada**, el código del equipo
-  elegido, el género y, si la temporada no existe, la etiqueta que propuso el `/preview` (decisión 3).
+  elegido y el género. **Sin `seasonLabel`**: el servidor usa la de la federación (decisión 3).
 - **Solo dos botones**: «Sincronizar…» y «Cancelar». Volver al paso 1 es el icono de editar; no hay «Atrás».
 - **«Cancelar»** vuelve a la portada de la que se vino, y quita la pantalla del historial (como el alta).
 - **Salir con algo escrito o comprobado** pregunta antes (LLD-B §5.5), con el aviso de la R2 (`LeaveDialog`).
@@ -242,12 +243,29 @@ un caso más que probar.
   engancha nunca algo distinto de lo que se ha visto.
 - **El camino** `/equipos/:id/federacion` del LLD-B §6.1 pasa de «Borrador» a confirmado.
 
-### Decisión 3 · La temporada que no existe: se crea con la etiqueta del `/preview`, sin corregirla
+### Decisión 3 · La temporada que no existe: se crea con la etiqueta de la Federación, sin corregirla
 
-**Propuesta: no se deja corregir la etiqueta.** El catálogo permite mandar otra (`seasonLabel`, «salvo
-corrección»), pero la etiqueta la traduce el conector de la federación (`D-106`) y la guarda de fechas de `D-91`
-es la red. Una corrección a mano solo puede meter una etiqueta que no casa con el calendario. La pantalla dice
-«Se creará la temporada 2026/27», y se envía esa.
+**Decidido el 2026-10-25**, sobre la maqueta (pantalla H).
+
+**Cuándo pasa.** El enganche busca la temporada primero por el código de la federación y después por la etiqueta
+(`D-106`), así que la temporada en curso casi siempre está: la creó el alta (R2). No está cuando se pega el
+calendario de una temporada que el club no ha creado, como el de 2027/28 para un equipo dado de alta en 2026/27.
+Entonces el enganche **la crea**, e inscribe en ella al equipo.
+
+**Lo que se ve**: en el resumen del paso 2, «Temporada: 2027/28 · nueva», y debajo el aviso «La temporada 2027/28
+no existe todavía en el club: se creará al sincronizar, con el nombre que le da la Federación.» Informa; no
+bloquea.
+
+**La etiqueta no se corrige.** El catálogo permite mandar otra (`seasonLabel`, «salvo corrección»), pero la
+traduce el conector de la federación de su propia página (`D-106`), y la guarda de fechas de `D-91` rechaza un
+calendario de otra temporada. Una corrección a mano solo puede meter una etiqueta que no casa con el calendario.
+
+**Y la web no manda `seasonLabel`.** Visto en el servidor (`LinkTeamToFederation`, el paso 1 de la cascada): sin
+ella, busca y crea con la de la federación, `calendar.seasonLabel`, que es la misma que enseñó el `/preview`. Sin
+mandarla, lo que se ve y lo que se guarda no pueden diferir.
+
+**El caso raro**: si la página de la federación no trae la etiqueta y la temporada no existe, el `/preview` falla
+con `SEASON_LABEL_UNAVAILABLE`. Va en la decisión 6.
 
 ### Decisión 4 · Cómo se reconoce el equipo propio
 
@@ -298,6 +316,7 @@ uno y **si el texto sirve en esta pantalla**, que es la primera que los enseña:
 | `SEASON_ALREADY_LINKED` (409) | La temporada de esa etiqueta tiene otro código (`D-106`) | Aviso arriba. El texto ya está escrito desde la R2 |
 | `COMPETITION_IDENTITY_MISMATCH`, `OWN_TEAM_NOT_IN_CALENDAR`, `FEDERATION_TEAM_ID_TAKEN`, `ALREADY_LINKED_TO_FEDERATION` (409) | Al confirmar | Aviso arriba, sin borrar lo comprobado |
 | `FEDERATION_SEASON_MISMATCH` | La guarda de fechas (`D-91`) | Aviso arriba |
+| `SEASON_LABEL_UNAVAILABLE` | La página de la federación no trae la etiqueta, y la temporada no existe (decisión 3) | Aviso en el paso 1, **sin** *Reintentar* |
 | `TEAM_NOT_FOUND` (404) | El equipo se borró, o la dirección tiene otro código | La página entera: «No se ha encontrado el equipo» |
 
 - **Qué códigos emite de verdad cada operación** se comprueba en el servidor antes de escribir los mensajes (paso
