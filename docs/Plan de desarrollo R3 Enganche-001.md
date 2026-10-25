@@ -17,8 +17,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
 > **Estado del documento: en revisión.** Las decisiones de la §4 se revisan una a una con el desarrollador antes
-> de construir nada (plan del backoffice, §2.2). **La 1, la 2 y la 3, decididas el 2026-10-25**, sobre una maqueta en
-> HTML de las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 4 a 6 siguen siendo **propuestas**.
+> de construir nada (plan del backoffice, §2.2). **Las 1 a 4, decididas el 2026-10-25**, sobre una maqueta en HTML de
+> las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 5 y 6 siguen siendo **propuestas**.
 >
 > **En la pantalla se dice «Sincronizar», no «Enganchar»** (decidido con la decisión 1). En los documentos sigue
 > siendo «el enganche», el nombre de `D-67` y de la operación; lo que lee el usuario es «Sincronizar con la
@@ -52,7 +52,7 @@ competición». Hoy solo se engancha con `curl`.
 | **Reconocer el equipo propio** entre los del grupo, confirmar el género, y los avisos de lo que no cuadra | Ficha, §3.3 · decisión 4 |
 | **Al confirmar**, la vuelta a la portada en la temporada del calendario, con el equipo «En marcha» | Ficha, §3.4 · decisión 5 |
 | **Los mensajes de cada error del enganche**, cada uno en su sitio | Decisión 6 |
-| En el servidor, **una operación nueva**: `getTeam`. Con ella, el servidor sirve **12 de las 85** | §5 |
+| En el servidor, **una operación nueva**, `getTeam`, y **el `/preview` dice qué equipos del grupo son ya del club** (`D-110`). Con ello, el servidor sirve **12 de las 85** | §5 · decisión 4 |
 
 **Lo que no trae** (llega después): la ficha del equipo (rebanada 4); relanzar la ingesta desde la fila
 (rebanada 14); los escudos de los equipos del grupo (decisión 4); y **deshacer un enganche**, «Dejar de
@@ -131,8 +131,9 @@ Lo que devuelve el `/preview`, para que una persona reconozca su equipo (`D-16`)
 - **Si la competición ya la usa otro equipo del club**: «Esta competición ya está en el club; se reutiliza»
   (`alreadyRegistered`). Es informativo, no impide nada.
 - **Los equipos del grupo**, para elegir **cuál es el del club** (decisión 4): botones de opción, uno solo y
-  obligatorio, con el nombre tal como lo escribe la federación (`rawName`). **Ninguno viene elegido.** Los que
-  llegan sin código se ven, pero no se pueden elegir, con el motivo.
+  obligatorio, con el nombre tal como lo escribe la federación (`rawName`), **por orden alfabético**. **Ninguno
+  viene elegido.** Los que llegan sin código, y los que ya están sincronizados con un equipo del club («Ya está
+  sincronizado con Alevín A»), se ven pero no se pueden elegir.
 - **El género**, un selector con el que propone el `/preview` ya elegido, que se puede cambiar (`D-58`).
 - **Si no cuadra con el equipo** (`identityMatches = false`): un aviso que dice **qué** no cuadra («El equipo es
   Cadete y la competición es Juvenil»), y **«Sincronizar» bloqueado**: el servidor lo rechazaría (409).
@@ -193,10 +194,10 @@ para otra temporada).
 - **El texto sale con el ratón y con el teclado**, y *Escape* lo cierra (WCAG 1.4.13). **El `Tooltip` de PrimeVue
   4.5.5 no hace las dos cosas a la vez**: con el modificador `focus` sale al llegar con el tabulador pero ya no al
   pasar el ratón, y sin él, al revés (`primevue/tooltip`, `bindEvents`). *Escape* sí lo cierra. Se resuelve en
-  R3.7, con una pieza propia pequeña o envolviendo la de PrimeVue; lo que vale es que los dos caminos funcionen.
+  R3.9, con una pieza propia pequeña o envolviendo la de PrimeVue; lo que vale es que los dos caminos funcionen.
 - **40 × 40 px** cada icono, como mínimo 24 (WCAG 2.5.8). Cada acción nueva ensancha la columna unos 40 px.
 - **La columna «Acciones» no se ordena**, y su cabecera no se ve pero el lector la lee.
-- **Iconos reconocibles**: la web todavía no tiene juego de iconos. Se elige en R3.7 (dibujos SVG propios o
+- **Iconos reconocibles**: la web todavía no tiene juego de iconos. Se elige en R3.9 (dibujos SVG propios o
   PrimeIcons, cuya licencia se mira antes).
 
 **Y lo que salió al hacer la maqueta, para la rebanada 13:**
@@ -269,19 +270,32 @@ con `SEASON_LABEL_UNAVAILABLE`. Va en la decisión 6.
 
 ### Decisión 4 · Cómo se reconoce el equipo propio
 
-**Propuesta:**
+**Decidido el 2026-10-25**, sobre la maqueta (pantallas E e I). De la decisión 2 venía ya la forma: botones de
+opción, uno solo y obligatorio, **ninguno elegido** (elegirlo por el nombre del club sería deducir en silencio lo
+que `D-16` y `D-67` piden que reconozca una persona), y los equipos **sin código** (`federationTeamId = null`)
+desactivados, con «La Federación no publica su código: no se puede elegir». Y se decidieron tres cosas más:
 
-- **Una lista de opciones** (un botón de opción por equipo, con su nombre tal como lo escribe la federación),
-  agrupadas con su título («¿Cuál es tu equipo?»). **Sin ninguno elegido**: elegirlo por el nombre del club
-  sería deducir en silencio lo que `D-16` y `D-67` piden que reconozca una persona.
-- **Los equipos sin código** (`federationTeamId = null`) salen **desactivados**, con «La Federación no publica
-  el código de este equipo; no se puede enganchar».
-- **Sin escudos**. El catálogo los trae para reconocer de un vistazo, pero apuntan a la RFFM de verdad, y que
-  los escenarios no se bajen nada de internet es de la rebanada 4 (plan del backoffice, §5, «Lo que no está en
-  la rebanada 0»). El nombre de la federación basta para reconocerlo, y es el que el club ve en su web.
+- **Por orden alfabético** del nombre de la federación, con las reglas del español. La federación los da en el
+  orden de su calendario, que no ayuda a encontrar el club entre 14 o 18; así, «CELTIC CASTILLA C.F. 'A'» y
+  «'B'» salen juntos.
+- **El equipo del club que ya está sincronizado en ese grupo sale desactivado, diciendo con cuál**: «Ya está
+  sincronizado con Alevín A». Es el caso de dos equipos del club en el mismo grupo: elegir el de otro daría 409
+  (`FEDERATION_TEAM_ID_TAKEN`). **Lo dice el servidor en el `/preview`**, que ya busca la competición (por eso
+  sabe `alreadyRegistered`): cada equipo de `teams[]` lleva, si es del club en esa competición, a qué equipo
+  propio está enganchado. Le sirve igual a la app del móvil. **Cambia el catálogo: mini-fase, con su `D-110`**
+  (§5). Si es el mismo equipo que se está sincronizando, dice «Ya está sincronizado con este equipo».
+- **Sin escudos.** El catálogo los trae, pero apuntan a la RFFM de verdad, y que los escenarios no se bajen nada
+  de internet es de la rebanada 4. El nombre de la federación basta para reconocerlo, y es el que el club ve en
+  su web.
 
-*Por revisar con el desarrollador*: si se prefiere adelantar los escudos a esta rebanada, el problema de los
-escenarios viene con ellos.
+| Opción para el equipo ya sincronizado | Veredicto |
+|---|---|
+| (a) Nada en la lista: el 409 al pulsar, con su mensaje | Descartada: explica el error, pero no lo evita |
+| (b) La web lo deduce, con `listSeasons` y `listSeasonRegistrations` y comparando códigos | Descartada: deduce en la web lo que sabe el servidor, y el `/preview` no da los identificadores de la temporada ni de la competición con los que comparar |
+| **(c) Lo dice el servidor en el `/preview`** | **Elegida** |
+
+**La forma exacta** del dato nuevo se fija en `D-110` (R3.2); la candidata es reutilizar `TeamRef` (`D-32`), la
+proyección de un equipo en una fila, como `linkedTeam`, nulo si no es del club.
 
 ### Decisión 5 · Después de enganchar: vuelta a la portada en la temporada del calendario, sin seguir la ingesta
 
@@ -332,11 +346,12 @@ como «No se ha encontrado el equipo», mirando `isOwn` de `getTeam`, sin pedir 
 ## 5. Lo que le falta al servidor
 
 Poco: **el enganche y su `/preview` ya están** (F10, y la búsqueda por etiqueta desde R2.8). Falta leer el
-equipo.
+equipo, y que el `/preview` diga qué equipos del grupo son ya del club (decisión 4).
 
 | Qué | Capas | ¿Mini-fase? | Decisión |
 |---|---|---|---|
 | **`getTeam`**: un equipo por su código, propio o rival, con los derivados de `TeamResponse` (`isOwn`, `clubName`, `displayName`, `crestUrl`). 404 `TEAM_NOT_FOUND` si no existe en el club | Las cuatro (filtro, Aplicación, Persistencia, HTTP) | **No**, si el catálogo no cambia. Si al programarla hay que tocar su descripción (por ejemplo, el código del 404), sí | 2 |
+| **El `/preview` dice qué equipos del grupo ya son del club** (`D-110`): cada equipo de `teams[]` lleva a qué equipo propio está enganchado en esa competición, o nulo. Solo si la competición ya existe (`alreadyRegistered`); si no, todos nulos | Catálogo, Aplicación, HTTP | **Sí**: cambia el catálogo | 4 |
 | **Los códigos que emiten el enganche y su `/preview`**, contrastados con lo que dice el catálogo | Ninguna, si cuadran | Solo si no cuadran | 6 |
 | **El `/preview` contra la federación falsa**: que una competición inventada por un escenario se pueda comprobar y enganchar, y que la página que sirve lleve lo que el `/preview` lee (la temporada, el grupo, los equipos) | Ninguna del servidor; la federación falsa de `backoffice/e2e/support/` | No | — |
 
@@ -378,6 +393,8 @@ uno.
 - Volver a comprobar desde el paso 2: se queda en el paso 2, con el equipo elegido.
 - Pulsar «Sincronizar» sin elegir equipo: «Falta un dato: Elige tu equipo», y la lista marcada.
 - Al elegir un equipo, el botón dice su nombre.
+- La lista, por orden alfabético.
+- Un segundo equipo del club en el mismo grupo: el del primero sale desactivado, «Ya está sincronizado con…».
 - Una competición de otra edad: el aviso dice qué no cuadra, y «Sincronizar» está bloqueado.
 - Una temporada que el club no tiene: «Se creará la temporada…».
 
@@ -411,7 +428,7 @@ solo, y lo que no venga en el plan va en su propio commit.
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R3.1** | Este plan, con las decisiones 1 a 6 revisadas una a una | El desarrollador lo revisa | Un commit, y otro por cada corrección |
-| **R3.2** | Los documentos de lo decidido: el LLD-B (§6.1 con el camino confirmado, y la regla de las acciones de fila si la decisión 1 la hace general, con su `DW-19`); y en el plan del backoffice, lo «pendiente de la rebanada 3» resuelto, y en la fila de la 13 el 🆕 «Dejar de sincronizar» (decisión 1). Si alguna decisión cambia lo que responde el servidor, su `D-110` en la bitácora | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
+| **R3.2** | Los documentos de lo decidido: el LLD-B (§6.1 con el camino confirmado, y la regla de las acciones de fila si la decisión 1 la hace general, con su `DW-19`); y en el plan del backoffice, lo «pendiente de la rebanada 3» resuelto, y en la fila de la 13 el 🆕 «Dejar de sincronizar» (decisión 1). Y `D-110` en la bitácora del backend: el `/preview` dice qué equipos del grupo ya son del club (decisión 4) | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
 | **R3.3** | **Los `.feature` de la §6**, con la *skill* de escenarios, revisados con el desarrollador antes de programar; y la federación falsa sirviendo lo que el `/preview` necesita de una competición inventada | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**, no porque el arnés no arranque (H-07). Un `curl` al `/preview` del servidor de pruebas sobre una competición inventada devuelve sus equipos | Un commit |
 
 ### B · El servidor
@@ -421,25 +438,27 @@ Con el método del backend (§5).
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R3.4** | **Los códigos del enganche**: qué emiten de verdad `previewFederationLink` y `linkTeamToFederation`, contrastado con la tabla de la decisión 6 y con el catálogo. Si algo no cuadra, se corrige donde toque (catálogo → mini-fase) | La lista, leída del código y de sus tests, en el renglón del paso | Un commit, si cambia algo |
-| **R3.5** | **`getTeam`** | Tests, mutación con su catálogo (`Catalogs/R3-5.json`) y `curl` contra la base de trabajo con un servidor aparte | Un commit |
-| **R3.6** | Cierre del servidor: el recuento leído del XML, el censo con `getTeam`, los catálogos de mutación de la rebanada otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
+| **R3.5** | **El catálogo (la mini-fase)**: el dato nuevo de `PreviewTeam` (decisión 4), con la forma de `D-110` | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, los tipos de la web regenerados y `npm run build` en verde | Un commit |
+| **R3.6** | **El `/preview` dice qué equipos ya son del club** | Tests de los tres casos (competición nueva: nulos; existente con un equipo del club enganchado; el mismo equipo que se sincroniza), mutación con su catálogo (`Catalogs/R3-6.json`) y `curl` | Un commit |
+| **R3.7** | **`getTeam`** | Tests, mutación con su catálogo (`Catalogs/R3-7.json`) y `curl` contra la base de trabajo con un servidor aparte | Un commit |
+| **R3.8** | Cierre del servidor: el recuento leído del XML, el censo con `getTeam` y el dato nuevo del `/preview`, los catálogos de mutación de la rebanada otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
 ### C · La web
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
-| **R3.7** | **Las acciones de la fila**: el juego de iconos elegido, el icono con su texto por ratón y por teclado (decisión 1), la columna nueva y el enlace del equipo sin competición | Vitest (el nombre según tenga o no competición y con el equipo, una vez por equipo aunque tenga dos competiciones, la columna no ordenable), y la web abierta en Chrome y en Safari | Un commit |
-| **R3.8** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
-| **R3.9** | **El paso 2**: la línea de la dirección con editar y volver a comprobar, la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, el botón con el nombre del equipo elegido, «Falta un dato» y los errores al sincronizar | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
-| **R3.10** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
+| **R3.9** | **Las acciones de la fila**: el juego de iconos elegido, el icono con su texto por ratón y por teclado (decisión 1), la columna nueva y el enlace del equipo sin competición | Vitest (el nombre según tenga o no competición y con el equipo, una vez por equipo aunque tenga dos competiciones, la columna no ordenable), y la web abierta en Chrome y en Safari | Un commit |
+| **R3.10** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
+| **R3.11** | **El paso 2**: la línea de la dirección con editar y volver a comprobar, la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, el botón con el nombre del equipo elegido, «Falta un dato» y los errores al sincronizar | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
+| **R3.12** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
 
 ### D · Los escenarios en verde y el cierre
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
-| **R3.11** | Los escenarios de R3.3, en verde | `npm run e2e` en verde, con axe en los dos modos; la duración de la pasada, apuntada (lo abierto de la R2) | Un commit |
-| **R3.12** | La revisión a mano del LLD-B §10.7 *b*, con el teclado en Chrome y en Safari, el menú ⋮ incluido; VoiceOver, del desarrollador | La lista en el PR | — |
-| **R3.13** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el mapa del plan del backoffice (§3) con el enganche en verde, el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
+| **R3.13** | Los escenarios de R3.3, en verde | `npm run e2e` en verde, con axe en los dos modos; la duración de la pasada, apuntada (lo abierto de la R2) | Un commit |
+| **R3.14** | La revisión a mano del LLD-B §10.7 *b*, con el teclado en Chrome y en Safari, los iconos y su texto incluidos; VoiceOver, del desarrollador | La lista en el PR | — |
+| **R3.15** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el mapa del plan del backoffice (§3) con el enganche en verde, el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
 
 ---
 
