@@ -235,7 +235,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
 | **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
 | **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
-| **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ · Portada: las que tengan sentido en la fila, como iconos (`DW-19`) | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` · 🆕 **dejar de sincronizar**: deshacer un enganche (R3, decisión 1) · 🆕 **el segundo equipo del club en un grupo ya sincronizado**, que la primera ingesta dejó como rival: unirlo al propio (la fusión del LLD §9.5) o que la ingesta no escriba como rivales los del club (`D-110`) |
+| **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ · Portada: las que tengan sentido en la fila, como iconos (`DW-19`) | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` · 🆕 **dejar de sincronizar**: deshacer un enganche (R3, decisión 1) · 🆕 **el segundo equipo del club en un grupo ya sincronizado**, que la primera ingesta dejó como rival: unirlo al propio (la fusión del LLD §9.5) o que la ingesta no escriba como rivales los del club (`D-110`) · **sincronizar un rival** hoy da 422 `INVALID_VALUE`, que la ruta no declara: decidir su respuesta (R3.4) |
 | **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club · Portada: relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
 | **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
@@ -397,7 +397,7 @@ su comprobación.
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
-| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: escenarios escritos y revisados | 3/16 | 2026-10-25 |
+| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: escenarios escritos y revisados, códigos del enganche contrastados | 4/16 | 2026-10-25 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
