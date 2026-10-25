@@ -311,6 +311,18 @@ Por qué iconos, y no un menú ⋮ ni botones con texto: [DW-19].
 **Lo que no va aquí:** qué mensaje sale con cada error y dónde se enseña (§4), y cómo se anuncia el
 «cargando…» a un lector de pantalla (§10).
 
+#### 3.8 Un dato nulo puede no venir
+
+*(Añadido el 2026-10-25, en la [rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md), R3.5.)*
+
+- **El servidor no manda los nulos: la clave falta.** Lo que el catálogo declara `null` (aunque sea obligatorio,
+  como `takenBy` del `/preview`) llega sin la clave, porque el código que genera Swift se salta lo vacío.
+- **La web trata «falta» igual que «nulo»**: lee esos campos con `?? null`, o comprueba `== null`, nunca
+  `=== null`. Los tipos de `schema.d.ts` dicen `T | null` y no lo avisan.
+- Las pruebas de piezas que fabrican respuestas a mano **prueban también la clave ausente**, no solo el `null`.
+
+Por qué no se arregla en el servidor: [DW-21].
+
 ---
 
 ## B. Cómo se comporta con el usuario
@@ -1013,3 +1025,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-18]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-19]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-20]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-21]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

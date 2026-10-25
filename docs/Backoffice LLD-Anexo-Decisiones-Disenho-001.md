@@ -33,6 +33,7 @@
 | **DW-05** | El «cargando…» se enseña desde el primer momento | §3.1, §3.5 |
 | **DW-19** | Las acciones de una fila son iconos con su texto por ratón y por teclado, no un menú ⋮ ni botones con texto | §3.7 |
 | **DW-20** | Lo que está en marcha se refresca solo, cada 10 s y como mucho 5 minutos | §2.4 |
+| **DW-21** | Un nulo puede llegar como clave ausente, y la web los trata igual | §3.8 |
 | **Cómo se comporta** | | |
 | **DW-06** | El campo de un error se lee del texto de `detail`, sin esperar a un campo `field` | §4.3, §4.5 |
 | **DW-07** | Las reglas de los formularios se leen del catálogo con Ajv | §5.1 |
@@ -509,6 +510,26 @@ para todas las filas, también para las ingestas que lanza `launchd`.
 **Lo que se asume a cambio.** Una petición cada 10 s mientras dure la ingesta, y una enmienda a [DW-03]: los datos
 ya no se piden **solo** al entrar. Se prueba sin simulacros ([DW-17]): la federación falsa retiene el calendario y
 el escenario ve el cambio sin recargar.
+
+### DW-21 · Un nulo puede llegar como clave ausente, y la web los trata igual
+
+**Qué hay que decidir** (2026-10-25, rebanada 3, R3.5). Al añadir `takenBy` al `/preview`, obligatorio y anulable,
+el JSON de verdad enseñó que **los nulos no viajan**: el `Codable` que genera `swift-openapi-generator` usa
+`encodeIfPresent`, y un campo vacío sale sin su clave. Ya pasaba con `crestUrl` y con `federationTeamId`; el
+catálogo dice una cosa y el servidor manda otra.
+
+| Opción | Veredicto |
+|---|---|
+| **(a) Aceptarlo: la web trata «falta» igual que «nulo»** | **Elegida** |
+| (b) Que el servidor mande `null` explícito en `takenBy` | Descartada: una conversión a JSON escrita a mano para un campo, y el resto de nulos de la API seguiría igual |
+
+**Decisión: (a)** (LLD-B §3.8). Es lo que ya pasa con todos los nulos de la API, y la web no necesita
+distinguirlos: ningún campo del catálogo da un significado distinto a «falta» y a «nulo» en una respuesta.
+
+**Lo que se asume a cambio.** El catálogo promete una clave que no llega, y los tipos de TypeScript no lo avisan;
+la regla vive en el LLD-B y en las pruebas de piezas que prueban la clave ausente. Si un día un cliente valida las
+respuestas contra el catálogo (Ajv, la app del móvil), fallará en los obligatorios anulables, y se arregla en el
+servidor para todos a la vez.
 
 ---
 
