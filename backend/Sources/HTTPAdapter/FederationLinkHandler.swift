@@ -202,7 +202,10 @@ extension FederationLinkPreview {
                         // escondería el caso justo en esa pantalla.
                         federationTeamId: $0.federationTeamID,
                         rawName: $0.rawName,
-                        crestUrl: $0.crestURL)
+                        crestUrl: $0.crestURL,
+                        // Nulo hasta R3.6, que lo calcula con las comprobaciones
+                        // del 409 del enganche (`D-110`).
+                        takenBy: nil)
                 },
                 alreadyRegistered: competition.alreadyRegistered),
             identityMatches: identityMatches,

@@ -397,7 +397,7 @@ su comprobación.
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
-| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: escenarios escritos y revisados, códigos del enganche contrastados | 4/16 | 2026-10-25 |
+| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: escenarios escritos y revisados, catálogo del enganche al día | 5/16 | 2026-10-25 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
