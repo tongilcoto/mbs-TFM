@@ -16,9 +16,11 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
-> **Estado del documento: en revisión.** Las decisiones de la §4 se revisan una a una con el desarrollador antes
-> de construir nada (plan del backoffice, §2.2). **Las 1 a 5, decididas el 2026-10-25**, sobre una maqueta en HTML de
-> las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). La 6 sigue siendo **propuesta**.
+> **Estado del documento: decisiones revisadas.** Las seis decisiones de la §4 se revisaron una a una con el
+> desarrollador el 2026-10-25, sobre una maqueta en HTML de las opciones (y, para la 1, de cómo crecen con las
+> rebanadas 13 y 14). La revisión cambió la forma de la pantalla (un asistente de dos pasos), añadió un cambio del
+> servidor que no estaba previsto (el `/preview` dice qué equipos ya son del club, `D-110`) y el refresco de la
+> portada. Los pasos pasan de 13 a 16.
 >
 > **En la pantalla se dice «Sincronizar», no «Enganchar»** (decidido con la decisión 1). En los documentos sigue
 > siendo «el enganche», el nombre de `D-67` y de la operación; lo que lee el usuario es «Sincronizar con la
@@ -332,31 +334,56 @@ verlo.
   (LLD-B §11.3), el escenario ve «En marcha», la suelta, y ve «Al día» sin recargar. En Vitest, con un reloj de
   mentira, como la espera de 30 s de `R0.4`.
 
-### Decisión 6 · Los errores del enganche, cada uno en su sitio
+### Decisión 6 · Los errores del enganche, cada uno en su sitio y con texto nuevo
 
-`errors.ts` ya tiene un texto por código (lo exige su prueba). Lo que decide esta rebanada es **dónde sale** cada
-uno y **si el texto sirve en esta pantalla**, que es la primera que los enseña:
+**Decidido el 2026-10-25**, sobre la maqueta (pantallas M, N y O).
 
-| Código | Cuándo | Dónde |
-|---|---|---|
-| `UNREADABLE_FEDERATION_URL` (400) | La dirección no es la de un calendario | Junto al campo |
-| `FEDERATION_SOURCE_MISMATCH` | La dirección es de otra federación | Junto al campo |
-| `FEDERATION_COORDINATE_NOT_FOUND` | La dirección no lleva a ningún calendario | Junto al campo |
-| `FEDERATION_UNREACHABLE` (504), `FEDERATION_UNEXPECTED_STATUS`, `FEDERATION_MALFORMED_RESPONSE` (502) | La federación no contesta, o contesta mal | Aviso arriba, con *Reintentar* |
-| `FEDERATION_ADAPTER_MISSING` (501) | La federación del club no tiene conector (`D-95`) | Aviso arriba, **sin** *Reintentar*: no es pasajero |
-| `SEASON_ALREADY_LINKED` (409) | La temporada de esa etiqueta tiene otro código (`D-106`) | Aviso arriba. El texto ya está escrito desde la R2 |
-| `COMPETITION_IDENTITY_MISMATCH`, `OWN_TEAM_NOT_IN_CALENDAR`, `FEDERATION_TEAM_ID_TAKEN`, `ALREADY_LINKED_TO_FEDERATION` (409) | Al confirmar | Aviso arriba, sin borrar lo comprobado |
-| `FEDERATION_SEASON_MISMATCH` | La guarda de fechas (`D-91`) | Aviso arriba |
-| `SEASON_LABEL_UNAVAILABLE` | La página de la federación no trae la etiqueta, y la temporada no existe (decisión 3) | Aviso en el paso 1, **sin** *Reintentar* |
-| `TEAM_NOT_FOUND` (404) | El equipo se borró, o la dirección tiene otro código | La página entera: «No se ha encontrado el equipo» |
+**Dónde sale cada uno**, con una regla por sitio:
+
+- **Junto al campo, en el paso 1** (M): los que dicen que la dirección está mal. El campo se marca y el motivo va
+  debajo.
+- **Aviso arriba, en el paso 1** (N): la federación no responde o responde mal, con *Reintentar*; y lo que no es
+  pasajero, sin él. Lo escrito sigue en el campo.
+- **Aviso arriba, en el paso 2** (O): lo que falla al pulsar «Sincronizar…». Lo comprobado y el equipo elegido se
+  conservan.
+- **La página entera**: el equipo no existe.
+
+**Y los textos de `errors.ts`, reescritos** con el vocabulario de la pantalla («sincronizar») y diciendo qué
+hacer. Los de hoy se escribieron en F10 y en la R2, pensando en el servidor:
+
+| Código | Cuándo | Dónde | Texto |
+|---|---|---|---|
+| `UNREADABLE_FEDERATION_URL` (400) | La dirección no es la de un calendario | Campo | Esa dirección no es la de un calendario de la Federación. Cópiala de la página del calendario del grupo. |
+| `FEDERATION_COORDINATE_NOT_FOUND` | La dirección no lleva a ningún calendario | Campo | La Federación no tiene ningún calendario en esa dirección. Revisa que esté completa. |
+| `FEDERATION_UNREACHABLE` (504) | La federación no contesta | Aviso, *Reintentar* | La Federación no responde. Prueba otra vez en un rato. |
+| `FEDERATION_UNEXPECTED_STATUS`, `FEDERATION_MALFORMED_RESPONSE` (502) | La federación contesta mal | Aviso, *Reintentar* | La Federación ha respondido con un error. Prueba otra vez en un rato. |
+| `FEDERATION_ADAPTER_MISSING` (501) | La federación del club no tiene conector (`D-95`) | Aviso, **sin** *Reintentar* | Todavía no se puede sincronizar con la federación de este club. |
+| `SEASON_LABEL_UNAVAILABLE` | La página no trae la etiqueta y la temporada no existe (decisión 3) | Aviso, **sin** *Reintentar* | La Federación no dice de qué temporada es ese calendario. |
+| `FEDERATION_SEASON_MISMATCH` (502) | La guarda de fechas (`D-91`) | Aviso | Las fechas de ese calendario son de otra temporada. Revisa que la dirección sea la de esta temporada. |
+| `FEDERATION_SOURCE_MISMATCH` (502) | La dirección de una competición que ya existe devuelve otra (`D-84`) | Aviso | En esa dirección la Federación tiene ahora otra competición. |
+| `SEASON_ALREADY_LINKED` (409) | La temporada de esa etiqueta tiene otro código (`D-106`) | Aviso | Esa temporada ya está sincronizada con otro código de la Federación. Revisa que el calendario sea de la temporada correcta. |
+| `COMPETITION_IDENTITY_MISMATCH` (409) | Al sincronizar | Aviso, paso 2 | El equipo y la competición no cuadran: no son de la misma edad, género o modalidad. |
+| `OWN_TEAM_NOT_IN_CALENDAR` (409) | Al sincronizar: el calendario cambió desde la comprobación | Aviso, paso 2 | Ese equipo ya no está en el calendario de la Federación. Vuelve a comprobar con el botón ↻ de la dirección. |
+| `FEDERATION_TEAM_ID_TAKEN` (409) | Al sincronizar | Aviso, paso 2 | Ese equipo de la Federación ya es de otro equipo del club. |
+| `ALREADY_LINKED_TO_FEDERATION` (409) | Al sincronizar | Aviso, paso 2 | Este equipo ya está sincronizado con otro equipo de la Federación en esa competición. |
+| `TEAM_NOT_FOUND` (404) | El equipo se borró, o la dirección tiene otro código | Página entera | No se ha encontrado el equipo (como hoy), con un enlace a la portada |
+
+**Tres cosas que salieron al repasarlos:**
+
+1. **El texto de `COMPETITION_IDENTITY_MISMATCH` estaba mal**: decía «categoría o temporada», y lo que se compara
+   es edad, género y modalidad (`identityMatches`). Es un fallo de hoy, no de estilo.
+2. **Esta tabla decía mal qué es `FEDERATION_SOURCE_MISMATCH`** («la dirección es de otra federación»): en el
+   servidor (`ProblemMiddleware`) es que la dirección guardada de una competición devuelve ahora otra. Una
+   dirección de otra web parece caer en `UNREADABLE_FEDERATION_URL`; lo confirma R3.4.
+3. **Los dos 502 pasan a ser pasajeros** (`transientCodes` de `errors.ts`, con *Reintentar*): la RFFM contesta a
+   veces `null` unos minutos (H-61), y eso llega como respuesta que no se entiende. Vale para toda la web.
 
 - **Qué códigos emite de verdad cada operación** se comprueba en el servidor antes de escribir los mensajes (paso
-  R3.4), no se copia de la descripción del catálogo: la tabla de arriba es la lista a verificar.
-- **«Junto al campo»** solo para los que dicen que la dirección está mal; los demás no son del campo, aunque los
-  provoque.
+  R3.4), no se copia de la descripción del catálogo: la tabla es la lista a verificar.
+- **Los textos son de `errors.ts`, para toda la web**, aunque hoy solo los enseña esta pantalla.
 
-**Y un equipo rival**: `/equipos/<id de un rival>/federacion` no tiene sentido. **Propuesta**: la web lo trata
-como «No se ha encontrado el equipo», mirando `isOwn` de `getTeam`, sin pedir nada más al servidor.
+**Y un equipo rival**: `/equipos/<id de un rival>/federacion` no tiene sentido. La web lo trata como «No se ha
+encontrado el equipo», mirando `isOwn` de `getTeam`, sin pedir nada más al servidor.
 
 ---
 
@@ -465,7 +492,7 @@ Con el método del backend (§5).
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R3.9** | **Las acciones de la fila**: el juego de iconos elegido, el icono con su texto por ratón y por teclado (decisión 1), la columna nueva y el enlace del equipo sin competición | Vitest (el nombre según tenga o no competición y con el equipo, una vez por equipo aunque tenga dos competiciones, la columna no ordenable), y la web abierta en Chrome y en Safari | Un commit |
-| **R3.10** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
+| **R3.10** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del paso 1; y los textos nuevos de `errors.ts`, con los dos 502 pasajeros (decisión 6) | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
 | **R3.11** | **El paso 2**: la línea de la dirección con editar y volver a comprobar, la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, el botón con el nombre del equipo elegido, «Falta un dato» y los errores al sincronizar | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
 | **R3.12** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
 | **R3.13** | **La portada se refresca sola** mientras haya algo en marcha (decisión 5): cada 10 s, con la pestaña a la vista, hasta 5 minutos, sin «Cargando…» y sin perder el orden ni el foco | Vitest con reloj de mentira (empieza, para al acabar, para con la pestaña oculta y a los 5 minutos, un fallo no pinta error), y la web abierta durante una ingesta de verdad | Un commit |
@@ -484,7 +511,7 @@ Con el método del backend (§5).
 
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
-| **R3.1** | | |
+| **R3.1** | ✅ 2026-10-25 | El plan escrito (`c5ab725`) y sus seis decisiones revisadas una a una con el desarrollador sobre una maqueta en HTML, cada una en su commit. Lo que cambió en la revisión: los iconos de la fila, con relanzar la ingesta en su celda, y «Sincronizar» en vez de «Enganchar» (1); el asistente de dos pasos, con editar y volver a comprobar y el botón con el nombre del equipo (2); la temporada nueva sin `seasonLabel` (3); el orden alfabético y el equipo ya sincronizado, que pide `D-110` y dos pasos del servidor (4); el refresco de la portada, un paso más (5); y los textos de los errores (6). Y dos hallazgos: «Dejar de sincronizar» no existe (a la rebanada 13) y el texto de `COMPETITION_IDENTITY_MISMATCH` estaba mal |
 
 ---
 
