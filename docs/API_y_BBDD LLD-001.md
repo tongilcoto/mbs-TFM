@@ -1220,6 +1220,10 @@ Tres lecturas que no son evidentes en la tabla:
 - **Es aditivo:** un equipo juega liga **y** copa ([D-12]), así que se engancha una vez por competición. Y si
   dos equipos del club caen en el mismo grupo, el segundo enganche **reutiliza** la competición en vez de
   crearla (`alreadyRegistered` en el `preview`).
+- **El `preview` dice qué equipos del grupo ya tiene el club** (`takenBy` en cada uno de `teams[]`, [D-110]): un
+  equipo propio sincronizado en esa competición, o un rival de esta temporada. Con las mismas comprobaciones que
+  el 409 `FEDERATION_TEAM_ID_TAKEN` del enganche, para avisar antes de elegir. El segundo caso no tiene salida
+  todavía (la fusión de §9.5).
 - **`/ownership` fija la propiedad** ([D-20]): pone `opponent_club_id` a nulo y, del `OpponentClub` que la
   ingesta le había asignado, toma el nombre y el escudo para rellenar `Club`. Es una **orquestación**, por
   eso es sub-recurso de estado y no una relajación del `PATCH`. La ingesta **no la revierte** ([D-18]). Con
@@ -2833,6 +2837,7 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
