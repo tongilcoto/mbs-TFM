@@ -59,7 +59,8 @@ competición». Hoy solo se engancha con `curl`.
 **Lo que no trae** (llega después): la ficha del equipo (rebanada 4); relanzar la ingesta desde la fila
 (rebanada 14); los escudos de los equipos del grupo (decisión 4); y **deshacer un enganche**, «Dejar de
 sincronizar», que **no existe en el catálogo** y se diseña en la rebanada 13 (decisión 1). Mientras tanto, un
-enganche equivocado se corrige a mano en la base. *(Este plan decía que lo cubría `releaseTeam`, y no: liberar
+enganche equivocado se corrige a mano en la base. Y **el segundo equipo del club en un grupo ya sincronizado**,
+que la pantalla avisa pero no puede sincronizar (decisión 4, `D-110`): también a la rebanada 13. *(Este plan decía que lo cubría `releaseTeam`, y no: liberar
 deshace una **reclamación**, `claimTeam`, que convierte en propio un equipo que la ingesta creó como rival; no
 toca el enganche.)*
 
@@ -280,12 +281,14 @@ desactivados, con «La Federación no publica su código: no se puede elegir». 
 - **Por orden alfabético** del nombre de la federación, con las reglas del español. La federación los da en el
   orden de su calendario, que no ayuda a encontrar el club entre 14 o 18; así, «CELTIC CASTILLA C.F. 'A'» y
   «'B'» salen juntos.
-- **El equipo del club que ya está sincronizado en ese grupo sale desactivado, diciendo con cuál**: «Ya está
-  sincronizado con Alevín A». Es el caso de dos equipos del club en el mismo grupo: elegir el de otro daría 409
-  (`FEDERATION_TEAM_ID_TAKEN`). **Lo dice el servidor en el `/preview`**, que ya busca la competición (por eso
-  sabe `alreadyRegistered`): cada equipo de `teams[]` lleva, si es del club en esa competición, a qué equipo
-  propio está enganchado. Le sirve igual a la app del móvil. **Cambia el catálogo: mini-fase, con su `D-110`**
-  (§5). Si es el mismo equipo que se está sincronizando, dice «Ya está sincronizado con este equipo».
+- **El equipo que el club ya tiene sale desactivado, diciendo cuál**. Es el caso de dos equipos del club en el
+  mismo grupo, y elegirlo daría 409 (`FEDERATION_TEAM_ID_TAKEN`). **Lo dice el servidor en el `/preview`**: cada
+  equipo de `teams[]` lleva `takenBy`, el equipo del club que ya tiene ese código, o nulo ([D-110], escrito en
+  R3.2). Le sirve igual a la app del móvil. **Cambia el catálogo: mini-fase** (§5). Tres textos:
+  - otro equipo propio, sincronizado en esa competición: «Ya está sincronizado con Celtic Alevín A»;
+  - el mismo equipo que se sincroniza: «Ya está sincronizado con este equipo»;
+  - **un rival** (`isOwn = false`): «Ya está en el club como rival: la Federación lo trajo antes de
+    sincronizarlo». **Este caso no tiene salida todavía** (abajo).
 - **Sin escudos.** El catálogo los trae, pero apuntan a la RFFM de verdad, y que los escenarios no se bajen nada
   de internet es de la rebanada 4. El nombre de la federación basta para reconocerlo, y es el que el club ve en
   su web.
@@ -296,8 +299,15 @@ desactivados, con «La Federación no publica su código: no se puede elegir». 
 | (b) La web lo deduce, con `listSeasons` y `listSeasonRegistrations` y comparando códigos | Descartada: deduce en la web lo que sabe el servidor, y el `/preview` no da los identificadores de la temporada ni de la competición con los que comparar |
 | **(c) Lo dice el servidor en el `/preview`** | **Elegida** |
 
-**La forma exacta** del dato nuevo se fija en `D-110` (R3.2); la candidata es reutilizar `TeamRef` (`D-32`), la
-proyección de un equipo en una fila, como `linkedTeam`, nulo si no es del club.
+**La forma**, en `D-110`: `takenBy` es un `TeamRef` (`D-32`), y su `isOwn` distingue el equipo propio del rival.
+
+**Lo que salió al escribir `D-110` (2026-10-25): el segundo equipo del club en un grupo ya sincronizado no se puede
+sincronizar.** La primera ingesta del Alevín A escribe los equipos del grupo, y como no crea equipos propios
+(`D-66`), el «CELTIC CASTILLA C.F. 'B'» queda **como rival**. Sincronizar después el Alevín B con ese código da 409,
+y reclamarlo (`claimTeam`) crearía un segundo equipo propio en vez de unirlo al Alevín B: es la fusión que el LLD
+deja sin diseñar (§9.5). Viene de F10; la rebanada 3 lo pone a la vista. **Decidido con el desarrollador: la R3 lo
+avisa y no lo resuelve**; la salida (la fusión, o una ingesta que no escriba como rivales los del club) va a la
+**rebanada 13**, junto a «Dejar de sincronizar».
 
 ### Decisión 5 · Después de enganchar: vuelta a la portada en la temporada del calendario, que se refresca sola mientras haya algo en marcha
 
@@ -395,7 +405,7 @@ equipo, y que el `/preview` diga qué equipos del grupo son ya del club (decisi�
 | Qué | Capas | ¿Mini-fase? | Decisión |
 |---|---|---|---|
 | **`getTeam`**: un equipo por su código, propio o rival, con los derivados de `TeamResponse` (`isOwn`, `clubName`, `displayName`, `crestUrl`). 404 `TEAM_NOT_FOUND` si no existe en el club | Las cuatro (filtro, Aplicación, Persistencia, HTTP) | **No**, si el catálogo no cambia. Si al programarla hay que tocar su descripción (por ejemplo, el código del 404), sí | 2 |
-| **El `/preview` dice qué equipos del grupo ya son del club** (`D-110`): cada equipo de `teams[]` lleva a qué equipo propio está enganchado en esa competición, o nulo. Solo si la competición ya existe (`alreadyRegistered`); si no, todos nulos | Catálogo, Aplicación, HTTP | **Sí**: cambia el catálogo | 4 |
+| **El `/preview` dice qué equipos del grupo ya tiene el club** (`D-110`): cada equipo de `teams[]` lleva `takenBy`, un `TeamRef` del equipo propio sincronizado en esa competición o del rival de esta temporada que ya tiene ese código, o nulo. Con **las mismas dos comprobaciones** que el 409 del enganche (su paso 3), sacadas a una función que usan los dos | Catálogo, Aplicación, HTTP | **Sí**: cambia el catálogo | 4 |
 | **Los códigos que emiten el enganche y su `/preview`**, contrastados con lo que dice el catálogo | Ninguna, si cuadran | Solo si no cuadran | 6 |
 | **El `/preview` contra la federación falsa**: que una competición inventada por un escenario se pueda comprobar y enganchar, y que la página que sirve lleve lo que el `/preview` lee (la temporada, el grupo, los equipos) | Ninguna del servidor; la federación falsa de `backoffice/e2e/support/` | No | — |
 
@@ -438,7 +448,8 @@ uno.
 - Pulsar «Sincronizar» sin elegir equipo: «Falta un dato: Elige tu equipo», y la lista marcada.
 - Al elegir un equipo, el botón dice su nombre.
 - La lista, por orden alfabético.
-- Un segundo equipo del club en el mismo grupo: el del primero sale desactivado, «Ya está sincronizado con…».
+- Un segundo equipo del club en el mismo grupo: el del primero sale desactivado, «Ya está sincronizado con…»; y
+  el suyo, que la primera ingesta dejó como rival, también: «Ya está en el club como rival…».
 - Una competición de otra edad: el aviso dice qué no cuadra, y «Sincronizar» está bloqueado.
 - Una temporada que el club no tiene: «Se creará la temporada…».
 
@@ -483,7 +494,7 @@ Con el método del backend (§5).
 |---|---|---|---|
 | **R3.4** | **Los códigos del enganche**: qué emiten de verdad `previewFederationLink` y `linkTeamToFederation`, contrastado con la tabla de la decisión 6 y con el catálogo. Si algo no cuadra, se corrige donde toque (catálogo → mini-fase) | La lista, leída del código y de sus tests, en el renglón del paso | Un commit, si cambia algo |
 | **R3.5** | **El catálogo (la mini-fase)**: el dato nuevo de `PreviewTeam` (decisión 4), con la forma de `D-110` | `npx @redocly/cli lint`, `swift build`, `REQUIRE_DB=1 swift test` sin cambios en el recuento, los tipos de la web regenerados y `npm run build` en verde | Un commit |
-| **R3.6** | **El `/preview` dice qué equipos ya son del club** | Tests de los tres casos (competición nueva: nulos; existente con un equipo del club enganchado; el mismo equipo que se sincroniza), mutación con su catálogo (`Catalogs/R3-6.json`) y `curl` | Un commit |
+| **R3.6** | **El `/preview` dice qué equipos ya son del club** | Tests de los cuatro casos (temporada o competición nuevas: nulos; otro equipo propio sincronizado; el mismo equipo que se sincroniza; un rival de esta temporada con ese código), y que el `/preview` y el enganche usan la misma comprobación; mutación con su catálogo (`Catalogs/R3-6.json`) y `curl` | Un commit |
 | **R3.7** | **`getTeam`** | Tests, mutación con su catálogo (`Catalogs/R3-7.json`) y `curl` contra la base de trabajo con un servidor aparte | Un commit |
 | **R3.8** | Cierre del servidor: el recuento leído del XML, el censo con `getTeam` y el dato nuevo del `/preview`, los catálogos de mutación de la rebanada otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
@@ -512,9 +523,12 @@ Con el método del backend (§5).
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
 | **R3.1** | ✅ 2026-10-25 | El plan escrito (`c5ab725`) y sus seis decisiones revisadas una a una con el desarrollador sobre una maqueta en HTML, cada una en su commit. Lo que cambió en la revisión: los iconos de la fila, con relanzar la ingesta en su celda, y «Sincronizar» en vez de «Enganchar» (1); el asistente de dos pasos, con editar y volver a comprobar y el botón con el nombre del equipo (2); la temporada nueva sin `seasonLabel` (3); el orden alfabético y el equipo ya sincronizado, que pide `D-110` y dos pasos del servidor (4); el refresco de la portada, un paso más (5); y los textos de los errores (6). Y dos hallazgos: «Dejar de sincronizar» no existe (a la rebanada 13) y el texto de `COMPETITION_IDENTITY_MISMATCH` estaba mal |
+| **R3.2** | ✅ 2026-10-25 | Tres commits. **El backend** (`ccabb69`): `D-110` en la bitácora y su línea en §5.1 del LLD. Al escribirla salió el caso del rival: el segundo equipo del club en un grupo ya sincronizado no se puede sincronizar; decidido con el desarrollador avisarlo y llevar la salida a la rebanada 13. **El LLD-B** (`cfbc8c4`): las acciones de fila como iconos (§3.7, `DW-19`), el refresco de lo que está en marcha (§2.4, `DW-20`, enmienda a `DW-03`), el camino del enganche decidido (§6.1) y «sincronizar» en la pantalla (§9.8); y un ejemplo que estaba mal en §7.4 y en `DW-10` («libéralo»). **El plan del backoffice**: lo pendiente de la R3, resuelto; los dos 🆕 de la R13; relanzar la ingesta en la fila, en la 14; la R3 en curso en el mapa y en el estado |
 
 ---
 
 ## 9. Lo aprendido
 
 *(Se escribe al cerrar.)*
+
+[D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

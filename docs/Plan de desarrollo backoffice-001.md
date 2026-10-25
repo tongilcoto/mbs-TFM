@@ -146,7 +146,7 @@ flowchart LR
         direction TB
         P["<b>Portada</b> · R1, R5<br/>/ · ?temporada=2025-26<br/>R1: equipos de una temporada, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
         A["<b>Alta de equipo</b> · R2<br/>/equipos/nuevo"]
-        F["<b>Enganche con la federación</b> · R3<br/>/equipos/:id/federacion"]
+        F["<b>Sincronizar con la Federación</b> · R3<br/>/equipos/:id/federacion"]
     end
 
     subgraph FICHA["Ficha del equipo · cabecera: temporada, competición, posición · ?temporada=2025-26"]
@@ -184,7 +184,7 @@ flowchart LR
     P -->|"Dar de alta un equipo"| A
     A -->|"al guardar"| P
     A -.->|"al guardar, cuando exista R3 (por decidir)"| F
-    P -->|"equipo sin enganchar"| F
+    P -->|"icono de la fila, o «Sincronizar con la Federación»"| F
     P -->|"clic en un equipo"| R
     R <--> E
     E <--> PL
@@ -199,7 +199,8 @@ flowchart LR
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
     class mEq,NF,P,A hecha
-    class mTem,mCom,mRiv,mIng,mClub,mPer,F,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
+    class F enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
 
@@ -224,7 +225,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **0** · Andamiaje | Ninguna: la web arranca con una página en blanco, y el arnés de los escenarios (§5) | Ninguno nuevo · en el servidor, la dirección de la RFFM pasa a ser configurable (`R0.8`) |
 | **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` ● · `listSeasonRegistrations` ● — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ● — con el estado de la ingesta (enmienda de `D-89`, desde R1.8) |
 | **2** · Alta de equipo | Alta de equipo, con «Crear nueva temporada» · Portada: botón «Dar de alta un equipo» y en los dos vacíos | `createTeam` ● — si el equipo ya existe, lo inscribe en la temporada (`D-107`) · `createSeason` ● — adelantada de la 11: la temporada nace sin código de la federación, y el primer enganche se lo pone (`D-106`) |
-| **3** · Enganche | Enganche · Portada: el equipo pasa a tener competición | `getTeam` · `previewFederationLink` ● · `linkTeamToFederation` ● |
+| **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
@@ -234,8 +235,8 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
 | **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
 | **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
-| **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` |
-| **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
+| **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ · Portada: las que tengan sentido en la fila, como iconos (`DW-19`) | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` · 🆕 **dejar de sincronizar**: deshacer un enganche (R3, decisión 1) · 🆕 **el segundo equipo del club en un grupo ya sincronizado**, que la primera ingesta dejó como rival: unirlo al propio (la fusión del LLD §9.5) o que la ingesta no escriba como rivales los del club (`D-110`) |
+| **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club · Portada: relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
 | **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
 | — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
@@ -278,14 +279,20 @@ Y dos cosas que salieron al hacerlo (`R2.11`, 2026-10-24):
 - **`schemas.json` pesa unos 157 KB** (unos 36 KB comprimido al viajar) porque lleva también las descripciones del
   catálogo, que Ajv no usa. Si el tamaño importa, `gen-schemas.mjs` puede quitarlas.
 
-**Pendiente de la rebanada 3: las acciones de cada fila de la portada** (decidido el 2026-10-24 con el
-desarrollador). La portada tiene que dejar hacer **rápido, desde la fila del equipo**, cosas que no deberían
-obligar a entrar en su ficha. **La 3 diseña cómo se ven esas acciones** —un menú de tres puntos verticales (⋮), un
-botón o icono por acción, u otra forma— y estrena la primera: **enganchar con la federación** el equipo que no
-tiene competición, que lleva a la pantalla del enganche con su `/preview`. Las siguientes se añaden a ese mismo
-diseño en su rebanada: **relanzar la ingesta**, en la 14 (no hay prisa; `triggerIngestion` ya está en el
-servidor); y lo que la 13 pone en el menú ⋮ de la ficha del equipo, si también tiene sentido en la fila. Mientras
-tanto, el equipo sin competición dice «Pendiente de sincronizar con la Federación», sin prometer desde dónde.
+**Resuelto (2026-10-25): las acciones de cada fila de la portada**, en la decisión 1 del
+[plan de la rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md), sobre una maqueta en HTML de cómo crecía cada forma con las acciones de las
+rebanadas 13 y 14. **Iconos**, cada uno donde está lo que afecta: los del equipo, en una columna «Acciones»; relanzar
+la ingesta (rebanada 14), en la celda de la ingesta de cada competición, porque es de la competición y no del
+equipo. Su texto, al pasar el ratón o al llegar con el teclado (LLD-B §3.7, `DW-19`). Y el equipo sin competición,
+con el enlace «Sincronizar con la Federación». En la pantalla se dice «sincronizar», no «enganchar» (LLD-B §9.8).
+
+**Y dos cosas que salieron al decidirlo, para la rebanada 13**, cada una con su 🆕 en la tabla:
+
+- **Deshacer un enganche no existe.** «Liberar» (`releaseTeam`) deshace una reclamación, no un enganche, y un
+  equipo sincronizado no se puede borrar (409, `D-21`). La rebanada 3 es la que crea el riesgo de sincronizar con
+  la competición equivocada; hasta la 13, se corrige a mano en la base.
+- **El segundo equipo del club en un grupo ya sincronizado no se puede sincronizar** (`D-110`): la primera ingesta
+  lo escribió como rival, y el enganche da 409. La rebanada 3 lo avisa en la pantalla; la salida se diseña en la 13.
 
 **Pendiente de la rebanada 4: cómo se llama un equipo en un partido** (salió el 2026-10-24, en el bloque T de la
 [rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La federación manda en cada partido el nombre
@@ -390,6 +397,7 @@ su comprobación.
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
+| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: decisiones revisadas y documentadas | 2/16 | 2026-10-25 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
