@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **743 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **748 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -302,6 +302,7 @@ La respuesta tiene esta forma (recortada):
 |---|---|---|
 | `competition.teams[]` | Los equipos del grupo, con el nombre tal cual lo publica la federación | **Buscar el tuyo y apuntar su `federationTeamId`**: es el `ownTeamFederationId` del paso 2. Es la comprobación importante: un dígito mal en la URL **no da error**, devuelve el calendario de otra liga (`D-84`), y solo una persona que no encuentra su club en la lista lo detecta (`D-16`) |
 | `teams[].federationTeamId: null` | La federación publica ese equipo sin código | Se ve, pero **no se puede elegir**. Si es el tuyo, no se puede enganchar con esta URL |
+| `teams[].takenBy` | **El equipo del club que ya tiene ese código** (`D-110`), como `TeamRef`; sin la clave si nadie lo tiene | `isOwn: true`: un equipo propio sincronizado en esta competición; si es el tuyo, ya lo está. `isOwn: false`: un rival de esta temporada, que escribió la ingesta de otro equipo del club en el mismo grupo; elegirlo da **409** y hoy no tiene salida (rebanada 13 del backoffice) |
 | `competition.ageCategory` · `gender` · `modality` | Edad, género y modalidad de la competición | Comprobar que son las del equipo. `gender` es una **propuesta**: se deduce de si el nombre dice `FEMENINO`, y en el paso 2 se confirma o se corrige |
 | `identityMatches` | `true` si las tres de arriba coinciden con las del equipo | En `false`, **el paso 2 dará 409**. O la URL no es de este equipo, o el equipo se creó con algo mal |
 | `ageCategoryChecked` | `false` si la edad **no se ha podido comprobar** | Pasa cuando la competición es nueva y su nombre no dice edad (*"TERCERA FEDERACIÓN RFEF"*): entonces se usa la del equipo y `identityMatches` sale `true` sin saberlo. **Compruébalo tú**: si no es su edad, la competición se crea mal y todos los rivales la heredan (A-12·H-75) |
@@ -527,7 +528,7 @@ curl -s -X POST http://atleti.localhost:8080/v1/teams -H 'Content-Type: applicat
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 743 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 748 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

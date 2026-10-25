@@ -577,4 +577,145 @@ struct FederationLinkPreviewTests {
                 .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
         }
     }
+
+    // ── D-110 · `takenBy`: quién del club tiene ya cada código ───────────────
+
+    /// Un equipo propio **sincronizado** con ese código en esa competición: la
+    /// fila de la inscripción que escribe el enganche (`D-101`).
+    static func registration(
+        _ team: Team, seasonID: SeasonID, competitionID: CompetitionID, code: String
+    ) throws -> TeamRegistration {
+        try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: seasonID,
+            competitionID: competitionID, federationTeamID: code,
+            createdAt: now, updatedAt: now)
+    }
+
+    /// Un rival **de una temporada** con su código (`D-104`), como lo escribe la
+    /// ingesta de otro equipo del club en el mismo grupo.
+    static func rival(of club: OpponentClub, seasonID: SeasonID, code: String) throws -> Team {
+        try Team(
+            id: TeamID(raw: UUID()), opponentClubID: club.id, seasonID: seasonID,
+            category: .cadete, letter: "B", gender: .masculino, modality: .futbol11,
+            federationTeamID: code, createdAt: now, updatedAt: now)
+    }
+
+    static func takenBy(_ code: String, in preview: FederationLinkPreview)
+        -> FederationLinkPreview.Holder?
+    {
+        preview.competition.teams.first { $0.federationTeamID == code }?.takenBy
+    }
+
+    /// **Sin temporada, nadie tiene el código; y con ella pero sin la
+    /// competición, tampoco el equipo propio sincronizado en otra** (`D-110`,
+    /// `D-101`): el código de un propio vale dentro de su competición, y el grupo
+    /// de la URL todavía no lo es de nadie.
+    @Test("con la temporada nueva, o la competición nueva, ningún propio tiene el código (D-110)")
+    func nobodyHoldsACodeInANewSeasonOrCompetition() async throws {
+        let team = try Self.team()
+        let fresh = IngestionStore()
+        await fresh.seed(club: try Self.club())
+        await fresh.seed(teams: [team])
+        let onFresh = try await Self.useCase(
+            store: fresh,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(onFresh.competition.teams.map(\.takenBy) == [nil, nil])
+
+        // La temporada está, y otro equipo del club lleva "3349086" en **otro**
+        // grupo de ella: no es este.
+        let season = try Self.season(federationSeasonID: "21")
+        let other = try Self.team()
+        let elsewhere = try Self.competition(seasonID: season.id, federationGroupID: "99999999")
+        let newGroup = IngestionStore()
+        await newGroup.seed(club: try Self.club())
+        await newGroup.seed(seasons: [season], competitions: [elsewhere], teams: [team, other])
+        await newGroup.seed(teamRegistrations: [
+            try Self.registration(other, seasonID: season.id, competitionID: elsewhere.id, code: "3349086")
+        ])
+        let onNewGroup = try await Self.useCase(
+            store: newGroup,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(onNewGroup.competition.teams.map(\.takenBy) == [nil, nil])
+    }
+
+    /// **Otro equipo propio, sincronizado con ese código en esta competición**
+    /// (`D-110` caso 1): el enganche lo rechazaría con 409, y el `/preview` lo
+    /// dice antes. El de al lado, libre: la otra mitad.
+    @Test("otro equipo propio sincronizado con ese código en esta competición lo tiene (D-110)")
+    func anotherOwnTeamHoldsTheCode() async throws {
+        let team = try Self.team()
+        let other = try Self.team()
+        let season = try Self.season(federationSeasonID: "21")
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(seasons: [season], competitions: [competition], teams: [team, other])
+        await store.seed(teamRegistrations: [
+            try Self.registration(other, seasonID: season.id, competitionID: competition.id, code: "3349086")
+        ])
+
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(Self.takenBy("3349086", in: preview) == .init(team: other, clubShortName: "Ejemplo"))
+        #expect(Self.takenBy("3349087", in: preview) == nil)
+        #expect(await store.writes == 0)
+    }
+
+    /// **El mismo equipo que se sincroniza también sale** (`D-110`, punto 3): ya
+    /// lo está con ese código, y el enganche no lo rechaza —es idempotente
+    /// (`C-E.10`)—. La web lo enseña como «Ya está sincronizado con este equipo».
+    @Test("el mismo equipo, ya sincronizado con ese código, sale como quien lo tiene (D-110)")
+    func theTeamItselfHoldsItsOwnCode() async throws {
+        let team = try Self.team()
+        let season = try Self.season(federationSeasonID: "21")
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(seasons: [season], competitions: [competition], teams: [team])
+        await store.seed(teamRegistrations: [
+            try Self.registration(team, seasonID: season.id, competitionID: competition.id, code: "3349086")
+        ])
+
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(Self.takenBy("3349086", in: preview) == .init(team: team, clubShortName: "Ejemplo"))
+    }
+
+    /// **Un rival de esta temporada con ese código** (`D-110` caso 2, `D-104`),
+    /// con el nombre corto de **su** club; basta con que exista la temporada,
+    /// como en el 409 del enganche. **El del año pasado no cuenta**: es otra
+    /// fila, de otra temporada.
+    @Test("un rival de esta temporada con ese código lo tiene; el de otra temporada no (D-110, D-104)")
+    func anOpponentOfThisSeasonHoldsTheCode() async throws {
+        let team = try Self.team()
+        let season = try Self.season(federationSeasonID: "21")
+        let last = try Self.season("2024/25", federationSeasonID: "20")
+        let galapagar = try OpponentClub(
+            id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR", shortName: "Galapagar",
+            slug: try Slug("c-d-galapagar"), createdAt: Self.now, updatedAt: Self.now)
+        let rival = try Self.rival(of: galapagar, seasonID: season.id, code: "3349087")
+        let lastYears = try Self.rival(of: galapagar, seasonID: last.id, code: "3349086")
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        await store.seed(
+            seasons: [season, last], opponentClubs: [galapagar], teams: [team, rival, lastYears])
+
+        let preview = try await Self.useCase(
+            store: store,
+            federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
+            .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
+
+        #expect(Self.takenBy("3349087", in: preview) == .init(team: rival, clubShortName: "Galapagar"))
+        #expect(Self.takenBy("3349086", in: preview) == nil)
+    }
 }

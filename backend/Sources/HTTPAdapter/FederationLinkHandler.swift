@@ -203,9 +203,8 @@ extension FederationLinkPreview {
                         federationTeamId: $0.federationTeamID,
                         rawName: $0.rawName,
                         crestUrl: $0.crestURL,
-                        // Nulo hasta R3.6, que lo calcula con las comprobaciones
-                        // del 409 del enganche (`D-110`).
-                        takenBy: nil)
+                        // **Quién del club tiene ya ese código** (`D-110`).
+                        takenBy: $0.takenBy.map { .init(value1: $0.toTeamRef()) })
                 },
                 alreadyRegistered: competition.alreadyRegistered),
             identityMatches: identityMatches,
@@ -271,5 +270,21 @@ extension Components.Schemas.Gender {
         case .femenino: .femenino
         case .mixto: .mixto
         }
+    }
+}
+
+extension FederationLinkPreview.Holder {
+    /// Mapeo a `TeamRef` (`D-32`), con los derivados compuestos como en
+    /// `TeamResponse` (§3.6, `D-109`): `displayName` es el nombre corto del club
+    /// + categoría + letra; `shortDisplayName`, sin la categoría. El club es el
+    /// propio o el rival, según quién tenga el código.
+    func toTeamRef() -> Components.Schemas.TeamRef {
+        .init(
+            teamId: "\(team.id)",
+            displayName: [clubShortName, team.category.toContract().displayName, team.letter]
+                .compactMap { $0 }.joined(separator: " "),
+            shortDisplayName: [clubShortName, team.letter].compactMap { $0 }.joined(separator: " "),
+            crestUrl: nil,
+            isOwn: team.isOwn)
     }
 }

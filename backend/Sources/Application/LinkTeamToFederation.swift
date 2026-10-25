@@ -296,20 +296,12 @@ public struct LinkTeamToFederation: Sendable {
             //
             // **Y el rival, solo si es de esta temporada** (`D-104`): el del año
             // pasado con el mismo código es otra fila, y no bloquea.
-            if let holder = try await repositories.teams.list().first(where: {
-                $0.counts(in: season.id)
-                    && $0.federationTeamID == request.ownTeamFederationID
-            }) {
-                throw DomainError.federationTeamIDTaken(
-                    code: request.ownTeamFederationID,
-                    owner: "\(holder.id)")
-            }
-            if let holder = try await repositories.teamRegistrations
-                .list(competitionID: competition.id)
-                .first(where: {
-                    $0.federationTeamID == request.ownTeamFederationID && $0.teamID != team.id
-                })
-            {
+            //
+            // **Las dos comprobaciones viven en `FederationCodeHolders`**, que
+            // usa también el `/preview` para avisarlo antes (`D-110`).
+            let holders = try await FederationCodeHolders.load(
+                seasonID: season.id, competitionID: competition.id, from: repositories)
+            if let holder = holders.holder(of: request.ownTeamFederationID, excluding: team.id) {
                 throw DomainError.federationTeamIDTaken(
                     code: request.ownTeamFederationID,
                     owner: "\(holder.teamID)")

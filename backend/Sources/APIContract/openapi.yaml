@@ -4666,8 +4666,8 @@ components:
               otro equipo del club en el mismo grupo. Hoy no tiene salida.
 
             Se calcula con **las mismas comprobaciones que el 409 del enganche**, no con una copia. Si la
-            temporada o la competición no existen todavía, nadie tiene el código: `null`. Y `null` siempre
-            si `federationTeamId` es nulo.
+            temporada no existe todavía, nadie tiene el código: `null`. Si existe pero la competición no,
+            solo puede tenerlo un rival de esa temporada. Y `null` siempre si `federationTeamId` es nulo.
 
     CompetitionPreviewResponse:
       type: object

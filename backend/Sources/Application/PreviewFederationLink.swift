@@ -82,10 +82,20 @@ public struct PreviewFederationLink: Sendable {
             // identifica por `season_id` **+** `federation_group_id`, así que
             // preguntar sin lo primero no tiene sentido — y la respuesta ya se
             // sabe.
-            guard let season else { return (season: nil as Season?, competition: nil as Competition?) }
+            guard let season else {
+                return (
+                    season: nil as Season?, competition: nil as Competition?,
+                    holders: [:] as [String: FederationLinkPreview.Holder])
+            }
             let competition = try await repositories.competitions.findByFederationGroup(
                 seasonID: season.id, federationGroupID: coordinate.federationGroupID)
-            return (season: season, competition: competition)
+            // **`D-110`: quién del club tiene ya cada código**, con las mismas
+            // comprobaciones que el 409 del enganche. Sin temporada, nadie.
+            let holders = try await Self.holders(
+                of: Self.teams(in: calendar).compactMap(\.federationTeamID),
+                seasonID: season.id, competitionID: competition?.id,
+                club: found.club, in: repositories)
+            return (season: season, competition: competition, holders: holders)
         }
         let existingSeason = existing.season
 
@@ -154,7 +164,12 @@ public struct PreviewFederationLink: Sendable {
                 federationCompetitionID: coordinate.federationCompetitionID,
                 federationGroupID: coordinate.federationGroupID,
                 roundCount: calendar.rounds.count,
-                teams: Self.teams(in: calendar),
+                teams: Self.teams(in: calendar).map {
+                    FederationLinkPreview.Team(
+                        federationTeamID: $0.federationTeamID, rawName: $0.rawName,
+                        crestURL: $0.crestURL,
+                        takenBy: $0.federationTeamID.flatMap { existing.holders[$0] })
+                },
                 // **`C-C.3`**: se pregunta por el **grupo**, que es lo que
                 // identifica la fila (§3.5). El código de competición designa la
                 // liga entera, y con él el Grupo 5 daría `true` siendo otra fila.
@@ -188,6 +203,41 @@ public struct PreviewFederationLink: Sendable {
     /// en uno. No se corrige aquí: esto es una lista de pantalla, no una
     /// escritura, y el emparejamiento de verdad es la cadena de §3.7 — que tiene
     /// su propio escalón para el nombre ambiguo (`D-79`).
+    /// **Quién del club tiene cada código** (`D-110`), con su equipo y el nombre
+    /// corto de su club. Sin excluir a nadie: el equipo que se sincroniza también
+    /// sale si ya lo está (punto 3). Los clubes rivales solo se piden si hay
+    /// algún rival que rotular.
+    private static func holders(
+        of codes: [String], seasonID: SeasonID, competitionID: CompetitionID?,
+        club: Club, in repositories: any Repositories
+    ) async throws -> [String: FederationLinkPreview.Holder] {
+        let holders = try await FederationCodeHolders.load(
+            seasonID: seasonID, competitionID: competitionID, from: repositories)
+        let found = codes.compactMap { code in
+            holders.holder(of: code, excluding: nil).map { (code: code, holder: $0) }
+        }
+        let rivalsAmongThem = found.contains {
+            if case .opponent = $0.holder { true } else { false }
+        }
+        let opponentClubs = rivalsAmongThem ? try await repositories.opponentClubs.list() : []
+
+        var result: [String: FederationLinkPreview.Holder] = [:]
+        for (code, holder) in found {
+            // Los dos `guard` no fallan con la base íntegra: la inscripción y el
+            // rival tienen su FK al equipo y al club.
+            switch holder {
+            case .own(let id):
+                guard let team = holders.team(id) else { continue }
+                result[code] = .init(team: team, clubShortName: club.shortName)
+            case .opponent(let team):
+                guard let rivalClub = opponentClubs.first(where: { $0.id == team.opponentClubID })
+                else { continue }
+                result[code] = .init(team: team, clubShortName: rivalClub.shortName)
+            }
+        }
+        return result
+    }
+
     private static func teams(in calendar: FederationCalendar) -> [FederationLinkPreview.Team] {
         var seen: Set<String> = []
         var teams: [FederationLinkPreview.Team] = []
@@ -291,11 +341,30 @@ public struct FederationLinkPreview: Equatable, Sendable {
         /// Nombre tal cual llega, **con la letra embebida**.
         public let rawName: String
         public let crestURL: String?
+        /// **El equipo del club que ya tiene este código**, o `nil` (`D-110`).
+        public let takenBy: Holder?
 
-        public init(federationTeamID: String?, rawName: String, crestURL: String?) {
+        public init(
+            federationTeamID: String?, rawName: String, crestURL: String?,
+            takenBy: Holder? = nil
+        ) {
             self.federationTeamID = federationTeamID
             self.rawName = rawName
             self.crestURL = crestURL
+            self.takenBy = takenBy
+        }
+    }
+
+    /// Quién del club tiene un código (`D-110`): el equipo, y el nombre corto
+    /// de su club —el propio o el rival—, que es con lo que el adaptador HTTP
+    /// compone sus rótulos (`D-109`).
+    public struct Holder: Equatable, Sendable {
+        public let team: Domain.Team
+        public let clubShortName: String
+
+        public init(team: Domain.Team, clubShortName: String) {
+            self.team = team
+            self.clubShortName = clubShortName
         }
     }
 }

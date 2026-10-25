@@ -5025,7 +5025,9 @@ código, o `null`.
    son los mismos, así que `displayName` basta para decir cuál es.
 2. **Se calcula con las mismas dos comprobaciones que el enganche** (paso 3 de `LinkTeamToFederation`, `C-E.10`),
    en el mismo orden y **con el mismo código**, no con una copia: si un día cambia la regla del 409, cambia lo que
-   avisa el `/preview`. Si la temporada o la competición no existen todavía, nadie tiene el código: todos `null`.
+   avisa el `/preview`. Si la temporada no existe todavía, nadie tiene el código: todos `null`. Si existe pero la
+   competición no, solo puede tenerlo un rival de esa temporada, porque el código de un rival no es de una
+   competición (corregido en R3.6: decía «la temporada o la competición»).
 3. **El mismo equipo que se sincroniza** puede salir como `takenBy` (ya está sincronizado en esa competición con
    ese código). El enganche no lo rechaza con este 409; la web lo enseña como «Ya está sincronizado con este
    equipo», comparando `teamId`.
