@@ -17,8 +17,8 @@
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
 > **Estado del documento: en revisión.** Las decisiones de la §4 se revisan una a una con el desarrollador antes
-> de construir nada (plan del backoffice, §2.2). **Las 1 a 4, decididas el 2026-10-25**, sobre una maqueta en HTML de
-> las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). Las 5 y 6 siguen siendo **propuestas**.
+> de construir nada (plan del backoffice, §2.2). **Las 1 a 5, decididas el 2026-10-25**, sobre una maqueta en HTML de
+> las opciones (y, para la 1, de cómo crecen con las rebanadas 13 y 14). La 6 sigue siendo **propuesta**.
 >
 > **En la pantalla se dice «Sincronizar», no «Enganchar»** (decidido con la decisión 1). En los documentos sigue
 > siendo «el enganche», el nombre de `D-67` y de la operación; lo que lee el usuario es «Sincronizar con la
@@ -156,8 +156,8 @@ Lo que devuelve el `/preview`, para que una persona reconozca su equipo (`D-16`)
 - Sale el aviso **«Sincronizado. La primera ingesta está en marcha.»**, que pone el marco, como «Guardado».
 - La web vuelve a la portada **en la temporada del calendario** (`/?temporada=2026-27`), que puede no ser la de
   partida, y quita la pantalla del historial (decisión 5).
-- En la portada, el equipo sale con su competición y la ingesta **«En marcha»**. Cuando acabe, al volver a pedir
-  la portada, sale como cualquier otro.
+- En la portada, el equipo sale con su competición y la ingesta **«En marcha»**, y la portada **se refresca sola**
+  mientras haya algo en marcha: cuando acabe, sale como cualquier otro sin recargar (decisión 5).
 
 ---
 
@@ -297,23 +297,40 @@ desactivados, con «La Federación no publica su código: no se puede elegir». 
 **La forma exacta** del dato nuevo se fija en `D-110` (R3.2); la candidata es reutilizar `TeamRef` (`D-32`), la
 proyección de un equipo en una fila, como `linkedTeam`, nulo si no es del club.
 
-### Decisión 5 · Después de enganchar: vuelta a la portada en la temporada del calendario, sin seguir la ingesta
+### Decisión 5 · Después de enganchar: vuelta a la portada en la temporada del calendario, que se refresca sola mientras haya algo en marcha
 
-**Propuesta:**
+**Decidido el 2026-10-25**, sobre la maqueta (pantallas J, K y L).
 
 | Momento | Adónde | Por qué |
 |---|---|---|
 | **Al enganchar bien** | La portada, en la temporada **del calendario**, con el aviso | Es donde está ahora el equipo con su competición; la etiqueta la tiene la web desde el `/preview` |
 | **Al cancelar** | La portada de partida | Como el alta |
 
-**La primera ingesta no se sigue desde la web en esta rebanada.** El 202 trae un `jobId`, y la portada ya enseña
-«En marcha» con la pasada `accepted` que el enganche escribe (enmienda de `D-89`, R1). Que la portada se
-refresque sola mientras haya algo en marcha es una mejora para todas sus filas, no del enganche: va a la rebanada
-14, con la pantalla de la ingesta, si se quiere.
+**La portada se refresca sola mientras alguna competición esté «En marcha».** El 202 trae un `jobId`, pero no
+hace falta seguirlo: la portada ya enseña «En marcha» con la pasada `accepted` que escribe el enganche (enmienda
+de `D-89`, R1). Lo que faltaba es ver cómo acaba sin recargar, y hasta la rebanada 14 no hay otro sitio donde
+verlo.
 
-*Por revisar*: si al desarrollador le parece que ver «En marcha» para siempre hasta recargar confunde, la
-alternativa barata es que la portada vuelva a pedir sus datos una vez, unos segundos después de llegar con el
-aviso.
+| Opción | Veredicto |
+|---|---|
+| (a) Nada: «En marcha» hasta recargar | Descartada: en la maqueta parece colgada |
+| (b) Volver a pedir los datos una vez, a los pocos segundos | Descartada: acierta solo si la ingesta ya acabó |
+| **(c) Refrescarse sola mientras haya algo en marcha** | **Elegida** |
+
+**Cómo**:
+
+- **Cada 10 s**, vuelve a pedir lo de la portada (`listCompetitions`; LLD-B §2.4), **solo** mientras alguna
+  competición de la temporada elegida esté `pending`, **solo con la pestaña a la vista** (`visibilitychange`), y
+  **como mucho 5 minutos** seguidos, por si una pasada no acaba nunca.
+- **Vale para todas las filas**, no solo para la recién sincronizada: también para las pasadas de `launchd`.
+- **Sin «Cargando…»**: lo que hay se queda a la vista hasta que llega lo nuevo, con el orden elegido, sin mover el
+  foco. Si una de esas peticiones falla, se deja como estaba y se reintenta en la siguiente; no se pinta un error
+  por un refresco.
+- **No se anuncia al lector de pantalla** cada cambio de estado, para no interrumpir; el aviso de arriba ya dice
+  que la ingesta está en marcha.
+- **Se prueba sin simulacros** (`DW-17`): la federación falsa retiene el calendario de una competición inventada
+  (LLD-B §11.3), el escenario ve «En marcha», la suelta, y ve «Al día» sin recargar. En Vitest, con un reloj de
+  mentira, como la espera de 30 s de `R0.4`.
 
 ### Decisión 6 · Los errores del enganche, cada uno en su sitio
 
@@ -401,7 +418,7 @@ uno.
 **Enganchar** (§3.4)
 
 - Enganchar un equipo sin competición: vuelve a la portada con el aviso, y el equipo sale con su competición «En
-  marcha».
+  marcha»; cuando acaba la ingesta, «Al día», sin recargar.
 - Enganchar con un calendario de otra temporada: la portada vuelve en la del calendario.
 - Enganchar el segundo equipo del club en la misma competición: «ya está en el club; se reutiliza», y engancha.
 - Una temporada enganchada con otro código: su aviso.
@@ -451,14 +468,15 @@ Con el método del backend (§5).
 | **R3.10** | **La pantalla del enganche, paso 1**: `getTeam` con sus cuatro estados, la línea de los pasos, el campo, «Comprobar en la Federación» y los errores del campo | Vitest, y la web abierta contra el servidor del desarrollador con una dirección de la RFFM de verdad | Un commit |
 | **R3.11** | **El paso 2**: la línea de la dirección con editar y volver a comprobar, la competición, la temporada, la lista de equipos, el género, los avisos de identidad y de edad, el botón con el nombre del equipo elegido, «Falta un dato» y los errores al sincronizar | Vitest, y un enganche de verdad desde la web sobre un equipo del club del desarrollador | Un commit |
 | **R3.12** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
+| **R3.13** | **La portada se refresca sola** mientras haya algo en marcha (decisión 5): cada 10 s, con la pestaña a la vista, hasta 5 minutos, sin «Cargando…» y sin perder el orden ni el foco | Vitest con reloj de mentira (empieza, para al acabar, para con la pestaña oculta y a los 5 minutos, un fallo no pinta error), y la web abierta durante una ingesta de verdad | Un commit |
 
 ### D · Los escenarios en verde y el cierre
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
-| **R3.13** | Los escenarios de R3.3, en verde | `npm run e2e` en verde, con axe en los dos modos; la duración de la pasada, apuntada (lo abierto de la R2) | Un commit |
-| **R3.14** | La revisión a mano del LLD-B §10.7 *b*, con el teclado en Chrome y en Safari, los iconos y su texto incluidos; VoiceOver, del desarrollador | La lista en el PR | — |
-| **R3.15** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el mapa del plan del backoffice (§3) con el enganche en verde, el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
+| **R3.14** | Los escenarios de R3.3, en verde | `npm run e2e` en verde, con axe en los dos modos; la duración de la pasada, apuntada (lo abierto de la R2) | Un commit |
+| **R3.15** | La revisión a mano del LLD-B §10.7 *b*, con el teclado en Chrome y en Safari, los iconos y su texto incluidos; VoiceOver, del desarrollador | La lista en el PR | — |
+| **R3.16** | Cierre: los cinco pasos de `AGENTS.md` («Al cerrar una fase»), el mapa del plan del backoffice (§3) con el enganche en verde, el README de la web y lo aprendido | Las cifras buscadas por su número viejo en todo el árbol | Un commit |
 
 ---
 
