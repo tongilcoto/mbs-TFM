@@ -559,7 +559,13 @@ el menú tiene solo «Equipos».
 | Qué pasa | Ejemplo | Quién lo sabe | Qué se enseña |
 |---|---|---|---|
 | **El camino no existe en la web** | `/equipoz` | La web, sin preguntar al servidor | «Esta página no existe», con un enlace a la portada |
-| **El camino existe, pero lo que nombra no** | `/equipos/abc/plantilla` | El servidor: `TEAM_NOT_FOUND` | El estado de error de la pantalla (§4.3), con un enlace a la portada |
+| **El camino existe, pero lo que nombra no** | `/equipos/<un código que el club no tiene>/plantilla` | El servidor: `TEAM_NOT_FOUND` | El estado de error de la pantalla (§4.3), con un enlace a la portada |
+| **El camino existe, pero el código no es un código** | `/equipos/abc/plantilla` | La web, sin preguntar al servidor: los códigos son UUID (§6.3) | Lo mismo que la fila de arriba: «No se ha encontrado el equipo» |
+
+*(La tercera fila, añadida el 2026-10-25 al revisar los escenarios de la
+[rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md). El ejemplo `abc` estaba en la segunda, pero el
+servidor no contesta `TEAM_NOT_FOUND` a lo que no es un UUID, sino 400 `INVALID_UUID`, con otro mensaje. Para quien
+escribe la dirección es lo mismo: eso no existe.)*
 
 ---
 
