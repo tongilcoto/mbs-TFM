@@ -21,17 +21,33 @@ describe('los errores con un código de la lista', () => {
     )
   })
 
-  test('la base de datos caída y la federación que no responde se pueden reintentar', () => {
+  test('la base de datos caída y la Federación que no responde se pueden reintentar', () => {
     expect(errorFromResponse(503, problem(503, 'DATABASE_UNAVAILABLE'))).toEqual({
       message: 'No se ha podido conectar con el servidor',
       code: 'DATABASE_UNAVAILABLE',
       retry: true,
     })
     expect(errorFromResponse(504, problem(504, 'FEDERATION_UNREACHABLE'))).toEqual({
-      message: 'La federación no responde',
+      message: 'La Federación no responde. Prueba otra vez en un rato.',
       code: 'FEDERATION_UNREACHABLE',
       retry: true,
     })
+  })
+
+  // Plan R3, decisión 6: la RFFM contesta a veces `null` unos minutos (H-61).
+  test.each(['FEDERATION_UNEXPECTED_STATUS', 'FEDERATION_MALFORMED_RESPONSE'])(
+    'la Federación que contesta mal (%s) también se reintenta, con el mismo mensaje',
+    (code) => {
+      expect(errorFromResponse(502, problem(502, code))).toEqual({
+        message: 'La Federación ha respondido con un error. Prueba otra vez en un rato.',
+        code,
+        retry: true,
+      })
+    },
+  )
+
+  test('una dirección donde la Federación no tiene calendario es un 502, pero no se reintenta', () => {
+    expect(errorFromResponse(502, problem(502, 'FEDERATION_COORDINATE_NOT_FOUND')).retry).toBe(false)
   })
 
   test('el resto no se reintenta, aunque sea un 5xx: daría lo mismo', () => {
