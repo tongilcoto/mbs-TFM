@@ -159,8 +159,8 @@ RFFM no aparece.
 
 ### 3.4 Jornada y clasificación (`/temporadas/:temporada/competiciones/:id`)
 
-**Por revisar al escribir sus escenarios**: la decisión 3 fija el camino; lo de abajo es la propuesta, sobre el
-boceto 3, que no tiene maqueta.
+**Por revisar en R4.3, sobre su maqueta**, antes de escribir sus escenarios: la decisión 3 fija el camino; lo de
+abajo es la propuesta, sobre el boceto 3.
 
 - **Arriba**: la competición y el grupo, la temporada, y «Jornada 22 · 14 – 16 feb».
 - **La jornada que se enseña** es la en curso (`isCurrent`), o la última si la competición terminó. **Si se llega
@@ -356,7 +356,7 @@ solo, y lo que no venga en el plan va en su propio commit.
 |---|---|---|---|
 | **R4.1** | Este plan, con las decisiones 1 a 7 | El desarrollador lo revisa | Un commit, y otro por cada corrección |
 | **R4.2** | Los documentos de lo decidido: en la bitácora del backend, **`D-111`** (club + letra) y **`D-112`** (el puesto en el partido), con su línea en el LLD; en el LLD-B, los caminos de la ficha y de jornada y clasificación confirmados (§6.1); y en el plan del backoffice, lo «pendiente de la rebanada 4» resuelto, relanzar la ingesta pasado de la fila 14 a la 4, el camino de jornada en el mapa y la R4 en curso | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
-| **R4.3** | **Los `.feature` de la §6**, revisados con el desarrollador antes de programar; y **la federación falsa con una competición jugada**: marcadores, horas, la clasificación de cada jornada y las actas, con un aplazado y un suspendido | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**. La ingesta del servidor de pruebas sobre la competición jugada deja en `tfm_test` sus partidos con marcador, una tabla por jornada y los estados del acta | Un commit |
+| **R4.3** | **La pantalla de jornada y clasificación (§3.4), revisada sobre su maqueta**; **los `.feature` de la §6**, revisados con el desarrollador antes de programar; y **la federación falsa con una competición jugada**: marcadores, horas, la clasificación de cada jornada y las actas, con un aplazado y un suspendido | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**. La ingesta del servidor de pruebas sobre la competición jugada deja en `tfm_test` sus partidos con marcador, una tabla por jornada y los estados del acta | Un commit |
 
 ### B · El servidor
 
@@ -394,7 +394,7 @@ Con el método del backend (§5).
 
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
-| **R4.1** | ✅ 2026-10-28 | El plan escrito y sus siete decisiones revisadas con el desarrollador sobre tres versiones de una maqueta en HTML (cabecera, portada y partidos). Lo que cambió en la revisión: **el nombre de los equipos**, el nombre del club + letra y no el corto (1); al mirarlo salió que el servidor monta todos sus rótulos con el corto, y que `TeamResponse.clubName` lo da aunque el catálogo diga «nombre» (a R4.4). **Las posiciones de cada partido, en la misma consulta que los partidos**, en vez de una petición por jornada (2). **El camino de jornada y clasificación** sin el número de jornada (3). **Las cajas de la cabecera**, con el estado de la ingesta y ↻ en la de la competición (4), y relanzar la ingesta adelantado de la rebanada 14 (7). **Los partidos en tabla**, con G, E y P, el aplazado en su jornada y abriendo arriba (6). La pantalla de jornada y clasificación (§3.4) queda sin maqueta, por revisar en un paso posterior |
+| **R4.1** | ✅ 2026-10-28 | El plan escrito y sus siete decisiones revisadas con el desarrollador sobre tres versiones de una maqueta en HTML (cabecera, portada y partidos). Lo que cambió en la revisión: **el nombre de los equipos**, el nombre del club + letra y no el corto (1); al mirarlo salió que el servidor monta todos sus rótulos con el corto, y que `TeamResponse.clubName` lo da aunque el catálogo diga «nombre» (a R4.4). **Las posiciones de cada partido, en la misma consulta que los partidos**, en vez de una petición por jornada (2). **El camino de jornada y clasificación** sin el número de jornada (3). **Las cajas de la cabecera**, con el estado de la ingesta y ↻ en la de la competición (4), y relanzar la ingesta adelantado de la rebanada 14 (7). **Los partidos en tabla**, con G, E y P, el aplazado en su jornada y abriendo arriba (6). La pantalla de jornada y clasificación (§3.4) queda sin maqueta: se revisa con la suya en R4.3. Estadísticas y Plantilla siguen en las rebanadas 10 y 6 (5) |
 
 ---
 
