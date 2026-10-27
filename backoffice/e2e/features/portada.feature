@@ -20,7 +20,6 @@ Feature: La portada
     Given en la temporada en curso de mi club hay un equipo inscrito sin competición
     When abro la portada de mi club
     Then la fila del equipo en la portada dice "Sin competición"
-    And la fila del equipo en la portada dice "Pendiente de sincronizar con la Federación"
 
   @ui
   Scenario Outline: La ingesta «<estado>»

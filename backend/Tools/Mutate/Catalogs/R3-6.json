@@ -1,0 +1,90 @@
+{
+  "title": "R3.6 · el /preview dice quién del club tiene ya cada código, con las comprobaciones del 409 (D-110)",
+  "filter": "FederationLinkTests|FederationLinkPreviewTests|FederationLinkEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-rival",
+      "description": "el rival con ese código no cuenta, ni en el enganche ni en el /preview",
+      "file": "Sources/Application/FederationCodeHolders.swift",
+      "find": "            return .opponent(rival)",
+      "replace": "            if false { return .opponent(rival) }"
+    },
+    {
+      "id": "M2-rival-de-cualquier-temporada",
+      "description": "cuenta el rival de otra temporada",
+      "file": "Sources/Application/FederationCodeHolders.swift",
+      "find": "            $0.counts(in: seasonID) && $0.federationTeamID == code",
+      "replace": "            $0.federationTeamID == code"
+    },
+    {
+      "id": "M3-sin-propio",
+      "description": "el equipo propio sincronizado en la competición no cuenta",
+      "file": "Sources/Application/FederationCodeHolders.swift",
+      "find": "            return .own(row.teamID)",
+      "replace": "            if false { return .own(row.teamID) }"
+    },
+    {
+      "id": "M4-no-excluye",
+      "description": "no se excluye al equipo que se sincroniza",
+      "file": "Sources/Application/FederationCodeHolders.swift",
+      "find": "            $0.federationTeamID == code && $0.teamID != teamID",
+      "replace": "            $0.federationTeamID == code"
+    },
+    {
+      "id": "M5-enganche-sin-excluir",
+      "description": "el enganche no se excluye a sí mismo: volver a sincronizar con el mismo código da 409",
+      "file": "Sources/Application/LinkTeamToFederation.swift",
+      "find": "holders.holder(of: request.ownTeamFederationID, excluding: team.id)",
+      "replace": "holders.holder(of: request.ownTeamFederationID, excluding: nil)"
+    },
+    {
+      "id": "M6-preview-sin-takenBy",
+      "description": "el /preview no rellena takenBy",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "takenBy: $0.federationTeamID.flatMap { existing.holders[$0] })",
+      "replace": "takenBy: nil)"
+    },
+    {
+      "id": "M7-preview-sin-competicion",
+      "description": "el /preview no mira las inscripciones de la competición",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "seasonID: season.id, competitionID: competition?.id,",
+      "replace": "seasonID: season.id, competitionID: nil,"
+    },
+    {
+      "id": "M8-rival-sin-su-club",
+      "description": "el rival se rotula con el nombre del club propio",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "result[code] = .init(team: team, clubShortName: rivalClub.shortName)",
+      "replace": "result[code] = .init(team: team, clubShortName: club.shortName)"
+    },
+    {
+      "id": "M9-propio-sin-nombre",
+      "description": "el propio se rotula sin el nombre de su club",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "result[code] = .init(team: team, clubShortName: club.shortName)",
+      "replace": "result[code] = .init(team: team, clubShortName: \"\")"
+    },
+    {
+      "id": "M10-sin-clubes-rivales",
+      "description": "no se piden los clubes rivales: el rival se queda sin rotular",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "let opponentClubs = rivalsAmongThem ? try await repositories.opponentClubs.list() : []",
+      "replace": "let opponentClubs = rivalsAmongThem && false ? try await repositories.opponentClubs.list() : []"
+    },
+    {
+      "id": "M11-isOwn-fijo",
+      "description": "el TeamRef dice siempre que es propio",
+      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "find": "            isOwn: team.isOwn)",
+      "replace": "            isOwn: true)"
+    },
+    {
+      "id": "M12-nombre-corto-con-categoria",
+      "description": "shortDisplayName lleva la categoría",
+      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "find": "shortDisplayName: [clubShortName, team.letter]",
+      "replace": "shortDisplayName: [clubShortName, team.category.toContract().displayName, team.letter]"
+    }
+  ]
+}

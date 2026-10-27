@@ -76,6 +76,7 @@
 | **D-107**              | Dar de alta un equipo que ya existe lo inscribe en la temporada, en vez de dar 409                                            | §3.5, §5.1                         |
 | **D-108**              | Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí                              | §5.1                               |
 | **D-109**              | El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP | §2.2, §5.1, §5.2                   |
+| **D-110**              | El `/preview` del enganche dice qué equipos del grupo ya tiene el club, y cuál                                                | §5.1                               |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -4993,6 +4994,58 @@ compilación: «CardType: sin nombre para roja».
 masculino del femenino ni el fútbol 7 del fútbol 11, como le pasaba a la portada (bloque T, paso T.4). Lo
 enseñarán las apps del móvil, y se decide con ellas.
 
+### D-110 · El `/preview` del enganche dice qué equipos del grupo ya tiene el club, y cuál
+
+**Lo que lo obligó a decidirse** (2026-10-25, al revisar con el desarrollador la pantalla del enganche de la
+rebanada 3 del backoffice, decisión 4). El `/preview` enseña los equipos del grupo (`competition.teams[]`) para que
+una persona elija cuál es el suyo ([D-16], [D-67]). Pero no dice si alguno **ya lo tiene el club**, y el enganche
+rechaza ese código con **409 `FEDERATION_TEAM_ID_TAKEN`** después de que la persona lo haya elegido. Pasa en dos
+casos, los dos con dos equipos del club en el mismo grupo:
+
+1. **El código ya es de otro equipo propio, sincronizado en esa competición** ([D-101]): «CELTIC CASTILLA C.F. 'A'»
+   ya es el Alevín A, y se elige para el Alevín B.
+2. **El código ya es de un rival de esta temporada** ([D-104]): al sincronizar el Alevín A, su primera ingesta
+   escribió los equipos del grupo, y como la ingesta no crea equipos propios ([D-66]), el «CELTIC CASTILLA C.F.
+   'B'» del club quedó **como rival**. Sincronizar después el Alevín B con ese código da 409, y la salida que
+   prevé el servidor, reclamarlo (`claimTeam`, [D-20]), crearía un segundo equipo propio en vez de unirlo al
+   Alevín B: es la fusión que el LLD deja sin diseñar (§9.5).
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Nada en el `/preview`: el 409 al confirmar | La pantalla explica el error, pero no lo evita | Descartada |
+| (b) La web lo deduce, con las temporadas y las inscripciones, comparando códigos | La web deduce lo que sabe el servidor, y el `/preview` no da los identificadores de la temporada ni de la competición con los que comparar | Descartada |
+| **(c) El `/preview` lo dice, equipo a equipo** | Un campo más en `PreviewTeam` | **Elegida** |
+
+**Decisión: (c).** Cada equipo de `competition.teams[]` lleva **`takenBy`**: el equipo del club que ya tiene ese
+código, o `null`.
+
+1. **Es un `TeamRef`** ([D-32]), la proyección de un equipo en una fila: `teamId`, `displayName`,
+   `shortDisplayName` e `isOwn`. **`isOwn` distingue los dos casos**: `true`, un equipo propio sincronizado en esa
+   competición; `false`, un rival de esta temporada. Dentro de una competición la edad, el género y la modalidad
+   son los mismos, así que `displayName` basta para decir cuál es.
+2. **Se calcula con las mismas dos comprobaciones que el enganche** (paso 3 de `LinkTeamToFederation`, `C-E.10`),
+   en el mismo orden y **con el mismo código**, no con una copia: si un día cambia la regla del 409, cambia lo que
+   avisa el `/preview`. Si la temporada no existe todavía, nadie tiene el código: todos `null`. Si existe pero la
+   competición no, solo puede tenerlo un rival de esa temporada, porque el código de un rival no es de una
+   competición (corregido en R3.6: decía «la temporada o la competición»).
+3. **El mismo equipo que se sincroniza** puede salir como `takenBy` (ya está sincronizado en esa competición con
+   ese código). El enganche no lo rechaza con este 409; la web lo enseña como «Ya está sincronizado con este
+   equipo», comparando `teamId`.
+4. **No escribe nada**, como el resto del `/preview`.
+
+**Lo que se asume a cambio.**
+
+- **El caso 2 sigue sin salida.** El `/preview` lo dice («Ya está en el club como rival»), pero el segundo equipo
+  del club en un grupo ya sincronizado **no se puede sincronizar** hasta que se diseñe la salida: unir el rival al
+  equipo propio (la fusión de §9.5) o que la ingesta no escriba como rivales los equipos del propio club. Se
+  diseña en la **rebanada 13** del backoffice, junto a «dejar de sincronizar», que toca los mismos datos.
+  Decidido con el desarrollador; dos equipos del mismo club en un grupo no debería ser lo frecuente.
+- **El `/preview` lee más**: la lista de equipos de la temporada y las inscripciones de la competición, que el
+  enganche ya leía.
+
+**Enmienda** a la descripción de `PreviewTeam` y de `teams[]` en el catálogo (R3.5 del plan de la rebanada 3), y a
+§5.1 del LLD.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5139,5 +5192,6 @@ enseñarán las apps del móvil, y se decide con ellas.
 [D-107]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

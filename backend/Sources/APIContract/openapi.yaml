@@ -1130,6 +1130,11 @@ paths:
       tags: [Teams]
       operationId: getTeam
       summary: Obtiene un equipo
+      description: |
+        Un equipo del club, **propio o rival**, con sus derivados (`isOwn`, `clubName`, `displayName`): el
+        `clubName` es el del club propio o el del rival, según quién sea. La pantalla del enganche del
+        backoffice la usa para saber qué equipo sincroniza, y trata un rival como «no encontrado» mirando
+        `isOwn`, sin otra pregunta.
       responses:
         '200':
           description: Equipo.
@@ -1137,8 +1142,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TeamResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`INVALID_UUID`: el `teamId` de la ruta no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: '`TEAM_NOT_FOUND`: no hay ningún equipo con ese `teamId` en el club.'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
@@ -1239,7 +1249,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FederationLinkPreviewResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: |
+            `INVALID_UUID`: el `teamId` de la ruta no es un UUID. `UNREADABLE_FEDERATION_URL`: la URL no es la
+            de un calendario de la federación del club (otro *host*, le falta un parámetro o el `tipojuego` no
+            se conoce, D-97). `SEASON_LABEL_UNAVAILABLE`: la temporada no existe en el club y la página no dice
+            de cuál es, así que no hay con qué crearla (D-106).
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1268,7 +1284,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '502':
-          description: La federación respondió con un error o con un cuerpo no interpretable.
+          description: |
+            La federación respondió, pero no con un calendario que se pueda usar.
+            `FEDERATION_UNEXPECTED_STATUS`: con un estado HTTP de error. `FEDERATION_MALFORMED_RESPONSE`: con
+            un cuerpo que no tiene la forma documentada. `FEDERATION_COORDINATE_NOT_FOUND`: con un 200 que no
+            es el calendario pedido (el grupo o la competición no existen, o la temporada no existe y devuelve
+            otra). **Este último no es pasajero**: la URL está mal, y reintentar da lo mismo.
           content:
             application/problem+json:
               schema:
@@ -1336,7 +1357,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/IngestJobResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: |
+            Los tres del `/preview` (`INVALID_UUID`, `UNREADABLE_FEDERATION_URL`, `SEASON_LABEL_UNAVAILABLE`),
+            porque el enganche **vuelve a leer la federación**; y `INVALID_VALUE` si el `seasonLabel` no tiene
+            la forma de una etiqueta, con el `detail` `seasonLabel: motivo`.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -1375,7 +1401,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '502':
-          description: La federación respondió con un error o con un cuerpo no interpretable.
+          description: |
+            Los tres del `/preview` (`FEDERATION_UNEXPECTED_STATUS`, `FEDERATION_MALFORMED_RESPONSE`,
+            `FEDERATION_COORDINATE_NOT_FOUND`), porque el enganche vuelve a leer la federación; y las dos
+            guardas que solo pasa el enganche: `FEDERATION_SEASON_MISMATCH`, las fechas del calendario son de
+            otra temporada (D-91), y `FEDERATION_SOURCE_MISMATCH`, la competición que ya existe con ese grupo
+            tiene otro nombre en la federación (D-84).
           content:
             application/problem+json:
               schema:
@@ -4597,8 +4628,10 @@ components:
 
     PreviewTeam:
       type: object
-      description: Equipo tal y como lo publica la federación, **sin normalizar ni persistir**.
-      required: [federationTeamId, rawName]
+      description: |
+        Equipo tal y como lo publica la federación, **sin normalizar ni persistir**; con `takenBy`, lo único
+        que no viene de la federación: si el club ya tiene ese código (D-110).
+      required: [federationTeamId, rawName, takenBy]
       properties:
         federationTeamId:
           type: [string, 'null']
@@ -4627,6 +4660,24 @@ components:
           description: |
             Escudo **en el origen** (aún no descargado a Storage). Solo para que la pantalla de
             confirmación sea reconocible de un vistazo.
+        takenBy:
+          type: [object, 'null']
+          anyOf:
+            - $ref: '#/components/schemas/TeamRef'
+          description: |
+            **El equipo del club que ya tiene este `federationTeamId`**, o `null` (D-110). Evita que se elija
+            un código que el enganche va a rechazar con **409 `FEDERATION_TEAM_ID_TAKEN`**. `isOwn` dice cuál
+            de los dos casos es:
+
+            - `true`: un equipo propio, sincronizado con este código en esta competición (D-101). Puede ser
+              **el mismo equipo que se sincroniza**, y entonces no es conflicto: ya lo está (se ve comparando
+              `teamId`).
+            - `false`: un rival **de esta temporada** con este código (D-104), que escribió la ingesta de
+              otro equipo del club en el mismo grupo. Hoy no tiene salida.
+
+            Se calcula con **las mismas comprobaciones que el 409 del enganche**, no con una copia. Si la
+            temporada no existe todavía, nadie tiene el código: `null`. Si existe pero la competición no,
+            solo puede tenerlo un rival de esa temporada. Y `null` siempre si `federationTeamId` es nulo.
 
     CompetitionPreviewResponse:
       type: object

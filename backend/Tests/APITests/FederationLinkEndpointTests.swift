@@ -1157,6 +1157,54 @@ extension FederationLinkEndpointTests {
 
 extension FederationLinkEndpointTests {
 
+    /// **El `/preview` dice quién del club tiene ya un código** (`D-110`), por la
+    /// ruta HTTP y contra Postgres: el rival de esta temporada que escribió la
+    /// ingesta, como `TeamRef` con los rótulos de **su** club. Y el de al lado,
+    /// libre: la otra mitad.
+    @Test("el /preview dice qué equipo del club tiene ya cada código (D-110)")
+    func previewSaysWhoHoldsEachCode() async throws {
+        try await Self.withSeededTeam { app, teamID in
+            let neighbour = TeamID(raw: UUID())
+            try await Self.unitOfWork(app).withRepositories(actor: Self.actor()) {
+                repositories in
+                let club = try OpponentClub(
+                    id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR",
+                    shortName: "Galapagar", slug: try Slug("c-d-galapagar"),
+                    createdAt: Self.now, updatedAt: Self.now)
+                try await repositories.opponentClubs.save(club)
+                let season = try Season(
+                    id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
+                    federationSeasonID: "21", createdAt: Self.now, updatedAt: Self.now)
+                try await repositories.seasons.save(season)
+                try await repositories.teams.save(
+                    try Team(
+                        id: neighbour, opponentClubID: club.id, seasonID: season.id,
+                        category: .cadete, letter: "B",
+                        gender: .masculino, modality: .futbol11,
+                        federationTeamID: "3349087",
+                        createdAt: Self.now, updatedAt: Self.now))
+            }
+
+            try await app.testing().test(
+                .POST,
+                "/v1/teams/\(teamID.raw.uuidString.lowercased())/federation-link/preview",
+                beforeRequest: { request async throws in
+                    Self.header(&request)
+                    try Self.previewBody(&request)
+                }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let teams = try Self.decodePreview(response).competition.teams
+                let taken = teams.first { $0.federationTeamId == "3349087" }?.takenBy?.value1
+                #expect(taken?.teamId == neighbour.raw.uuidString.lowercased())
+                #expect(taken?.displayName == "Galapagar Cadete B")
+                #expect(taken?.shortDisplayName == "Galapagar B")
+                #expect(taken?.isOwn == false)
+                #expect(teams.first { $0.federationTeamId == "3349086" }?.takenBy?.value1 == nil)
+            }
+        }
+    }
+
     /// `C-E.10`: **ese `federationTeamId` ya es de otro equipo → 409**, no 500.
     ///
     /// # Por qué existe este ciclo, que el plan no traía

@@ -31,6 +31,9 @@
 | **DW-03** | Cada pantalla pide sus datos al entrar: sin memoria entre pantallas | §2.4, §3.3 |
 | **DW-04** | Un solo límite de 30 s, por encima de los 20 s que el servidor espera a la federación | §3.4, §4.4 |
 | **DW-05** | El «cargando…» se enseña desde el primer momento | §3.1, §3.5 |
+| **DW-19** | Las acciones de una fila son iconos con su texto por ratón y por teclado, no un menú ⋮ ni botones con texto | §3.7 |
+| **DW-20** | Lo que está en marcha se refresca solo, cada 10 s y como mucho 5 minutos | §2.4 |
+| **DW-21** | Un nulo puede llegar como clave ausente, y la web los trata igual | §3.8 |
 | **Cómo se comporta** | | |
 | **DW-06** | El campo de un error se lee del texto de `detail`, sin esperar a un campo `field` | §4.3, §4.5 |
 | **DW-07** | Las reglas de los formularios se leen del catálogo con Ajv | §5.1 |
@@ -265,7 +268,9 @@ un botón que al pulsarlo da error.
 
 - **Lo que no se permite nunca, no aparece.** En un partido no hay botón «Borrar».
 - **Lo que se permite a veces aparece desactivado y con el motivo escrito**, por ejemplo: «No se puede borrar:
-  el equipo está enganchado a la federación. Para dejar de gestionarlo, libéralo». Así el usuario sabe que la
+  el equipo está sincronizado con la Federación». *(Decía «Para dejar de gestionarlo, libéralo»; corregido el
+  2026-10-25: liberar deshace una reclamación, no un enganche. Dejar de sincronizar no existe todavía; es de la
+  rebanada 13.)* Así el usuario sabe que la
   acción existe y qué le falta para poder hacerla.
 
 **La alternativa descartada para el motivo: un globo al pasar el ratón.** No lo ve quien usa el teclado ni
@@ -461,7 +466,76 @@ del servidor».
 
 ---
 
+### DW-19 · Las acciones de una fila son iconos con su texto por ratón y por teclado, no un menú ⋮ ni botones con texto
+
+**Qué hay que decidir** (2026-10-25, rebanada 3). La portada tiene que dejar hacer cosas desde la fila del equipo
+sin entrar en su ficha. La rebanada 3 trae la primera, sincronizar con la Federación; la 14, relanzar la ingesta, y
+la 13 puede poner otras (corregir, borrar). Se decidió sobre una maqueta en HTML de cada forma con las acciones de
+las tres rebanadas, para ver cómo crece.
+
+| Opción | Lo que se vio | Veredicto |
+|---|---|---|
+| (a) Un botón ⋮ con menú | Cabe todo sin ensanchar la tabla, pero la acción no se ve hasta abrirlo; y relanzar la ingesta es **de cada competición**, así que el menú del equipo necesita un apartado con una opción por competición | Descartada |
+| (b) Un botón con texto por acción | Con cuatro o cinco acciones aprieta la tabla y repite lo mismo en cada línea | Descartada: no escala |
+| **(c) Iconos, con su texto al pasar el ratón o al llegar con el teclado** | Ocupan poco, y cada uno puede ir **donde está lo que afecta**: el de relanzar, en la celda de la ingesta de su competición | **Elegida** |
+
+**Decisión: (c)**, con las condiciones del LLD-B §3.7: el texto sale por los dos caminos, el lector lee el nombre
+con la fila detrás, y 40 × 40 px.
+
+**No contradice [DW-10]**, que descartó el globo al pasar el ratón para el **motivo** de lo desactivado. Aquí el
+texto es el **nombre** de la acción, y llega también por teclado y al lector. Una acción desactivada sigue
+llevando su motivo escrito a la vista (§7.4): el de relanzar una ingesta que ya está en marcha es el propio «En
+marcha» de su celda.
+
+**Lo que se asume a cambio.** Un icono no se lee solo: hay que elegir dibujos reconocibles, y quien no pasa el
+ratón ni usa el teclado ve solo el dibujo. Por eso el caso que más lo pide, el equipo sin competición, lleva
+además un enlace con texto. Y cada acción nueva ensancha la columna unos 40 px.
+
+### DW-20 · Lo que está en marcha se refresca solo, cada 10 s y como mucho 5 minutos
+
+**Qué hay que decidir** (2026-10-25, rebanada 3). Al sincronizar un equipo, la portada lo enseña «En marcha», y
+la ingesta acaba unos segundos o minutos después. [DW-03] dice que cada pantalla pide sus datos al entrar; sin
+más, «En marcha» se queda hasta recargar, y en la maqueta parecía colgada.
+
+| Opción | Veredicto |
+|---|---|
+| (a) Nada: hasta recargar | Descartada: parece colgada, y hasta la rebanada 14 no hay otro sitio donde verlo acabar |
+| (b) Volver a pedir una vez, a los pocos segundos | Descartada: acierta solo si la ingesta ya acabó |
+| **(c) Volver a pedir cada 10 s mientras haya algo en marcha** | **Elegida** |
+
+**Decisión: (c)**, con sus límites: solo con la pestaña a la vista, como mucho 5 minutos seguidos por si una pasada
+no acaba nunca, sin «Cargando…» ni errores pintados por un refresco, y sin anunciarlo al lector (LLD-B §2.4). Vale
+para todas las filas, también para las ingestas que lanza `launchd`.
+
+**Lo que se asume a cambio.** Una petición cada 10 s mientras dure la ingesta, y una enmienda a [DW-03]: los datos
+ya no se piden **solo** al entrar. Se prueba sin simulacros ([DW-17]): la federación falsa retiene el calendario y
+el escenario ve el cambio sin recargar.
+
+### DW-21 · Un nulo puede llegar como clave ausente, y la web los trata igual
+
+**Qué hay que decidir** (2026-10-25, rebanada 3, R3.5). Al añadir `takenBy` al `/preview`, obligatorio y anulable,
+el JSON de verdad enseñó que **los nulos no viajan**: el `Codable` que genera `swift-openapi-generator` usa
+`encodeIfPresent`, y un campo vacío sale sin su clave. Ya pasaba con `crestUrl` y con `federationTeamId`; el
+catálogo dice una cosa y el servidor manda otra.
+
+| Opción | Veredicto |
+|---|---|
+| **(a) Aceptarlo: la web trata «falta» igual que «nulo»** | **Elegida** |
+| (b) Que el servidor mande `null` explícito en `takenBy` | Descartada: una conversión a JSON escrita a mano para un campo, y el resto de nulos de la API seguiría igual |
+
+**Decisión: (a)** (LLD-B §3.8). Es lo que ya pasa con todos los nulos de la API, y la web no necesita
+distinguirlos: ningún campo del catálogo da un significado distinto a «falta» y a «nulo» en una respuesta.
+
+**Lo que se asume a cambio.** El catálogo promete una clave que no llega, y los tipos de TypeScript no lo avisan;
+la regla vive en el LLD-B y en las pruebas de piezas que prueban la clave ausente. Si un día un cliente valida las
+respuestas contra el catálogo (Ajv, la app del móvil), fallará en los obligatorios anulables, y se arregla en el
+servidor para todos a la vez.
+
+---
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-01]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-10]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-17]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

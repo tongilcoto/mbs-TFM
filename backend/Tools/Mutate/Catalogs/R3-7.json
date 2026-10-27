@@ -1,0 +1,62 @@
+{
+  "title": "R3.7 · getTeam: un equipo, propio o rival, con su club",
+  "filter": "GetTeamTests|TeamReadEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-rival-como-propio",
+      "description": "el rival sale con el club propio",
+      "file": "Sources/Application/GetTeam.swift",
+      "find": "        guard let opponentClubID = team.opponentClubID else {",
+      "replace": "        guard let opponentClubID = team.opponentClubID, false else {"
+    },
+    {
+      "id": "M2-primer-club-rival",
+      "description": "el rival sale con el primer club rival, no con el suyo",
+      "file": "Sources/Application/GetTeam.swift",
+      "find": "try await opponentClubs.list().first(where: { $0.id == opponentClubID })",
+      "replace": "try await opponentClubs.list().first"
+    },
+    {
+      "id": "M3-404-con-otro-codigo",
+      "description": "el equipo que no está sale con otro código",
+      "file": "Sources/Application/GetTeam.swift",
+      "find": "            throw ApplicationError.teamNotFound(id: \"\\(id)\")",
+      "replace": "            throw ApplicationError.competitionNotFound(id: \"\\(id)\")"
+    },
+    {
+      "id": "M4-uuid-sin-400",
+      "description": "un teamId que no es un UUID no se rechaza con 400",
+      "file": "Sources/HTTPAdapter/TeamHandler.swift",
+      "find": "            teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: \"teamId\"))",
+      "replace": "            teamID = TeamID(raw: (try? Self.uuid(input.path.teamId, field: \"teamId\")) ?? UUID())"
+    },
+    {
+      "id": "M5-rival-con-nombre-largo",
+      "description": "clubName del rival es su nombre largo",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            clubName: club.shortName,\n            displayName: [club.shortName,",
+      "replace": "            clubName: club.name,\n            displayName: [club.shortName,"
+    },
+    {
+      "id": "M6-rival-sin-club",
+      "description": "el rival sale sin opponentClubId",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            opponentClubId: \"\\(club.id)\",",
+      "replace": "            opponentClubId: nil,"
+    },
+    {
+      "id": "M7-rival-sin-temporada",
+      "description": "el rival sale sin su temporada",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            opponentClubId: \"\\(club.id)\",\n            seasonId: seasonID.map { \"\\($0)\" },",
+      "replace": "            opponentClubId: \"\\(club.id)\",\n            seasonId: nil,"
+    },
+    {
+      "id": "M8-rival-sin-codigo",
+      "description": "el rival sale sin su código",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            federationTeamId: federationTeamID,\n            isOwn: isOwn,\n            clubName: club.shortName,\n            displayName:",
+      "replace": "            federationTeamId: nil,\n            isOwn: isOwn,\n            clubName: club.shortName,\n            displayName:"
+    }
+  ]
+}

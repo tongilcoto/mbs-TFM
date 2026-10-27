@@ -73,3 +73,29 @@ extension Domain.Team {
         )
     }
 }
+
+extension Domain.Team {
+    /// Mapeo `Entidad → DTO` de un **rival** (R3.7), con los derivados de su
+    /// club: `clubName` es su nombre corto y `displayName`, ese + categoría +
+    /// letra, como en el propio. Lleva su club, su temporada (`D-104`) y su
+    /// código, que en un rival sí es del equipo (`D-101`).
+    func toResponse(opponentClub club: OpponentClub) -> Components.Schemas.TeamResponse {
+        .init(
+            id: "\(id)",
+            category: category.toContract(),
+            letter: letter,
+            gender: .init(value1: gender.toContract()),
+            modality: .init(value1: modality.toContract()),
+            opponentClubId: "\(club.id)",
+            seasonId: seasonID.map { "\($0)" },
+            federationTeamId: federationTeamID,
+            isOwn: isOwn,
+            clubName: club.shortName,
+            displayName: [club.shortName, category.toContract().displayName, letter]
+                .compactMap { $0 }.joined(separator: " "),
+            crestUrl: nil,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+}
