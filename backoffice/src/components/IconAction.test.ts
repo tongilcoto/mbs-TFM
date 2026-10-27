@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/vue'
 import { describe, expect, test } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import RowAction from './RowAction.vue'
+import IconAction from './IconAction.vue'
 
 function renderAction() {
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:anything(.*)*', component: {} }] })
-  render(RowAction, {
+  render(IconAction, {
     props: { label: 'Sincronizar otra competición', subject: 'Cadete A', icon: 'link', to: '/equipos/1/federacion' },
     global: { plugins: [router] },
   })
@@ -15,7 +15,7 @@ function renderAction() {
 // El texto a la vista. No se busca por rol: no lo tiene, porque el nombre del enlace ya lo dice.
 const tip = () => screen.queryByText('Sincronizar otra competición')
 
-describe('una acción de fila (LLD-B §3.7)', () => {
+describe('una acción de fila, que lleva a otra pantalla (LLD-B §3.7)', () => {
   test('el lector lee el nombre con el equipo, y el dibujo no', () => {
     const link = renderAction()
 
@@ -93,5 +93,35 @@ describe('una acción de fila (LLD-B §3.7)', () => {
 
     await fireEvent.keyDown(document.body, { key: 'a' })
     expect(tip()).toBeInTheDocument()
+  })
+})
+
+describe('una acción sin adónde ir: un botón', () => {
+  function renderButton(disabled = false) {
+    const { emitted } = render(IconAction, { props: { label: 'Editar la dirección', icon: 'pencil', disabled } })
+    return { button: screen.getByRole('button', { name: 'Editar la dirección' }), emitted }
+  }
+
+  test('sin `subject`, el nombre es solo el texto; al pulsarlo, avisa', async () => {
+    const { button, emitted } = renderButton()
+
+    await fireEvent.click(button)
+
+    expect(emitted('press')).toHaveLength(1)
+  })
+
+  test('el texto sale también al llegar con el teclado', async () => {
+    const { button } = renderButton()
+
+    await fireEvent.focus(button)
+
+    expect(screen.getByText('Editar la dirección')).toBeInTheDocument()
+  })
+
+  // Que no avise al pulsarlo lo hace el navegador con un botón desactivado; jsdom manda el clic igual.
+  test('desactivado, el botón lo está', () => {
+    const { button } = renderButton(true)
+
+    expect(button).toBeDisabled()
   })
 })

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/vue'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/vue'
 import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
@@ -20,12 +20,40 @@ const aTeam = {
   updatedAt: '2026-10-09T21:50:27Z',
 }
 const calendar = 'https://www.rffm.es/competicion/calendario?temporada=22&tipojuego=2&competicion=26737859&grupo=27325582'
-// Lo justo para pasar al paso 2: su contenido lo pinta R3.11.
-const aPreview = { season: { label: '2026/27', exists: true }, identityMatches: true, ageCategoryChecked: true }
+// Un `/preview` que cuadra con el equipo: Primera Alevín, fútbol 7, masculino; con tres equipos en el grupo, en el
+// orden del calendario, y uno sin código.
+function team(rawName: string, federationTeamId: string | null, takenBy: unknown = null) {
+  return { rawName, federationTeamId, takenBy }
+}
+const aPreview = {
+  season: { federationSeasonId: '22', label: '2026/27', exists: true },
+  identityMatches: true,
+  ageCategoryChecked: true,
+  competition: {
+    modality: 'futbol_7',
+    gender: 'masculino',
+    ageCategory: 'alevin',
+    divisionLabel: 'PRIMERA ALEVIN',
+    groupLabel: 'Grupo 4',
+    federationCompetitionId: '26737859',
+    federationGroupId: '27325582',
+    roundCount: 26,
+    alreadyRegistered: false,
+    teams: [
+      team("U.D. SAN ROQUE 'B'", '101'),
+      team("CELTIC CASTILLA C.F. 'B'", '102'),
+      team("ESCUELA RIOSECO 'A'", null),
+      team("A.D. LOS OLIVOS 'A'", '104'),
+    ],
+  },
+}
 
-// Un servidor de mentira: el equipo y el `/preview`, como diga cada prueba; apunta lo que se envió a comprobar.
-function fakeServer(answers: { team?: () => Response | Promise<Response>; preview?: () => Response | Promise<Response> }) {
+// Un servidor de mentira: el equipo, el `/preview` y el enganche, como diga cada prueba; apunta lo que se envió a
+// comprobar (`sent`) y a sincronizar (`linked`).
+type Answer = () => Response | Promise<Response>
+function fakeServer(answers: { team?: Answer; preview?: Answer; link?: Answer }) {
   const sent: unknown[] = []
+  const linked: unknown[] = []
   const asked: string[] = []
   vi.stubGlobal('fetch', async (request: Request) => {
     const path = new URL(request.url).pathname
@@ -35,9 +63,13 @@ function fakeServer(answers: { team?: () => Response | Promise<Response>; previe
       sent.push(await request.json())
       return (answers.preview ?? (() => Response.json(aPreview)))()
     }
+    if (request.method === 'POST' && path === `/api/v1/teams/${teamId}/federation-link`) {
+      linked.push(await request.json())
+      return (answers.link ?? (() => Response.json({ jobId: 'j', status: 'encolado', teamId, competitionId: 'c', seasonId: 's' }, { status: 202 })))()
+    }
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
-  return { sent, asked }
+  return { sent, linked, asked }
 }
 
 function problem(status: number, code: string) {
@@ -290,3 +322,278 @@ describe('Cancelar', () => {
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/'))
   })
 })
+
+// ── El paso 2 ──
+
+// Un `/preview` como `aPreview`, con lo que cambie cada prueba en la competición, la temporada o lo demás.
+function previewWith(changes: { competition?: object; season?: object; ageCategoryChecked?: boolean }) {
+  return {
+    ...aPreview,
+    ...(changes.ageCategoryChecked === undefined ? {} : { ageCategoryChecked: changes.ageCategoryChecked }),
+    season: { ...aPreview.season, ...changes.season },
+    competition: { ...aPreview.competition, ...changes.competition },
+  }
+}
+
+// Abre la pantalla y comprueba la dirección: llega al paso 2.
+async function openStepTwo(answers: Parameters<typeof fakeServer>[0] = {}, fromHome?: string) {
+  const server = fakeServer(answers)
+  const router = await openScreen(teamId, fromHome)
+  await checkAddress(calendar)
+  await screen.findByRole('heading', { name: 'Lo que hay en esa dirección' })
+  return { ...server, router }
+}
+
+const teamChoice = () => screen.getByRole('group', { name: /¿Cuál es tu equipo\?/ })
+const radios = () => within(teamChoice()).getAllByRole('radio')
+const syncButton = () => screen.getByRole('button', { name: /^Sincronizar/ })
+const summary = () =>
+  [...document.querySelectorAll('.summary div')].map((pair) => [pair.querySelector('dt')!.textContent, pair.querySelector('dd')!.textContent!.trim()])
+
+describe('el paso 2: lo que hay en la dirección (§3.3)', () => {
+  test('el resumen de la competición, y el foco en su título', async () => {
+    await openStepTwo()
+
+    expect(summary()).toEqual([
+      ['Competición', 'PRIMERA ALEVIN · Grupo 4'],
+      ['Edad', 'Alevín'],
+      ['Modalidad', 'Fútbol 7'],
+      ['Temporada', '2026/27'],
+      ['Jornadas', '26'],
+    ])
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Lo que hay en esa dirección' })).toHaveFocus())
+  })
+
+  test('la dirección comprobada, en su línea, sin el https://', async () => {
+    await openStepTwo()
+
+    expect(screen.getByText(calendar.replace('https://', ''))).toBeInTheDocument()
+  })
+
+  test('una temporada que el club no tiene: «nueva», y el aviso de que se creará', async () => {
+    await openStepTwo({ preview: () => Response.json(previewWith({ season: { label: '2027/28', exists: false } })) })
+
+    expect(summary()).toContainEqual(['Temporada', '2027/28 · nueva'])
+    expect(screen.getByText(/no existe todavía en el club: se creará al sincronizar/)).toHaveTextContent('La temporada 2027/28')
+  })
+
+  test('una competición que ya está en el club: el aviso, y su género a la vista, sin elegirlo', async () => {
+    await openStepTwo({ preview: () => Response.json(previewWith({ competition: { alreadyRegistered: true } })) })
+
+    expect(screen.getByText('Esta competición ya está en el club; se reutiliza.')).toBeInTheDocument()
+    expect(summary()).toContainEqual(['Género', 'Masculino'])
+    expect(screen.queryByRole('combobox', { name: /Género/ })).not.toBeInTheDocument()
+  })
+
+  test('una competición de otra edad: qué no cuadra, y no deja sincronizar', async () => {
+    await openStepTwo({ preview: () => Response.json(previewWith({ competition: { ageCategory: 'infantil' } })) })
+
+    expect(screen.getByText('Edad: el equipo es Alevín y la competición, Infantil.')).toBeInTheDocument()
+    expect(syncButton()).toBeDisabled()
+  })
+
+  test('el género propuesto no cuadra: al corregirlo, deja sincronizar, y se envía el elegido', async () => {
+    const { linked } = await openStepTwo({ preview: () => Response.json(previewWith({ competition: { gender: 'femenino' } })) })
+    expect(screen.getByText('Género: el equipo es Masculino y la competición, Femenino.')).toBeInTheDocument()
+    expect(syncButton()).toBeDisabled()
+
+    await fireEvent.click(screen.getByRole('combobox', { name: /Género de la competición/ }))
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: 'Masculino' }))
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+    await fireEvent.click(syncButton())
+
+    await waitFor(() => expect(linked).toEqual([expect.objectContaining({ gender: 'masculino' })]))
+  })
+
+  test('una competición cuyo nombre no dice la edad: el aviso, y deja sincronizar', async () => {
+    await openStepTwo({ preview: () => Response.json(previewWith({ ageCategoryChecked: false })) })
+
+    expect(screen.getByText(/La Federación no dice la edad de esta competición: se usará la del equipo, Alevín\./)).toBeInTheDocument()
+    expect(syncButton()).toBeEnabled()
+  })
+})
+
+describe('el paso 2: la lista de equipos (decisión 4)', () => {
+  test('por orden alfabético, ninguno elegido, y el botón dice solo «Sincronizar»', async () => {
+    await openStepTwo()
+
+    expect(radios()).toHaveLength(4)
+    expect([...teamChoice().querySelectorAll('.option label')].map((label) => label.textContent!.trim())).toEqual([
+      "A.D. LOS OLIVOS 'A'",
+      "CELTIC CASTILLA C.F. 'B'",
+      "ESCUELA RIOSECO 'A'",
+      "U.D. SAN ROQUE 'B'",
+    ])
+    expect(radios().filter((radio) => (radio as HTMLInputElement).checked)).toEqual([])
+    expect(syncButton()).toHaveTextContent(/^Sincronizar$/)
+  })
+
+  test('el que no tiene código: desactivado, y el motivo se lee con él', async () => {
+    await openStepTwo()
+
+    const noCode = screen.getByRole('radio', { name: /ESCUELA RIOSECO/ })
+    expect(noCode).toBeDisabled()
+    expect(noCode).toHaveAccessibleDescription('La Federación no publica su código: no se puede elegir')
+  })
+
+  test('el que ya es de otro equipo del club, o de este: desactivado, diciendo de quién', async () => {
+    const taken = (teamRef: string, displayName: string) => ({ teamId: teamRef, displayName, shortDisplayName: 'x', isOwn: true })
+    await openStepTwo({
+      preview: () =>
+        Response.json(
+          previewWith({
+            competition: {
+              teams: [team("CELTIC CASTILLA C.F. 'A'", '201', taken('otro', 'Celtic Alevín A')), team("CELTIC CASTILLA C.F. 'B'", '202', taken(teamId, 'Celtic Alevín B'))],
+            },
+          }),
+        ),
+    })
+
+    expect(screen.getByRole('radio', { name: /'A'/ })).toHaveAccessibleDescription('Ya está sincronizado con Celtic Alevín A')
+    expect(screen.getByRole('radio', { name: /'B'/ })).toHaveAccessibleDescription('Ya está sincronizado con este equipo')
+  })
+
+  test('al elegir uno, el botón dice su nombre', async () => {
+    await openStepTwo()
+
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    expect(syncButton()).toHaveTextContent("Sincronizar CELTIC CASTILLA C.F. 'B'")
+  })
+})
+
+describe('el paso 2: sincronizar', () => {
+  test('sin elegir: «Elige tu equipo» en la lista de errores, con el foco, y en la lista; sin enviar nada', async () => {
+    const { linked } = await openStepTwo()
+
+    await fireEvent.click(syncButton())
+
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Revisa este campo:' })).toHaveFocus())
+    expect(screen.getByRole('link', { name: /Elige tu equipo/ })).toBeInTheDocument()
+    expect(teamChoice()).toHaveAccessibleDescription(expect.stringContaining('Elige tu equipo'))
+    expect(linked).toEqual([])
+  })
+
+  test('el enlace de la lista de errores lleva al primer equipo que se puede elegir', async () => {
+    await openStepTwo()
+    await fireEvent.click(syncButton())
+
+    await fireEvent.click(await screen.findByRole('link', { name: /Elige tu equipo/ }))
+
+    expect(screen.getByRole('radio', { name: /LOS OLIVOS/ })).toHaveFocus()
+  })
+
+  test('al elegir después, lo que faltaba se va', async () => {
+    await openStepTwo()
+    await fireEvent.click(syncButton())
+
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    expect(screen.queryByRole('group', { name: 'Revisa este campo:' })).not.toBeInTheDocument()
+  })
+
+  test('con uno elegido: la dirección comprobada, su código y el género; sin la temporada (decisión 3)', async () => {
+    const { linked } = await openStepTwo()
+
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+    await fireEvent.click(syncButton())
+
+    await waitFor(() =>
+      expect(linked).toEqual([{ federationCalendarUrl: calendar, ownTeamFederationId: '102', gender: 'masculino' }]),
+    )
+  })
+
+  test('bien: de momento, vuelve a la portada de la que se vino (la vuelta de verdad es de R3.12)', async () => {
+    const { router } = await openStepTwo({}, '2025/26')
+
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+    await fireEvent.click(syncButton())
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
+  })
+
+  test.each([
+    [409, 'OWN_TEAM_NOT_IN_CALENDAR', 'Ese equipo ya no está en el calendario de la Federación. Vuelve a comprobar con el botón ↻ de la dirección.'],
+    [502, 'FEDERATION_SEASON_MISMATCH', 'Las fechas de ese calendario son de otra temporada.'],
+    [504, 'FEDERATION_UNREACHABLE', 'La Federación no responde. Prueba otra vez en un rato.'],
+  ])('un %i %s: arriba, sin Reintentar, y lo elegido sigue', async (status, code, message) => {
+    await openStepTwo({ link: () => problem(status, code) })
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(syncButton())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'")).toBeChecked()
+  })
+
+  test('el equipo ya no está: la página entera', async () => {
+    await openStepTwo({ link: () => problem(404, 'TEAM_NOT_FOUND') })
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(syncButton())
+
+    expect(await screen.findByRole('link', { name: 'Ir a la portada' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /¿Cuál es tu equipo/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('el paso 2: la línea de la dirección', () => {
+  test('editar vuelve al paso 1 con la dirección comprobada en el campo, y el foco en él; lo comprobado se borra', async () => {
+    await openStepTwo()
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Editar la dirección' }))
+
+    const input = await urlField()
+    expect(input).toHaveValue(calendar)
+    await waitFor(() => expect(input).toHaveFocus())
+    expect(screen.queryByRole('heading', { name: 'Lo que hay en esa dirección' })).not.toBeInTheDocument()
+
+    // Vuelto a comprobar, ninguno elegido: lo de antes no se arrastra.
+    await fireEvent.click(checkButton())
+    await screen.findByRole('heading', { name: 'Lo que hay en esa dirección' })
+    expect(radios().filter((radio) => (radio as HTMLInputElement).checked)).toEqual([])
+  })
+
+  test('volver a comprobar repite el /preview con la misma dirección, y conserva el equipo elegido', async () => {
+    // La segunda respuesta, con una jornada más: así se sabe que ya ha llegado.
+    let calls = 0
+    const { sent } = await openStepTwo({
+      preview: () => Response.json(++calls === 1 ? aPreview : previewWith({ competition: { roundCount: 27 } })),
+    })
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Volver a comprobar en la Federación' }))
+
+    await waitFor(() => expect(summary()).toContainEqual(['Jornadas', '27']))
+    expect(sent).toEqual([{ federationCalendarUrl: calendar }, { federationCalendarUrl: calendar }])
+    expect(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'")).toBeChecked()
+  })
+
+  test('volver a comprobar: si el elegido ya no se puede elegir, se suelta', async () => {
+    let calls = 0
+    const second = previewWith({
+      competition: { teams: [team("CELTIC CASTILLA C.F. 'B'", '102', { teamId: 'otro', displayName: 'Celtic Alevín A', shortDisplayName: 'x', isOwn: true })] },
+    })
+    await openStepTwo({ preview: () => Response.json(++calls === 1 ? aPreview : second) })
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Volver a comprobar en la Federación' }))
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: /'B'/ })).toBeDisabled())
+    expect(syncButton()).toHaveTextContent(/^Sincronizar$/)
+  })
+
+  test('volver a comprobar con la Federación caída: arriba, y lo de antes sigue', async () => {
+    let calls = 0
+    await openStepTwo({ preview: () => (++calls === 1 ? Response.json(aPreview) : problem(504, 'FEDERATION_UNREACHABLE')) })
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Volver a comprobar en la Federación' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('La Federación no responde.')
+    expect(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'")).toBeChecked()
+  })
+})
+

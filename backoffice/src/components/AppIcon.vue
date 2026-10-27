@@ -12,6 +12,13 @@ const drawings = {
     'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71',
     'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
   ],
+  // Editar (R3, la dirección comprobada).
+  pencil: [
+    'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z',
+    'm15 5 4 4',
+  ],
+  // Volver a comprobar (R3, la dirección comprobada).
+  'rotate-cw': ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
 }
 
 export type IconName = keyof typeof drawings

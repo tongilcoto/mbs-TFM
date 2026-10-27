@@ -1,7 +1,7 @@
 <!-- La tabla de la portada: los equipos de una temporada, con su competición y cómo va su ingesta (plan R1, §3.2).
      Un equipo con dos competiciones ocupa dos líneas, con su nombre y sus acciones una sola vez (rowspan). -->
 <script setup lang="ts">
-import RowAction from './RowAction.vue'
+import IconAction from './IconAction.vue'
 import SortableHeader from './SortableHeader.vue'
 import type { HealthState, TeamRow } from './teamRow'
 
@@ -79,7 +79,7 @@ function syncTarget(row: TeamRow) {
             </span>
           </td>
           <td class="actions">
-            <RowAction
+            <IconAction
               :label="syncLabel(row)"
               :subject="row.team"
               icon="link"
@@ -127,7 +127,7 @@ function syncTarget(row: TeamRow) {
             class="actions"
             :rowspan="row.competitions.length"
           >
-            <RowAction
+            <IconAction
               :label="syncLabel(row)"
               :subject="row.team"
               icon="link"

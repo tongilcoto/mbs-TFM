@@ -1,14 +1,18 @@
-<!-- Una acción de una fila: un icono que lleva a otra pantalla, con su texto (LLD-B §3.7, plan R3, decisión 1).
-     El texto sale al pasar el ratón y al llegar con el teclado, se queda mientras el ratón está encima de él, y
-     Escape lo esconde sin mover el foco (WCAG 1.4.13). El `Tooltip` de PrimeVue hace lo uno o lo otro, no los dos.
-     El lector de pantalla no necesita el texto: lo lee en el nombre del enlace, con la fila detrás («Sincronizar
-     otra competición, Cadete A»), para que diez enlaces iguales se distingan. -->
+<!-- Una acción con icono y su texto (LLD-B §3.7, plan R3, decisión 1): un enlace si lleva a otra pantalla (`to`), y
+     si no, un botón que avisa al pulsarlo. El texto sale al pasar el ratón y al llegar con el teclado, se queda
+     mientras el ratón está encima de él, y Escape lo esconde sin mover el foco (WCAG 1.4.13). El `Tooltip` de
+     PrimeVue hace lo uno o lo otro, no los dos.
+     El lector de pantalla no necesita el texto: lo lee en el nombre. En una fila, con la fila detrás (`subject`:
+     «Sincronizar otra competición, Cadete A»), para que diez enlaces iguales se distingan. -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import AppIcon, { type IconName } from './AppIcon.vue'
 
-const props = defineProps<{ label: string; subject: string; icon: IconName; to: RouteLocationRaw }>()
+const props = defineProps<{ label: string; subject?: string; icon: IconName; to?: RouteLocationRaw; disabled?: boolean }>()
+defineEmits<{ press: [] }>()
+
+const name = computed(() => (props.subject ? `${props.label}, ${props.subject}` : props.label))
 
 const hovered = ref(false)
 const focused = ref(false)
@@ -38,21 +42,34 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 
 <template>
   <!-- El puntero, en la acción entera, para que el texto siga a la vista con el puntero encima de él; el teclado,
-       en el enlace, que es lo único que recibe el foco. -->
+       en el enlace o el botón, que es lo único que recibe el foco. -->
   <span
     class="action"
     @pointerenter="hover"
     @pointerleave="hovered = false"
   >
     <RouterLink
+      v-if="props.to"
       :to="props.to"
-      :aria-label="`${label}, ${subject}`"
+      :aria-label="name"
       class="target"
       @focus="focus"
       @blur="focused = false"
     >
       <AppIcon :name="icon" />
     </RouterLink>
+    <button
+      v-else
+      type="button"
+      :aria-label="name"
+      :disabled="disabled"
+      class="target"
+      @click="$emit('press')"
+      @focus="focus"
+      @blur="focused = false"
+    >
+      <AppIcon :name="icon" />
+    </button>
     <!-- Sin rol ni `aria-describedby`: el nombre del enlace ya lo dice, y el lector lo leería dos veces. -->
     <span
       v-if="shown"
@@ -77,7 +94,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
   border-radius: var(--p-content-border-radius);
   color: var(--p-text-color);
 }
-.target:hover {
+button.target {
+  padding: 0;
+  border: 1px solid var(--p-content-border-color);
+  background: none;
+  cursor: pointer;
+}
+button.target:disabled {
+  color: var(--p-text-muted-color);
+  cursor: default;
+}
+.target:hover:not(:disabled) {
   background: var(--p-content-hover-background);
 }
 .target:focus-visible {
