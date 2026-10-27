@@ -957,6 +957,15 @@ a dar de alta el agente**: apunta a `current/`, e `install.sh` cambia ese enlace
 **avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no
 entran).
 
+**Regla: una migración que cambia lo que significa una columna se instala el mismo día.** El servidor de
+desarrollo migra la base al arrancar, pero la ingesta de `launchd` sigue con el binario de `current/`, que no
+cambia hasta `install.sh`. Mientras tanto, ese binario lee la base nueva con las reglas viejas, y no falla:
+escribe mal sin avisar. Pasó el 2026-10-18: `D-101` sacó de `teams` el código de los equipos propios, la base se
+migró a las 16:25, y a las 23:30 la ingesta corrió con el binario del 12 de octubre (`f982c9d`). No encontró a
+los propios por su código y los creó como rivales. Hubo que limpiarlos a mano el 27 (plan R3, fila de R3.11).
+Así que, tras una migración de ese tipo, **commit e `install.sh` antes del siguiente disparo**. Si no da tiempo,
+`agent.sh uninstall` hasta instalar.
+
 **Para personalizarlo:**
 
 | Qué | Cómo |
