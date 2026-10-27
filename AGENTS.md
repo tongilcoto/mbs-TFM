@@ -863,6 +863,14 @@ semana por diseño—: pasa el parser por encima de la respuesta viva y exige qu
 tiene **cuatro** señales y no dos, porque `D-84` obligó: sin red · coordenada mala · código HTTP raro ·
 formato cambiado. Solo la última es para lo que existe.
 
+**Y una lección de la rebanada 3, del servidor: donde dos fuentes pueden decir lo mismo, quién gana se escribe y se
+prueba.** La clasificación juntaba rivales e inscripciones con `uniquingKeysWith: first`, y la cadena del
+calendario cogía el primero con el código; con datos limpios daba igual. Un despliegue tardío lo destapó: la base
+se migró a `D-101` al arrancar el servidor de desarrollo, la ingesta de `launchd` siguió cinco días con el binario
+anterior, creó dos equipos propios como rivales, y desde entonces la tabla se escribía en ellos sin avisar. Ahora
+gana el propio (`cf18e40`), y el README del backend tiene la regla: una migración que cambia lo que significa una
+columna se instala el mismo día (plan R3, fila de R3.11).
+
 Sigue pendiente de diseño: forma del *tier* dedicado (§9.2), fallo parcial y paralelismo de las migraciones por
 tenant (§9.3), política de retención RGPD (§9.4) y estimación de costes cloud por *tier*.
 
