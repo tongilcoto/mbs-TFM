@@ -584,6 +584,8 @@ KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests      # conserva los schemas
 | F10 · la inscripción y sus invariantes en el esquema | `TeamRegistrationPersistence` | **sí** |
 | F10 · las dos puertas en HTTP · los enumerados espejo | `FederationLinkEndpoint` · `ContractEnum` | **sí** |
 | F10-ter · el identificador en minúscula | `IdentifierText` | no |
+| Backoffice R3 · `getTeam` y quién tiene cada código en el `/preview`, con dobles | `'GetTeamTests\|FederationLinkPreview'` | no |
+| Backoffice R3 · `getTeam` en HTTP | `TeamReadEndpoint` | **sí** |
 
 > **`--filter` busca por los nombres en Swift** (el tipo de la *suite* y la función del `@Test`), como
 > expresión regular. Eso tiene tres consecuencias:
