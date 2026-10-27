@@ -66,10 +66,12 @@ ul {
 }
 /* Cada enlace, al menos 24 px de alto y con aire entre uno y otro: lo que se pulsa mide 24 × 24 (LLD-B §10.5,
    WCAG 2.2, 2.5.8). Lo vio axe en los escenarios de R2.16. */
+/* Arriba: con un mensaje de dos líneas, la viñeta se queda en la primera. */
 a {
   display: inline-block;
   min-height: 1.5rem;
   line-height: 1.5rem;
+  vertical-align: top;
 }
 li + li {
   margin-top: 0.25rem;

@@ -169,13 +169,12 @@ thead th {
   font-size: 0.875rem;
   color: var(--p-text-muted-color);
 }
-/* «Sincronizar con la Federación», bajo «Sin competición»: del color de los enlaces del tema, no el azul del
-   navegador, y 24 px de alto como mínimo, como en FormErrorList (WCAG 2.5.8). */
+/* «Sincronizar con la Federación», bajo «Sin competición»: 24 px de alto como mínimo, como en FormErrorList
+   (WCAG 2.5.8). */
 .note a {
   display: inline-block;
   min-height: 1.5rem;
   line-height: 1.5rem;
-  color: var(--p-primary-color);
 }
 .icon {
   display: inline-block;
