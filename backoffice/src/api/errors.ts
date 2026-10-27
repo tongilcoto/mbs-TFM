@@ -42,23 +42,23 @@ const messages: Record<ProblemCode, string> = {
   TEAM_ALREADY_REGISTERED: 'Ese equipo ya está dado de alta en esta temporada',
   SEASON_ALREADY_EXISTS: 'Ya existe una temporada con esa etiqueta. Si no la ves en el selector, está archivada: se recupera desde Temporadas',
 
-  // El enganche con la federación
-  ALREADY_LINKED_TO_FEDERATION: 'Este equipo ya está enganchado a la federación',
-  FEDERATION_TEAM_ID_TAKEN: 'Ese código de la federación ya es de otro equipo del club',
-  SEASON_ALREADY_LINKED: 'Esa temporada ya está enganchada con otro código de la federación. Revisa que el calendario sea de la temporada correcta',
-  OWN_TEAM_NOT_IN_CALENDAR: 'Ese código no es de ningún equipo del calendario',
-  COMPETITION_IDENTITY_MISMATCH: 'El equipo y la competición no cuadran: no son de la misma categoría o temporada',
-  UNREADABLE_FEDERATION_URL: 'La dirección del calendario no se puede leer',
+  // Sincronizar con la Federación (plan R3, decisión 6): con las palabras de la pantalla, y diciendo qué hacer.
+  ALREADY_LINKED_TO_FEDERATION: 'Este equipo ya está sincronizado con otro equipo de la Federación en esa competición.',
+  FEDERATION_TEAM_ID_TAKEN: 'Ese equipo de la Federación ya es de otro equipo del club.',
+  SEASON_ALREADY_LINKED: 'Esa temporada ya está sincronizada con otro código de la Federación. Revisa que el calendario sea de la temporada correcta.',
+  OWN_TEAM_NOT_IN_CALENDAR: 'Ese equipo ya no está en el calendario de la Federación. Vuelve a comprobar con el botón ↻ de la dirección.',
+  COMPETITION_IDENTITY_MISMATCH: 'El equipo y la competición no cuadran: no son de la misma edad, género o modalidad.',
+  UNREADABLE_FEDERATION_URL: 'Esa dirección no es la de un calendario de la Federación. Cópiala de la página del calendario del grupo.',
 
-  // Lo que responde la federación
-  FEDERATION_UNREACHABLE: 'La federación no responde',
-  FEDERATION_UNEXPECTED_STATUS: 'La federación ha respondido con un error',
-  FEDERATION_MALFORMED_RESPONSE: 'La federación ha respondido algo que no se entiende',
-  FEDERATION_COORDINATE_NOT_FOUND: 'La federación no tiene ningún calendario en esa dirección',
-  FEDERATION_SOURCE_MISMATCH: 'Esa dirección de la federación es de otra competición',
-  FEDERATION_SEASON_MISMATCH: 'Ese calendario de la federación es de otra temporada',
-  SEASON_LABEL_UNAVAILABLE: 'La federación no dice de qué temporada es el calendario',
-  FEDERATION_ADAPTER_MISSING: 'La web todavía no sabe leer la federación de este club',
+  // Lo que responde la Federación
+  FEDERATION_UNREACHABLE: 'La Federación no responde. Prueba otra vez en un rato.',
+  FEDERATION_UNEXPECTED_STATUS: 'La Federación ha respondido con un error. Prueba otra vez en un rato.',
+  FEDERATION_MALFORMED_RESPONSE: 'La Federación ha respondido con un error. Prueba otra vez en un rato.',
+  FEDERATION_COORDINATE_NOT_FOUND: 'La Federación no tiene ningún calendario en esa dirección. Revisa que esté completa.',
+  FEDERATION_SOURCE_MISMATCH: 'En esa dirección la Federación tiene ahora otra competición.',
+  FEDERATION_SEASON_MISMATCH: 'Las fechas de ese calendario son de otra temporada. Revisa que la dirección sea la de esta temporada.',
+  SEASON_LABEL_UNAVAILABLE: 'La Federación no dice de qué temporada es ese calendario.',
+  FEDERATION_ADAPTER_MISSING: 'Todavía no se puede sincronizar con la federación de este club.',
 
   // La sincronización
   INGESTION_FAILED: 'La sincronización con la federación no ha terminado',
@@ -69,8 +69,14 @@ const messages: Record<ProblemCode, string> = {
   INTERNAL: 'Error del servidor',
 }
 
-// Los únicos códigos que pueden ser pasajeros (LLD-B §4.4). Con el resto, reintentar daría lo mismo.
-const transientCodes: ProblemCode[] = ['DATABASE_UNAVAILABLE', 'FEDERATION_UNREACHABLE']
+// Los únicos códigos que pueden ser pasajeros (LLD-B §4.4). Con el resto, reintentar daría lo mismo. Los dos de la
+// Federación que contesta mal también: la RFFM devuelve a veces `null` unos minutos (H-61, plan R3, decisión 6).
+const transientCodes: ProblemCode[] = [
+  'DATABASE_UNAVAILABLE',
+  'FEDERATION_UNREACHABLE',
+  'FEDERATION_UNEXPECTED_STATUS',
+  'FEDERATION_MALFORMED_RESPONSE',
+]
 
 // Los errores de valor, los únicos cuyo `detail` dice de qué campo son, con la forma `<campo>: <motivo>`.
 const valueErrorCodes: ProblemCode[] = ['INVALID_VALUE', 'NOT_EDITABLE_AFTER_SYNC']

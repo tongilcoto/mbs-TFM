@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **755 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)). **757 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -541,7 +541,7 @@ curl -s http://atleti.localhost:8080/v1/teams/<id del equipo> | jq
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 755 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 757 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
@@ -956,6 +956,15 @@ a dar de alta el agente**: apunta a `current/`, e `install.sh` cambia ese enlace
 últimas versiones en `releases/`, y volver a una es `install.sh <sha>` (instantáneo si sigue ahí). El guion
 **avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no
 entran).
+
+**Regla: una migración que cambia lo que significa una columna se instala el mismo día.** El servidor de
+desarrollo migra la base al arrancar, pero la ingesta de `launchd` sigue con el binario de `current/`, que no
+cambia hasta `install.sh`. Mientras tanto, ese binario lee la base nueva con las reglas viejas, y no falla:
+escribe mal sin avisar. Pasó el 2026-10-18: `D-101` sacó de `teams` el código de los equipos propios, la base se
+migró a las 16:25, y a las 23:30 la ingesta corrió con el binario del 12 de octubre (`f982c9d`). No encontró a
+los propios por su código y los creó como rivales. Hubo que limpiarlos a mano el 27 (plan R3, fila de R3.11).
+Así que, tras una migración de ese tipo, **commit e `install.sh` antes del siguiente disparo**. Si no da tiempo,
+`agent.sh uninstall` hasta instalar.
 
 **Para personalizarlo:**
 

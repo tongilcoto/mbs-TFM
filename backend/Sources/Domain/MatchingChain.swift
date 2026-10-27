@@ -82,7 +82,15 @@ public enum MatchingChain {
         // o cada pasada lo daría de alta como rival. Lo que el paso 2 no puede
         // hacer es alcanzar a los propios **sin** enganchar, y de eso se encarga
         // `TeamOwnership`, no una guarda.
-        if let matched = byFederationKey(incoming.federationTeamID, among: candidates) {
+        //
+        // Y si el código lo tienen un propio y un rival, **gana el propio**, vaya
+        // donde vaya en la lista (`D-101`): el código es de su inscripción en esta
+        // competición, y un rival de esta temporada con el mismo número es un error
+        // de los datos. Antes ganaba el primero, y el orden decidía a quién iban los
+        // partidos.
+        let owned = candidates.filter { $0.ownership == .own }
+        if let matched = byFederationKey(incoming.federationTeamID, among: owned)
+            ?? byFederationKey(incoming.federationTeamID, among: candidates) {
             return .matched(matched, by: .federationKey)
         }
 

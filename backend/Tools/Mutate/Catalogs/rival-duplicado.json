@@ -1,0 +1,27 @@
+{
+  "title": "Un rival con el código de un propio: gana el propio (D-101), en el calendario y en la clasificación",
+  "filter": "MatchingChainTests|IngestStandingsTests",
+  "mutations": [
+    {
+      "id": "M1-cadena-sin-preferir-propio",
+      "description": "el paso 1 de la cadena coge el primero con el código, como antes",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "        let owned = candidates.filter { $0.ownership == .own }",
+      "replace": "        let owned = candidates"
+    },
+    {
+      "id": "M2-cadena-solo-propios",
+      "description": "el paso 1 de la cadena solo mira a los propios: los rivales con código dejan de casar",
+      "file": "Sources/Domain/MatchingChain.swift",
+      "find": "            ?? byFederationKey(incoming.federationTeamID, among: candidates) {",
+      "replace": "            ?? nil {"
+    },
+    {
+      "id": "M3-tabla-gana-el-rival",
+      "description": "al juntar los mapas de la clasificación gana el rival, como antes",
+      "file": "Sources/Application/IngestStandings.swift",
+      "find": "                        uniquingKeysWith: { _, own in own }),",
+      "replace": "                        uniquingKeysWith: { rival, _ in rival }),"
+    }
+  ]
+}

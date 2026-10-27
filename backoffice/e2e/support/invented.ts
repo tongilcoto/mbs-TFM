@@ -41,6 +41,8 @@ const categoryInFederationNames: Record<Category, string> = {
 export const gameTypes: Record<Modality, string> = { futbol_11: '1', futbol_7: '2', futbol_sala: '3', futbol_5: '4' }
 
 const divisions = ['PRIMERA', 'SEGUNDA', 'PREFERENTE', 'DIVISIÓN DE HONOR', 'SUPERLIGA']
+// Competiciones de verdad de la RFFM cuyo nombre no dice la edad (A-12·H-75).
+const ageless = ['COPA RFEF FASE AUTONÓMICA', 'TERCERA FEDERACIÓN RFEF', 'COPA DE LA COMUNIDAD']
 const rivalNames = ['C.D. LAS ROZAS', 'A.D. ALCORCÓN', 'C.F. POZUELO', 'E.F. TRES CANTOS', 'C.D. LEGANÉS NORTE',
   'U.D. SAN SEBASTIÁN', 'C.D. MÓSTOLES URJC', 'A.D. VILLAVERDE', 'C.F. ARGANDA', 'R.S.D. ALCALÁ']
 const clubNames = ['Atlético Ribera', 'Racing Arroyo', 'Unión Valdebebas', 'Deportivo Sierra', 'Sporting Henares',
@@ -165,13 +167,26 @@ export interface Competition {
   rowName: string
   /** La dirección de su calendario en la web de la RFFM: la que se pega para engancharla. */
   calendarUrl: string
+  /**
+   * Lo que dice su calendario en `temporada`, si no es la de la temporada («2026-2027»): «2027-2029» no se puede
+   * leer como etiqueta, y el servidor se queda sin saber de qué temporada es (H-10).
+   */
+  calendarSeason?: string
   /** El `id` que le da el servidor. */
   id?: string
 }
 
-/** Una competición de la temporada, de la edad, el género y la modalidad del equipo. */
-export function competition(random: Random, of: Season, forTeam: Pick<Team, 'category' | 'gender' | 'modality'>): Competition {
-  const words = [random.pick(divisions), categoryInFederationNames[forTeam.category]]
+/**
+ * Una competición de la temporada, de la edad, el género y la modalidad del equipo. Con `withoutAge`, su nombre no
+ * dice la edad, como «COPA RFEF FASE AUTONÓMICA»: el servidor no la puede comprobar y usa la del equipo.
+ */
+export function competition(
+  random: Random,
+  of: Season,
+  forTeam: Pick<Team, 'category' | 'gender' | 'modality'>,
+  withoutAge = false,
+): Competition {
+  const words = withoutAge ? [random.pick(ageless)] : [random.pick(divisions), categoryInFederationNames[forTeam.category]]
   if (forTeam.gender === 'femenino') words.push('FEMENINO')
   const division = words.join(' ')
   const group = `Grupo ${random.int(1, 12)}`

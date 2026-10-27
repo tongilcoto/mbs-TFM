@@ -373,6 +373,34 @@ struct IngestStandingsTests {
         #expect(runs.first?.skipped.map(\.reason) == [.unknownStandingTeam])
     }
 
+    /// **Si un rival de esta temporada lleva el código de la inscripción de un
+    /// propio, la fila va al propio** (`D-101`). Pasó de verdad: una ingesta con el
+    /// binario anterior a `D-101` creó como rivales al Cadete B y al Alevín A del
+    /// club, y desde entonces cada jornada de la tabla se escribía en el rival,
+    /// porque al juntar los dos mapas ganaba el primero, que era el de los rivales.
+    @Test("con el mismo código en un rival y en la inscripción de un propio, la fila va al propio (D-101)")
+    func theOwnRegistrationWinsOverARivalWithItsCode() async throws {
+        let fixture = try await Self.seed(roundNumbers: [1], played: [1])
+        let own = try Team(
+            id: TeamID(raw: UUID()), opponentClubID: nil, category: .cadete,
+            letter: "A", gender: .masculino, modality: .futbol11,
+            createdAt: Self.now, updatedAt: Self.now)
+        let here = try TeamRegistration(
+            id: TeamRegistrationID(raw: UUID()), team: own, seasonID: SeasonID(raw: UUID()),
+            competitionID: fixture.competition, federationTeamID: "111",
+            createdAt: Self.now, updatedAt: Self.now)
+        await fixture.store.seed(teams: [own])
+        await fixture.store.seed(teamRegistrations: [here])
+        let client = StandingsClient([1: Self.table(["111", "222"])])
+
+        _ = try await Self.useCase(fixture, client: client)
+            .execute(competitionID: fixture.competition, actor: .init(clubSlug: try Slug("atleti")))
+
+        let written = await fixture.store.standingRows
+        #expect(written.first { $0.position == 1 }?.teamID == own.id)
+        #expect(!written.contains { $0.teamID == fixture.teams["111"] })
+    }
+
     // ── El registro ──────────────────────────────────────────────────────────
 
     @Test("la pasada deja su fila con la jornada y los contadores (D-85)")

@@ -1197,3 +1197,49 @@ sin lector no se transporta**. Están descritos aquí y entran el día que exist
 - **Si la lista tiene tope.** 218 filas y ni rastro de paginación en la respuesta; el volcado de la FCF, en
   cambio, trae **exactamente 50**, que huele a *top-50* del servidor. En Madrid no parece haberlo, pero no se
   ha probado con un grupo grande.
+
+---
+
+## F.20 El calendario lo manda el grupo; la competición solo pone el nombre — **medido el 2026-10-27**
+
+*(Visto al probar la pantalla de sincronizar de la [rebanada 3](./Plan%20de%20desarrollo%20R3%20Enganche-001.md),
+R3.10: el desarrollador cambió el número de la competición en la dirección y la pantalla no dio error.)*
+
+Con el grupo de la PRIMERA CADETE G4 de 2026/27 (`grupo=26737755`, `temporada=22`) y distintos valores en lo
+demás:
+
+| `competicion` | `tipojuego` | `calendar.competicion` | `grupo` | Jornadas |
+|---|---|---|---|---|
+| `26737751` (la suya) | 1 | PRIMERA CADETE | Grupo 4 | 30 |
+| `1` (no existe) | 1 | **`''`** | Grupo 4 | 30, las mismas |
+| `26737701` (**otra que sí existe**) | 1 | **PREFERENTE AFICIONADO** | Grupo 4 | 30, las mismas |
+| `26737751` | 2 y 9 | PRIMERA CADETE | Grupo 4 | 30, las mismas |
+
+→ `RFFM-calendario-competicion-inexistente.html` y `RFFM-calendario-competicion-ajena.html`.
+
+**Lo que corrige**: §F.16 y §F.17 dicen que mandan `competicion`+`grupo`. **Manda el grupo**: los partidos son
+siempre los del grupo, y la competición solo pone el nombre, que la RFFM busca por su código sin comprobar que
+el grupo sea suyo. `tipojuego` no cambia nada (`tipo_competicion` sale `"2"` en todos). Lo que sigue en pie es lo
+de §F.16: `temporada` solo tiñe la etiqueta.
+
+**Lo que hace hoy el servidor**: el `/preview` acepta las dos direcciones y contesta 200. Con la competición
+que no existe, `divisionLabel` vacío; con la ajena, «PREFERENTE AFICIONADO · Grupo 4» con los equipos del cadete.
+Sincronizar guardaría la competición con ese código y ese nombre; la ingesta iría bien, porque usa el grupo.
+
+**Lo que ya lo frena, en parte**: si la competición ajena es de otra edad, como aquí, la identidad no cuadra
+(`identityMatches = false`) y la pantalla no deja sincronizar. Si es de la misma edad y otra división (Segunda
+Cadete con un grupo de Primera), pasa con el nombre equivocado.
+
+**Por qué no se arregla todavía** (decidido con el desarrollador): equivocarse así es muy difícil. Al editar la
+dirección, el cursor se queda al final, en el grupo; un dedo mal apoyado cambia el grupo, que la RFFM sí rechaza
+(`calendar: null`). Cambiar la competición dejando el grupo hay que hacerlo a propósito.
+
+**Lo que haría falta, apuntado como pendiente** en el plan del backoffice:
+
+- **La competición que no existe**: el nombre vacío como coordenada mala (`coordinateNotFound`) en
+  `RFFMCalendarParser`, junto a la temporada vacía. Sencillo, con su prueba sobre el volcado.
+- **La competición ajena**: comprobar que el grupo es de la competición. La pista está en
+  `RFFM-groups.txt`, una lista de los grupos de una competición (`26737752`… de la PRIMERA CADETE) que ningún
+  documento cita y que contradice, en parte, «no existe una API de descubrimiento» (§F.1). Falta saber de qué
+  llamada sale.
+

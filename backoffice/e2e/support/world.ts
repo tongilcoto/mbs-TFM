@@ -35,6 +35,12 @@ export interface ScenarioData {
   twins?: Team[]
   /** Los equipos de la tabla en el orden en que los manda el servidor (bloque T). */
   inServerOrder?: Team[]
+  /** La competición que la Federación tiene para el equipo que se sincroniza (plan R3). */
+  offer?: Competition
+  /** El otro equipo del club, sin sincronizar, en la competición que juega el equipo (plan R3, D-110). */
+  otherTeam?: Team
+  /** El nombre que se eligió en la lista del paso 2, como lo escribe la Federación (plan R3). */
+  chosen?: string
 }
 
 export class ScenarioWorld extends World {

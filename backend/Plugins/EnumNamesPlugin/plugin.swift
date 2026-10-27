@@ -13,7 +13,9 @@ struct EnumNamesPlugin: BuildToolPlugin {
             .buildCommand(
                 displayName: "Los nombres de las listas del catálogo (D-109)",
                 executable: try context.tool(named: "EnumNamesTool").url,
-                arguments: [catalog.path(), config.path(), output.path()],
+                // Sin codificar: `path()` escribe un espacio como `%20`, y la herramienta no encuentra el fichero
+                // cuando la ruta lo tiene (`~/Library/Application Support/tfm`, donde compila `install.sh`).
+                arguments: [catalog, config, output].map { $0.path(percentEncoded: false) },
                 inputFiles: [catalog, config],
                 outputFiles: [output]
             ),

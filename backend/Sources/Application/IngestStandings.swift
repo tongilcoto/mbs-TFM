@@ -293,13 +293,20 @@ public struct IngestStandings: Sendable {
                 // pasada del calendario, o la tabla casaría con otro número. Y
                 // solo los rivales **de esta temporada** (`D-104`): el mismo
                 // código del año pasado es otra fila.
+                //
+                // **Si un rival lleva el código de un propio, gana el propio**
+                // (`D-101`), como en la cadena del calendario. Antes ganaba el
+                // rival, por ir primero al juntar los dos mapas, y cada jornada
+                // se escribía en un rival duplicado sin que nada avisara.
                 teamsByFederationID: Dictionary(
                     try await repositories.teams.list()
                         .filter { $0.counts(in: competition.seasonID) }
-                        .compactMap { team in team.federationTeamID.map { ($0, team.id) } }
-                        + repositories.teamRegistrations.list(competitionID: competitionID)
-                        .compactMap { row in row.federationTeamID.map { ($0, row.teamID) } },
-                    uniquingKeysWith: { first, _ in first }),
+                        .compactMap { team in team.federationTeamID.map { ($0, team.id) } },
+                    uniquingKeysWith: { first, _ in first })
+                    .merging(
+                        try await repositories.teamRegistrations.list(competitionID: competitionID)
+                            .compactMap { row in row.federationTeamID.map { ($0, row.teamID) } },
+                        uniquingKeysWith: { _, own in own }),
                 previousOfFirstStep: previous)
         }
     }

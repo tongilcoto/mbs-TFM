@@ -93,6 +93,35 @@ export async function addPlayingTeam(
   return { team: created, competition: plays }
 }
 
+/**
+ * Engancha un equipo que ya existe a una competición inventada, con el código que se diga del grupo (por defecto,
+ * el primero, el del club). Vuelve cuando acaba la primera ingesta, con el `id` de la competición.
+ */
+export async function linkTeam(club: ScenarioClub, linked: Team, plays: Competition, ownCode = plays.teams[0]!.code): Promise<string> {
+  fakeFederation().invent(plays)
+  const { competitionId } = await expectApi<{ competitionId: string }>(
+    club,
+    'POST',
+    `/teams/${linked.id}/federation-link`,
+    { federationCalendarUrl: plays.calendarUrl, ownTeamFederationId: ownCode, gender: linked.gender },
+    202,
+  )
+  plays.id = competitionId
+  await ingestionFinished(club, competitionId)
+  return competitionId
+}
+
+/** El `id` de la competición del club con ese grupo de la federación, en la temporada de la etiqueta; o nada. */
+export async function competitionIdByGroup(club: ScenarioClub, seasonLabel: string, federationGroupId: string): Promise<string | undefined> {
+  const seasons = await expectApi<{ id: string; label: string }[]>(club, 'GET', '/seasons?includeArchived=true', undefined, 200)
+  const season = seasons.find((s) => s.label === seasonLabel)
+  if (!season) return undefined
+  const competitions = await expectApi<{ id: string; federationGroupId: string }[]>(
+    club, 'GET', `/competitions?seasonId=${season.id}`, undefined, 200,
+  )
+  return competitions.find((c) => c.federationGroupId === federationGroupId)?.id
+}
+
 /** Un equipo nuevo del club, inscrito en la temporada sin competición (el estado de junio), por el alta. */
 export function addTeamWithoutCompetition(club: ScenarioClub, random: Random, season: Season, taken: Team[] = []): Promise<Team> {
   return createTeam(club, random, season, taken)
@@ -240,3 +269,19 @@ export async function settleIngestions(club: ScenarioClub, competitionIds: strin
     await ingestionFinished(club, id, 5_000).catch(() => undefined)
   }
 }
+
+/**
+ * El `id` del rival que la ingesta escribió con ese código. Ninguna operación de la API lista los rivales (la
+ * pantalla que los enseña es de la rebanada 7), así que se busca en la base.
+ */
+export function rivalTeamId(club: ScenarioClub, federationTeamId: string): Promise<string> {
+  return sql(club, async (query) => {
+    const rows = await query(
+      'select id from $schema.teams where federation_team_id = $1 and opponent_club_id is not null',
+      [federationTeamId],
+    )
+    if (!rows[0]) throw new Error(`No hay ningún rival con el código ${federationTeamId}`)
+    return rows[0].id!
+  })
+}
+

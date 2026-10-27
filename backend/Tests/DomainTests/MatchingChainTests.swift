@@ -500,6 +500,40 @@ struct MatchingChainTests {
         #expect(outcome == .matched(miInfantilAEnganchado.id, by: .federationKey))
     }
 
+    /// **Un rival con el código de un propio no le gana, vaya donde vaya en la
+    /// lista** (`D-101`). El código es de la inscripción del propio en esta
+    /// competición; un rival de esta temporada con el mismo número es un error de
+    /// los datos —el que dejó una ingesta con el binario anterior a `D-101` sobre
+    /// la base ya migrada—, y antes el paso 1 cogía el primero de la lista: el
+    /// orden decidía a quién iban los partidos.
+    @Test("con el mismo código en un propio y en un rival, gana el propio aunque el rival vaya antes (D-101)")
+    func step1PrefersTheOwnTeamOverARivalWithItsCode() {
+        let rivalDuplicado = TeamCandidate(
+            id: TeamID(raw: UUID()),
+            federationTeamID: "820",
+            ownership: .opponent(clubName: NormalizedName("CELTIC CASTILLA C.F.")),
+            category: .cadete, letter: "B", gender: .masculino, modality: .futbol11
+        )
+        let miCadeteB = TeamCandidate(
+            id: TeamID(raw: UUID()),
+            federationTeamID: "820",
+            ownership: .own,
+            category: .cadete, letter: "B", gender: .masculino, modality: .futbol11
+        )
+
+        let outcome = MatchingChain.team(
+            IncomingTeam(
+                federationTeamID: "820",
+                clubName: NormalizedName("CELTIC CASTILLA C.F."),
+                letter: "B"
+            ),
+            in: CompetitionScope(ageCategory: .cadete, gender: .masculino, modality: .futbol11),
+            among: [rivalDuplicado, miCadeteB]
+        )
+
+        #expect(outcome == .matched(miCadeteB.id, by: .federationKey))
+    }
+
     // ── Partidos: paso 1 ─────────────────────────────────────────────────────
 
     /// §3.7, paso 1 de la cadena de partidos: *"`federation_match_id`, si el

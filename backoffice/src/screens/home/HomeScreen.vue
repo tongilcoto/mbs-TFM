@@ -1,6 +1,7 @@
 <!-- La portada: los equipos del club en una temporada (plan R1, §3.2). Pide la lista de temporadas una vez, y
      con la elegida, sus equipos y sus competiciones a la vez: tres peticiones al abrir y dos al cambiar de
-     temporada, tenga el club los equipos que tenga. -->
+     temporada, tenga el club los equipos que tenga. Mientras alguna ingesta esté «En marcha», vuelve a pedir las
+     competiciones sola (plan R3, decisión 5). -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -8,9 +9,11 @@ import Button from 'primevue/button'
 import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
+import type { components } from '../../api/schema'
 import LoadError from '../../components/LoadError.vue'
 import SeasonPicker from '../../components/SeasonPicker.vue'
 import TeamsTable from '../../components/TeamsTable.vue'
+import { refreshWhile } from '../../refresh'
 import { nextOrder, orderFromAddress, orderToAddress, sortRows } from '../../sorting'
 import { type Column, columns, rules } from './order'
 import { type HomeRow, teamRows } from './rows'
@@ -29,7 +32,12 @@ type State =
 const route = useRoute()
 const router = useRouter()
 
+type Registration = components['schemas']['TeamRegistrationResponse']
+
 const state = ref<State>({ kind: 'loading' })
+// Los equipos de la temporada que se ve, para rehacer las filas al refrescar: una ingesta cambia las
+// competiciones, no quién está inscrito.
+let registrations: Registration[] = []
 // `undefined` mientras no se han pedido, o si su petición falló.
 const seasons = ref<Season[]>()
 const choice = ref<SeasonChoice>()
@@ -37,6 +45,8 @@ const choice = ref<SeasonChoice>()
 // Cada carga cancela la anterior: al cambiar de temporada deprisa, una respuesta vieja no se pinta encima de
 // la nueva; y al salir de la pantalla, se cancela la que quede (LLD-B §3.2).
 let pending: AbortController | undefined
+// El refresco a medias, que también se cancela: lo cancela una carga nueva, o salir.
+let refreshing: AbortController | undefined
 
 const chosen = computed(() => (choice.value?.kind === 'chosen' ? choice.value : undefined))
 const pickerLabels = computed(() => newestFirst(seasons.value ?? []).map((s) => s.label))
@@ -45,6 +55,7 @@ async function load() {
   pending?.abort()
   const leaving = new AbortController()
   pending = leaving
+  refreshing?.abort()
   state.value = { kind: 'loading' }
 
   try {
@@ -69,12 +80,12 @@ async function load() {
     }
 
     const seasonId = choice.value.season.id
-    const [registrations, competitions] = await Promise.all([
+    const [registered, competitions] = await Promise.all([
       asResult(api.GET('/seasons/{seasonId}/registrations', { params: { path: { seasonId } }, signal: leaving.signal })),
       asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: leaving.signal })),
     ])
-    if (!registrations.ok) {
-      state.value = { kind: 'error', error: registrations.error }
+    if (!registered.ok) {
+      state.value = { kind: 'error', error: registered.error }
       return
     }
     if (!competitions.ok) {
@@ -82,7 +93,8 @@ async function load() {
       return
     }
 
-    const rows = teamRows(registrations.data, competitions.data)
+    registrations = registered.data
+    const rows = teamRows(registrations, competitions.data)
     state.value = rows.length === 0 ? { kind: 'noTeams' } : { kind: 'teams', rows }
   } catch (error) {
     // Cancelada por otra carga o por salir de la pantalla: no hay nada que enseñar.
@@ -93,7 +105,35 @@ async function load() {
 
 // Al abrir, y cada vez que cambia la temporada de la dirección (el selector, o «Atrás»).
 watch(() => route.query.temporada, load, { immediate: true })
-onBeforeUnmount(() => pending?.abort())
+
+// El refresco (decisión 5): mientras alguna competición de la temporada esté «En marcha», cada 10 s, solo las
+// competiciones. Sin «Cargando…»: lo que hay se queda hasta que llega lo nuevo, y las filas son las mismas (por su
+// `id`), así que el orden y el foco no se mueven. Si falla, se deja como estaba: un refresco no pinta errores. Y
+// no se anuncia al lector: el aviso de arriba ya dice que la ingesta está en marcha.
+const running = computed(
+  () => state.value.kind === 'teams' && state.value.rows.some((row) => row.competitions.some((c) => c.health === 'pending')),
+)
+
+async function refresh() {
+  if (state.value.kind !== 'teams' || !chosen.value) return
+  const seasonId = chosen.value.season.id
+  refreshing = new AbortController()
+  try {
+    const competitions = await asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: refreshing.signal }))
+    // Una carga nueva (otra temporada) manda sobre un refresco a medias.
+    if (!competitions.ok || state.value.kind !== 'teams' || chosen.value?.season.id !== seasonId) return
+    state.value = { kind: 'teams', rows: teamRows(registrations, competitions.data) }
+  } catch (error) {
+    if (refreshing.signal.aborted) return
+    throw error
+  }
+}
+
+refreshWhile(() => running.value, refresh)
+onBeforeUnmount(() => {
+  pending?.abort()
+  refreshing?.abort()
+})
 
 // «Dar de alta un equipo» lleva al formulario con la temporada que se está viendo, en el estado de la navegación y
 // no en la dirección (plan R2, decisión 5): `/equipos/nuevo` es siempre el mismo camino.
@@ -205,6 +245,7 @@ function sortBy(column: string) {
     :rows="sortedRows"
     :caption="`Equipos de la temporada ${chosen?.season.label}`"
     :order="order"
+    :season-label="chosen?.season.label"
     @sort="sortBy"
   />
 </template>
