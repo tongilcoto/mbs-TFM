@@ -216,3 +216,111 @@ describe('las acciones de la fila (plan R3, §3.1)', () => {
     expect(opened?.state).toMatchObject({ seasonLabel: '2026/27' })
   })
 })
+
+// ── El refresco (plan R3, decisión 5) ──
+
+describe('la portada se refresca sola mientras algo está en marcha', () => {
+  // Con un reloj de mentira que también avanza solo: así las esperas de Testing Library siguen funcionando.
+  afterEach(() => vi.useRealTimers())
+
+  const liga = (ingestionHealth: string) => ({
+    id: 'liga',
+    seasonId: 'id-2026',
+    modality: 'futbol_11',
+    gender: 'masculino',
+    ageCategory: 'alevin',
+    divisionLabel: 'PRIMERA ALEVIN',
+    groupLabel: 'Grupo 8',
+    federationCompetitionId: '1',
+    federationGroupId: '2',
+    displayName: 'Liga',
+    ingestionHealth,
+    createdAt: '2026-10-09T21:50:27Z',
+    updatedAt: '2026-10-09T21:50:27Z',
+  })
+  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga' }] }
+
+  // Las competiciones, una respuesta por petición, en orden; la última se repite. Apunta cuántas se pidieron.
+  function serverWith(answers: (() => Response)[]) {
+    const asked = { competitions: 0, registrations: 0 }
+    vi.stubGlobal('fetch', async (request: Request) => {
+      const path = new URL(request.url).pathname
+      if (path === '/api/v1/seasons') return Response.json([season('2026/27', true)])
+      if (path.endsWith('/registrations')) {
+        asked.registrations++
+        return Response.json([inscribed])
+      }
+      if (path === '/api/v1/competitions') return answers[Math.min(asked.competitions++, answers.length - 1)]!()
+      throw new Error(`Petición no esperada: ${path}`)
+    })
+    return asked
+  }
+  const json = (health: string) => () => Response.json([liga(health)])
+  const ingestion = () => screen.getAllByRole('cell')[1]!
+
+  test('«En marcha»: a los 10 s pide las competiciones otra vez, y la fila sale «Al día» sin «Cargando…»', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const asked = serverWith([json('pending'), json('ok')])
+    await openHome('/')
+    await waitFor(() => expect(ingestion()).toHaveTextContent('En marcha'))
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+    expect(screen.queryByText('Cargando equipos…')).not.toBeInTheDocument()
+    // Solo las competiciones: los equipos inscritos no cambian con una ingesta.
+    expect(asked).toEqual({ competitions: 2, registrations: 1 })
+  })
+
+  test('sin nada en marcha, no vuelve a pedir nada', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const asked = serverWith([json('ok')])
+    await openHome('/')
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(asked.competitions).toBe(1)
+  })
+
+  test('al acabar, para', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const asked = serverWith([json('pending'), json('ok')])
+    await openHome('/')
+    await vi.advanceTimersByTimeAsync(10_000)
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(asked.competitions).toBe(2)
+  })
+
+  test('un refresco que falla no pinta un error: se deja lo que había y se prueba en el siguiente', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const asked = serverWith([json('pending'), () => Response.json({ code: 'INTERNAL', status: 500 }, { status: 500 }), json('ok')])
+    await openHome('/')
+    await waitFor(() => expect(ingestion()).toHaveTextContent('En marcha'))
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await waitFor(() => expect(asked.competitions).toBe(2))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(ingestion()).toHaveTextContent('En marcha')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+  })
+
+  test('el foco se queda donde estaba: la fila es la misma', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    serverWith([json('pending'), json('ok')])
+    await openHome('/')
+    const action = await screen.findByRole('link', { name: /^Sincronizar otra competición, / })
+    action.focus()
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+
+    expect(action).toHaveFocus()
+  })
+})
+
