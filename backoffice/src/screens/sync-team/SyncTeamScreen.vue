@@ -8,7 +8,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
@@ -17,10 +17,12 @@ import type { components } from '../../api/schema'
 import CheckedAddress from '../../components/CheckedAddress.vue'
 import FormErrorList, { type FormError } from '../../components/FormErrorList.vue'
 import FormField from '../../components/FormField.vue'
+import LeaveDialog from '../../components/LeaveDialog.vue'
 import LoadError from '../../components/LoadError.vue'
 import NoticeBox from '../../components/NoticeBox.vue'
 import StepLine from '../../components/StepLine.vue'
 import TeamChoiceList from '../../components/TeamChoiceList.vue'
+import { announce } from '../../notice'
 import { categoryNames, type Gender, namesOf, optionsOf, teamName } from '../../theme/names'
 import { toAddress } from '../home/seasons'
 import type { FromHome } from '../new-team/form'
@@ -246,9 +248,13 @@ async function sync() {
     syncing.value = false
   }
 
-  // La vuelta a la portada en la temporada del calendario, con su aviso, es de R3.12. Hasta entonces, a la de
-  // partida, como «Cancelar».
-  if (result.ok) return cancel()
+  // Bien: el enganche está escrito y la primera ingesta, en cola (202). A la portada en la temporada **del
+  // calendario**, que puede no ser la de partida, porque es donde está ahora el equipo con su competición; sin
+  // esta pantalla en el historial (decisión 5). El aviso lo pone el marco, como «Guardado» (§3.4).
+  if (result.ok) {
+    announce('Sincronizado. La primera ingesta está en marcha.')
+    return leave(preview.value!.season.label)
+  }
   const placed = placeSyncError(result.error)
   if ('page' in placed) state.value = { kind: 'error', error: placed.page, notFound: true }
   else stepTwoBanner.value = placed.banner
@@ -265,13 +271,49 @@ async function focusLater(move: () => void) {
   move()
 }
 
-// «Cancelar» vuelve a la portada de la que se vino, sustituyendo a esta pantalla en el historial (§3.3).
-function cancel() {
-  const seasonLabel = fromHome.seasonLabel
+// Al sincronizar bien no se pregunta nada: ya no hay nada sin guardar.
+let leavingOnPurpose = false
+
+// La portada en esa temporada, o `/` si no hay ninguna; sustituyendo a esta pantalla en el historial (§3.3).
+function leave(seasonLabel: string | undefined, onPurpose = true) {
+  leavingOnPurpose = onPurpose
   return router.replace(seasonLabel ? { path: '/', query: { temporada: toAddress(seasonLabel) } } : '/')
 }
 
-onBeforeUnmount(() => pending?.abort())
+// «Cancelar» vuelve a la temporada de la que se vino, y pregunta si hay algo escrito o comprobado.
+function cancel() {
+  return leave(fromHome.seasonLabel, false)
+}
+
+// Algo que se perdería al salir (§3.3): una dirección escrita, o lo comprobado, que la lleva siempre: el campo la
+// conserva durante el paso 2. Sin el equipo cargado no hay nada. (Los espacios de los lados ya los quita el
+// navegador en un campo `type="url"`; el `trim`, por si el campo deja de serlo.)
+const hasChanges = computed(() => state.value.kind === 'ready' && url.value.trim() !== '')
+
+// Salir con cambios sin guardar (LLD-B §5.5): dentro de la web, pregunta la web, con el aviso del alta.
+const asking = ref(false)
+let answer: ((leave: boolean) => void) | undefined
+
+onBeforeRouteLeave(() => {
+  if (leavingOnPurpose || !hasChanges.value) return true
+  asking.value = true
+  return new Promise<boolean>((resolve) => (answer = resolve))
+})
+
+function answerLeave(leave: boolean) {
+  asking.value = false
+  answer?.(leave)
+}
+
+// Al cerrar la pestaña o recargar, pregunta el navegador, con su propio texto.
+function warnBeforeUnload(event: BeforeUnloadEvent) {
+  if (hasChanges.value) event.preventDefault()
+}
+window.addEventListener('beforeunload', warnBeforeUnload)
+onBeforeUnmount(() => {
+  pending?.abort()
+  window.removeEventListener('beforeunload', warnBeforeUnload)
+})
 </script>
 
 <template>
@@ -504,6 +546,12 @@ onBeforeUnmount(() => pending?.abort())
       </div>
     </form>
   </template>
+
+  <LeaveDialog
+    :visible="asking"
+    @stay="answerLeave(false)"
+    @leave="answerLeave(true)"
+  />
 </template>
 
 <style scoped>

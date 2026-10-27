@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { notice } from '../../notice'
 import { primeVueOptions } from '../../theme/primevue'
 import SyncTeamScreen from './SyncTeamScreen.vue'
 
@@ -503,13 +504,31 @@ describe('el paso 2: sincronizar', () => {
     )
   })
 
-  test('bien: de momento, vuelve a la portada de la que se vino (la vuelta de verdad es de R3.12)', async () => {
+  test('bien: a la portada en la temporada del calendario, con el aviso, y sin la pantalla detrás (decisión 5)', async () => {
     const { router } = await openStepTwo({}, '2025/26')
 
     await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
     await fireEvent.click(syncButton())
 
+    // La del calendario (2026/27), no la de partida (2025/26); y sin preguntar nada al salir.
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2026-27'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // El aviso lo enseña el marco (App.vue), que sigue ahí después de cambiar de pantalla.
+    expect(notice.value).toBe('Sincronizado. La primera ingesta está en marcha.')
+    // La pantalla se ha sustituido: «Atrás» lleva a la portada de partida.
+    router.back()
     await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
+  })
+
+  test('bien con el calendario de una temporada que el club no tenía: a la portada en esa temporada', async () => {
+    const { router } = await openStepTwo({
+      preview: () => Response.json(previewWith({ season: { label: '2027/28', exists: false } })),
+    })
+
+    await fireEvent.click(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'"))
+    await fireEvent.click(syncButton())
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2027-28'))
   })
 
   test.each([
@@ -594,6 +613,91 @@ describe('el paso 2: la línea de la dirección', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('La Federación no responde.')
     expect(screen.getByLabelText("CELTIC CASTILLA C.F. 'B'")).toBeChecked()
+  })
+})
+
+describe('salir con algo escrito o comprobado (§3.3, LLD-B §5.5)', () => {
+  const leaveDialog = () => screen.findByRole('dialog', { name: 'Cambios sin guardar' })
+
+  test('en el paso 1 con la dirección escrita, «Cancelar» pregunta; «Seguir editando» se queda con lo escrito', async () => {
+    fakeServer({})
+    const router = await openScreen(teamId, '2025/26')
+    await fireEvent.update(await urlField(), calendar)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(await leaveDialog()).toHaveTextContent('Tienes cambios sin guardar. ¿Salir sin guardar?')
+    await fireEvent.click(screen.getByRole('button', { name: 'Seguir editando' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(router.currentRoute.value.path).toBe(`/equipos/${teamId}/federacion`)
+    expect(await urlField()).toHaveValue(calendar)
+  })
+
+  test('«Salir sin guardar» vuelve a la portada de partida', async () => {
+    fakeServer({})
+    const router = await openScreen(teamId, '2025/26')
+    await fireEvent.update(await urlField(), calendar)
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await fireEvent.click(await screen.findByRole('button', { name: 'Salir sin guardar' }))
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
+  })
+
+  // El campo es `type="url"`: el navegador (y jsdom) le quitan los espacios de los lados, así que llega vacío.
+  test('solo con espacios en el campo, no hay nada que perder: sale sin preguntar', async () => {
+    fakeServer({})
+    const router = await openScreen(teamId, '2025/26')
+    await fireEvent.update(await urlField(), '   ')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/?temporada=2025-26'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('en el paso 2, «Cancelar» también pregunta', async () => {
+    await openStepTwo()
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(await leaveDialog()).toBeInTheDocument()
+  })
+
+  test('«Atrás» del navegador con algo escrito también pregunta', async () => {
+    fakeServer({})
+    const router = await openScreen(teamId, '2025/26')
+    await fireEvent.update(await urlField(), calendar)
+
+    router.back()
+
+    expect(await leaveDialog()).toBeInTheDocument()
+    expect(router.currentRoute.value.path).toBe(`/equipos/${teamId}/federacion`)
+  })
+
+  test('el equipo que no existe: el enlace a la portada sale sin preguntar', async () => {
+    fakeServer({ team: () => problem(404, 'TEAM_NOT_FOUND') })
+    const router = await openScreen()
+
+    await fireEvent.click(await screen.findByRole('link', { name: 'Ir a la portada' }))
+
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  test('al cerrar la pestaña o recargar, pregunta el navegador solo si hay algo que perder', async () => {
+    fakeServer({})
+    await openScreen()
+    await urlField()
+    const quiet = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(quiet)
+    expect(quiet.defaultPrevented).toBe(false)
+
+    await fireEvent.update(await urlField(), calendar)
+    const asked = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(asked)
+
+    expect(asked.defaultPrevented).toBe(true)
   })
 })
 
