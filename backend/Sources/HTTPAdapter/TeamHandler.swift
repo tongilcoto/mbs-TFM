@@ -4,8 +4,33 @@ import Domain
 import Foundation
 
 /// `POST /v1/teams` (§5.1, R2.9): el alta de un equipo del club, que lo inscribe
-/// en la temporada; y si ya existe, solo lo inscribe (`D-107`).
+/// en la temporada; y si ya existe, solo lo inscribe (`D-107`). Y `GET
+/// /v1/teams/{teamId}` (R3.7): un equipo, propio o rival.
 extension APIHandler {
+    public func getTeam(_ input: Operations.getTeam.Input) async throws
+        -> Operations.getTeam.Output
+    {
+        let actor = try actors.currentActor()
+        let teamID: TeamID
+        do {
+            teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: "teamId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        // El 404 lo traduce el middleware (`A-14`·H-63).
+        let result = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await GetTeam(
+                clubs: repositories.clubs, teams: repositories.teams,
+                opponentClubs: repositories.opponentClubs
+            ).execute(teamID, actor: actor)
+        }
+        let body = switch result {
+        case .own(let team, let club): team.toResponse(club: club)
+        case .opponent(let team, let club): team.toResponse(opponentClub: club)
+        }
+        return .ok(.init(body: .json(body)))
+    }
+
     public func createTeam(_ input: Operations.createTeam.Input) async throws
         -> Operations.createTeam.Output
     {

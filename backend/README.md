@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **748 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanada 1 cerrada ([su plan](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)). **755 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -41,7 +41,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
 | `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
 | `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
-| Las otras 74 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/teams/{id}`                                                                  | Backoffice R3 — [§4.6](#alta-de-equipo) |
+| Las otras 73 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -523,12 +524,24 @@ curl -s -X POST http://atleti.localhost:8080/v1/teams -H 'Content-Type: applicat
 - **404 `SEASON_NOT_FOUND`** si la temporada no existe; **400** si `seasonId` no es un UUID; **422** si la letra
   solo tiene espacios.
 
+**Y para leer uno, propio o rival** (rebanada 3): la pantalla del enganche del backoffice lo usa para saber qué
+equipo sincroniza.
+
+```sh
+curl -s http://atleti.localhost:8080/v1/teams/<id del equipo> | jq
+```
+
+- **200** con el equipo. `clubName` y `displayName` salen del club **propio o del rival**, según quién sea: «Celtic
+  Alevín A», «U.D. ARROYOFRESNO Cadete A». Un rival lleva además su club, su temporada y su código; los campos
+  nulos no salen (LLD-B §3.8).
+- **404 `TEAM_NOT_FOUND`** si no está en el club; **400 `INVALID_UUID`** si el id no es un UUID.
+
 ---
 
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 748 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 755 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

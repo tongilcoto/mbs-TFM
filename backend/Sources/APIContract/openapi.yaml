@@ -1130,6 +1130,11 @@ paths:
       tags: [Teams]
       operationId: getTeam
       summary: Obtiene un equipo
+      description: |
+        Un equipo del club, **propio o rival**, con sus derivados (`isOwn`, `clubName`, `displayName`): el
+        `clubName` es el del club propio o el del rival, según quién sea. La pantalla del enganche del
+        backoffice la usa para saber qué equipo sincroniza, y trata un rival como «no encontrado» mirando
+        `isOwn`, sin otra pregunta.
       responses:
         '200':
           description: Equipo.
@@ -1137,8 +1142,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TeamResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`INVALID_UUID`: el `teamId` de la ruta no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: '`TEAM_NOT_FOUND`: no hay ningún equipo con ese `teamId` en el club.'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     patch:
