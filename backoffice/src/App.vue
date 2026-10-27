@@ -33,9 +33,11 @@ watchEffect(() => {
 
 // Al cambiar de pantalla, el foco va a su título, y el lector de pantalla lo lee (LLD-B §10.2). Solo si cambia
 // el camino: cambiar de temporada en la portada cambia la dirección, y el foco tiene que seguir en el selector.
-// Al abrir la web, tampoco: el foco empieza al principio de la página, donde está «Saltar al contenido».
-useRouter().afterEach((to, from) => {
-  if (from.matched.length === 0 || to.path === from.path) return
+// Al abrir la web, tampoco: el foco empieza al principio de la página, donde está «Saltar al contenido». Y si la
+// navegación se cancela («Seguir editando» al salir con cambios), no se ha cambiado de pantalla: el foco se queda
+// donde estaba, en el botón que se pulsó.
+useRouter().afterEach((to, from, failure) => {
+  if (failure || from.matched.length === 0 || to.path === from.path) return
   nextTick(() => {
     const title = document.querySelector<HTMLElement>('main h1')
     title?.setAttribute('tabindex', '-1')
