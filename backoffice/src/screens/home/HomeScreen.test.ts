@@ -7,8 +7,8 @@ import { primeVueOptions } from '../../theme/primevue'
 import HomeScreen from './HomeScreen.vue'
 import type { Season } from './seasons'
 
-// Lo que añade la rebanada 2 a la portada (plan R2, §3.1): el botón «Dar de alta un equipo». El resto de la
-// portada lo prueban sus escenarios.
+// Lo que añaden las rebanadas 2 y 3 a la portada: el botón «Dar de alta un equipo» (plan R2, §3.1) y adónde llevan
+// las acciones de la fila (plan R3, §3.1). El resto de la portada lo prueban sus escenarios.
 
 function season(label: string, isCurrent = false): Season {
   const year = Number(label.slice(0, 4))
@@ -51,24 +51,28 @@ function fakeServer(seasons: Season[], registrations: unknown[]) {
   })
 }
 
-// Lo que recibe el formulario al abrirse desde la portada: la dirección y el estado de la navegación.
+// Lo que recibe la pantalla a la que se va desde la portada: la dirección y el estado de la navegación.
 let opened: { path: string; state: unknown } | undefined
+
+// Una pantalla de mentira que apunta adónde se ha llegado y con qué.
+function landing(title: string) {
+  return defineComponent({
+    setup() {
+      opened = { path: router.currentRoute.value.path, state: router.options.history.state }
+      return () => h('h1', title)
+    },
+  })
+}
+let router: ReturnType<typeof createRouter>
 
 async function openHome(address = '/') {
   opened = undefined
-  const router = createRouter({
+  router = createRouter({
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: HomeScreen },
-      {
-        path: '/equipos/nuevo',
-        component: defineComponent({
-          setup() {
-            opened = { path: '/equipos/nuevo', state: router.options.history.state }
-            return () => h('h1', 'Dar de alta un equipo')
-          },
-        }),
-      },
+      { path: '/equipos/nuevo', component: landing('Dar de alta un equipo') },
+      { path: '/equipos/:id/federacion', component: landing('Sincronizar con la Federación') },
     ],
   })
   await router.push(address)
@@ -188,5 +192,27 @@ describe('ordenar la tabla (bloque T)', () => {
     await fireEvent.mouseDown(await screen.findByRole('option', { name: '2025/26' }))
 
     await waitFor(() => expect(router.currentRoute.value.query).toEqual({ temporada: '2025-26', orden: 'equipo-inverso' }))
+  })
+})
+
+describe('las acciones de la fila (plan R3, §3.1)', () => {
+  test('el icono lleva a sincronizar el equipo, con la temporada que se ve', async () => {
+    fakeServer([season('2026/27', true), season('2025/26')], [aTeam])
+    await openHome('/?temporada=2025-26')
+
+    await fireEvent.click(await screen.findByRole('link', { name: 'Sincronizar con la Federación, Alevín A' }))
+
+    await waitFor(() => expect(opened?.path).toBe('/equipos/equipo/federacion'))
+    expect(opened?.state).toMatchObject({ seasonLabel: '2025/26' })
+  })
+
+  test('el enlace del equipo sin competición, igual', async () => {
+    fakeServer([season('2026/27', true)], [aTeam])
+    await openHome('/')
+
+    await fireEvent.click(await screen.findByRole('link', { name: 'Sincronizar con la Federación' }))
+
+    await waitFor(() => expect(opened?.path).toBe('/equipos/equipo/federacion'))
+    expect(opened?.state).toMatchObject({ seasonLabel: '2026/27' })
   })
 })

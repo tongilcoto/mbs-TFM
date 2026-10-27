@@ -205,6 +205,7 @@ function sortBy(column: string) {
     :rows="sortedRows"
     :caption="`Equipos de la temporada ${chosen?.season.label}`"
     :order="order"
+    :season-label="chosen?.season.label"
     @sort="sortBy"
   />
 </template>
