@@ -54,11 +54,11 @@ Feature: Las acciones de cada fila de la portada
     Given en la temporada en curso de mi club hay un equipo inscrito sin competición
     And estoy en la portada de mi club
     When pulso el enlace "Sincronizar con la Federación" de la fila del equipo
-    Then estoy en el paso 1 de sincronizar el equipo de mi club inscrito sin competición
+    Then se abre el paso 1 de sincronizar el equipo de mi club inscrito sin competición
 
   @e2e
   Scenario: En la portada, el icono de un equipo con competición lleva a sincronizar ese equipo
     Given en la temporada en curso de mi club juega un equipo
     And estoy en la portada de mi club
     When pulso la acción "Sincronizar otra competición" de la fila del equipo
-    Then estoy en el paso 1 de sincronizar el equipo de mi club que juega
+    Then se abre el paso 1 de sincronizar el equipo de mi club que juega

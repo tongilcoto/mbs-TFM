@@ -1,11 +1,11 @@
 // El alta de equipo y «Crear nueva temporada» (plan R2, §3.2–§3.4). El equipo que se escribe en el formulario se
 // inventa al azar (invented.ts) y se guarda en `data.entered`, para que los `Then` busquen en la pantalla siguiente
 // lo mismo que se metió.
-import { Given, Then, When } from '@cucumber/cucumber'
+import { type DataTable, Given, Then, When } from '@cucumber/cucumber'
 import type { Locator } from 'playwright'
 import { addArchivedSeason, addSeason } from '../support/club-data.ts'
 import { categoryLabels, currentSeason, nextSeason, pastSeason, team, type Season, type Team } from '../support/invented.ts'
-import { becomes, shows } from '../support/look.ts'
+import { becomes, sentences, shows } from '../support/look.ts'
 import type { ScenarioWorld } from '../support/world.ts'
 import { addPastSeason, addTeamPlaying, content, inAddress, lastPastSeason, row } from './portada.steps.ts'
 
@@ -25,7 +25,7 @@ const errorList = (world: ScenarioWorld) => form(world).getByRole('group', { nam
 
 function seasonByName(world: ScenarioWorld, which: string): Season {
   if (which === 'en curso') return currentSeason()
-  if (which === 'siguiente') return nextSeason()
+  if (which === 'siguiente' || which === 'que viene') return nextSeason()
   if (which === 'pasada') return lastPastSeason(world)
   throw new Error(`«${which}» no es una temporada que el escenario conozca`)
 }
@@ -158,7 +158,7 @@ When('recargo el formulario de alta', async function (this: ScenarioWorld) {
 // ── Con el teclado ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** Pulsa el tabulador hasta que el foco llega a `target` (como mucho, 30 veces). */
-async function tabTo(world: ScenarioWorld, target: Locator, what: string) {
+export async function tabTo(world: ScenarioWorld, target: Locator, what: string) {
   for (let i = 0; i < 30; i++) {
     if (await target.evaluate((el) => el === document.activeElement || el.contains(document.activeElement))) return
     await world.page.keyboard.press('Tab')
@@ -317,7 +317,7 @@ Then('sigo en el formulario de alta', async function (this: ScenarioWorld) {
   await onForm(this)
 })
 
-Then(/^estoy en la portada, en la temporada (en curso|pasada)$/, async function (this: ScenarioWorld, which: string) {
+Then(/^estoy en la portada, en la temporada (en curso|pasada|que viene)$/, async function (this: ScenarioWorld, which: string) {
   const expected = seasonByName(this, which).label
   await this.check('la dirección', () =>
     becomes(this.page, async () => new URL(this.page.url()).pathname, '/', 'el camino'),
@@ -470,10 +470,19 @@ Then(
   },
 )
 
-Then('la portada tiene el aviso {string}', async function (this: ScenarioWorld, text: string) {
-  await this.check(`el aviso «${text}»`, () =>
-    shows(this.page.getByRole('status').filter({ hasText: text }), `el aviso «${text}»`),
+async function homeNotice(world: ScenarioWorld, text: string) {
+  await world.check(`el aviso «${text}»`, () =>
+    shows(world.page.getByRole('status').filter({ hasText: text }), `el aviso «${text}»`),
   )
+}
+
+Then('la portada tiene el aviso {string}', async function (this: ScenarioWorld, text: string) {
+  await homeNotice(this, text)
+})
+
+// Un aviso largo, en una tabla: una frase por fila (la skill de escenarios).
+Then('la portada tiene el aviso:', async function (this: ScenarioWorld, table: DataTable) {
+  await homeNotice(this, sentences(table))
 })
 
 Then('el mensaje de la portada vacía tiene debajo el enlace {string}', async function (this: ScenarioWorld, name: string) {

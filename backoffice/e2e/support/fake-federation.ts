@@ -99,7 +99,8 @@ function inventedCalendar(competition: Competition): string {
         calendar: {
           competicion: competition.division,
           grupo: competition.group,
-          temporada: `${start}-${start + 1}`,
+          // La de la temporada, salvo que el escenario quiera que la federación diga otra cosa (`calendarSeason`).
+          temporada: competition.calendarSeason ?? `${start}-${start + 1}`,
           host: 'https://appweb.rffm.es/',
           rounds,
         },
@@ -115,20 +116,23 @@ function inventedScorers(competition: Competition): string {
   return JSON.stringify({ estado: '1', sesion_ok: '1', competicion: competition.division, grupo: competition.group, goles: [] })
 }
 
-// Una respuesta retenida: la federación tarda hasta que el escenario la suelta.
+// Una respuesta retenida: la federación tarda hasta que el escenario la suelta. `skip`, cuántas peticiones del
+// calendario deja pasar antes de retener una: el enganche lo lee una vez y la primera ingesta otra, así que
+// retener la ingesta sin retener el enganche es dejar pasar una.
 interface Hold {
+  skip: number
   arrived: Promise<void>
   markArrived(): void
   gate: Promise<void>
   release(): void
 }
 
-function newHold(): Hold {
+function newHold(skip = 0): Hold {
   let markArrived!: () => void
   let release!: () => void
   const arrived = new Promise<void>((resolve) => (markArrived = resolve))
   const gate = new Promise<void>((resolve) => (release = resolve))
-  return { arrived, markArrived, gate, release }
+  return { skip, arrived, markArrived, gate, release }
 }
 
 export interface FakeFederation {
@@ -138,8 +142,15 @@ export interface FakeFederation {
   invent(competition: Competition): void
   /** Desde ahora sus goleadores llegan a `null`, como cuando la RFFM no los encuentra: la pasada falla. */
   failScorers(competition: Competition): void
-  /** El próximo calendario que se le pida de esta competición no sale hasta `releaseAll`. */
-  hold(competition: Competition): void
+  /**
+   * El próximo calendario que se le pida de esta competición no sale hasta `releaseAll`; con `skip`, deja pasar
+   * antes ese número de peticiones.
+   */
+  hold(competition: Competition, skip?: number): void
+  /** Desde ahora su calendario contesta 500, como la RFFM cuando falla: el servidor no lo entiende. */
+  failCalendar(competition: Competition): void
+  /** Desde ahora su calendario vuelve a contestar bien. */
+  answerCalendar(competition: Competition): void
   /** Cuando el calendario retenido ya se ha pedido. */
   heldArrived(competition: Competition): Promise<void>
   /**
@@ -164,6 +175,7 @@ export async function startFakeFederation(port = config.federationPort): Promise
   // Las inventadas, por su grupo: el código que va en todas sus direcciones.
   const invented = new Map<string, Competition>()
   const failing = new Set<string>()
+  const failingCalendars = new Set<string>()
   const holds = new Map<string, Hold>()
   // Las retenidas que ya se pidieron y esperan a que las suelten.
   const waiting: Hold[] = []
@@ -179,8 +191,13 @@ export async function startFakeFederation(port = config.federationPort): Promise
 
     const ours = invented.get(url.searchParams.get('grupo') ?? url.searchParams.get('idGroup') ?? '')
     if (ours && url.pathname === '/competicion/calendario') {
+      if (failingCalendars.has(ours.federationGroupId)) {
+        response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+        return response.end('Error interno')
+      }
       const hold = holds.get(ours.federationGroupId)
-      if (hold) {
+      if (hold && hold.skip > 0) hold.skip--
+      else if (hold) {
         holds.delete(ours.federationGroupId)
         waiting.push(hold)
         hold.markArrived()
@@ -220,7 +237,9 @@ export async function startFakeFederation(port = config.federationPort): Promise
     requests,
     invent: (competition) => void invented.set(competition.federationGroupId, competition),
     failScorers: (competition) => void failing.add(competition.federationGroupId),
-    hold: (competition) => void holds.set(competition.federationGroupId, newHold()),
+    hold: (competition, skip) => void holds.set(competition.federationGroupId, newHold(skip)),
+    failCalendar: (competition) => void failingCalendars.add(competition.federationGroupId),
+    answerCalendar: (competition) => void failingCalendars.delete(competition.federationGroupId),
     // Si ya no está entre las que esperan su petición, es que ya llegó.
     heldArrived: (competition) => holds.get(competition.federationGroupId)?.arrived ?? Promise.resolve(),
     releaseAll: () => {
