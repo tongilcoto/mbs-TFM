@@ -198,8 +198,7 @@ flowchart LR
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,NF,P,A hecha
-    class F enCurso
+    class mEq,NF,P,A,F hecha
     class mTem,mCom,mRiv,mIng,mClub,mPer,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
     class J hueco
 ```
@@ -397,7 +396,7 @@ su comprobación.
 | **0** · El andamiaje | ✅ hecha | 13/13 | 2026-10-16 |
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
-| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | en curso: escenarios escritos y revisados, servidor cerrado, las acciones de la fila y la web entera, sus 44 escenarios en verde y la revisión a mano hecha | 15/16 | 2026-10-27 |
+| **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

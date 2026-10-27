@@ -8,7 +8,7 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
-**Lo que enseña hoy** (rebanadas 1 y 2, cerradas el 2026-10-20 y el 2026-10-24):
+**Lo que enseña hoy** (rebanadas 1, 2 y 3, cerradas el 2026-10-20, el 2026-10-24 y el 2026-10-27):
 
 - **La portada**, con los equipos del club en una temporada: la competición en la que juega cada uno (sin la
   categoría delante, «PRIMERA CADETE · Grupo 4»), cómo va su ingesta y cuándo se sincronizó por última vez, en tu
@@ -21,10 +21,20 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
   antes de enviar y avisa si se sale con cambios sin guardar; al lado de su selector, «Crear nueva temporada» la
   crea en ese momento, solo con su etiqueta (`2027/28`). Al guardar, vuelve a la portada en la temporada del
   equipo, con el aviso «Guardado».
+- **Sincronizar con la Federación**: cada fila de la portada tiene al final un icono de enlace, cuyo texto sale al
+  pasar el ratón o al llegar con el tabulador («Sincronizar con la Federación», o «Sincronizar otra competición»
+  si ya juega alguna); en la fila sin competición, además, el enlace con su texto. Lleva a
+  `/equipos/:id/federacion`, en dos pasos: **1**, pegar la dirección del calendario del grupo, copiada de la web
+  de la Federación, y «Comprobar en la Federación»; **2**, ver lo que hay en ella (competición, temporada,
+  jornadas, si no cuadra con el equipo), **elegir el equipo del club** entre los del grupo y «Sincronizar». Vuelve
+  a la portada en la temporada del calendario, con el aviso «Sincronizado. La primera ingesta está en marcha.».
+- **La portada se refresca sola** cada 10 s mientras alguna ingesta esté «En marcha», sin recargar.
 - Alrededor, la cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
-**Ojo: guardar da de alta el equipo de verdad en tu club, y «Crear» crea la temporada de verdad.** Borrar un
-equipo no se podrá hasta la rebanada 13, ni una temporada hasta la 11.
+**Ojo: guardar da de alta el equipo de verdad en tu club, «Crear» crea la temporada de verdad, y «Sincronizar»
+engancha el equipo y lanza su primera ingesta contra la Federación de verdad.** Borrar un equipo o deshacer un
+enganche no se podrá hasta la rebanada 13, ni borrar una temporada hasta la 11. «Comprobar en la Federación» no
+guarda nada.
 
 ## Antes de empezar
 
@@ -125,8 +135,8 @@ cambiar su configuración, pero no al cambiar ese fichero: para la web con `Ctrl
 `npm run dev`. Los escenarios no lo leen: usan siempre su propio servidor del 8081.
 
 **Para que la portada tenga equipos**, se dan de alta con «Dar de alta un equipo»: salen con «Sin competición»
-hasta que se enganchan con su federación. Mientras la web no sepa engancharlos (rebanada 3), el enganche se hace
-desde el servidor: [README del backend, §4.1](../backend/README.md#enganche).
+hasta que se sincronizan con su federación, desde el icono de su fila. También se puede desde el servidor:
+[README del backend, §4.1](../backend/README.md#enganche).
 
 Una forma rápida de ver que los dos se hablan:
 

@@ -16,7 +16,8 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
-> **Estado del documento: decisiones revisadas.** Las seis decisiones de la §4 se revisaron una a una con el
+> **Estado del documento: cerrado el 2026-10-27**, con los dieciséis pasos hechos (§8) y lo aprendido en la §9.
+> Antes, **decisiones revisadas**: Las seis decisiones de la §4 se revisaron una a una con el
 > desarrollador el 2026-10-25, sobre una maqueta en HTML de las opciones (y, para la 1, de cómo crecen con las
 > rebanadas 13 y 14). La revisión cambió la forma de la pantalla (un asistente de dos pasos), añadió un cambio del
 > servidor que no estaba previsto (el `/preview` dice qué equipos ya son del club, `D-110`) y el refresco de la
@@ -483,7 +484,7 @@ Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cad
 bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
 solo, y lo que no venga en el plan va en su propio commit.
 
-### A · Las decisiones y los escenarios
+### A · Las decisiones y los escenarios ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -491,7 +492,7 @@ solo, y lo que no venga en el plan va en su propio commit.
 | **R3.2** | Los documentos de lo decidido: el LLD-B (§6.1 con el camino confirmado, y la regla de las acciones de fila si la decisión 1 la hace general, con su `DW-19`); y en el plan del backoffice, lo «pendiente de la rebanada 3» resuelto, y en la fila de la 13 el 🆕 «Dejar de sincronizar» (decisión 1). Y `D-110` en la bitácora del backend: el `/preview` dice qué equipos del grupo ya son del club (decisión 4) | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
 | **R3.3** | **Los `.feature` de la §6**, con la *skill* de escenarios, revisados con el desarrollador antes de programar; y la federación falsa sirviendo lo que el `/preview` necesita de una competición inventada | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**, no porque el arnés no arranque (H-07). Un `curl` al `/preview` del servidor de pruebas sobre una competición inventada devuelve sus equipos | Un commit |
 
-### B · El servidor
+### B · El servidor ✅
 
 Con el método del backend (§5).
 
@@ -503,7 +504,7 @@ Con el método del backend (§5).
 | **R3.7** | **`getTeam`** | Tests, mutación con su catálogo (`Catalogs/R3-7.json`) y `curl` contra la base de trabajo con un servidor aparte | Un commit |
 | **R3.8** | Cierre del servidor: el recuento leído del XML, el censo con `getTeam` y el dato nuevo del `/preview`, los catálogos de mutación de la rebanada otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
-### C · La web
+### C · La web ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -513,7 +514,7 @@ Con el método del backend (§5).
 | **R3.12** | **La vuelta**: a la portada en la temporada del calendario, con el aviso, sin la pantalla en el historial; y el aviso de salir sin guardar | Vitest, y la web abierta | Un commit |
 | **R3.13** | **La portada se refresca sola** mientras haya algo en marcha (decisión 5): cada 10 s, con la pestaña a la vista, hasta 5 minutos, sin «Cargando…» y sin perder el orden ni el foco | Vitest con reloj de mentira (empieza, para al acabar, para con la pestaña oculta y a los 5 minutos, un fallo no pinta error), y la web abierta durante una ingesta de verdad | Un commit |
 
-### D · Los escenarios en verde y el cierre
+### D · Los escenarios en verde y el cierre ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -542,11 +543,43 @@ Con el método del backend (§5).
 | **R3.13** | ✅ 2026-10-27 | **La portada se refresca sola** mientras alguna competición de la temporada esté «En marcha» (decisión 5, LLD-B §2.4). Una pieza para cualquier pantalla, **`refreshWhile`** (`src/refresh.ts`): cada 10 s mientras se cumpla la condición, nada con la pestaña escondida, como mucho 5 minutos seguidos, un refresco lento no se pisa con el siguiente (se cuenta desde que acaba), y se para al salir. **Al volver a la pestaña, lo último ya y otros 5 minutos**: la §2.4 no decía qué pasaba al volver, y sin esto una pestaña escondida más de 5 minutos se quedaba «En marcha» hasta recargar. En la portada, **solo vuelve a pedir las competiciones** (las inscripciones no cambian con una ingesta) y rehace las filas con las mismas `id`, así que Vue las reaprovecha: el foco se queda y el orden es el de la dirección; sin «Cargando…», y si falla se deja lo que había. Vitest: **300 → 315** (10 de `refreshWhile` y 5 de la portada, con reloj de mentira). **Rojo visto** en diez roturas: no pintar lo nuevo (4), mirar otro estado (4), enseñar «Cargando…» (4), pintar el error (1), pedirlo todo (3), sin los 5 minutos (1), al volver sin otros 5 (1), al volver sin nada en marcha (1), al salir no para (1), y **con la pestaña escondida, que no se cazaba**: esa condición solo cuenta si se esconde con un refresco a medias, y ahora tiene su prueba (1). `typecheck` y `lint` en verde. **En Chromium, contra el servidor del desarrollador**, con las dos primeras respuestas de competiciones cambiadas a «En marcha» para el Cadete A: a los 10 s pide otra vez sin «Cargando…», a los 20 s la fila dice «Al día» y el refresco para (3 peticiones en 40 s); el foco sigue en el icono del Cadete B. Con `?orden=ingesta`, **la fila cambia de sitio** al pasar a «Al día»: se respeta la columna elegida, no la posición. **Con una ingesta de verdad, el flujo entero, hecho por el desarrollador**: alta de un equipo nuevo (Sénior A, R2), su enganche desde la web con PREFERENTE AFICIONADO · Grupo 1 (`3349086`), la vuelta a la portada «En marcha» y, al refrescarse, «Al día». En la base, la primera ingesta tardó unos 6,6 s (calendario: 10 clubes, 17 rivales en un grupo de 18, sin el propio, 34 jornadas y 306 partidos; siete pasadas de clasificación y una de goleadores), y ningún rival con el código de un propio. **Por qué así y no con la ingesta programada**: su antirrebote de 6 horas se saltaría las competiciones de esta tarde, y aun con `--force` una ingesta dura segundos: la portada solo se refresca si al abrirla ya ve algo «En marcha», que es justo lo que pasa al volver de sincronizar |
 | **R3.14** | ✅ 2026-10-27 | **Los 44 escenarios de la rebanada, en verde**: `npm run e2e`, **112 escenarios y 918 pasos**, con axe en los dos modos al final de cada uno; **cuatro pasadas seguidas en verde**, con cuatro semillas distintas. **La duración, apuntada** (lo abierto de la R2): **unos 3 min 30 s**, frente a 2 min 18 s con los 68 de antes; 183 ms de media en crear cada club. **Los pasos**, en dos ficheros nuevos, `sincronizar.steps.ts` y `acciones-fila.steps.ts` (este con los del refresco); de los del alta, `tabTo` exportado, «estoy en la portada, en la temporada que viene» y «la portada tiene el aviso:» con tabla; en `look.ts`, `sentences` (los textos largos de las tablas) y `contains`, que cuando falla dice lo que se leyó. **La federación falsa**, ampliada: el calendario que contesta 500 y vuelve a contestar bien; retener dejando pasar antes N peticiones (el enganche lee el calendario una vez y la primera ingesta otra, así que «la ingesta tarda» es retener la segunda); y lo que dice en `temporada`, que puede no leerse como etiqueta («2027-2029», H-10) para el caso sin temporada. **Los datos inventados**: competiciones cuyo nombre no dice la edad; un equipo publicado sin código; y en `club-data.ts`, enganchar un equipo a otra competición, el `id` de una competición por su grupo, y **el de un rival por su código, en la base**, porque ninguna operación de la API lista los rivales (la pantalla que los enseña es de la rebanada 7). **Cambiado en los escenarios**: en `acciones-fila.feature`, los dos Then «estoy en el paso 1 de sincronizar el equipo…» pasan a **«se abre el paso 1 de sincronizar el equipo…»**: el mismo texto era un Given en `sincronizar.feature` (abrir la pantalla) y Cucumber no distingue Given de Then. Y «una dirección que no es la de un calendario» se escribe con otro dominio, porque la página de la clasificación de la RFFM con los mismos datos vale (Anexo RFFM §F.20). **Rojo visto**: con *Escape* roto en `IconAction`, falla el escenario de *Escape*; con el texto de `UNREADABLE_FEDERATION_URL` cambiado, falla el de la dirección que no es de un calendario, diciendo lo que se leyó junto al campo. Vitest, `lint` y `typecheck` en verde |
 | **R3.15** | ✅ 2026-10-27 | **La revisión a mano del LLD-B §10.7 *b***, con la lista para el PR. **Chrome** (Chromium, contra el servidor del desarrollador, sin escribir en la base): el teclado recorre la portada (los iconos de cada fila con el equipo en el nombre; en la fila sin competición, el enlace con texto antes que su icono), el paso 1 (campo, «Comprobar en la Federación», «Cancelar»; Intro en el campo comprueba) y el paso 2 (el foco al llegar va a «Lo que hay en esa dirección»; el texto del lápiz sale con el foco y *Escape* lo esconde sin moverlo; Intro en el lápiz vuelve al paso 1 con el foco en el campo); «Cambios sin guardar» retiene el foco. **Zoom al 200 %** (640 px) y **los dos modos**: portada y paso 1 sin desplazamiento horizontal. **Safari con el teclado y VoiceOver**, del desarrollador: bien. Preguntó si era lo esperado que el tabulador no pase por las celdas de la tabla: sí, solo se para en lo que se pulsa o se rellena; la tabla se lee con VoiceOver (Control + Opción + flechas), con el equipo como cabecera de fila. **Encontrado**: al cerrar «Cambios sin guardar» con «Seguir editando» o *Escape*, **el foco iba al título** en vez de volver a «Cancelar»; venía de la R1 y pasaba también en el alta: `afterEach` del router corre también cuando la navegación se cancela. Arreglado en su propio commit (`7990977`), con su prueba (rojo visto) y los 112 escenarios en verde |
+| **R3.16** | ✅ 2026-10-27 | **Cierre.** Los cinco pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **757** (754 + 3 omitidos), en 38 s, con el censo en `0` (12 operaciones, 27 de 34 códigos nombrados); en la web, **316 pruebas de piezas** (`npm test`) y **112 escenarios** (`npm run e2e`, R3.14); (2) la cabecera del README del backend: **decía «rebanada 1 cerrada»**, que el cierre de la R2 no vio; ahora, las tres, con su enlace (757 y «~40 s» ya estaban); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada, lo que deja para la 13 y lo siguiente; (4) los rótulos de la §7 con su ✅ y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol: en el plan del backoffice, la fila de la rebanada en la tabla de estado (que había quedado mal escrita a fuerza de cambios encadenados: ahora «✅ hecha, 16/16») y el nodo de «Sincronizar con la Federación» del mapa, de `enCurso` a `hecha`; el resto de apariciones (755, 195, 68 escenarios) son registros con fecha y no se tocan. El README de la web dice qué enseña hoy, con «Sincronizar» y el refresco, y que «Sincronizar» escribe de verdad. Lo aprendido, en la §9 |
 
 ---
 
 ## 9. Lo aprendido
 
-*(Se escribe al cerrar.)*
+- **Probar con los datos de verdad del desarrollador encuentra lo que ningún escenario inventado tiene.** Los
+  rivales duplicados de un equipo propio (con su daño todavía vivo en la clasificación), la RFFM que saca el
+  calendario solo del grupo (Anexo RFFM §F.20) y el `install.sh` que no compilaba en «Application Support» salieron
+  de abrir la web contra la base del club, no de las pruebas: las competiciones inventadas eran todas coherentes.
+- **Un desempate que nadie escribe a propósito decide en silencio.** La clasificación juntaba rivales e
+  inscripciones con `uniquingKeysWith: first`, y la cadena del calendario cogía el primero de la lista con el
+  código: con datos limpios no importaba, y con un duplicado escribía en el rival sin avisar. Donde dos fuentes
+  pueden decir lo mismo, la regla de quién gana se escribe y se prueba.
+- **Una migración que cambia lo que significa una columna obliga a desplegar el mismo día.** La base se migró al
+  arrancar el servidor de desarrollo, y la ingesta programada siguió cinco días con un binario que buscaba el
+  código donde ya no estaba. Va como regla en el README del backend.
+- **Mirar la licencia antes de elegir una pieza, también la de la versión nueva.** PrimeIcons era MIT hasta la 7;
+  la 8 es comercial. Copiar los cuatro dibujos de Lucide, con su licencia al lado, fue más corto que depender de
+  un paquete.
+- **La mutación también enseña cuando no caza.** Cuatro roturas sobrevivieron en la rebanada, y ninguna era un
+  hueco de las pruebas sin más: una prueba que miraba antes de que llegara la respuesta, una condición que solo
+  cuenta con un refresco a medias, otra que sobraba (lo comprobado siempre lleva la dirección) y un `trim` que no
+  hace nada porque el navegador ya quita los espacios de un campo `type="url"`.
+- **Un mismo texto para un Given y un Then no se puede distinguir.** Cucumber no mira la palabra clave:
+  «estoy en el paso 1 de sincronizar…» abría la pantalla en un fichero y comprobaba adónde se había llegado en
+  otro. El Then pasó a «se abre el paso 1…». Al escribir los escenarios, los dos usos de una frase se miran juntos.
+- **Una navegación cancelada también es una navegación.** El foco al título de la pantalla nueva (R1) se movía
+  también al contestar «Seguir editando», porque `afterEach` corre aunque la navegación no llegue. Lo vio la
+  revisión a mano, no axe ni los escenarios.
+- **Para lo que escribe en la base, el navegador puede contestar.** Interceptar el enganche con Playwright
+  permitió ver la vuelta a la portada y la pregunta al salir contra el servidor de verdad sin tocar los datos del
+  club; el enganche de verdad lo hizo el desarrollador, una vez.
+
+**Queda abierto, con dueño:** «Dejar de sincronizar», el segundo equipo del club en un grupo ya sincronizado
+(`D-110`), sincronizar un rival (422) y la competición de la dirección que la RFFM no comprueba (§F.20), en la fila
+de la rebanada 13; y vigilar cuánto tarda `npm run e2e`, que pasa de 2 min 18 s a unos 3 min 30 s con los 44
+escenarios de la rebanada.
 
 [D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
