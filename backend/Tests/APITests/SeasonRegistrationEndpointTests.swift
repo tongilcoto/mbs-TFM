@@ -12,9 +12,10 @@ import TestSupport
 @testable import Tenancy
 
 /// Nivel 4 (§8.1): `GET /v1/seasons/{seasonId}/registrations` (`D-102`; Plan R1,
-/// R1.9). La agrupación por equipo y el orden los prueba el nivel 2; aquí se
-/// prueba **el borde**: la ruta, cada campo del equipo y de la inscripción, el 404
-/// y el 400.
+/// R1.9) y `GET /v1/teams/{teamId}/registrations/{seasonId}` (Plan R4, R4.5). La
+/// agrupación por equipo y el orden los prueba el nivel 2; aquí se prueba **el
+/// borde**: la ruta, cada campo del equipo y de la inscripción, los 404 y el 400.
+/// Las dos en la misma suite, que comparte club y datos y va en serie.
 @Suite("SeasonRegistrations · D-102 · el equipo en una temporada",
        .serialized,
        .enabled(if: DatabaseAvailability.isReachable, "\(DatabaseAvailability.skipReason)"))
@@ -27,6 +28,8 @@ struct SeasonRegistrationEndpointTests {
     struct Seeded: Sendable {
         let season: SeasonID, competition: CompetitionID
         let cadeteB: TeamID, alevinA: TeamID
+        /// Una temporada del club sin ninguna inscripción (R4.5).
+        let emptySeason: SeasonID
     }
 
     static func withSeededClub(
@@ -38,11 +41,14 @@ struct SeasonRegistrationEndpointTests {
 
             let seeded = Seeded(
                 season: SeasonID(raw: UUID()), competition: CompetitionID(raw: UUID()),
-                cadeteB: TeamID(raw: UUID()), alevinA: TeamID(raw: UUID()))
+                cadeteB: TeamID(raw: UUID()), alevinA: TeamID(raw: UUID()), emptySeason: SeasonID(raw: UUID()))
             let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
             try await unitOfWork.withRepositories(actor: ActorContext(clubSlug: try Slug(slug))) {
                 try await $0.seasons.save(try Season(
                     id: seeded.season, label: try SeasonLabel("2026/27"), federationSeasonID: "22",
+                    createdAt: createdAt, updatedAt: createdAt))
+                try await $0.seasons.save(try Season(
+                    id: seeded.emptySeason, label: try SeasonLabel("2025/26"), federationSeasonID: nil,
                     createdAt: createdAt, updatedAt: createdAt))
                 try await $0.competitions.save(try Competition(
                     id: seeded.competition, seasonID: seeded.season, modality: .futbol11,
@@ -155,6 +161,102 @@ struct SeasonRegistrationEndpointTests {
             try await app.testing().test(
                 .GET, "/v1/seasons/abc/registrations", beforeRequest: { Self.header(&$0) }
             ) { response async throws in
+                #expect(response.status == .badRequest)
+                #expect(try Self.problem(response).code == .INVALID_UUID)
+            }
+        }
+    }
+
+    // ── `getTeamRegistration` (R4.5): un equipo en una temporada ─────────────
+
+    static func decodeOne(_ response: TestingHTTPResponse) throws -> Components.Schemas.TeamRegistrationResponse {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(
+            Components.Schemas.TeamRegistrationResponse.self, from: Data(response.body.readableBytesView))
+    }
+
+    /// La misma forma que un elemento de la lista: el equipo entero, la temporada
+    /// y sus competiciones con su código (`D-101`).
+    @Test("getTeamRegistration: el equipo en la temporada, con su competición y cada campo del equipo")
+    func getsOneTeamInTheSeason() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/teams/\(seeded.cadeteB)/registrations/\(seeded.season)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let entry = try Self.decodeOne(response)
+                #expect(entry.seasonId == "\(seeded.season)")
+                let competition = try #require(entry.competitions.first)
+                #expect(entry.competitions.count == 1)
+                #expect(competition.competitionId == "\(seeded.competition)")
+                #expect(competition.federationTeamId == "821")
+                #expect(entry.team.id == "\(seeded.cadeteB)")
+                #expect(entry.team.category == .cadete)
+                #expect(entry.team.letter == "B")
+                #expect(entry.team.isOwn)
+                #expect(entry.team.clubName == "SEASREGCLUB")
+                #expect(entry.team.displayName == "SEASREGCLUB Cadete B")
+            }
+        }
+    }
+
+    @Test("getTeamRegistration: inscrito sin competición, la lista vacía")
+    func getsATeamWithoutCompetition() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/teams/\(seeded.alevinA)/registrations/\(seeded.season)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let entry = try Self.decodeOne(response)
+                #expect(entry.team.id == "\(seeded.alevinA)")
+                #expect(entry.competitions.isEmpty)
+            }
+        }
+    }
+
+    @Test("getTeamRegistration: un equipo que no está en esa temporada es 404 TEAM_NOT_REGISTERED")
+    func aTeamNotRegisteredIs404() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/teams/\(seeded.cadeteB)/registrations/\(seeded.emptySeason)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                #expect(try Self.problem(response).code == .TEAM_NOT_REGISTERED)
+            }
+        }
+    }
+
+    @Test("getTeamRegistration: un equipo que no existe es 404 TEAM_NOT_FOUND")
+    func anUnknownTeamIs404() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/teams/\(UUID())/registrations/\(seeded.season)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                #expect(try Self.problem(response).code == .TEAM_NOT_FOUND)
+            }
+        }
+    }
+
+    @Test("getTeamRegistration: una temporada que no existe es 404 SEASON_NOT_FOUND")
+    func anUnknownSeasonOfATeamIs404() async throws {
+        try await Self.withSeededClub { app, seeded in
+            try await app.testing().test(
+                .GET, "/v1/teams/\(seeded.cadeteB)/registrations/\(UUID())", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                #expect(response.status == .notFound)
+                #expect(try Self.problem(response).code == .SEASON_NOT_FOUND)
+            }
+        }
+    }
+
+    @Test("getTeamRegistration: un teamId o un seasonId que no es un UUID es 400 INVALID_UUID", arguments: [
+        "/v1/teams/abc/registrations/\(UUID())", "/v1/teams/\(UUID())/registrations/abc",
+    ])
+    func idsThatAreNotUUIDsAre400(path: String) async throws {
+        try await Self.withSeededClub { app, _ in
+            try await app.testing().test(.GET, path, beforeRequest: { Self.header(&$0) }) { response async throws in
                 #expect(response.status == .badRequest)
                 #expect(try Self.problem(response).code == .INVALID_UUID)
             }

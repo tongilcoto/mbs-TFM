@@ -276,16 +276,16 @@ extension Components.Schemas.Gender {
 extension FederationLinkPreview.Holder {
     /// Mapeo a `TeamRef` (`D-32`), con los derivados compuestos como en
     /// `TeamResponse` (§3.6, `D-109`): `displayName` es el nombre corto del club
-    /// + categoría + letra; `shortDisplayName`, sin la categoría. El club es el
-    /// propio o el rival, según quién tenga el código.
+    /// + categoría + letra; `shortDisplayName`, sin la categoría; y
+    /// `nameWithLetter`, el nombre del club, no el corto, + letra (`D-111`). El
+    /// club es el propio o el rival, según quién tenga el código.
     func toTeamRef() -> Components.Schemas.TeamRef {
         .init(
             teamId: "\(team.id)",
             displayName: [clubShortName, team.category.toContract().displayName, team.letter]
                 .compactMap { $0 }.joined(separator: " "),
             shortDisplayName: [clubShortName, team.letter].compactMap { $0 }.joined(separator: " "),
-            // Provisional, con el nombre corto: el nombre del club llega en R4.5 (`D-111`).
-            nameWithLetter: [clubShortName, team.letter].compactMap { $0 }.joined(separator: " "),
+            nameWithLetter: [clubName, team.letter].compactMap { $0 }.joined(separator: " "),
             crestUrl: nil,
             isOwn: team.isOwn)
     }

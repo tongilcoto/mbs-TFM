@@ -291,6 +291,14 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Equipo desconocido", detail: id,
                                base: typeBaseURI, slug: "team-not-found")
 
+            case .teamNotRegistered(let team, let season):
+                // 404 con su código (R4.5): los dos existen, y la diferencia con
+                // `TEAM_NOT_FOUND` es la que la ficha del backoffice enseña.
+                return Problem(status: .notFound, code: "TEAM_NOT_REGISTERED",
+                               title: "El equipo no está inscrito en esa temporada",
+                               detail: "equipo \(team), temporada \(season)",
+                               base: typeBaseURI, slug: "team-not-registered")
+
             case .seasonLabelUnavailable(let federationSeasonID):
                 // **400, y el criterio es el de `unreadableFederationURL`**: el
                 // 422 es para el cuerpo que se decodificó y dice algo que la

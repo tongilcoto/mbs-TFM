@@ -228,11 +228,11 @@ public struct PreviewFederationLink: Sendable {
             switch holder {
             case .own(let id):
                 guard let team = holders.team(id) else { continue }
-                result[code] = .init(team: team, clubShortName: club.shortName)
+                result[code] = .init(team: team, clubName: club.name, clubShortName: club.shortName)
             case .opponent(let team):
                 guard let rivalClub = opponentClubs.first(where: { $0.id == team.opponentClubID })
                 else { continue }
-                result[code] = .init(team: team, clubShortName: rivalClub.shortName)
+                result[code] = .init(team: team, clubName: rivalClub.name, clubShortName: rivalClub.shortName)
             }
         }
         return result
@@ -355,15 +355,19 @@ public struct FederationLinkPreview: Equatable, Sendable {
         }
     }
 
-    /// Quién del club tiene un código (`D-110`): el equipo, y el nombre corto
-    /// de su club —el propio o el rival—, que es con lo que el adaptador HTTP
-    /// compone sus rótulos (`D-109`).
+    /// Quién del club tiene un código (`D-110`): el equipo, y el nombre y el
+    /// nombre corto de su club —el propio o el rival—, que es con lo que el
+    /// adaptador HTTP compone sus rótulos (`D-109`, `D-111`).
     public struct Holder: Equatable, Sendable {
         public let team: Domain.Team
+        /// El nombre de su club, el propio o el rival: con él se monta
+        /// `nameWithLetter` (`D-111`).
+        public let clubName: String
         public let clubShortName: String
 
-        public init(team: Domain.Team, clubShortName: String) {
+        public init(team: Domain.Team, clubName: String, clubShortName: String) {
             self.team = team
+            self.clubName = clubName
             self.clubShortName = clubShortName
         }
     }

@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)). **757 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)), y la 4 en marcha ([resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **769 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -42,7 +42,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
 | `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
 | `GET /v1/teams/{id}`                                                                  | Backoffice R3 — [§4.6](#alta-de-equipo) |
-| Las otras 73 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4 — [§4.5](#equipos-de-la-temporada) |
+| Las otras 72 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -504,6 +505,17 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
   (`Celtic Cadete B`).
 - Una temporada que no existe da **404**; un `id` que no es un UUID, **400**.
 
+**Y un solo equipo en una temporada** (rebanada 4): la ficha del equipo del backoffice. La misma forma que un
+elemento de la lista.
+
+```sh
+curl -s http://atleti.localhost:8080/v1/teams/<id del equipo>/registrations/<id de la temporada> | jq
+```
+
+- **404 con tres códigos**: `TEAM_NOT_FOUND` si el equipo no está en el club, `SEASON_NOT_FOUND` si la temporada
+  no existe, y **`TEAM_NOT_REGISTERED` si los dos existen pero el equipo no juega esa temporada** (un rival
+  nunca lo está). **400 `INVALID_UUID`** si uno de los dos no es un UUID.
+
 <a id="alta-de-equipo"></a>
 ### 4.6 El alta de un equipo
 
@@ -541,7 +553,7 @@ curl -s http://atleti.localhost:8080/v1/teams/<id del equipo> | jq
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 757 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 769 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

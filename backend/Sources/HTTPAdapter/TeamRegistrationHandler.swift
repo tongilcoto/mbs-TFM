@@ -28,6 +28,33 @@ extension APIHandler {
     }
 }
 
+/// `GET /v1/teams/{teamId}/registrations/{seasonId}` (R4.5): el equipo en una
+/// temporada, con la forma de cada elemento de la lista de arriba.
+extension APIHandler {
+    public func getTeamRegistration(_ input: Operations.getTeamRegistration.Input) async throws
+        -> Operations.getTeamRegistration.Output
+    {
+        let actor = try actors.currentActor()
+        let teamID: TeamID
+        let seasonID: SeasonID
+        do {
+            teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: "teamId"))
+            seasonID = SeasonID(raw: try Self.uuid(input.path.seasonId, field: "seasonId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        // Los tres 404 los lanza el caso de uso y los traduce el middleware: el
+        // equipo, la temporada y que no esté inscrito (`TEAM_NOT_REGISTERED`).
+        let result = try await unitOfWork.withRepositories(actor: actor) { repositories in
+            try await GetTeamRegistration(
+                clubs: repositories.clubs, seasons: repositories.seasons,
+                teams: repositories.teams, registrations: repositories.teamRegistrations
+            ).execute(actor: actor, teamID: teamID, seasonID: seasonID)
+        }
+        return .ok(.init(body: .json(result.registration.toResponse(club: result.club))))
+    }
+}
+
 extension SeasonRegistration {
     /// Mapeo `Caso de uso → DTO` (§2.2). `team` es la respuesta de un equipo, que
     /// **no cambia nunca de forma** (`D-102`): lo de la temporada viaja fuera.

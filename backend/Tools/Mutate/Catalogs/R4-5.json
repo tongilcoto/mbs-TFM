@@ -1,0 +1,76 @@
+{
+  "title": "R4.5 · getTeamRegistration y el nombre del club + letra en TeamRef (D-111)",
+  "filter": "GetTeamRegistrationTests|ListSeasonRegistrationsTests|SeasonRegistrationEndpointTests|FederationLinkPreviewTests|FederationLinkEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-equipo-con-otro-codigo",
+      "description": "el equipo que no existe sale con otro código",
+      "file": "Sources/Application/GetTeamRegistration.swift",
+      "find": "            throw ApplicationError.teamNotFound(id: \"\\(teamID)\")",
+      "replace": "            throw ApplicationError.competitionNotFound(id: \"\\(teamID)\")"
+    },
+    {
+      "id": "M2-sin-mirar-la-temporada",
+      "description": "una temporada que no existe no se comprueba (sale como no inscrito)",
+      "file": "Sources/Application/GetTeamRegistration.swift",
+      "find": "        guard try await seasons.find(seasonID) != nil else {",
+      "replace": "        guard true else {"
+    },
+    {
+      "id": "M3-no-inscrito-sin-404",
+      "description": "un equipo sin inscripción en esa temporada sale con la lista vacía",
+      "file": "Sources/Application/GetTeamRegistration.swift",
+      "find": "        guard !rows.isEmpty else {",
+      "replace": "        guard true else {"
+    },
+    {
+      "id": "M4-orden-al-reves",
+      "description": "las competiciones salen al revés del orden en que se inscribieron",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "                .sorted { $0.createdAt < $1.createdAt }",
+      "replace": "                .sorted { $0.createdAt > $1.createdAt }"
+    },
+    {
+      "id": "M5-uuid-sin-400",
+      "description": "un seasonId que no es un UUID no se rechaza con 400",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            seasonID = SeasonID(raw: try Self.uuid(input.path.seasonId, field: \"seasonId\"))\n        } catch let error as InvalidUUID {\n            return .badRequest(Self.invalidUUID(error))\n        }\n        // Los tres 404",
+      "replace": "            seasonID = SeasonID(raw: (try? Self.uuid(input.path.seasonId, field: \"seasonId\")) ?? UUID())\n        } catch let error as InvalidUUID {\n            return .badRequest(Self.invalidUUID(error))\n        }\n        // Los tres 404"
+    },
+    {
+      "id": "M6-no-inscrito-como-no-encontrado",
+      "description": "el 404 de no inscrito sale con el código de equipo no encontrado",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .notFound, code: \"TEAM_NOT_REGISTERED\",",
+      "replace": "return Problem(status: .notFound, code: \"TEAM_NOT_FOUND\","
+    },
+    {
+      "id": "M7-nombre-corto-en-nameWithLetter",
+      "description": "nameWithLetter se monta con el nombre corto",
+      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "find": "            nameWithLetter: [clubName, team.letter]",
+      "replace": "            nameWithLetter: [clubShortName, team.letter]"
+    },
+    {
+      "id": "M8-nameWithLetter-sin-letra",
+      "description": "nameWithLetter sale sin la letra",
+      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "find": "            nameWithLetter: [clubName, team.letter]",
+      "replace": "            nameWithLetter: [clubName]"
+    },
+    {
+      "id": "M9-propio-con-nombre-corto",
+      "description": "el titular propio lleva el nombre corto como nombre del club",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "result[code] = .init(team: team, clubName: club.name, clubShortName: club.shortName)",
+      "replace": "result[code] = .init(team: team, clubName: club.shortName, clubShortName: club.shortName)"
+    },
+    {
+      "id": "M10-rival-con-nombre-corto",
+      "description": "el titular rival lleva el nombre corto como nombre del club",
+      "file": "Sources/Application/PreviewFederationLink.swift",
+      "find": "result[code] = .init(team: team, clubName: rivalClub.name, clubShortName: rivalClub.shortName)",
+      "replace": "result[code] = .init(team: team, clubName: rivalClub.shortName, clubShortName: rivalClub.shortName)"
+    }
+  ]
+}
