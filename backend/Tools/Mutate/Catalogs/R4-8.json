@@ -1,0 +1,132 @@
+{
+  "title": "R4.8 · listMatches: tres ámbitos, paginado, y la fila de la clasificación en cada lado (D-112)",
+  "filter": "ListMatchesTests|MatchEndpointTests|IngestionPersistenceTests|GetStandingTests|StandingEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-equipo-solo-de-local",
+      "description": "los partidos de un equipo son solo los de local",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .group(.or) { $0.filter(\\.$homeTeam.$id == teamID.raw).filter(\\.$awayTeam.$id == teamID.raw) }",
+      "replace": "            .filter(\\.$homeTeam.$id == teamID.raw)"
+    },
+    {
+      "id": "M2-filas-de-todas-las-jornadas",
+      "description": "las filas de varias jornadas traen las de todas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .filter(\\.$round.$id ~~ roundIDs.map(\\.raw))\n",
+      "replace": "\n"
+    },
+    {
+      "id": "M3-jornada-sin-filtrar",
+      "description": "los partidos de una jornada traen todos",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .filter(\\.$round.$id == roundID.raw)\n            .all()\n            .map { try $0.toDomain() }\n    }\n\n    public func list(teamID",
+      "replace": "            .all()\n            .map { try $0.toDomain() }\n    }\n\n    public func list(teamID"
+    },
+    {
+      "id": "M4-sin-filtro-de-temporada",
+      "description": "la temporada no acota",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "                && (seasonCompetitions.map { $0.contains(match.competitionID) } ?? true)",
+      "replace": "                && true"
+    },
+    {
+      "id": "M5-sin-filtro-de-estado",
+      "description": "el estado no filtra",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "                && (query.status.map { match.status == $0 } ?? true)",
+      "replace": "                && true"
+    },
+    {
+      "id": "M6-ambitos-no-se-suman",
+      "description": "el equipo no acota cuando viene con una jornada",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "                && (query.teamID.map { match.homeTeamID == $0 || match.awayTeamID == $0 } ?? true)",
+      "replace": "                && true"
+    },
+    {
+      "id": "M7-sin-hora-al-principio",
+      "description": "las horas sin fijar van al principio del día",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "match.kickoff.time.map { $0.hour * 60 + $0.minute } ?? 24 * 60",
+      "replace": "match.kickoff.time.map { $0.hour * 60 + $0.minute } ?? -1"
+    },
+    {
+      "id": "M8-desc-ignorado",
+      "description": "order=desc no da la vuelta al orden",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "        let all = query.newestFirst ? Array(ordered.reversed()) : ordered",
+      "replace": "        let all = ordered"
+    },
+    {
+      "id": "M9-pagina-desde-cero",
+      "description": "la página se cuenta desde 0",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "        let start = (query.page - 1) * query.perPage",
+      "replace": "        let start = query.page * query.perPage"
+    },
+    {
+      "id": "M10-total-de-la-pagina",
+      "description": "total cuenta solo los de la página",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "        return Page(lines: lines, total: all.count, page: query.page, perPage: query.perPage)",
+      "replace": "        return Page(lines: lines, total: lines.count, page: query.page, perPage: query.perPage)"
+    },
+    {
+      "id": "M11-fila-del-otro-lado",
+      "description": "el local lleva la fila del visitante",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "standing: standings[RoundTeam(round: match.roundID, team: match.homeTeamID)]",
+      "replace": "standing: standings[RoundTeam(round: match.roundID, team: match.awayTeamID)]"
+    },
+    {
+      "id": "M12-sin-mirar-el-equipo",
+      "description": "un equipo que no existe da la página vacía en vez de 404",
+      "file": "Sources/Application/ListMatches.swift",
+      "find": "        if let id = query.teamID, try await teams.find(id) == nil {",
+      "replace": "        if let id = query.teamID, false, try await teams.find(id) == nil {"
+    },
+    {
+      "id": "M13-sin-ambito-sin-400",
+      "description": "sin ámbito no se rechaza con 400",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "        guard query.roundId != nil || query.competitionId != nil || query.teamId != nil else {",
+      "replace": "        guard true else {"
+    },
+    {
+      "id": "M14-perpage-sin-tope",
+      "description": "perPage no tiene tope",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "        guard page >= 1, (1...100).contains(perPage) else {",
+      "replace": "        guard page >= 1, perPage >= 1 else {"
+    },
+    {
+      "id": "M15-marcadores-cruzados",
+      "description": "los marcadores se cruzan de lado",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "            home: .init(value1: home.toMatchTeam(score: match.result?.homeScore)),",
+      "replace": "            home: .init(value1: home.toMatchTeam(score: match.result?.awayScore)),"
+    },
+    {
+      "id": "M16-goles-de-la-fila-cruzados",
+      "description": "en la fila, goles a favor y en contra cruzados",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "goalsFor: $0.goalsFor, goalsAgainst: $0.goalsAgainst, points: $0.points))",
+      "replace": "goalsFor: $0.goalsAgainst, goalsAgainst: $0.goalsFor, points: $0.points))"
+    },
+    {
+      "id": "M17-sin-fila-como-vacia",
+      "description": "sin fila, el envoltorio vacío ({}) en vez de omitir la clave",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "            value2: .init(score: score, standing: standing.map {\n                .init(value1: .init(\n                    position: $0.position, played: $0.played, won: $0.won, drawn: $0.drawn, lost: $0.lost,\n                    goalsFor: $0.goalsFor, goalsAgainst: $0.goalsAgainst, points: $0.points))\n            }))",
+      "replace": "            value2: .init(score: score, standing: .init(value1: standing.map {\n                .init(\n                    position: $0.position, played: $0.played, won: $0.won, drawn: $0.drawn, lost: $0.lost,\n                    goalsFor: $0.goalsFor, goalsAgainst: $0.goalsAgainst, points: $0.points)\n            })))"
+    },
+    {
+      "id": "M18-hora-sin-fijar-como-confirmada",
+      "description": "isKickoffConfirmed siempre verdadero",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "            isKickoffConfirmed: match.isKickoffConfirmed,",
+      "replace": "            isKickoffConfirmed: true,"
+    }
+  ]
+}
