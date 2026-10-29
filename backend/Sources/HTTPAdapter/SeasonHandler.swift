@@ -61,16 +61,19 @@ extension Domain.Season {
             id: "\(id)",
             label: label.value,
             federationSeasonId: federationSeasonID,
-            startDate: startDate.formatted(Self.isoDay),
-            endDate: endDate.formatted(Self.isoDay),
+            startDate: startDate.formatted(.isoDay),
+            endDate: endDate.formatted(.isoDay),
             isCurrent: isCurrent,
             archivedAt: archivedAt,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
     }
+}
 
-    /// Días sin hora (`format: date`), en UTC, que es como los construye
-    /// `SeasonLabel`: con otro huso, el 1 de julio saldría 30 de junio.
-    private static let isoDay = Date.ISO8601FormatStyle(timeZone: .gmt).year().month().day()
+extension FormatStyle where Self == Date.ISO8601FormatStyle {
+    /// Días sin hora (`format: date`), en UTC, que es como los construyen
+    /// `SeasonLabel` y la jornada: con otro huso, el 1 de julio saldría 30 de
+    /// junio. Lo usan la temporada y la jornada (R4.6).
+    static var isoDay: Date.ISO8601FormatStyle { Date.ISO8601FormatStyle(timeZone: .gmt).year().month().day() }
 }

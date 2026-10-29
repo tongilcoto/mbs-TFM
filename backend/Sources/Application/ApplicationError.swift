@@ -54,6 +54,10 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// «no se ha encontrado».
     case teamNotRegistered(team: String, season: String)
 
+    /// La jornada no existe en el club (`GET /v1/rounds/{id}`, R4.6). 404: el id
+    /// lo puso quien llama, como `teamNotFound`.
+    case roundNotFound(id: String)
+
     /// **La fuente no publicó etiqueta de temporada y hay que crear una**
     /// (F10, `C-C.8` → **400**).
     ///

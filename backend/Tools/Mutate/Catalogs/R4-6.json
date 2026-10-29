@@ -1,0 +1,90 @@
+{
+  "title": "R4.6 · listRounds y getRound: las jornadas de una competición, con la que está en curso",
+  "filter": "RoundTests|SeasonTests|RoundQueriesTests|RoundEndpointTests|IngestionPersistenceTests|SeasonEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-en-curso-la-que-contiene-hoy",
+      "description": "en curso es solo la que contiene hoy, no la próxima",
+      "file": "Sources/Domain/Round.swift",
+      "find": "        return filter { $0.endDate >= today }",
+      "replace": "        return filter { $0.endDate >= today && $0.startDate <= today }"
+    },
+    {
+      "id": "M2-en-curso-la-ultima",
+      "description": "en curso es la más lejana, no la más próxima",
+      "file": "Sources/Domain/Round.swift",
+      "find": "            .min { ($0.endDate, $0.number) < ($1.endDate, $1.number) }",
+      "replace": "            .max { ($0.endDate, $0.number) < ($1.endDate, $1.number) }"
+    },
+    {
+      "id": "M3-el-ultimo-dia-ya-no-cuenta",
+      "description": "el último día de una jornada ya no es de ella",
+      "file": "Sources/Domain/Round.swift",
+      "find": "        return filter { $0.endDate >= today }",
+      "replace": "        return filter { $0.endDate > today }"
+    },
+    {
+      "id": "M4-empate-por-el-numero-mas-alto",
+      "description": "a igual fecha de fin, la de número más alto",
+      "file": "Sources/Domain/Round.swift",
+      "find": "            .min { ($0.endDate, $0.number) < ($1.endDate, $1.number) }",
+      "replace": "            .min { ($0.endDate, -$0.number) < ($1.endDate, -$1.number) }"
+    },
+    {
+      "id": "M5-dia-en-utc",
+      "description": "el día se cuenta en UTC, no en Madrid",
+      "file": "Sources/Domain/MadridDay.swift",
+      "find": "        madrid.timeZone = TimeZone(identifier: \"Europe/Madrid\")!",
+      "replace": "        madrid.timeZone = TimeZone(identifier: \"UTC\")!"
+    },
+    {
+      "id": "M6-find-la-primera",
+      "description": "find devuelve la primera jornada de la tabla, no la pedida",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "        try await RoundRecord.find(id.raw, on: database)?.toDomain()",
+      "replace": "        try await RoundRecord.query(on: database).first()?.toDomain()"
+    },
+    {
+      "id": "M7-sin-mirar-la-competicion",
+      "description": "una competición que no existe da la lista vacía en vez de 404",
+      "file": "Sources/Application/ListRounds.swift",
+      "find": "        guard try await competitions.find(competitionID) != nil else {",
+      "replace": "        guard true else {"
+    },
+    {
+      "id": "M8-sin-ordenar",
+      "description": "las jornadas salen en el orden del repositorio, sin ordenar por número",
+      "file": "Sources/Application/ListRounds.swift",
+      "find": "        let list = try await rounds.list(competitionID: competitionID).sorted { $0.number < $1.number }",
+      "replace": "        let list = try await rounds.list(competitionID: competitionID)"
+    },
+    {
+      "id": "M9-en-curso-entre-todas",
+      "description": "getRound mira «en curso» con la jornada sola, no entre las de su competición",
+      "file": "Sources/Application/GetRound.swift",
+      "find": "        return Result(round: round, isCurrent: siblings.current(on: clock.now())?.id == round.id)",
+      "replace": "        return Result(round: round, isCurrent: !siblings.isEmpty && [round].current(on: clock.now())?.id == round.id)"
+    },
+    {
+      "id": "M10-ronda-con-otro-codigo",
+      "description": "la jornada que no existe sale con otro código",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .notFound, code: \"ROUND_NOT_FOUND\",",
+      "replace": "return Problem(status: .notFound, code: \"NOT_FOUND\","
+    },
+    {
+      "id": "M11-fecha-de-fin-por-la-de-inicio",
+      "description": "endDate sale con la fecha de inicio",
+      "file": "Sources/HTTPAdapter/RoundHandler.swift",
+      "find": "            endDate: endDate.formatted(.isoDay),",
+      "replace": "            endDate: startDate.formatted(.isoDay),"
+    },
+    {
+      "id": "M12-uuid-sin-400",
+      "description": "un competitionId que no es un UUID no se rechaza con 400",
+      "file": "Sources/HTTPAdapter/RoundHandler.swift",
+      "find": "            competitionID = CompetitionID(raw: try Self.uuid(input.query.competitionId, field: \"competitionId\"))",
+      "replace": "            competitionID = CompetitionID(raw: (try? Self.uuid(input.query.competitionId, field: \"competitionId\")) ?? UUID())"
+    }
+  ]
+}

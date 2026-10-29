@@ -104,3 +104,20 @@ extension Round {
         )
     }
 }
+
+extension Array where Element == Round {
+    /// **La jornada en curso** de una competición, derivada en lectura (§5.1,
+    /// R4.6): la de `endDate` más próximo que aún no ha pasado, contando el día
+    /// en Madrid (`MadridDay`). **Como mucho una**; y ninguna si la competición
+    /// ya terminó.
+    ///
+    /// No es el criterio de `Season.current(on:)` (`D-103`, «la que contiene
+    /// hoy»): entre dos jornadas hay días que no son de ninguna, y entonces la
+    /// que cuenta es la próxima. A igual `endDate` (un aplazamiento que junta
+    /// dos), la de número más bajo.
+    public func current(on instant: Date) -> Round? {
+        let today = MadridDay.of(instant)
+        return filter { $0.endDate >= today }
+            .min { ($0.endDate, $0.number) < ($1.endDate, $1.number) }
+    }
+}

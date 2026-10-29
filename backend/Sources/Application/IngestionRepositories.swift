@@ -11,6 +11,9 @@ public protocol RoundRepository: Sendable {
     /// decide crear o actualizar.
     func list(competitionID: CompetitionID) async throws -> [Round]
 
+    /// Una jornada por su `id`, o `nil` si no está (`GET /v1/rounds/{id}`, R4.6).
+    func find(_ id: RoundID) async throws -> Round?
+
     /// *Upsert* por `id` (§4.3). El id lo pone el caso de uso, no la base:
     /// así la fila recién creada puede entrar en los candidatos de la misma
     /// pasada sin releerla.

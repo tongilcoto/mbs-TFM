@@ -1,6 +1,5 @@
 {
   "problemCodes": {
-    "BAD_REQUEST": "PATCH /club con un cuerpo que no es application/json (ClubHandler); ningún test lo nombra. Ya en la lista de H-46/H-72",
     "DATABASE_UNAVAILABLE": "503 de ApplicationError.databaseUnavailable (ProblemMiddleware); provocarlo por HTTP exige Postgres caído a mitad de la petición. Ya en la lista de H-46",
     "EMPTY_PATCH": "PATCH /club con {} (minProperties: 1, que el generador ignora, D-65); ningún test nombra el código. Ya en la lista de H-46",
     "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
@@ -18,6 +17,8 @@
     "CompetitionResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "CompetitionResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "TeamResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
-    "TeamResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
+    "TeamResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "RoundResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.6)",
+    "RoundResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.6)"
   }
 }

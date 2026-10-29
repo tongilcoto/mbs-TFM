@@ -172,6 +172,7 @@ struct FakeRoundRepository: RoundRepository {
     func list(competitionID: CompetitionID) async throws -> [Round] {
         await store.rounds.filter { $0.competitionID == competitionID }
     }
+    func find(_ id: RoundID) async throws -> Round? { await store.rounds.first { $0.id == id } }
     func save(_ round: Round) async throws { await store.save(round) }
 }
 

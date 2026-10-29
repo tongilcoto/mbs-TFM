@@ -631,6 +631,34 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// `find` (R4.6), con **dos** jornadas, como el de los equipos: con una sola,
+    /// devolver *"la primera que haya"* pasaría.
+    @Test("Round: find trae esa jornada y no otra, y nil si no está (R4.6)")
+    func findBringsTheDesignatedRound() async throws {
+        try await Self.withCompetition("round-find") { competitionID, tenant in
+            let (first, second) = try (
+                Round(
+                    id: RoundID(raw: UUID()), competitionID: competitionID, number: 1,
+                    startDate: Self.date("27-09-2025"), endDate: Self.date("28-09-2025"),
+                    createdAt: Date(), updatedAt: Date()),
+                Round(
+                    id: RoundID(raw: UUID()), competitionID: competitionID, number: 2,
+                    startDate: Self.date("04-10-2025"), endDate: Self.date("05-10-2025"),
+                    createdAt: Date(), updatedAt: Date()))
+            try await tenant.scope {
+                try await $0.rounds.save(first)
+                try await $0.rounds.save(second)
+            }
+
+            let found = try #require(try await tenant.scope { try await $0.rounds.find(second.id) })
+            #expect(found.id == second.id)
+            #expect(found.number == 2, "la designada, no la primera de la tabla")
+            #expect(found.competitionID == competitionID)
+            #expect(found.endDate == Self.date("05-10-2025"))
+            #expect(try await tenant.scope { try await $0.rounds.find(RoundID(raw: UUID())) } == nil)
+        }
+    }
+
     /// El partido entero, con las tres piezas que el esquema **no** sabe
     /// expresar y reconstruye el mapeo: el par del marcador, la hora de reloj
     /// como texto `HH:mm` y el `Kickoff` con sus dos mitades.

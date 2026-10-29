@@ -112,6 +112,10 @@ public struct FluentRoundRepository: RoundRepository {
             .map { try $0.toDomain() }
     }
 
+    public func find(_ id: RoundID) async throws -> Round? {
+        try await RoundRecord.find(id.raw, on: database)?.toDomain()
+    }
+
     public func save(_ round: Round) async throws {
         if let existing = try await RoundRecord.find(round.id.raw, on: database) {
             existing.apply(round)
