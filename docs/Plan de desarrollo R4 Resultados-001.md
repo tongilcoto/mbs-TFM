@@ -43,7 +43,7 @@ clasificaciones, pero **la web no enseña nada de eso todavía**: la portada sol
 | Qué | Dónde se describe |
 |---|---|
 | **En la portada, el nombre de cada equipo lleva a su ficha**, y la celda de la ingesta de cada competición tiene el botón ↻ para relanzarla | Ficha, §3.1 · decisión 7 |
-| **La ficha del equipo** (`/equipos/:id/resultados`): el título, y tres cajas con la temporada, la competición (con el estado de su ingesta y ↻) y la posición | Ficha, §3.2 · decisiones 4 y 7 |
+| **La ficha del equipo** (`/temporadas/:temporada/equipos/:id/resultados`): el título, y tres cajas con la temporada, la competición (con el estado de su ingesta y ↻) y la posición | Ficha, §3.2 · decisiones 4 y 7 |
 | **La pestaña Resultados**: todos los partidos de la temporada en una tabla, con el puesto de cada equipo y la línea del propio tras cada jornada | Ficha, §3.3 · decisiones 1, 2 y 6 |
 | **Jornada y clasificación** (`/temporadas/:temporada/competiciones/:id`): los partidos de una jornada, *Anterior* / *Siguiente*, y la clasificación de esa jornada | Ficha, §3.4 · decisión 3 |
 | En el servidor, **cinco operaciones nuevas** (`getTeamRegistration`, `listRounds`, `getRound`, `listMatches` y `getStanding`), y en el catálogo **el nombre del club + letra** (`D-111`) y **el puesto de cada lado de un partido** (`D-112`). Con ello, el servidor sirve **17 de las 85** | §5 · decisiones 1 y 2 |
@@ -59,7 +59,7 @@ de Ingesta, con el motivo de cada fallo (rebanada 14, que se queda con eso al pe
 
 ### 3.1 La portada: el enlace a la ficha y relanzar la ingesta
 
-- **El nombre del equipo pasa a ser un enlace** a `/equipos/:id/resultados?temporada=<la de la portada>`. Es el
+- **El nombre del equipo pasa a ser un enlace** a `/temporadas/<la de la portada>/equipos/:id/resultados`. Es el
   «clic en un equipo» del mapa (plan del backoffice, §3).
 - **En la celda «Ingesta» de cada competición, el icono ↻** junto a su estado (decisión 7), con las reglas de los
   iconos de la R3 (`IconAction`, `DW-19`): su texto, «Volver a traer los datos de la Federación», con el ratón y
@@ -82,7 +82,7 @@ nombre del club, que ya está en la cabecera de la web.
 
 | Caja | Qué dice | Qué se puede hacer |
 |---|---|---|
-| **Temporada** | La de la dirección (`?temporada=2025-26`); sin ella, la en curso, y si no hay, la más reciente (LLD-B §6.5) | Un selector con **todas las temporadas del club**. Cambiarla cambia la dirección |
+| **Temporada** | La del camino (`/temporadas/2025-26/…`). `/equipos/:id` sin temporada lleva a la en curso, y si no hay, a la más reciente (LLD-B §6.4, §6.5) | Un selector con **todas las temporadas del club**. Cambiarla cambia el camino |
 | **Competición** | Su nombre, su estado de la ingesta (✓ Al día, ✕ Con fallos, ↻ En marcha…, los nombres de `IngestionHealth`) y el botón ↻ | El nombre lleva a la jornada y clasificación (§3.4). El ↻, como en la portada. **Si el equipo tiene más de una** (liga y copa, `D-12`), el nombre pasa a ser un selector y la tabla enseña solo los de la elegida |
 | **Posición** | «2º», y «de 16 · tras la jornada 22» | — |
 
@@ -164,8 +164,8 @@ abajo es la propuesta, sobre el boceto 3.
 
 - **Arriba**: la competición y el grupo, la temporada, y «Jornada 22 · 14 – 16 feb».
 - **La jornada que se enseña** es la en curso (`isCurrent`), o la última si la competición terminó. **Si se llega
-  desde ☰**, la de ese partido. La jornada no va en el camino (decisión 3): va detrás de `?`, como la temporada
-  (`?jornada=22`), para que recargar deje en la misma.
+  desde ☰**, la de ese partido. La jornada no va en el camino (decisión 3): va detrás de `?` (`?jornada=22`), para
+  que recargar deje en la misma.
 - **Los partidos de la jornada** (`listMatches` con `roundId`), en una tabla como la de Resultados pero sin las
   columnas del propio: local, resultado, visitante. Los equipos del club, resaltados.
 - **«‹ Anterior» · «Jornada 22» · «Siguiente ›»**, bloqueados en la primera y en la última.
@@ -220,12 +220,18 @@ va en la bitácora como **`D-112`**, y su forma exacta se fija en R4.4.
 
 **Los partidos por jugar** llevan el puesto de hoy, que sale de la clasificación que pide la cabecera.
 
-### Decisión 3 · El camino de jornada y clasificación: la competición dentro de su temporada
+### Decisión 3 · Los caminos: la temporada en el camino, la jornada detrás de `?`
 
-**`/temporadas/:temporada/competiciones/:id`**, con la temporada como en el resto (`2025-26`, LLD-B §6.5) y la
-competición por su código interno (§6.3). **El número de jornada no va en el camino**: la pantalla es de la
-competición, y la jornada es lo que se está mirando de ella; va detrás de `?` (§3.4). Era el «camino por decidir»
-del mapa (plan del backoffice, §3).
+- **Jornada y clasificación: `/temporadas/:temporada/competiciones/:id`**, con la competición por su código interno
+  (LLD-B §6.3). **El número de jornada no va en el camino**: la pantalla es de la competición, y la jornada es lo
+  que se está mirando de ella; va detrás de `?` (§3.4). Era el «camino por decidir» del mapa (plan del backoffice,
+  §3).
+- **La ficha del equipo: `/temporadas/:temporada/equipos/:id/resultados`**, y no `/equipos/:id/resultados?temporada=`
+  como decía el LLD-B. Señalado por el desarrollador al revisar R4.2: los resultados son de una temporada, por la
+  misma razón que la competición. **La temporada va en el camino de todo lo que es de una temporada** (la ficha y
+  sus pestañas, la competición); detrás de `?`, lo que se elige dentro de la pantalla. La portada se queda en
+  `/?temporada=`, porque es la entrada; y el enganche, en `/equipos/:id/federacion`, porque no es de una temporada.
+  Cambia la regla de la R1 (decisión 5): LLD-B §6.5 y `DW-22`.
 
 ### Decisión 4 · La cabecera de la ficha: tres cajas
 
@@ -355,7 +361,7 @@ solo, y lo que no venga en el plan va en su propio commit.
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
 | **R4.1** | Este plan, con las decisiones 1 a 7 | El desarrollador lo revisa | Un commit, y otro por cada corrección |
-| **R4.2** | Los documentos de lo decidido: en la bitácora del backend, **`D-111`** (club + letra) y **`D-112`** (el puesto en el partido), con su línea en el LLD; en el LLD-B, los caminos de la ficha y de jornada y clasificación confirmados (§6.1); y en el plan del backoffice, lo «pendiente de la rebanada 4» resuelto, relanzar la ingesta pasado de la fila 14 a la 4, el camino de jornada en el mapa y la R4 en curso | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
+| **R4.2** | Los documentos de lo decidido: en la bitácora del backend, **`D-111`** (club + letra) y **`D-112`** (el puesto en el partido), con su línea en el LLD; en el LLD-B, los caminos de la ficha y de jornada y clasificación confirmados (§6.1), con la temporada en el camino (§6.5, `DW-22`); y en el plan del backoffice, lo «pendiente de la rebanada 4» resuelto, relanzar la ingesta pasado de la fila 14 a la 4, el camino de jornada en el mapa y la R4 en curso | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
 | **R4.3** | **La pantalla de jornada y clasificación (§3.4), revisada sobre su maqueta**; **los `.feature` de la §6**, revisados con el desarrollador antes de programar; y **la federación falsa con una competición jugada**: marcadores, horas, la clasificación de cada jornada y las actas, con un aplazado y un suspendido | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**. La ingesta del servidor de pruebas sobre la competición jugada deja en `tfm_test` sus partidos con marcador, una tabla por jornada y los estados del acta | Un commit |
 
 ### B · El servidor
@@ -395,6 +401,7 @@ Con el método del backend (§5).
 | Paso | Hecho | Lo que se comprobó |
 |---|---|---|
 | **R4.1** | ✅ 2026-10-28 | El plan escrito y sus siete decisiones revisadas con el desarrollador sobre tres versiones de una maqueta en HTML (cabecera, portada y partidos). Lo que cambió en la revisión: **el nombre de los equipos**, el nombre del club + letra y no el corto (1); al mirarlo salió que el servidor monta todos sus rótulos con el corto, y que `TeamResponse.clubName` lo da aunque el catálogo diga «nombre» (a R4.4). **Las posiciones de cada partido, en la misma consulta que los partidos**, en vez de una petición por jornada (2). **El camino de jornada y clasificación** sin el número de jornada (3). **Las cajas de la cabecera**, con el estado de la ingesta y ↻ en la de la competición (4), y relanzar la ingesta adelantado de la rebanada 14 (7). **Los partidos en tabla**, con G, E y P, el aplazado en su jornada y abriendo arriba (6). La pantalla de jornada y clasificación (§3.4) queda sin maqueta: se revisa con la suya en R4.3. Estadísticas y Plantilla siguen en las rebanadas 10 y 6 (5) |
+| **R4.2** | ✅ 2026-10-29 | Cuatro commits. **El backend**: `D-111` (el nombre del club + letra, un rótulo nuevo de `TeamRef` junto a `shortDisplayName`; y el aviso de `TeamResponse.clubName`, que da el corto) y `D-112` (la fila de la clasificación de su jornada en cada lado de un partido), con su línea en §5.1 y §5.2 del LLD. **El LLD-B**: los caminos de la rebanada en §6.1 y, **cambiado al revisarlo**, la temporada en el camino de todo lo que es de una temporada (§6.5, `DW-22`): el desarrollador señaló que la ficha tenía que ir como la competición, porque los resultados son de una temporada; la portada se queda en `/?temporada=` y el enganche sin temporada. **El plan del backoffice**: el mapa (Resultados y jornada en curso, con sus caminos), las filas de la 4 y la 14, lo pendiente de la 4 resuelto, el relanzar adelantado y la R4 en el estado. **Este plan**: la decisión 3 con los dos caminos. **Encontrado al revisarlo**: el editor de Markdown del desarrollador (Obsidian) volvió a escribir la tabla índice de la bitácora del backend ensanchando todas sus filas; se dejó como estaba, con solo las dos filas nuevas |
 
 ---
 
