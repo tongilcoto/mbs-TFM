@@ -174,6 +174,27 @@ export interface Competition {
   calendarSeason?: string
   /** El `id` que le da el servidor. */
   id?: string
+  /**
+   * Su calendario, si se ha jugado algo: jornada a jornada, con fecha, hora y marcador (`playedCompetition`). Sin él,
+   * la federación falsa sirve tres jornadas sin jugar.
+   */
+  schedule?: Round[]
+}
+
+export interface Round {
+  number: number
+  /** El día de la jornada; todos sus partidos, ese día. */
+  date: Date
+  matches: Fixture[]
+}
+
+export interface Fixture {
+  home: FederationTeam
+  away: FederationTeam
+  /** `HH:MM`, o nada si la federación todavía no la ha fijado. */
+  time?: string
+  /** Nada si no se ha jugado. */
+  score?: { home: number; away: number }
 }
 
 /**
@@ -185,6 +206,7 @@ export function competition(
   of: Season,
   forTeam: Pick<Team, 'category' | 'gender' | 'modality'>,
   withoutAge = false,
+  teamCount = 4,
 ): Competition {
   const words = withoutAge ? [random.pick(ageless)] : [random.pick(divisions), categoryInFederationNames[forTeam.category]]
   if (forTeam.gender === 'femenino') words.push('FEMENINO')
@@ -194,7 +216,7 @@ export function competition(
   const federationGroupId = String(Number(federationCompetitionId) + random.int(1, 50))
 
   const codes = new Set<string>()
-  while (codes.size < 4) codes.add(String(random.int(100, 9_999_999)))
+  while (codes.size < teamCount) codes.add(String(random.int(100, 9_999_999)))
   const [own, ...rivals] = [...codes]
   const rivalPool = [...rivalNames]
   const teams: FederationTeam[] = [
@@ -224,3 +246,117 @@ export function competition(
     calendarUrl: `https://www.rffm.es/competicion/calendario?${query}`,
   }
 }
+
+// ── Competiciones con jornadas jugadas (plan R4) ────────────────────────────────────────────────────────────
+
+const DAY = 24 * 60 * 60 * 1000
+
+/** Hoy en Madrid, como fecha sin hora (a medianoche UTC): con ella se cuentan los días de las jornadas. */
+function todayInMadrid(today: Date): Date {
+  const madrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: 'numeric', day: 'numeric' })
+  const parts = Object.fromEntries(madrid.formatToParts(today).map((p) => [p.type, Number(p.value)]))
+  return new Date(Date.UTC(parts.year!, parts.month! - 1, parts.day!))
+}
+
+/**
+ * Una competición de la temporada en curso con **jornadas jugadas**: seis equipos a ida y vuelta (diez jornadas, una
+ * por semana). Las primeras ya se jugaron, con marcador al azar; la siguiente, la jornada en curso, tiene hora; el
+ * resto, sin hora. Las fechas, alrededor de hoy: la última jugada hace tres días y la en curso dentro de cuatro, para
+ * que el servidor la marque como tal (`Round.isCurrent`). El primer equipo es el del club, y juega todas.
+ */
+export function playedCompetition(
+  random: Random,
+  of: Season,
+  forTeam: Pick<Team, 'category' | 'gender' | 'modality'>,
+  today = new Date(),
+): Competition {
+  const plays = competition(random, of, forTeam, false, 6)
+  const played = random.int(3, 5)
+  const base = todayInMadrid(today)
+  const teams = plays.teams
+  // El método del círculo: el primero se queda quieto y los demás giran; cada vuelta es una jornada.
+  const firstLeg: [FederationTeam, FederationTeam][][] = []
+  let ring = teams.slice(1)
+  for (let r = 0; r < teams.length - 1; r++) {
+    const order = [teams[0]!, ...ring]
+    const pairs: [FederationTeam, FederationTeam][] = []
+    for (let i = 0; i < order.length / 2; i++) {
+      const pair: [FederationTeam, FederationTeam] = [order[i]!, order[order.length - 1 - i]!]
+      pairs.push(r % 2 === 0 ? pair : [pair[1], pair[0]])
+    }
+    firstLeg.push(pairs)
+    ring = [ring[ring.length - 1]!, ...ring.slice(0, -1)]
+  }
+  const legs = [...firstLeg, ...firstLeg.map((pairs) => pairs.map(([home, away]) => [away, home] as [FederationTeam, FederationTeam]))]
+  plays.schedule = legs.map((pairs, index) => {
+    const number = index + 1
+    const date = new Date(base.getTime() + (7 * (number - played) - 3) * DAY)
+    return {
+      number,
+      date,
+      matches: pairs.map(([home, away]) => ({
+        home,
+        away,
+        ...(number <= played + 1 ? { time: random.pick(['09:30', '11:00', '12:15', '16:45', '18:30']) } : {}),
+        ...(number <= played ? { score: { home: random.int(0, 4), away: random.int(0, 4) } } : {}),
+      })),
+    }
+  })
+  return plays
+}
+
+export interface StandingRow {
+  position: number
+  team: FederationTeam
+  played: number
+  won: number
+  drawn: number
+  lost: number
+  goalsFor: number
+  goalsAgainst: number
+  points: number
+}
+
+/**
+ * La clasificación tras una jornada, como la da la RFFM: tres puntos la victoria y uno el empate; a igualdad, la
+ * diferencia de goles, los goles a favor y el nombre. Vacía si esa jornada no se ha jugado.
+ */
+export function standingsAfter(plays: Competition, roundNumber: number): StandingRow[] {
+  const rounds = plays.schedule ?? []
+  const round = rounds.find((r) => r.number === roundNumber)
+  if (!round || round.matches.some((m) => !m.score)) return []
+  const rows = new Map(plays.teams.map((team) => [team.code, { team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }]))
+  for (const { matches } of rounds.filter((r) => r.number <= roundNumber)) {
+    for (const { home, away, score } of matches) {
+      if (!score) continue
+      for (const [team, scored, conceded] of [[home, score.home, score.away], [away, score.away, score.home]] as const) {
+        const row = rows.get(team.code)!
+        row.played++
+        row.goalsFor += scored
+        row.goalsAgainst += conceded
+        if (scored > conceded) {
+          row.won++
+          row.points += 3
+        } else if (scored === conceded) {
+          row.drawn++
+          row.points++
+        } else {
+          row.lost++
+        }
+      }
+    }
+  }
+  return [...rows.values()]
+    .sort((a, b) =>
+      b.points - a.points ||
+      b.goalsFor - b.goalsAgainst - (a.goalsFor - a.goalsAgainst) ||
+      b.goalsFor - a.goalsFor ||
+      a.team.rawName.localeCompare(b.team.rawName, 'es'))
+    .map((row, index) => ({ position: index + 1, ...row }))
+}
+
+/** `dd-mm-aaaa`, como escribe las fechas la RFFM. */
+export function federationDate(date: Date): string {
+  return `${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${date.getUTCFullYear()}`
+}
+

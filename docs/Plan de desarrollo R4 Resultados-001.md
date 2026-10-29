@@ -141,6 +141,12 @@ columnas de la derecha:
 
 La fecha, **sin marca de provisional**.
 
+**Aplazado y suspendido no salen todavía con datos de verdad** (encontrado en R4.3): el estado de un partido del club
+sale de su **acta** (`D-57`), y la ingesta todavía no la lee; el puerto de la federación lo dice («el acta, todavía
+no»). Hoy un partido es «finalizado» si tiene marcador y «programado» si no: en la base del desarrollador, 161 y 807,
+y ninguno aplazado ni suspendido. La web los pinta como dice la tabla, y se prueba con Vitest; sin escenarios. Leer el
+acta queda pendiente, sin rebanada, en el plan del backoffice (§4).
+
 **La tabla abre arriba**, en la jornada 1: en la pantalla de un ordenador caben las ~30 filas sin desplazarse.
 
 **Los estados de la tabla:**
@@ -159,22 +165,38 @@ RFFM no aparece.
 
 ### 3.4 Jornada y clasificación (`/temporadas/:temporada/competiciones/:id`)
 
-**Por revisar en R4.3, sobre su maqueta**, antes de escribir sus escenarios: la decisión 3 fija el camino; lo de
-abajo es la propuesta, sobre el boceto 3.
+**Revisada en R4.3 (2026-10-29)**, sobre una maqueta con datos de la base del desarrollador (PREFERENTE CADETE ·
+Grupo 2, jornada 5): **partidos arriba y clasificación debajo**, como el boceto, y **la racha con el número de
+jornada**, la más reciente a la izquierda. Descartadas las dos tablas lado a lado y la racha con letras.
 
-- **Arriba**: la competición y el grupo, la temporada, y «Jornada 22 · 14 – 16 feb».
+- **Arriba**: «← Volver» (a donde se estaba: la ficha del equipo, si se vino de ella), la competición y el grupo
+  («PREFERENTE CADETE · Grupo 2»), y debajo la edad, el género, la modalidad y la temporada.
 - **La jornada que se enseña** es la en curso (`isCurrent`), o la última si la competición terminó. **Si se llega
   desde ☰**, la de ese partido. La jornada no va en el camino (decisión 3): va detrás de `?` (`?jornada=22`), para
   que recargar deje en la misma.
-- **Los partidos de la jornada** (`listMatches` con `roundId`), en una tabla como la de Resultados pero sin las
-  columnas del propio: local, resultado, visitante. Los equipos del club, resaltados.
-- **«‹ Anterior» · «Jornada 22» · «Siguiente ›»**, bloqueados en la primera y en la última.
-- **La clasificación** de esa jornada (`getStanding`): Pos., Equipo, J, G, E, P, GF, GC, Pts, Ant. (la anterior) y
-  la racha de los últimos cinco (V/E/D, con la letra). La fila del club, resaltada. Sin tabla todavía: «Esta jornada
-  aún no tiene clasificación.»
-- **«←»** vuelve a donde se estaba (la ficha del equipo, si se vino de ella).
-- **Los cuatro estados**, como las demás: cargando, error (con «No se ha encontrado la competición»), vacío (sin
-  jornadas: «La Federación aún no ha publicado el calendario.») y con datos.
+- **«‹ Anterior» · un selector de jornada · «Siguiente ›»**, con la etiqueta «Federación» al lado. El selector dice
+  cada jornada con sus fechas («Jornada 5 · 24 – 25 oct»), y no está en el boceto: con 30 jornadas ahorra clics.
+  *Anterior* bloqueado en la primera y *Siguiente* en la última.
+- **Los partidos de la jornada** (`listMatches` con `roundId`), en una tabla: fecha, hora, local, resultado y
+  visitante, con los estados de partido de Resultados (§3.3). El del club, resaltado.
+- **La clasificación de esa jornada** (`getStanding`), debajo, con el título «Clasificación tras la jornada 5»:
+  Pos., Equipo, J, G, E, P, GF, GC, **DG** (no está en el boceto; desempata a igualdad de puntos), Pts, **Ant.** (el
+  puesto anterior, con una flecha de cuánto subió o bajó; «–» si no hay) y **Racha**. La fila del club, resaltada.
+- **La racha**: un cuadro por partido, con **el número de su jornada** sobre el color del resultado (verde, gris,
+  rojo), **el más reciente a la izquierda**, hasta cinco. Como el color es lo único que dice el resultado, el
+  resultado va en el nombre para el lector y al pasar el ratón: «Victoria en la jornada 5» (LLD-B §10).
+- **Los estados**:
+
+| Estado | Cómo se ve |
+|---|---|
+| **Cargando** | «Cargando jornada…» |
+| **Error** | El mensaje, con *Reintentar* si es pasajero. La competición que no existe, o un código que no es un UUID: «No se ha encontrado la competición» y el enlace a la portada |
+| **Sin jornadas** | «La Federación aún no ha publicado el calendario.» |
+| **Jornada sin clasificación** | Los partidos, y en lugar de la tabla: «Esta jornada aún no tiene clasificación.» |
+| **Con datos** | Los partidos y la clasificación |
+
+Y «Clasificación calculada» junto al título de la tabla, en las jornadas de antes del alta, si la federación del
+club no da las pasadas (`federationProvidesRoundStandings = false`). Con la RFFM no sale.
 
 ---
 
@@ -342,8 +364,8 @@ escenarios, con las etiquetas `@e2e` y `@ui` y axe en los dos modos.
 - Una competición que no existe.
 
 **Los datos**: **una competición jugada inventada** por la federación falsa (LLD-B §11.3), con lo que hoy no sabe
-servir: marcadores y horas en el calendario, **la clasificación de cada jornada** y **el acta de los partidos del
-club** (la ingesta la pide para saber si un partido se aplazó o se suspendió, `D-57`). Se programa en R4.3, porque los
+servir: marcadores y horas en el calendario y **la clasificación de cada jornada**. *(Decía también «el acta de los
+partidos del club»: la ingesta no la lee todavía, así que no hace falta; §3.3.)* Se programa en R4.3, porque los
 escenarios no se pueden ver en rojo de verdad sin datos. La única grabación que tiene hoy
 (`RFFM-standings-temp21-group-24037549-round01-28.txt`) es de un grupo real; si sirve de modelo de formato, se
 inventa sobre ella.
@@ -362,7 +384,7 @@ solo, y lo que no venga en el plan va en su propio commit.
 |---|---|---|---|
 | **R4.1** | Este plan, con las decisiones 1 a 7 | El desarrollador lo revisa | Un commit, y otro por cada corrección |
 | **R4.2** | Los documentos de lo decidido: en la bitácora del backend, **`D-111`** (club + letra) y **`D-112`** (el puesto en el partido), con su línea en el LLD; en el LLD-B, los caminos de la ficha y de jornada y clasificación confirmados (§6.1), con la temporada en el camino (§6.5, `DW-22`); y en el plan del backoffice, lo «pendiente de la rebanada 4» resuelto, relanzar la ingesta pasado de la fila 14 a la 4, el camino de jornada en el mapa y la R4 en curso | El desarrollador lo revisa | Un commit por documento (LLD-B §E.1) |
-| **R4.3** | **La pantalla de jornada y clasificación (§3.4), revisada sobre su maqueta**; **los `.feature` de la §6**, revisados con el desarrollador antes de programar; y **la federación falsa con una competición jugada**: marcadores, horas, la clasificación de cada jornada y las actas, con un aplazado y un suspendido | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**. La ingesta del servidor de pruebas sobre la competición jugada deja en `tfm_test` sus partidos con marcador, una tabla por jornada y los estados del acta | Un commit |
+| **R4.3** | **La pantalla de jornada y clasificación (§3.4), revisada sobre su maqueta**; **los `.feature` de la §6**, revisados con el desarrollador antes de programar; y **la federación falsa con una competición jugada**: marcadores, horas y la clasificación de cada jornada | Revisión del desarrollador; `npm run e2e` con los nuevos **en rojo porque falta la pantalla**. La ingesta del servidor de pruebas sobre la competición jugada deja en `tfm_test` sus partidos con marcador y una tabla por jornada | Un commit |
 
 ### B · El servidor
 
@@ -402,6 +424,7 @@ Con el método del backend (§5).
 |---|---|---|
 | **R4.1** | ✅ 2026-10-28 | El plan escrito y sus siete decisiones revisadas con el desarrollador sobre tres versiones de una maqueta en HTML (cabecera, portada y partidos). Lo que cambió en la revisión: **el nombre de los equipos**, el nombre del club + letra y no el corto (1); al mirarlo salió que el servidor monta todos sus rótulos con el corto, y que `TeamResponse.clubName` lo da aunque el catálogo diga «nombre» (a R4.4). **Las posiciones de cada partido, en la misma consulta que los partidos**, en vez de una petición por jornada (2). **El camino de jornada y clasificación** sin el número de jornada (3). **Las cajas de la cabecera**, con el estado de la ingesta y ↻ en la de la competición (4), y relanzar la ingesta adelantado de la rebanada 14 (7). **Los partidos en tabla**, con G, E y P, el aplazado en su jornada y abriendo arriba (6). La pantalla de jornada y clasificación (§3.4) queda sin maqueta: se revisa con la suya en R4.3. Estadísticas y Plantilla siguen en las rebanadas 10 y 6 (5) |
 | **R4.2** | ✅ 2026-10-29 | Cuatro commits. **El backend**: `D-111` (el nombre del club + letra, un rótulo nuevo de `TeamRef` junto a `shortDisplayName`; y el aviso de `TeamResponse.clubName`, que da el corto) y `D-112` (la fila de la clasificación de su jornada en cada lado de un partido), con su línea en §5.1 y §5.2 del LLD. **El LLD-B**: los caminos de la rebanada en §6.1 y, **cambiado al revisarlo**, la temporada en el camino de todo lo que es de una temporada (§6.5, `DW-22`): el desarrollador señaló que la ficha tenía que ir como la competición, porque los resultados son de una temporada; la portada se queda en `/?temporada=` y el enganche sin temporada. **El plan del backoffice**: el mapa (Resultados y jornada en curso, con sus caminos), las filas de la 4 y la 14, lo pendiente de la 4 resuelto, el relanzar adelantado y la R4 en el estado. **Este plan**: la decisión 3 con los dos caminos. **Encontrado al revisarlo**: el editor de Markdown del desarrollador (Obsidian) volvió a escribir la tabla índice de la bitácora del backend ensanchando todas sus filas; se dejó como estaba, con solo las dos filas nuevas |
+| **R4.3** | ✅ 2026-10-29 | **La pantalla de jornada y clasificación, revisada sobre su maqueta** con datos de la base del desarrollador (PREFERENTE CADETE · Grupo 2, jornada 5): partidos arriba y clasificación debajo, y la racha con el número de jornada, la más reciente a la izquierda (§3.4); se quedan el selector de jornada y la columna DG, que no están en el boceto. **Los escenarios de la rebanada**, revisados con el desarrollador antes de programarlos, sin cambios: **42 nuevos** —`ficha.feature` (15), `resultados.feature` (9), `jornada.feature` (13) y 5 de relanzar la ingesta en `acciones-fila.feature`—. **Encontrado al escribirlos: la ingesta no lee el acta** (`D-57`), así que aplazado y suspendido no se alcanzan con datos de verdad (161 «finalizado» y 807 «programado» en la base del desarrollador); sin escenarios, con Vitest, y leer el acta pendiente en el plan del backoffice (§3.3). **La federación falsa, con una competición con jornadas jugadas** (`playedCompetition` en `invented.ts`): seis equipos a ida y vuelta, diez jornadas semanales alrededor de hoy (la última jugada hace tres días y la en curso dentro de cuatro), entre tres y cinco jugadas con marcador al azar, la en curso con hora y el resto sin ella; y **la clasificación de cada jornada jugada** (`/api/standings`), calculada de los marcadores (`standingsAfter`, que también usarán los pasos para comparar), con `null` para las no jugadas. `addPlayingTeam` la usa con `played`. **Comprobado con una ingesta de verdad** en `tfm_test`, con un script aparte (sin guardar): con 4 jornadas jugadas, 10 jornadas en la base; 12 partidos finalizados, todos con hora, y 18 programados, 3 con hora (los de la jornada en curso); una tabla de 6 filas por cada jornada jugada y ninguna en las demás, con `previous_position`; la de la última jugada, igual que la calculada; 4 peticiones de clasificación; ingesta «Al día». **Encontrado al repetirlo, y arreglado en su propio commit**: a veces faltaba la tabla de la última jornada (4 de 5). `ingestionFinished` (de la R3) daba la ingesta por acabada en cuanto no había ninguna pasada «en marcha», y entre una pasada y la siguiente hay un momento en que la siguiente aún no está apuntada. Ahora espera, desde el último calendario, a la pasada de goleadores, que es la última, o a una fallida, tras la que la ingesta no sigue (`IngestClubCalendars`). Con calendarios sin jugar casi no se notaba. Después, cinco ingestas seguidas con todas sus tablas al volver. `npm run e2e`: **154 escenarios, los 112 de antes en verde y los 42 nuevos sin definir** (3 min 45 s); `typecheck` y `lint` en verde (los 3 avisos de `App.test.ts` ya estaban) |
 
 ---
 

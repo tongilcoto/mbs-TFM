@@ -10,15 +10,16 @@
 // e2e/federation-recordings/: un `.txt` con la dirección pedida en una línea y la respuesta debajo, como
 // los que ya hay. Ojo con el `null` pasajero de la RFFM (H-61): si llega, se vuelve a pedir.
 //
-// Además de las grabadas, sirve las competiciones que se inventa cada escenario (invented.ts): su calendario
-// sin jugar, y sus goleadores, todavía ninguno. Así el servidor las da de alta y las sincroniza por su camino
+// Además de las grabadas, sirve las competiciones que se inventa cada escenario (invented.ts): su calendario,
+// sin jugar o con jornadas jugadas (plan R4); la clasificación de cada jornada jugada, calculada de sus marcadores;
+// y sus goleadores, todavía ninguno. Así el servidor las da de alta y las sincroniza por su camino
 // de siempre, y los datos no se escriben a mano en la base (la skill de escenarios, principio 9). Y a una
 // competición inventada se le puede pedir que falle o que tarde: es lo que hace la RFFM de verdad.
 import { readdirSync, readFileSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { config } from './config.ts'
-import type { Competition } from './invented.ts'
+import { federationDate, standingsAfter, type Competition, type Round } from './invented.ts'
 
 /** Los calendarios grabados. Son páginas enteras y no llevan dentro la dirección, así que van aquí. */
 const calendars: Record<string, string> = {
@@ -64,31 +65,39 @@ function readRecordedAnswers(folder: string): Map<string, string> {
   return answers
 }
 
-/** La página del calendario de una competición inventada: tres jornadas sin jugar, con sus fechas en la temporada. */
-function inventedCalendar(competition: Competition): string {
+/** Las tres jornadas sin jugar de una competición inventada sin calendario propio: domingos de septiembre y octubre. */
+function unplayedRounds(competition: Competition): Round[] {
   const [a, b, c, d] = competition.teams
   const pairings = [[[a, b], [c, d]], [[a, c], [b, d]], [[a, d], [b, c]]]
-  const rounds = pairings.map((matches, index) => {
-    // Domingos de septiembre y octubre del primer año de la temporada.
-    const day = new Date(Date.UTC(competition.season.start, 8, 14 + 7 * index))
-    const date = `${String(day.getUTCDate()).padStart(2, '0')}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${day.getUTCFullYear()}`
+  return pairings.map((matches, index) => ({
+    number: index + 1,
+    date: new Date(Date.UTC(competition.season.start, 8, 14 + 7 * index)),
+    matches: matches.map(([home, away]) => ({ home: home!, away: away! })),
+  }))
+}
+
+/** La página del calendario de una competición inventada, con su calendario o con tres jornadas sin jugar. */
+function inventedCalendar(competition: Competition): string {
+  const rounds = (competition.schedule ?? unplayedRounds(competition)).map((round) => {
+    const date = federationDate(round.date)
     return {
-      codjornada: String(index + 1),
-      jornada: `${index + 1} (${date})`,
-      equipos: matches.map(([home, away], m) => ({
-        codacta: `${competition.federationGroupId}${index}${m}`,
-        codigo_equipo_local: home!.code,
-        equipo_local: home!.rawName,
+      codjornada: String(round.number),
+      jornada: `${round.number} (${date})`,
+      equipos: round.matches.map(({ home, away, time, score }, m) => ({
+        codacta: `${competition.federationGroupId}${round.number - 1}${m}`,
+        codigo_equipo_local: home.code,
+        equipo_local: home.rawName,
         escudo_equipo_local: '',
-        goles_casa: '',
-        codigo_equipo_visitante: away!.code,
-        equipo_visitante: away!.rawName,
+        // La RFFM manda el marcador como texto, y vacío si no se ha jugado.
+        goles_casa: score ? String(score.home) : '',
+        codigo_equipo_visitante: away.code,
+        equipo_visitante: away.rawName,
         escudo_equipo_visitante: '',
-        goles_visitante: '',
+        goles_visitante: score ? String(score.away) : '',
         codigo_campo: '',
         campo: '',
         fecha: date,
-        hora: '',
+        hora: time ?? '',
       })),
     }
   })
@@ -111,7 +120,39 @@ function inventedCalendar(competition: Competition): string {
   return `<html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script></body></html>`
 }
 
-/** Los goleadores de una competición inventada: ninguno todavía, porque no se ha jugado. */
+/**
+ * La clasificación de una competición inventada tras una jornada, con los campos que lee el servidor
+ * (RFFMStandingsParser); `null` si esa jornada no se ha jugado, como la RFFM cuando no la tiene.
+ */
+function inventedStandings(competition: Competition, round: number): string {
+  const rows = standingsAfter(competition, round)
+  if (rows.length === 0) return 'null'
+  const text = (n: number) => String(n)
+  return JSON.stringify({
+    estado: '1',
+    sesion_ok: '1',
+    competicion: competition.division,
+    codigo_competicion: competition.federationCompetitionId,
+    grupo: competition.group,
+    codigo_grupo: competition.federationGroupId,
+    jornada: String(round),
+    clasificacion: rows.map((row) => ({
+      posicion: text(row.position),
+      codequipo: row.team.code,
+      nombre: row.team.rawName,
+      url_img: '',
+      jugados: text(row.played),
+      ganados: text(row.won),
+      empatados: text(row.drawn),
+      perdidos: text(row.lost),
+      goles_a_favor: text(row.goalsFor),
+      goles_en_contra: text(row.goalsAgainst),
+      puntos: text(row.points),
+    })),
+  })
+}
+
+/** Los goleadores de una competición inventada: ninguno todavía. */
 function inventedScorers(competition: Competition): string {
   return JSON.stringify({ estado: '1', sesion_ok: '1', competicion: competition.division, grupo: competition.group, goles: [] })
 }
@@ -204,6 +245,9 @@ export async function startFakeFederation(port = config.federationPort): Promise
         await hold.gate
       }
       return send(inventedCalendar(ours), 'text/html; charset=utf-8')
+    }
+    if (ours && url.pathname === '/api/standings') {
+      return send(inventedStandings(ours, Number(url.searchParams.get('round'))))
     }
     if (ours && url.pathname === '/api/scorers') {
       return send(failing.has(ours.federationGroupId) ? 'null' : inventedScorers(ours))

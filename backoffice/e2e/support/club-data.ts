@@ -14,7 +14,7 @@ import { expectApi } from './club-api.ts'
 import type { ScenarioClub } from './clubs.ts'
 import { config } from './config.ts'
 import { fakeFederation } from './fake-federation.ts'
-import { competition, team, type Competition, type Season, type Team } from './invented.ts'
+import { competition, playedCompetition, team, type Competition, type Season, type Team } from './invented.ts'
 import type { Random } from './random.ts'
 import { withDatabase } from './test-database.ts'
 
@@ -70,16 +70,18 @@ export async function addTeam(club: ScenarioClub, season: Season, created: Team)
  * Un equipo nuevo del club, enganchado a una competición de la temporada. Como lo haría el club: da de alta el
  * equipo en la temporada (y la temporada, si no estaba), y después lo engancha. El enganche encuentra la temporada
  * por su etiqueta y le pone el código de la federación (`D-106`), crea la competición, llena la inscripción y
- * lanza la primera ingesta. Vuelve cuando la ingesta ha acabado: la competición queda «Al día».
+ * lanza la primera ingesta. Vuelve cuando la ingesta ha acabado: la competición queda «Al día». Con `played`, la
+ * competición tiene jornadas jugadas (`playedCompetition`, plan R4), y la ingesta trae también su clasificación.
  */
 export async function addPlayingTeam(
   club: ScenarioClub,
   random: Random,
   season: Season,
   taken: Team[] = [],
+  played = false,
 ): Promise<PlayingTeam> {
   const created = await createTeam(club, random, season, taken)
-  const plays = competition(random, season, created)
+  const plays = played ? playedCompetition(random, season, created) : competition(random, season, created)
   fakeFederation().invent(plays)
   const linked = await expectApi<{ competitionId: string }>(
     club,

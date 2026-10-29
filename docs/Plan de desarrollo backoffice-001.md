@@ -307,6 +307,12 @@ que se queda para las pantallas del móvil. Lo que dejaba [D-109](./API_y_BBDD%2
 (el nombre no distingue el masculino del femenino ni el fútbol 7 del fútbol 11) no afecta dentro de una
 competición; el título de la ficha lleva el género y la modalidad.
 
+**Pendiente, sin rebanada todavía: leer el acta de los partidos del club** (encontrado el 2026-10-29, en R4.3 del
+[plan de la rebanada 4](./Plan%20de%20desarrollo%20R4%20Resultados-001.md)). `D-57` decidió que el estado de un partido
+del club (aplazado, suspendido) sale de su acta, pero la ingesta todavía no la pide: hoy todo partido es «finalizado» o
+«programado», según tenga marcador. La pestaña Resultados ya sabe pintar los otros dos estados. Leerla es del
+servidor (una ruta más de la RFFM y su parser); el acta del club con goles y tarjetas es la rebanada 7.
+
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
 bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
@@ -400,7 +406,7 @@ su comprobación.
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
 | **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
-| **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | en curso | 2/16 | — |
+| **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | en curso | 3/16 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
