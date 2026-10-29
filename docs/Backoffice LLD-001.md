@@ -155,8 +155,8 @@ La web saca todo lo que necesita para pintar una pantalla de **tres partes de la
 | Parte | Ejemplo | Qué dice |
 |---|---|---|
 | El nombre | `celtic-castilla.miapp.com` | El club |
-| El camino | `/equipos/123/plantilla` | Qué estás viendo (§6) |
-| Lo que va detrás de `?` | `?temporada=2025-26` | Lo que has elegido: temporada, filtros, orden |
+| El camino | `/temporadas/2025-26/equipos/123/plantilla` | Qué estás viendo, con la temporada si es de una (§6) |
+| Lo que va detrás de `?` | `?jornada=22`, `?orden=ingesta` | Lo que has elegido dentro de la pantalla: la jornada, filtros, orden; y en la portada, la temporada |
 
 Así, **recargar o abrir un enlace guardado deja en la misma pantalla**, y un enlace que se manda a un
 compañero le enseña lo mismo. **Lo que no esté en la dirección se pierde al recargar, y es a propósito**
@@ -523,15 +523,16 @@ la competición arriba.
 | `/` | **Portada**: los equipos del club con su competición | ✅ Rebanada 1 |
 | `/equipos` | Lleva a la portada: la lista de equipos es la portada, y así cada sección del menú tiene su camino (`/equipos`, `/temporadas`…) | ✅ Rebanada 1 |
 | `/equipos/nuevo` | **Alta de equipo** | ✅ Rebanada 2 |
-| `/equipos/:id/resultados` | Ficha del equipo, pestaña Resultados | Borrador |
-| `/equipos/:id/plantilla` | Pestaña Plantilla | Borrador |
-| `/equipos/:id/estadisticas` | Pestaña Estadísticas | Borrador |
+| `/temporadas/:temporada/equipos/:id/resultados` | **Ficha del equipo, pestaña Resultados**: la cabecera (temporada, competición y posición) y los partidos de la temporada | Decidido en la rebanada 4 |
+| `/temporadas/:temporada/equipos/:id/plantilla` | Pestaña Plantilla | Borrador; la forma del camino, decidida en la rebanada 4 (§6.5) |
+| `/temporadas/:temporada/equipos/:id/estadisticas` | Pestaña Estadísticas | Borrador; la forma del camino, decidida en la rebanada 4 (§6.5) |
 | `/equipos/:id/federacion` | **Sincronizar con la Federación** (el enganche): dos pasos, la dirección y el equipo, en el mismo camino | Decidido en la rebanada 3 |
+| `/temporadas/:temporada/competiciones/:id` | **Jornada y clasificación** de una competición (boceto 3). La jornada va detrás de `?` (`?jornada=22`): es lo que se mira de la competición, no otra pantalla | Decidido en la rebanada 4 |
 | `/partidos/:id` | El acta del partido: goles, tarjetas, minutos | Borrador |
 | `/jugadores/:id` | Ficha del jugador | Borrador |
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
-**Solo están decididas las tres primeras y la del enganche** (el alta de equipo, con la rebanada 2; el enganche, con la 3). El resto es un borrador: cada camino se confirma, o se cambia,
+**Solo están decididas las tres primeras, la del enganche y las de la rebanada 4** (el alta de equipo, con la rebanada 2; el enganche, con la 3; la pestaña Resultados y la de jornada y clasificación, con la 4). El resto es un borrador: cada camino se confirma, o se cambia,
 al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español
@@ -547,18 +548,29 @@ nombre legible: [DW-09].
 
 #### 6.4 Cada pestaña tiene su propio camino
 
-Así, **recargar en la pestaña Plantilla deja en Plantilla** (§2.2). `/equipos/:id` a secas lleva a
-Resultados.
+Así, **recargar en la pestaña Plantilla deja en Plantilla** (§2.2). `/temporadas/:temporada/equipos/:id` a secas
+lleva a Resultados, y `/equipos/:id`, sin temporada, a la ficha en la temporada en curso (§6.5).
 
-#### 6.5 La temporada va detrás de `?`
+#### 6.5 La temporada va en el camino; en la portada, detrás de `?`
 
-`/?temporada=2025-26` en la portada, `/equipos/:id/plantilla?temporada=2025-26` en la plantilla. **Si no se
-indica, se usa la temporada en curso**, la que el servidor marca con `isCurrent`; **si no hay ninguna en curso**
-(de julio a que se crea la del año), **la más reciente**, con un rótulo que dice si terminó o si todavía no ha
-empezado. Una temporada de la dirección que no existe es el estado de error de la pantalla (§6.7), y lo decide
-la web con la lista de temporadas. *(Decidido con la portada, [Plan R1, decisión 5](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md).)* En el camino se escribe con guion (`2025-26`) aunque la etiqueta de la
-temporada lleve barra (`2025/26`, esquema `SeasonLabel`), porque una barra dentro de un valor del camino
-tiene que codificarse y quedaría `2025%2F26`.
+**Lo que es de una temporada lleva la temporada en el camino**, delante de lo que se mira:
+`/temporadas/2025-26/equipos/:id/resultados` (la ficha del equipo y sus pestañas) y
+`/temporadas/2025-26/competiciones/:id` (jornada y clasificación). La temporada **es parte de lo que se mira**, no un
+filtro: la ficha es el equipo en esa temporada (su inscripción, `D-102`), y una competición es de una sola. Lo que
+se elige dentro de la pantalla sí va detrás de `?`: la jornada, el orden. *(Decidido en la rebanada 4, [DW-22];
+hasta entonces la temporada iba siempre detrás de `?`.)*
+
+**La portada es la excepción**: `/?temporada=2025-26`. Es la entrada de la web, y `/` a secas tiene que llevar a
+algún sitio. **Lo que no es de una temporada no la lleva**: el enganche, `/equipos/:id/federacion`, puede
+sincronizar el equipo con una competición de otra.
+
+**Si no se indica, se usa la temporada en curso**, la que el servidor marca con `isCurrent`; **si no hay ninguna en
+curso** (de julio a que se crea la del año), **la más reciente**, con un rótulo que dice si terminó o si todavía no
+ha empezado. Vale para la portada sin `?temporada=` y para `/equipos/:id` sin temporada (§6.4). Una temporada de la
+dirección que no existe es el estado de error de la pantalla (§6.7), y lo decide la web con la lista de temporadas.
+*(Decidido con la portada, [Plan R1, decisión 5](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md).)* Se
+escribe con guion (`2025-26`) aunque la etiqueta de la temporada lleve barra (`2025/26`, esquema `SeasonLabel`),
+porque una barra dentro de un valor del camino tiene que codificarse y quedaría `2025%2F26`.
 
 **El orden de una tabla también va detrás de `?`** (§3.6): `/?temporada=2026-27&orden=ingesta`. Cambiar de
 temporada lo conserva.
@@ -1028,3 +1040,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-19]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-20]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-21]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-22]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

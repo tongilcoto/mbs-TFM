@@ -39,6 +39,7 @@
 | **DW-07** | Las reglas de los formularios se leen del catálogo con Ajv | §5.1 |
 | **DW-08** | Dos personas editando lo mismo: se queda lo último que se guardó | §5.6 |
 | **DW-09** | En el camino va el identificador del servidor, no un nombre legible | §6.3 |
+| **DW-22** | La temporada va en el camino de lo que es de una temporada; en la portada, detrás de `?` | §2.2, §6.4, §6.5 |
 | **DW-18** | Un 502, 503 o 504 sin código es «no se ha podido conectar»: es el recepcionista, no el servidor | §4.1, §4.4 |
 | **Las reglas del negocio en la pantalla** | | |
 | **DW-10** | Lo que no se permite nunca se oculta; lo que se permite a veces se desactiva con el motivo a la vista | §7.4, §10 |
@@ -531,6 +532,35 @@ la regla vive en el LLD-B y en las pruebas de piezas que prueban la clave ausent
 respuestas contra el catálogo (Ajv, la app del móvil), fallará en los obligatorios anulables, y se arregla en el
 servidor para todos a la vez.
 
+
+### DW-22 · La temporada va en el camino de lo que es de una temporada; en la portada, detrás de `?`
+
+**Qué hay que decidir** (2026-10-29, rebanada 4, R4.2). La R1 decidió que la temporada va detrás de `?` en todas las
+pantallas (`/?temporada=2025-26`, `/equipos/:id/plantilla?temporada=2025-26`; plan R1, decisión 5). Al decidir el
+camino de jornada y clasificación, el desarrollador lo propuso con la temporada **en el camino**
+(`/temporadas/:temporada/competiciones/:id`), y al revisar el de la ficha señaló que tenía que ser igual: los
+resultados también son de una temporada.
+
+| Opción | Veredicto |
+|---|---|
+| (a) Siempre detrás de `?`, como hasta ahora | Descartada: la temporada no es un filtro de la ficha sino parte de lo que se mira |
+| **(b) En el camino lo que es de una temporada; detrás de `?` lo que se elige dentro de la pantalla** | **Elegida** |
+| (c) En el camino también en la portada (`/temporadas/2025-26/equipos`) | Descartada: `/` a secas tiene que llevar a algún sitio, y la portada ya funciona así desde la R1 |
+
+**Decisión: (b)** (LLD-B §6.5). La ficha del equipo y sus pestañas son el equipo **en una temporada**, que en el
+servidor es su inscripción (`/teams/{teamId}/registrations/{seasonId}`, `D-102`): resultados, plantilla y
+estadísticas lo son. Una competición es de una sola temporada. Lo que va detrás de `?` es lo que se elige mirando
+esa pantalla: la jornada, el orden. **Queda más estructurado**, y el camino dice de un vistazo de qué temporada es
+lo que se ve.
+
+**Lo que se asume a cambio.**
+
+- **La portada es distinta de las demás**: `/?temporada=`. Se acepta porque es la entrada.
+- **Cambiar de temporada en la ficha cambia el camino**, no un parámetro; para quien navega es lo mismo.
+- **`/equipos/:id` sin temporada** abre la ficha en la temporada en curso, para que un enlace al equipo funcione sin
+  saberla.
+- **La sección de gestión `/temporadas`** (rebanada 11) y estos caminos comparten el principio; no chocan, porque
+  `/temporadas` a secas es la lista y lo de debajo, lo de cada una.
 ---
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
