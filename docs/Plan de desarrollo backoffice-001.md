@@ -26,7 +26,7 @@
 necesita** (el borrador, §2). No se hace «todo el servidor y luego toda la web»: cada unidad de trabajo es una
 **rebanada**, que entrega una pantalla funcionando de punta a punta.
 
-Hoy el servidor sirve **15 de las 85 operaciones** del catálogo (desde la rebanada 4, R4.6). Cada rebanada activa las suyas, y una operación
+Hoy el servidor sirve **16 de las 85 operaciones** del catálogo (desde la rebanada 4, R4.7). Cada rebanada activa las suyas, y una operación
 **solo se activa con la rebanada que la usa**.
 
 **Cada rebanada se da por terminada cuando:**
@@ -406,7 +406,7 @@ su comprobación.
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
 | **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
-| **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | en curso | 6/16 | — |
+| **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | en curso | 7/16 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

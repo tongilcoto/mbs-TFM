@@ -19,6 +19,8 @@
     "TeamResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "TeamResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "RoundResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.6)",
-    "RoundResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.6)"
+    "RoundResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.6)",
+    "StandingResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.7)",
+    "StandingResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.7)"
   }
 }

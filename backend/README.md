@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)), y la 4 en marcha ([resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **792 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)), y la 4 en marcha ([resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **807 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -44,7 +44,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/teams/{id}`                                                                  | Backoffice R3 — [§4.6](#alta-de-equipo) |
 | `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4 — [§4.5](#equipos-de-la-temporada) |
 | `GET /v1/rounds?competitionId=` · `GET /v1/rounds/{id}`                               | Backoffice R4 — [§4.7](#jornadas) |
-| Las otras 70 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/standings?roundId=`                                                          | Backoffice R4 — [§4.7](#jornadas) |
+| Las otras 69 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -551,7 +552,7 @@ curl -s http://atleti.localhost:8080/v1/teams/<id del equipo> | jq
 
 
 <a id="jornadas"></a>
-### 4.7 Las jornadas de una competición
+### 4.7 Las jornadas de una competición y su clasificación
 
 **Las jornadas, por número, y cuál está en curso** (rebanada 4): la ficha del equipo del backoffice saca de ahí la
 posición, y la pantalla de jornada y clasificación, su selector.
@@ -566,12 +567,27 @@ curl -s http://atleti.localhost:8080/v1/rounds/<id de la jornada> | jq
   pasado, contando el día en Madrid. Entre dos jornadas, la próxima; **ninguna** si la competición ya terminó.
 - **404 `COMPETITION_NOT_FOUND`** si la competición no existe, y **`ROUND_NOT_FOUND`** si la jornada no existe.
   **400 `BAD_REQUEST`** sin `competitionId`, e **`INVALID_UUID`** si un id no es un UUID.
+
+**Y la clasificación de una jornada** (`D-34`): por puesto, cada fila con su equipo y su racha.
+
+```sh
+curl -s "http://atleti.localhost:8080/v1/standings?roundId=<id de la jornada>" | jq
+```
+
+- **La fila es la guardada** por la ingesta, de la federación o calculada (`D-15`), con el puesto anterior
+  (`previousPosition`, nulo en la primera jornada o en la primera tras un alta tardía).
+- **`team`** dice el equipo con los nombres de **su** club, el propio o el rival: `displayName` (corto + categoría +
+  letra), `shortDisplayName` (corto + letra) y `nameWithLetter` (nombre + letra, `D-111`).
+- **`form`, la racha, no se guarda**: se calcula de los partidos hasta esa jornada, los últimos cinco jugados, del
+  más reciente al más antiguo, cada uno con su jornada y `victoria`, `empate` o `derrota`.
+- **Una jornada sin tabla todavía** (sin jugar, o sin ingerir) da la lista vacía. **404 `ROUND_NOT_FOUND`** si la
+  jornada no existe; **400 `BAD_REQUEST`** sin `roundId`, e **`INVALID_UUID`** si no es un UUID.
 ---
 
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 792 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 807 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker
