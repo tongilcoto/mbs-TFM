@@ -46,15 +46,15 @@
     },
     {
       "id": "M7-nombre-corto-en-nameWithLetter",
-      "description": "nameWithLetter se monta con el nombre corto",
-      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "description": "nameWithLetter se monta con el nombre corto (en LabeledTeam.toTeamRef, común desde R4.7)",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
       "find": "            nameWithLetter: [clubName, team.letter]",
       "replace": "            nameWithLetter: [clubShortName, team.letter]"
     },
     {
       "id": "M8-nameWithLetter-sin-letra",
-      "description": "nameWithLetter sale sin la letra",
-      "file": "Sources/HTTPAdapter/FederationLinkHandler.swift",
+      "description": "nameWithLetter sale sin la letra (en LabeledTeam.toTeamRef, común desde R4.7)",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
       "find": "            nameWithLetter: [clubName, team.letter]",
       "replace": "            nameWithLetter: [clubName]"
     },

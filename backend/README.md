@@ -659,6 +659,10 @@ KEEP_TEST_DATA=1 swift test --filter ClubUpdateTests      # conserva los schemas
 | F10-ter · el identificador en minúscula | `IdentifierText` | no |
 | Backoffice R3 · `getTeam` y quién tiene cada código en el `/preview`, con dobles | `'GetTeamTests\|FederationLinkPreview'` | no |
 | Backoffice R3 · `getTeam` en HTTP | `TeamReadEndpoint` | **sí** |
+| Backoffice R4 · la jornada en curso y la racha, en el Dominio | `'RoundTests\|FormTests'` | no |
+| Backoffice R4 · los cuatro casos de uso, con dobles | `'GetTeamRegistration\|RoundQueries\|GetStanding\|ListMatches'` | no |
+| Backoffice R4 · las lecturas nuevas (jornada por id, partidos por jornada y equipo, filas de varias jornadas) | `IngestionPersistenceTests` | **sí** |
+| Backoffice R4 · las cinco operaciones en HTTP | `'SeasonRegistrationEndpoint\|RoundEndpoint\|StandingEndpoint\|MatchEndpoint'` | **sí** |
 
 > **`--filter` busca por los nombres en Swift** (el tipo de la *suite* y la función del `@Test`), como
 > expresión regular. Eso tiene tres consecuencias:
