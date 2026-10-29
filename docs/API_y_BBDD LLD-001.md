@@ -1364,6 +1364,9 @@ Tres lecturas que no son evidentes en la tabla:
   (`?teamId=` + `?seasonId=`, que puede abarcar liga **y** copa — dos `Competition`, [D-12]).
 - **`?teamId=` casa contra los dos lados**, local y visitante. La sostienen los índices compuestos de §4.6,
   los mismos que quedaron al eliminar `Participation` ([D-27]).
+- **Cada lado lleva su fila de la clasificación de esa jornada** ([D-112]): puesto, jugados, ganados, empatados,
+  perdidos, goles y puntos, o nula si la jornada no tiene tabla. Así el calendario de un equipo pinta el puesto de
+  cada partido sin una `GET /standings` por jornada.
 - **Paginado**, a diferencia de `Round`, aunque los dos exijan ámbito: aquí el ámbito **no trae techo**
   ([D-49]).
 - **Resto de filtros:** `?seasonId=`, `?status=`. `?seasonId=` se alcanza por FK vía `Competition`, no por
@@ -1845,6 +1848,11 @@ struct SeasonResponse: Content {
   `displayName` la incluye ("CD Ejemplo Juvenil A"). La razón es la pantalla: en una jornada **todos** los
   equipos son de la misma categoría, así que rotularla en cada fila es ruido — pero en el calendario de un
   equipo, que puede mezclar competiciones ([D-12]), el nombre largo sí distingue.
+- **Y un tercer rótulo, el nombre del club + `letter`** ([D-111]): sin categoría, como `shortDisplayName`, pero
+  con el **nombre** del club y no el corto («Celtic Castilla A» frente a «Celtic A»). Es el que usa el backoffice;
+  el corto queda para las pantallas del móvil. Los tres se montan en el adaptador HTTP ([D-109]).
+- **`MatchTeam` lleva también la fila de la clasificación de su jornada** ([D-112]), sin la racha ni el puesto
+  anterior, que son de la tabla entera ([D-34]): es lo que varía en cada fila del calendario de un equipo.
 - **El marcador vive dentro de `home`/`away`, no como `homeScore`/`awayScore` sueltos.** Ata cada número a su
   equipo en la propia estructura: el cliente pinta `fila.score` junto a `fila.crestUrl` sin cruzar dos
   campos paralelos y sin poder equivocarse de lado. Ambos son anulables hasta que el partido se juega.
@@ -2838,6 +2846,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-111]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
