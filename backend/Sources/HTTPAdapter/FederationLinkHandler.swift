@@ -284,6 +284,8 @@ extension FederationLinkPreview.Holder {
             displayName: [clubShortName, team.category.toContract().displayName, team.letter]
                 .compactMap { $0 }.joined(separator: " "),
             shortDisplayName: [clubShortName, team.letter].compactMap { $0 }.joined(separator: " "),
+            // Provisional, con el nombre corto: el nombre del club llega en R4.5 (`D-111`).
+            nameWithLetter: [clubShortName, team.letter].compactMap { $0 }.joined(separator: " "),
             crestUrl: nil,
             isOwn: team.isOwn)
     }

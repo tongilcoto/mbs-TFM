@@ -1492,16 +1492,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TeamRegistrationResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`INVALID_UUID`: el `teamId` o el `seasonId` de la ruta no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
+          $ref: '#/components/responses/NotFound'
           description: |
-            El equipo o la temporada no existen, **o el equipo no está inscrito en esa temporada**. Un rival
-            nunca lo está (D-68).
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+            `TEAM_NOT_FOUND`: no hay ningún equipo con ese `teamId` en el club. `SEASON_NOT_FOUND`: no hay
+            ninguna temporada con ese `seasonId`. **`TEAM_NOT_REGISTERED`: los dos existen, pero el equipo no
+            está inscrito en esa temporada** — la ficha del backoffice lo enseña como «no jugó esa temporada», no
+            como «no se ha encontrado». Un rival nunca lo está (D-68).
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     put:
@@ -1617,14 +1618,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/RoundResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`BAD_REQUEST`: falta `competitionId`. `INVALID_UUID`: no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: La competición no existe en este club.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/NotFound'
+          description: '`COMPETITION_NOT_FOUND`: la competición no existe en este club.'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST: las crea la ingesta desde el calendario de la federación (§3.7).
@@ -1644,8 +1644,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoundResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`INVALID_UUID`: el `roundId` de la ruta no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: '`ROUND_NOT_FOUND`: no hay ninguna jornada con ese `roundId` en el club.'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin PATCH ni DELETE: número y fechas SON el calendario, no hay nada deducido que corregir. Es la
@@ -1735,14 +1740,18 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/MatchResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: |
+            `MISSING_SCOPE`: no viene ninguno de `roundId`, `competitionId` o `teamId`. `INVALID_UUID`: uno de
+            los identificadores no es un UUID. `BAD_REQUEST`: `page`, `perPage`, `status` u `order` fuera de lo
+            que admiten.
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: El recurso del ámbito (jornada, competición o equipo) no existe en este club.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/NotFound'
+          description: |
+            El recurso del ámbito no existe en este club: `ROUND_NOT_FOUND`, `COMPETITION_NOT_FOUND`,
+            `TEAM_NOT_FOUND` o `SEASON_NOT_FOUND`.
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST: los crea la ingesta (§3.7). Consecuencia asumida: no hay amistosos (D-21).
@@ -1807,14 +1816,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StandingResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`BAD_REQUEST`: falta `roundId`. `INVALID_UUID`: no es un UUID.'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404':
-          description: La jornada no existe en este club.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/NotFound'
+          description: '`ROUND_NOT_FOUND`: la jornada no existe en este club.'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
     # Sin POST, PATCH ni DELETE: la escribe la ingesta, ingerida o calculada (D-15).
@@ -4111,9 +4119,11 @@ components:
         - INVALID_LIMIT
         - INVALID_UUID
         - INVALID_VALUE
+        - MISSING_SCOPE
         - NOT_EDITABLE_AFTER_SYNC
         - NOT_FOUND
         - OWN_TEAM_NOT_IN_CALENDAR
+        - ROUND_NOT_FOUND
         - RUN_NOT_RECORDED
         - SEASON_ALREADY_EXISTS
         - SEASON_ALREADY_LINKED
@@ -4121,6 +4131,7 @@ components:
         - SEASON_NOT_FOUND
         - TEAM_ALREADY_REGISTERED
         - TEAM_NOT_FOUND
+        - TEAM_NOT_REGISTERED
         - TENANT_MISMATCH
         - TENANT_NOT_PROVISIONED
         - TENANT_NOT_RESOLVED
@@ -5125,7 +5136,10 @@ components:
         clubName:
           type: string
           readOnly: true
-          description: Nombre del club al que pertenece el equipo — el propio o el rival.
+          description: |
+            **Nombre corto** del club al que pertenece el equipo, el propio o el rival (`Club.shortName`,
+            `OpponentClub.shortName`): es con el que se monta `displayName`. *(Decía «Nombre del club», y daba el
+            corto; corregida la descripción en D-111, sin cambiar lo que devuelve.)*
           examples: ['CD Ejemplo']
         displayName:
           type: string
@@ -5497,7 +5511,7 @@ components:
         constantes (§3.2), así que repetirlas en cada fila no distingue una de otra.
 
         Se extrajo al aparecer el **segundo** consumidor (`StandingResponse`), no por anticipado.
-      required: [teamId, displayName, shortDisplayName, isOwn]
+      required: [teamId, displayName, shortDisplayName, nameWithLetter, isOwn]
       properties:
         teamId:
           type: string
@@ -5519,6 +5533,15 @@ components:
             de una jornada o de una clasificación, donde todos los equipos son de la misma categoría y
             rotularla sería ruido.
           examples: ['CD Ejemplo A']
+        nameWithLetter:
+          type: string
+          readOnly: true
+          description: |
+            **Derivado**: el **nombre** del club, no el corto, + `letter`, sin categoría; solo el nombre si el
+            equipo no tiene letra (D-111). Es el que pinta el backoffice en las filas de una jornada, del
+            calendario de un equipo o de una clasificación; `shortDisplayName` queda para las pantallas del
+            móvil. En un rival, el nombre que dio la federación, salvo que el club lo haya corregido.
+          examples: ['Club Deportivo Ejemplo A']
         crestUrl:
           type: [string, 'null']
           format: uri
@@ -5551,6 +5574,59 @@ components:
                 Vive aquí, y no como `homeScore`/`awayScore` paralelos, para atar cada número a su equipo
                 en la propia estructura: el cliente pinta `score` junto a `crestUrl` sin poder cruzar de
                 lado (D-32).
+            standing:
+              type: [object, 'null']
+              anyOf:
+                - $ref: '#/components/schemas/MatchStanding'
+              readOnly: true
+              description: |
+                **La fila de este equipo en la clasificación de la jornada del partido** (D-112), o `null` si
+                esa jornada no tiene clasificación todavía (partidos sin jugar o sin ingerir). Es la fila
+                guardada, la misma que da `GET /standings`, sin la racha ni el puesto anterior, que son de la
+                tabla entera (D-34). Así el calendario de un equipo pinta el puesto de cada partido sin pedir
+                una clasificación por jornada.
+
+    MatchStanding:
+      type: object
+      description: |
+        **Un equipo en la clasificación de una jornada, recortado a lo que cabe en la fila de un partido** (D-112).
+        No es un recurso: es una proyección de `StandingResponse`, sin su `team` (es el lado del partido), sin
+        la racha ni el puesto anterior (D-34).
+      required: [position, played, won, drawn, lost, goalsFor, goalsAgainst, points]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          readOnly: true
+          examples: [2]
+        played:
+          type: integer
+          minimum: 0
+          readOnly: true
+        won:
+          type: integer
+          minimum: 0
+          readOnly: true
+        drawn:
+          type: integer
+          minimum: 0
+          readOnly: true
+        lost:
+          type: integer
+          minimum: 0
+          readOnly: true
+        goalsFor:
+          type: integer
+          minimum: 0
+          readOnly: true
+        goalsAgainst:
+          type: integer
+          minimum: 0
+          readOnly: true
+        points:
+          type: integer
+          minimum: 0
+          readOnly: true
 
     MatchResponse:
       type: object

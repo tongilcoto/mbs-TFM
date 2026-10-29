@@ -18,6 +18,7 @@
     "CompetitionResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "CompetitionResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
     "TeamResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
-    "TeamResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test"
+    "TeamResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",
+    "TeamRef.nameWithLetter": "R4.4 (plan R4): nuevo en el catálogo (D-111) y relleno provisional con el nombre corto; lo monta de verdad y lo prueba R4.5, que lo quita de aquí"
   }
 }

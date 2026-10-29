@@ -5074,11 +5074,12 @@ categoría.
 **Decisión: (d).** `TeamRef` lleva un tercer rótulo, **el nombre del club + `letter`**, sin categoría; solo el
 nombre si el equipo no tiene letra. **`shortDisplayName` se queda**: el backoffice usa el nuevo, y el corto queda
 para la web del móvil y las apps, que tienen menos sitio; se verá cuando existan. Como `TeamRef` es la proyección
-de las filas, el rótulo llega a todas: los partidos, la clasificación y el `takenBy` del `/preview` ([D-110]). El
-nombre del campo se fija al escribirlo en el catálogo (R4.4 del plan de la rebanada 4).
+de las filas, el rótulo llega a todas: los partidos, la clasificación y el `takenBy` del `/preview` ([D-110]). Se
+llama **`nameWithLetter`** (fijado en R4.4 del plan de la rebanada 4).
 
 **Y la descripción de `TeamResponse.clubName`**, que dice lo contrario de lo que hace, se corrige en el mismo paso:
-o la descripción dice «nombre corto», o el campo pasa a dar el nombre. Se decide con lo que lo use.
+o la descripción dice «nombre corto», o el campo pasa a dar el nombre. Se decide con lo que lo use. *(R4.4: se corrige
+la descripción. Ninguna pantalla lo usa, y cambiar lo que devuelve cambiaría también su `displayName`.)*
 
 **Lo que se asume a cambio.**
 
@@ -5106,7 +5107,8 @@ partidos salen de una consulta, y su clasificación puede salir de la misma.
 | **(c) Cada lado del partido trae su fila de esa jornada** | Un campo más en `MatchTeam`, resuelto en la misma consulta de `listMatches` | **Elegida** |
 
 **Decisión: (c).** `MatchTeam` lleva **la fila de ese equipo en la clasificación de la jornada del partido**:
-posición, jugados, ganados, empatados, perdidos, goles a favor y en contra, y puntos. **Nula** si esa jornada no
+posición, jugados, ganados, empatados, perdidos, goles a favor y en contra, y puntos (`MatchTeam.standing`, un
+`MatchStanding`, fijado en R4.4). **Nula** si esa jornada no
 tiene tabla todavía (partidos sin jugar o sin ingerir). Los dos lados la llevan, aunque el backoffice solo pinte la
 línea completa del propio: así la respuesta no depende de quién es el propio, y el puesto del rival sale de la
 misma fila.

@@ -1848,10 +1848,10 @@ struct SeasonResponse: Content {
   `displayName` la incluye ("CD Ejemplo Juvenil A"). La razón es la pantalla: en una jornada **todos** los
   equipos son de la misma categoría, así que rotularla en cada fila es ruido — pero en el calendario de un
   equipo, que puede mezclar competiciones ([D-12]), el nombre largo sí distingue.
-- **Y un tercer rótulo, el nombre del club + `letter`** ([D-111]): sin categoría, como `shortDisplayName`, pero
+- **Y un tercer rótulo, `nameWithLetter`: el nombre del club + `letter`** ([D-111]): sin categoría, como `shortDisplayName`, pero
   con el **nombre** del club y no el corto («Celtic Castilla A» frente a «Celtic A»). Es el que usa el backoffice;
   el corto queda para las pantallas del móvil. Los tres se montan en el adaptador HTTP ([D-109]).
-- **`MatchTeam` lleva también la fila de la clasificación de su jornada** ([D-112]), sin la racha ni el puesto
+- **`MatchTeam` lleva también la fila de la clasificación de su jornada**, `standing` ([D-112]), sin la racha ni el puesto
   anterior, que son de la tabla entera ([D-34]): es lo que varía en cada fila del calendario de un equipo.
 - **El marcador vive dentro de `home`/`away`, no como `homeScore`/`awayScore` sueltos.** Ata cada número a su
   equipo en la propia estructura: el cliente pinta `fila.score` junto a `fila.crestUrl` sin cruzar dos
