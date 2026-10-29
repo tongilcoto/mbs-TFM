@@ -144,20 +144,20 @@ flowchart LR
 
     subgraph EQUIPOS["Equipos"]
         direction TB
-        P["<b>Portada</b> · R1, R5<br/>/ · ?temporada=2025-26<br/>R1: equipos de una temporada, competición y estado de la ingesta<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
+        P["<b>Portada</b> · R1, R4, R5<br/>/ · ?temporada=2025-26<br/>R1: equipos de una temporada, competición y estado de la ingesta<br/>R4: relanzar la ingesta de cada competición<br/>R5: posición, racha, último y próximo partido<br/><i>boceto 1</i>"]
         A["<b>Alta de equipo</b> · R2<br/>/equipos/nuevo"]
         F["<b>Sincronizar con la Federación</b> · R3<br/>/equipos/:id/federacion"]
     end
 
-    subgraph FICHA["Ficha del equipo · cabecera: temporada, competición, posición · ?temporada=2025-26"]
+    subgraph FICHA["Ficha del equipo · cabecera: temporada, competición, posición · /temporadas/:temporada/equipos/:id/…"]
         direction TB
-        R["<b>Resultados</b> · R4<br/>/equipos/:id/resultados<br/><i>boceto 2</i>"]
-        E["<b>Estadísticas</b> · R10<br/>/equipos/:id/estadisticas<br/><i>boceto 4</i>"]
-        PL["<b>Plantilla</b> · R6, R8, R10<br/>/equipos/:id/plantilla<br/>R6: lista · R8: disponibilidad · R10: cifras<br/><i>boceto 5</i>"]
+        R["<b>Resultados</b> · R4<br/>/temporadas/:temporada/equipos/:id/resultados<br/><i>boceto 2</i>"]
+        E["<b>Estadísticas</b> · R10<br/>…/equipos/:id/estadisticas<br/><i>boceto 4</i>"]
+        PL["<b>Plantilla</b> · R6, R8, R10<br/>…/equipos/:id/plantilla<br/>R6: lista · R8: disponibilidad · R10: cifras<br/><i>boceto 5</i>"]
         AX["<b>Menú ⋮ del equipo</b> · R13<br/>corregir, borrar, liberar, reclamar"]
     end
 
-    J["<b>Jornada + clasificación</b> · R4<br/>sin camino en el LLD-B<br/><i>boceto 3</i>"]
+    J["<b>Jornada + clasificación</b> · R4<br/>/temporadas/:temporada/competiciones/:id<br/>?jornada=22<br/><i>boceto 3</i>"]
     ACTA["<b>Acta del partido</b> · R7<br/>/partidos/:id"]
     JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
 
@@ -190,7 +190,7 @@ flowchart LR
     E <--> PL
     R --> AX
     R -->|"clic en un partido"| ACTA
-    R -.->|"icono de lista del boceto (camino por decidir)"| J
+    R -->|"☰ de cada partido, o la competición de la cabecera"| J
     PL --> JUG
     NF --> P
 
@@ -199,8 +199,8 @@ flowchart LR
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
     class mEq,NF,P,A,F hecha
-    class mTem,mCom,mRiv,mIng,mClub,mPer,R,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
-    class J hueco
+    class R,J enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
 ```
 
 Colores: **verde** = hecha · **ámbar** = en curso · **gris** = pendiente · **borde discontinuo** = sale en un
@@ -225,7 +225,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **1** · Portada base | Marco (cabecera, menú, «página no existe») · Portada: equipos de una temporada, con selector, su competición y el estado de la ingesta | `getClub` ● · `listSeasons` ● · `listSeasonRegistrations` ● — el equipo en una temporada, con sus competiciones (`D-102`) · `listCompetitions` ● — con el estado de la ingesta (enmienda de `D-89`, desde R1.8) |
 | **2** · Alta de equipo | Alta de equipo, con «Crear nueva temporada» · Portada: botón «Dar de alta un equipo» y en los dos vacíos | `createTeam` ● — si el equipo ya existe, lo inscribe en la temporada (`D-107`) · `createSeason` ● — adelantada de la 11: la temporada nace sin código de la federación, y el primer enganche se lo pone (`D-106`) |
 | **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
-| **4** · Resultados | Ficha del equipo: cabecera y pestaña Resultados · Jornada + clasificación | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` · `getStanding` |
+| **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
@@ -235,7 +235,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
 | **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
 | **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ · Portada: las que tengan sentido en la fila, como iconos (`DW-19`) | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` · 🆕 **dejar de sincronizar**: deshacer un enganche (R3, decisión 1) · 🆕 **el segundo equipo del club en un grupo ya sincronizado**, que la primera ingesta dejó como rival: unirlo al propio (la fusión del LLD §9.5) o que la ingesta no escriba como rivales los del club (`D-110`) · **sincronizar un rival** hoy da 422 `INVALID_VALUE`, que la ruta no declara: decidir su respuesta (R3.4) · 🆕 **la competición de la dirección no se comprueba**: la RFFM saca el calendario del grupo y solo pone el nombre de la competición, así que una que no existe pasa con el nombre vacío y una ajena con el suyo (anexo RFFM §F.20, R3.10). Dos arreglos: el nombre vacío como coordenada mala, y comprobar que el grupo es de la competición (pista: `RFFM-groups.txt`) |
-| **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club · Portada: relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `listIngestionRuns` ● · `triggerIngestion` ● · `updateClub` ● — solo web |
+| **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `updateClub` ● — solo web · *(relanzar la ingesta, con `triggerIngestion`, pasó a la 4)* |
 | **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
 | — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
@@ -251,9 +251,10 @@ activa con la rebanada que la usa**.
   amarillas pendientes dependen de sus tramos de sanción.
 - **La 10 es la única con diseño grande en el servidor**: el LLD del backend diseña las estadísticas por dentro
   (§3.4, §4.5) pero **nunca llegaron al catálogo**.
-- **Lo que se pide por partes**: la portada del boceto (5) y las posiciones de cada partido en Resultados (4)
-  salen de pedir la clasificación por jornada y los partidos por equipo. Se decide al escribir sus fichas si
-  se acepta o si se diseña una petición que lo junte.
+- **Lo que se pide por partes**: la portada del boceto (5) sale de pedir la clasificación y los partidos equipo
+  por equipo; se decide al escribir su ficha si se acepta o si se diseña una petición que lo junte. **Las
+  posiciones de cada partido en Resultados (4), resueltas** (2026-10-28, `D-112`): cada lado del partido trae su
+  fila de la clasificación de esa jornada, en la misma consulta.
 
 **Resuelto (2026-10-23, `D-106`):** la primera temporada se crea desde la web, en el formulario de alta de
 equipo, así que `createSeason` se adelanta de la rebanada 11 a la 2
@@ -285,6 +286,10 @@ la ingesta (rebanada 14), en la celda de la ingesta de cada competición, porque
 equipo. Su texto, al pasar el ratón o al llegar con el teclado (LLD-B §3.7, `DW-19`). Y el equipo sin competición,
 con el enlace «Sincronizar con la Federación». En la pantalla se dice «sincronizar», no «enganchar» (LLD-B §9.8).
 
+**Adelantado (2026-10-28): relanzar la ingesta, de la rebanada 14 a la 4** (Plan R4, decisión 7). Hace falta en la
+portada y en la ficha del equipo, y el servidor ya lo tiene. Va donde decidió la R3, en la celda de la ingesta de
+cada competición; la 14 se queda con la pantalla de Ingesta.
+
 **Y dos cosas que salieron al decidirlo, para la rebanada 13**, cada una con su 🆕 en la tabla:
 
 - **Deshacer un enganche no existe.** «Liberar» (`releaseTeam`) deshace una reclamación, no un enganche, y un
@@ -293,16 +298,14 @@ con el enlace «Sincronizar con la Federación». En la pantalla se dice «sincr
 - **El segundo equipo del club en un grupo ya sincronizado no se puede sincronizar** (`D-110`): la primera ingesta
   lo escribió como rival, y el enganche da 409. La rebanada 3 lo avisa en la pantalla; la salida se diseña en la 13.
 
-**Pendiente de la rebanada 4: cómo se llama un equipo en un partido** (salió el 2026-10-24, en el bloque T de la
-[rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md)). La federación manda en cada partido el nombre
-del equipo ya escrito por ella, del club y del rival: `"equipo_local": "CELTIC CASTILLA C.F. 'A'"`. La base no lo
-guarda: la ingesta lo desmonta en piezas (club, categoría, letra), y el catálogo vuelve a montar el equipo de un
-partido (`TeamRef`) con ellas: `displayName`, club + categoría + letra («Celtic Alevín A»), y `shortDisplayName`,
-club + letra («Celtic A»); el club propio, con el nombre corto que pone el club, y el rival, con el que dio la
-federación. Al diseñar la pantalla de Resultados se revisa con el desarrollador **si eso es lo que se quiere
-ver**, o el nombre que publica la federación. Y con ello lo que dejó pendiente
-[D-109](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md): ese nombre no distingue el masculino del femenino ni
-el fútbol 7 del fútbol 11.
+**Resuelto (2026-10-28, `D-111`): cómo se llama un equipo en un partido**, en la decisión 1 del
+[plan de la rebanada 4](./Plan%20de%20desarrollo%20R4%20Resultados-001.md). Salió el 2026-10-24, en el bloque T de la
+[rebanada 2](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md): la federación manda en cada partido el nombre
+ya escrito por ella, y la base lo guarda en piezas (club, categoría, letra). **Con el nombre del club + la letra**
+(«Celtic Castilla A»), sin categoría: `TeamRef` suma ese rótulo junto a `shortDisplayName` (nombre corto + letra),
+que se queda para las pantallas del móvil. Lo que dejaba [D-109](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md)
+(el nombre no distingue el masculino del femenino ni el fútbol 7 del fútbol 11) no afecta dentro de una
+competición; el título de la ficha lleva el género y la modalidad.
 
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
@@ -397,6 +400,7 @@ su comprobación.
 | **1** · Portada base · [su plan](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md) | ✅ hecha | 18/18 | 2026-10-20 |
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
 | **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
+| **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | en curso | 2/16 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 
