@@ -25,14 +25,19 @@ export interface SortKeys {
 }
 
 // Junta cada inscripción con sus competiciones. El orden de las filas es el del servidor: por categoría, de
-// menor a mayor edad, y por letra.
-export function teamRows(registrations: Registration[], competitions: Competition[]): HomeRow[] {
+// menor a mayor edad, y por letra. `relaunched`, las competiciones cuyos datos se están volviendo a traer desde la
+// portada (plan R4, decisión 7): salen «En marcha» aunque el servidor aún no lo diga.
+export function teamRows(
+  registrations: Registration[],
+  competitions: Competition[],
+  relaunched: ReadonlySet<string> = new Set(),
+): HomeRow[] {
   const byId = new Map(competitions.map((c) => [c.id, c]))
   // Si dos equipos se llamarían igual («Alevín A» masculino y femenino), cada uno con lo que lo distingue.
   const names = teamNames(registrations.map((registration) => registration.team))
   return registrations.map((registration) => {
     const own = registration.competitions.flatMap(({ competitionId }) => byId.get(competitionId) ?? [])
-    const cells = own.map(cell)
+    const cells = own.map((competition) => cell(competition, relaunched.has(competition.id)))
     return {
       id: registration.team.id,
       team: names.get(registration.team.id)!,
@@ -51,16 +56,21 @@ export function teamRows(registrations: Registration[], competitions: Competitio
 // Las categorías de menor a mayor edad: el orden del catálogo.
 const ages = optionsOf('TeamCategory').map((option) => option.value)
 
-function cell(competition: Competition): CompetitionCell {
-  const health = competition.ingestionHealth
+// Lo que se ordena sigue siendo lo que dice el servidor (`keys.healths`): la fila no salta de sitio al pulsar ↻.
+function cell(competition: Competition, relaunched: boolean): CompetitionCell {
+  const health = relaunched ? 'pending' : competition.ingestionHealth
+  // «La anterior tuvo fallos», como cuando lo dice el servidor (plan R1, decisión 2): al volver a traerla, la
+  // anterior es la que se veía.
+  const previous = relaunched && competition.ingestionHealth !== 'pending' ? competition.ingestionHealth : competition.previousIngestionHealth
   return {
+    id: competition.id,
     // La división y el grupo: «PRIMERA CADETE · Grupo 4». Sin la categoría que el servidor pone delante en
     // `displayName`, porque en la misma fila ya la dice el equipo (bloque T del plan R2). La que repite la
     // federación dentro de su propio nombre no se recorta: cada federación escribe a su manera.
     name: `${competition.divisionLabel} · ${competition.groupLabel}`,
     health,
     healthName: health && healthNames[health],
-    previousFailed: health === 'pending' && competition.previousIngestionHealth === 'failing',
+    previousFailed: health === 'pending' && previous === 'failing',
     lastSynced: competition.lastSyncedAt ? formatInstant(competition.lastSyncedAt) : 'Nunca',
   }
 }

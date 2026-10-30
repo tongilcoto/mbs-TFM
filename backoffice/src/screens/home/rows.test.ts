@@ -63,6 +63,7 @@ describe('las filas de la portada', () => {
         team: 'Cadete B',
         competitions: [
           {
+            id: 'liga',
             // La división y el grupo, sin la categoría delante: el equipo ya la dice (bloque T).
             name: 'PRIMERA CADETE · Grupo 4',
             health: 'ok',
@@ -127,5 +128,45 @@ describe('las filas de la portada', () => {
     )
 
     expect(rows.map((r) => r.team)).toEqual(['Alevín A', 'Cadete B'])
+  })
+})
+
+describe('volver a traer los datos con ↻ (plan R4, decisión 7)', () => {
+  const relaunched = (fields: Partial<Competition>) =>
+    teamRows([registration('cadete-b', 'cadete', 'B', ['liga'])], [competition('liga', fields)], new Set(['liga']))
+
+  test('la competición sale «En marcha» aunque el servidor diga otra cosa', () => {
+    expect(relaunched({ ingestionHealth: 'ok' })[0]!.competitions[0]).toMatchObject({
+      health: 'pending',
+      healthName: 'En marcha',
+      previousFailed: false,
+    })
+  })
+
+  test('si estaba con fallos, «La anterior tuvo fallos»', () => {
+    expect(relaunched({ ingestionHealth: 'failing' })[0]!.competitions[0]).toMatchObject({
+      health: 'pending',
+      previousFailed: true,
+    })
+  })
+
+  test('si el servidor ya la tenía en marcha, la anterior es la que él dice', () => {
+    expect(
+      relaunched({ ingestionHealth: 'pending', previousIngestionHealth: 'failing' })[0]!.competitions[0]!.previousFailed,
+    ).toBe(true)
+  })
+
+  test('para ordenar, lo que dice el servidor: la fila no cambia de sitio al pulsar', () => {
+    expect(relaunched({ ingestionHealth: 'failing' })[0]!.keys.healths).toEqual(['failing'])
+  })
+
+  test('las demás competiciones, como las dice el servidor', () => {
+    const rows = teamRows(
+      [registration('cadete-b', 'cadete', 'B', ['liga', 'copa'])],
+      [competition('liga', { ingestionHealth: 'ok' }), competition('copa', { ingestionHealth: 'ok' })],
+      new Set(['copa']),
+    )
+
+    expect(rows[0]!.competitions.map((c) => c.health)).toEqual(['ok', 'pending'])
   })
 })

@@ -63,8 +63,9 @@ const messages: Record<ProblemCode, string> = {
   SEASON_LABEL_UNAVAILABLE: 'La Federación no dice de qué temporada es ese calendario.',
   FEDERATION_ADAPTER_MISSING: 'Todavía no se puede sincronizar con la federación de este club.',
 
-  // La sincronización
-  INGESTION_FAILED: 'La sincronización con la federación no ha terminado',
+  // La sincronización. `INGESTION_FAILED` es el de volver a traer los datos con ↻ (plan R4, decisión 7): la pasada
+  // corrió y la Federación falló a mitad.
+  INGESTION_FAILED: 'No se han podido traer los datos de la Federación. Prueba otra vez en un rato.',
   RUN_NOT_RECORDED: 'Los datos se han guardado, pero no se ha podido apuntar la sincronización',
 
   // El servidor
@@ -73,12 +74,14 @@ const messages: Record<ProblemCode, string> = {
 }
 
 // Los únicos códigos que pueden ser pasajeros (LLD-B §4.4). Con el resto, reintentar daría lo mismo. Los dos de la
-// Federación que contesta mal también: la RFFM devuelve a veces `null` unos minutos (H-61, plan R3, decisión 6).
+// Federación que contesta mal también: la RFFM devuelve a veces `null` unos minutos (H-61, plan R3, decisión 6). Y
+// la pasada que no terminó, por lo mismo: casi siempre es la Federación (plan R4, decisión 7).
 const transientCodes: ProblemCode[] = [
   'DATABASE_UNAVAILABLE',
   'FEDERATION_UNREACHABLE',
   'FEDERATION_UNEXPECTED_STATUS',
   'FEDERATION_MALFORMED_RESPONSE',
+  'INGESTION_FAILED',
 ]
 
 // Los errores de valor, los únicos cuyo `detail` dice de qué campo son, con la forma `<campo>: <motivo>`.

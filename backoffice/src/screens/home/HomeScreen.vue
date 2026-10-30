@@ -1,7 +1,8 @@
 <!-- La portada: los equipos del club en una temporada (plan R1, §3.2). Pide la lista de temporadas una vez, y
      con la elegida, sus equipos y sus competiciones a la vez: tres peticiones al abrir y dos al cambiar de
      temporada, tenga el club los equipos que tenga. Mientras alguna ingesta esté «En marcha», vuelve a pedir las
-     competiciones sola (plan R3, decisión 5). -->
+     competiciones sola (plan R3, decisión 5). Y vuelve a traer los datos de una competición con su ↻ (plan R4,
+     decisión 7). -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -33,11 +34,14 @@ const route = useRoute()
 const router = useRouter()
 
 type Registration = components['schemas']['TeamRegistrationResponse']
+type Competition = components['schemas']['CompetitionResponse']
 
 const state = ref<State>({ kind: 'loading' })
 // Los equipos de la temporada que se ve, para rehacer las filas al refrescar: una ingesta cambia las
 // competiciones, no quién está inscrito.
 let registrations: Registration[] = []
+// Y sus competiciones, las últimas que llegaron: con ellas se rehacen las filas al pulsar ↻.
+let competitions: Competition[] = []
 // `undefined` mientras no se han pedido, o si su petición falló.
 const seasons = ref<Season[]>()
 const choice = ref<SeasonChoice>()
@@ -48,6 +52,13 @@ let pending: AbortController | undefined
 // El refresco a medias, que también se cancela: lo cancela una carga nueva, o salir.
 let refreshing: AbortController | undefined
 
+// Las competiciones cuyos datos se están volviendo a traer con ↻, y el error de la última que falló (más abajo,
+// en `relaunch`).
+const relaunched = new Set<string>()
+const relaunchError = ref<{ error: ShownError; competitionId: string; competitionName: string }>()
+// Al salir de la pantalla solo se deja de esperar: la pasada ya está pedida (LLD-B §3.2).
+const relaunching = new AbortController()
+
 const chosen = computed(() => (choice.value?.kind === 'chosen' ? choice.value : undefined))
 const pickerLabels = computed(() => newestFirst(seasons.value ?? []).map((s) => s.label))
 
@@ -56,6 +67,7 @@ async function load() {
   const leaving = new AbortController()
   pending = leaving
   refreshing?.abort()
+  relaunchError.value = undefined
   state.value = { kind: 'loading' }
 
   try {
@@ -80,7 +92,7 @@ async function load() {
     }
 
     const seasonId = choice.value.season.id
-    const [registered, competitions] = await Promise.all([
+    const [registered, answered] = await Promise.all([
       asResult(api.GET('/seasons/{seasonId}/registrations', { params: { path: { seasonId } }, signal: leaving.signal })),
       asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: leaving.signal })),
     ])
@@ -88,13 +100,14 @@ async function load() {
       state.value = { kind: 'error', error: registered.error }
       return
     }
-    if (!competitions.ok) {
-      state.value = { kind: 'error', error: competitions.error }
+    if (!answered.ok) {
+      state.value = { kind: 'error', error: answered.error }
       return
     }
 
     registrations = registered.data
-    const rows = teamRows(registrations, competitions.data)
+    competitions = answered.data
+    const rows = teamRows(registrations, competitions, relaunched)
     state.value = rows.length === 0 ? { kind: 'noTeams' } : { kind: 'teams', rows }
   } catch (error) {
     // Cancelada por otra carga o por salir de la pantalla: no hay nada que enseñar.
@@ -117,22 +130,59 @@ const running = computed(
 async function refresh() {
   if (state.value.kind !== 'teams' || !chosen.value) return
   const seasonId = chosen.value.season.id
-  refreshing = new AbortController()
+  // Si hay otro a medias (el de cada 10 s y el de después de ↻), manda el último.
+  refreshing?.abort()
+  const current = new AbortController()
+  refreshing = current
   try {
-    const competitions = await asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: refreshing.signal }))
+    const answered = await asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: current.signal }))
     // Una carga nueva (otra temporada) manda sobre un refresco a medias.
-    if (!competitions.ok || state.value.kind !== 'teams' || chosen.value?.season.id !== seasonId) return
-    state.value = { kind: 'teams', rows: teamRows(registrations, competitions.data) }
+    if (!answered.ok || state.value.kind !== 'teams' || chosen.value?.season.id !== seasonId) return
+    competitions = answered.data
+    state.value = { kind: 'teams', rows: teamRows(registrations, competitions, relaunched) }
   } catch (error) {
-    if (refreshing.signal.aborted) return
+    if (current.signal.aborted) return
     throw error
   }
+}
+
+// Volver a traer los datos de una competición, con su ↻ (plan R4, decisión 7). Con una sola competición el
+// servidor responde cuando la pasada ha terminado, así que mientras tanto la celda dice «En marcha» y el botón
+// está bloqueado; al acabar, bien o mal, se piden otra vez las competiciones, como en el refresco. Si falla, el
+// aviso arriba con el texto de su código. La pasada no se cancela al cambiar de temporada: sigue en el servidor,
+// y al volver a ella se ve.
+function showRows() {
+  if (state.value.kind === 'teams') state.value = { kind: 'teams', rows: teamRows(registrations, competitions, relaunched) }
+}
+
+async function relaunch(competitionId: string) {
+  const competitionName =
+    state.value.kind === 'teams'
+      ? state.value.rows.flatMap((row) => row.competitions).find((c) => c.id === competitionId)?.name ?? ''
+      : ''
+  relaunchError.value = undefined
+  relaunched.add(competitionId)
+  showRows()
+  try {
+    const result = await asResult(
+      api.POST('/ingestion-runs', { body: { competitionIds: [competitionId] }, signal: relaunching.signal }),
+    )
+    if (!result.ok) relaunchError.value = { error: result.error, competitionId, competitionName }
+  } catch (error) {
+    if (relaunching.signal.aborted) return
+    throw error
+  } finally {
+    relaunched.delete(competitionId)
+  }
+  showRows()
+  await refresh()
 }
 
 refreshWhile(() => running.value, refresh)
 onBeforeUnmount(() => {
   pending?.abort()
   refreshing?.abort()
+  relaunching.abort()
 })
 
 // «Dar de alta un equipo» lleva al formulario con la temporada que se está viendo, en el estado de la navegación y
@@ -191,6 +241,21 @@ function sortBy(column: string) {
     Temporada {{ chosen.season.label }} · {{ chosen.note }}
   </p>
 
+  <!-- Volver a traer los datos de una competición no ha ido bien: arriba, sobre la tabla, que sigue a la vista
+       (LLD-B §4.3). -->
+  <LoadError
+    v-if="relaunchError"
+    class="relaunch-error"
+    :message="relaunchError.error.message"
+    :code="relaunchError.error.code"
+    :retry="relaunchError.error.retry"
+    @retry="relaunch(relaunchError.competitionId)"
+  >
+    <p v-if="relaunchError.competitionName">
+      Al volver a traer los datos de {{ relaunchError.competitionName }}.
+    </p>
+  </LoadError>
+
   <!-- Se lee en voz alta sin mover el foco (LLD-B §10.3). -->
   <p
     v-if="state.kind === 'loading'"
@@ -246,7 +311,9 @@ function sortBy(column: string) {
     :caption="`Equipos de la temporada ${chosen?.season.label}`"
     :order="order"
     :season-label="chosen?.season.label"
+    :season-address="chosen && toAddress(chosen.season.label)"
     @sort="sortBy"
+    @relaunch="relaunch"
   />
 </template>
 
@@ -271,6 +338,9 @@ function sortBy(column: string) {
 }
 .empty p:first-child {
   margin-bottom: 0;
+}
+.relaunch-error {
+  margin-bottom: 1rem;
 }
 .note {
   margin-top: 0;

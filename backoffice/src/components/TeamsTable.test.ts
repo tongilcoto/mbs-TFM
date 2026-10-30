@@ -6,6 +6,7 @@ import type { CompetitionCell, TeamRow } from './teamRow'
 
 function competition(fields: Partial<CompetitionCell>): CompetitionCell {
   return {
+    id: 'liga',
     name: 'Cadete · PRIMERA CADETE · Grupo 4',
     health: 'ok',
     healthName: 'Al día',
@@ -21,8 +22,11 @@ function withRouter() {
   return { global: { plugins: [router] } }
 }
 
-function renderTable(rows: TeamRow[], seasonLabel?: string) {
-  render(TeamsTable, { props: { rows, caption: 'Equipos de la temporada 2026/27', seasonLabel }, ...withRouter() })
+function renderTable(rows: TeamRow[], seasonLabel?: string, seasonAddress?: string) {
+  return render(TeamsTable, {
+    props: { rows, caption: 'Equipos de la temporada 2026/27', seasonLabel, seasonAddress },
+    ...withRouter(),
+  })
 }
 
 // Lo que dice cada fila, celda a celda: cada trozo de texto, separado por un espacio. (Vue quita los espacios
@@ -176,5 +180,62 @@ describe('ordenar (bloque T)', () => {
     render(TeamsTable, { props: { rows: [], caption: 'x', order: { column: 'equipo', reversed: false } }, ...withRouter() })
 
     expect(screen.getByRole('columnheader', { name: 'Equipo' })).toHaveAttribute('aria-sort', 'ascending')
+  })
+})
+
+describe('el nombre del equipo lleva a su ficha (plan R4, §3.1)', () => {
+  test('en la temporada que se ve', () => {
+    renderTable([{ id: 'a1b2', team: 'Cadete A', competitions: [competition({})] }], '2025/26', '2025-26')
+
+    expect(screen.getByRole('link', { name: 'Cadete A' })).toHaveAttribute('href', '/temporadas/2025-26/equipos/a1b2/resultados')
+  })
+
+  test('también sin competición', () => {
+    renderTable([{ id: 'a1b2', team: 'Alevín A', competitions: [] }], '2026/27', '2026-27')
+
+    expect(screen.getByRole('link', { name: 'Alevín A' })).toHaveAttribute('href', '/temporadas/2026-27/equipos/a1b2/resultados')
+  })
+
+  test('sigue siendo la cabecera de su fila', () => {
+    renderTable([{ id: 'a1b2', team: 'Cadete A', competitions: [competition({})] }], '2026/27', '2026-27')
+
+    expect(screen.getByRole('rowheader')).toContainElement(screen.getByRole('link', { name: 'Cadete A' }))
+  })
+})
+
+describe('volver a traer los datos de la Federación (plan R4, decisión 7)', () => {
+  const relaunch = (name: string) => screen.getByRole('button', { name: `Volver a traer los datos de la Federación, ${name}` })
+
+  test('en la celda de la ingesta de cada competición, con la competición en el nombre', () => {
+    renderTable([{ id: '1', team: 'Infantil A', competitions: [competition({ name: 'Liga' }), competition({ id: 'copa', name: 'Copa' })] }])
+
+    expect(relaunch('Liga').closest('td')).toBe(screen.getAllByRole('cell')[1])
+    expect(relaunch('Copa')).toBeInTheDocument()
+  })
+
+  test('sin competición, no hay', () => {
+    renderTable([{ id: '1', team: 'Alevín A', competitions: [] }])
+
+    expect(screen.queryByRole('button', { name: /^Volver a traer/ })).not.toBeInTheDocument()
+  })
+
+  test('al pulsarlo, avisa de qué competición', async () => {
+    const { emitted } = renderTable([{ id: '1', team: 'Infantil A', competitions: [competition({ id: 'copa', name: 'Copa' })] }])
+
+    await fireEvent.click(relaunch('Copa'))
+
+    expect(emitted('relaunch')).toEqual([['copa']])
+  })
+
+  test('«En marcha», bloqueado', () => {
+    renderTable([{ id: '1', team: 'Cadete B', competitions: [competition({ name: 'Liga', health: 'pending', healthName: 'En marcha' })] }])
+
+    expect(relaunch('Liga')).toBeDisabled()
+  })
+
+  test('con fallos, se puede pulsar', () => {
+    renderTable([{ id: '1', team: 'Cadete B', competitions: [competition({ name: 'Liga', health: 'failing', healthName: 'Con fallos' })] }])
+
+    expect(relaunch('Liga')).toBeEnabled()
   })
 })

@@ -57,9 +57,9 @@ describe('los errores con un código de la lista', () => {
 
   test('un 502 con código es del propio servidor, no del recepcionista', () => {
     expect(errorFromResponse(502, problem(502, 'INGESTION_FAILED'))).toEqual({
-      message: 'La sincronización con la federación no ha terminado',
+      message: 'No se han podido traer los datos de la Federación. Prueba otra vez en un rato.',
       code: 'INGESTION_FAILED',
-      retry: false,
+      retry: true,
     })
   })
 })
