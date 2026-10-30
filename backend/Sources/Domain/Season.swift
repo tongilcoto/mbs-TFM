@@ -1,6 +1,4 @@
 public import struct Foundation.Date
-import struct Foundation.Calendar
-import struct Foundation.TimeZone
 
 /// La temporada. **Raíz de agregado** (§4.2).
 ///
@@ -172,18 +170,7 @@ extension Collection<Season> {
     /// de temporadas, así que la lista completa cabe de sobra y la regla se
     /// prueba en el nivel 1 de la pirámide, sin contenedor (§8.1).
     public func current(on instant: Date) -> Season? {
-        let today = Self.madridDay(of: instant)
+        let today = MadridDay.of(instant)
         return first { !$0.isArchived && $0.startDate <= today && today <= $0.endDate }
-    }
-
-    /// El día de Madrid en que cae `instant`, escrito como lo están `startDate`
-    /// y `endDate`: a las 00:00 en UTC (`SeasonLabel`).
-    private static func madridDay(of instant: Date) -> Date {
-        var madrid = Calendar(identifier: .gregorian)
-        madrid.timeZone = TimeZone(identifier: "Europe/Madrid")!
-        var utc = Calendar(identifier: .gregorian)
-        utc.timeZone = TimeZone(identifier: "UTC")!
-        // Inalcanzable: año, mes y día salen de una fecha que existe.
-        return utc.date(from: madrid.dateComponents([.year, .month, .day], from: instant))!
     }
 }

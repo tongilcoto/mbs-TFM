@@ -172,6 +172,7 @@ struct FakeRoundRepository: RoundRepository {
     func list(competitionID: CompetitionID) async throws -> [Round] {
         await store.rounds.filter { $0.competitionID == competitionID }
     }
+    func find(_ id: RoundID) async throws -> Round? { await store.rounds.first { $0.id == id } }
     func save(_ round: Round) async throws { await store.save(round) }
 }
 
@@ -222,6 +223,10 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
 
 struct FakeMatchRepository: MatchRepository {
     let store: IngestionStore
+    func list(roundID: RoundID) async throws -> [Match] { await store.matches.filter { $0.roundID == roundID } }
+    func list(teamID: TeamID) async throws -> [Match] {
+        await store.matches.filter { $0.homeTeamID == teamID || $0.awayTeamID == teamID }
+    }
     func list(competitionID: CompetitionID) async throws -> [Match] {
         await store.matches.filter { $0.competitionID == competitionID }
     }
@@ -296,6 +301,9 @@ struct FakeIngestionRunRepository: IngestionRunRepository {
 /// midiera otra cosa que el nivel 3.
 struct FakeStandingRowRepository: StandingRowRepository {
     let store: IngestionStore
+    func list(roundIDs: [RoundID]) async throws -> [StandingRow] {
+        await store.standingRows.filter { roundIDs.contains($0.roundID) }
+    }
     func list(roundID: RoundID) async throws -> [StandingRow] {
         await store.standingRows
             .filter { $0.roundID == roundID }

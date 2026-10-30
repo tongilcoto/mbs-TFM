@@ -39,6 +39,11 @@ filter:
     - createSeason            # R2 — la temporada nace en la web, sin código de la federación (D-106)
     - createTeam              # R2 — el alta de equipo; si ya existe, lo inscribe en la temporada (D-107)
     - getTeam                 # R3 — un equipo, propio o rival, para la pantalla del enganche
+    - getTeamRegistration     # R4 — el equipo en una temporada, para la ficha del equipo
+    - listRounds              # R4 — las jornadas de una competición, con la que está en curso
+    - getRound                # R4 — una jornada, para la pantalla de jornada y clasificación
+    - getStanding             # R4 — la clasificación de una jornada, con la racha calculada
+    - listMatches             # R4 — los partidos de una jornada, una competición o un equipo, con su fila de clasificación (D-112)
 
   # D-109: las listas cerradas que llevan nombres en el catálogo (`x-enum-names`), se usen ya o no. El generador
   # solo fabrica los tipos de las operaciones de arriba, y `EnumNamesTool` escribe el nombre de cada valor como

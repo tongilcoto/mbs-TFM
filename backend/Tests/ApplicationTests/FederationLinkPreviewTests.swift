@@ -663,7 +663,7 @@ struct FederationLinkPreviewTests {
             federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
             .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
 
-        #expect(Self.takenBy("3349086", in: preview) == .init(team: other, clubShortName: "Ejemplo"))
+        #expect(Self.takenBy("3349086", in: preview) == .init(team: other, clubName: "C.D. Ejemplo", clubShortName: "Ejemplo"))
         #expect(Self.takenBy("3349087", in: preview) == nil)
         #expect(await store.writes == 0)
     }
@@ -688,7 +688,7 @@ struct FederationLinkPreviewTests {
             federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
             .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
 
-        #expect(Self.takenBy("3349086", in: preview) == .init(team: team, clubShortName: "Ejemplo"))
+        #expect(Self.takenBy("3349086", in: preview) == .init(team: team, clubName: "C.D. Ejemplo", clubShortName: "Ejemplo"))
     }
 
     /// **Un rival de esta temporada con ese código** (`D-110` caso 2, `D-104`),
@@ -715,7 +715,7 @@ struct FederationLinkPreviewTests {
             federation: SpyFederationClient(returning: Self.calendar(), readingURLAs: Self.coordinate))
             .execute(teamID: team.id, calendarURL: Self.url, actor: Self.actor)
 
-        #expect(Self.takenBy("3349087", in: preview) == .init(team: rival, clubShortName: "Galapagar"))
+        #expect(Self.takenBy("3349087", in: preview) == .init(team: rival, clubName: "C.D. GALAPAGAR", clubShortName: "Galapagar"))
         #expect(Self.takenBy("3349086", in: preview) == nil)
     }
 }

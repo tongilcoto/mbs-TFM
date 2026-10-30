@@ -11,6 +11,9 @@ public protocol RoundRepository: Sendable {
     /// decide crear o actualizar.
     func list(competitionID: CompetitionID) async throws -> [Round]
 
+    /// Una jornada por su `id`, o `nil` si no está (`GET /v1/rounds/{id}`, R4.6).
+    func find(_ id: RoundID) async throws -> Round?
+
     /// *Upsert* por `id` (§4.3). El id lo pone el caso de uso, no la base:
     /// así la fila recién creada puede entrar en los candidatos de la misma
     /// pasada sin releerla.
@@ -111,6 +114,13 @@ public protocol TeamRegistrationRepository: Sendable {
 /// Puerto de salida de `Match` (§4.3).
 public protocol MatchRepository: Sendable {
     func list(competitionID: CompetitionID) async throws -> [Match]
+
+    /// Los partidos de una jornada (`GET /v1/matches?roundId=`, R4.8).
+    func list(roundID: RoundID) async throws -> [Match]
+
+    /// Los partidos de un equipo, **de local o de visitante**, de todas sus
+    /// competiciones (`GET /v1/matches?teamId=`, R4.8).
+    func list(teamID: TeamID) async throws -> [Match]
 
     func save(_ match: Match) async throws
 }
@@ -239,6 +249,10 @@ public protocol StandingRowRepository: Sendable {
     /// La tabla de una jornada, **ordenada por posición**: una clasificación
     /// desordenada no es una clasificación (§5.1).
     func list(roundID: RoundID) async throws -> [StandingRow]
+
+    /// Las filas de **varias jornadas a la vez**, sin orden: la fila de cada
+    /// lado de los partidos de una página en una sola consulta (`D-112`, R4.8).
+    func list(roundIDs: [RoundID]) async throws -> [StandingRow]
 
     /// *Upsert* por `id`, igual que sus hermanas de F5: el id lo pone el caso de
     /// uso para que la fila recién escrita entre en los candidatos de la misma

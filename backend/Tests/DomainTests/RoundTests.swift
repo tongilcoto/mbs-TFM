@@ -139,4 +139,71 @@ struct RoundTests {
         #expect(merged.startDate == Self.date("27-09-2025"))
         #expect(merged.endDate == Self.date("28-09-2025"))
     }
+
+    // ── La jornada en curso (R4.6) ──────────────────────────────────────────
+
+    static func instant(_ text: String) -> Date { try! Date(text, strategy: .iso8601) }
+
+    /// Tres jornadas de fin de semana: 4–5, 11–12 y 18–19 de octubre de 2025,
+    /// **guardadas desordenadas**, para que la respuesta salga de la regla y no
+    /// del orden de la lista.
+    static func weekends() throws -> [Round] {
+        let competition = CompetitionID(raw: UUID())
+        func round(_ number: Int, _ start: String, _ end: String) throws -> Round {
+            try Round(
+                id: RoundID(raw: UUID()), competitionID: competition, number: number,
+                startDate: date(start), endDate: date(end), createdAt: Date(), updatedAt: Date())
+        }
+        return [
+            try round(3, "18-10-2025", "19-10-2025"),
+            try round(1, "04-10-2025", "05-10-2025"),
+            try round(2, "11-10-2025", "12-10-2025"),
+        ]
+    }
+
+    @Test("en curso es la jornada que se está jugando hoy")
+    func theRoundBeingPlayed() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-11T12:00:00Z"))?.number == 2)
+    }
+
+    @Test("entre dos jornadas, en curso es la próxima")
+    func betweenTwoRoundsTheNextOne() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-08T12:00:00Z"))?.number == 2)
+    }
+
+    @Test("el último día de una jornada todavía es de ella")
+    func theLastDayStillCounts() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-12T12:00:00Z"))?.number == 2)
+    }
+
+    @Test("antes de la primera, en curso es la primera")
+    func beforeTheFirstOne() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-09-20T12:00:00Z"))?.number == 1)
+    }
+
+    @Test("terminada la competición, ninguna está en curso; y sin jornadas, tampoco")
+    func noneAfterTheLastOne() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-20T12:00:00Z")) == nil)
+        #expect([Round]().current(on: Self.instant("2025-10-11T12:00:00Z")) == nil)
+    }
+
+    /// El 12 de octubre a las 22:30 UTC ya es día 13 en Madrid (UTC+2): la
+    /// jornada 2 ya pasó. Comparando en UTC seguiría en curso.
+    @Test("el día se cuenta en Madrid: pasada la medianoche de Madrid, ya es la siguiente")
+    func theDayIsCountedInMadrid() throws {
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-12T21:30:00Z"))?.number == 2)
+        #expect(try Self.weekends().current(on: Self.instant("2025-10-12T22:30:00Z"))?.number == 3)
+    }
+
+    @Test("a igual fecha de fin, la de número más bajo")
+    func onATieTheLowerNumber() throws {
+        let competition = CompetitionID(raw: UUID())
+        let rounds = try [5, 4].map {
+            try Round(
+                id: RoundID(raw: UUID()), competitionID: competition, number: $0,
+                startDate: Self.date("11-10-2025"), endDate: Self.date("12-10-2025"),
+                createdAt: Date(), updatedAt: Date())
+        }
+        #expect(rounds.current(on: Self.instant("2025-10-08T12:00:00Z"))?.number == 4)
+    }
 }

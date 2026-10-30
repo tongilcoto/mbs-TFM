@@ -1,0 +1,111 @@
+{
+  "title": "R4.7 · getStanding: la clasificación de una jornada, con la racha calculada (D-34)",
+  "filter": "FormTests|GetStandingTests|StandingEndpointTests|FederationLinkEndpointTests|FederationLinkPreviewTests",
+  "mutations": [
+    {
+      "id": "M1-racha-del-mas-antiguo",
+      "description": "la racha sale del más antiguo al más reciente",
+      "file": "Sources/Domain/Form.swift",
+      "find": "        return played.sorted { $0.round > $1.round }.prefix(limit).map(\\.entry)",
+      "replace": "        return played.sorted { $0.round < $1.round }.prefix(limit).map(\\.entry)"
+    },
+    {
+      "id": "M2-racha-sin-limite",
+      "description": "la racha no se corta en cinco",
+      "file": "Sources/Domain/Form.swift",
+      "find": "        return played.sorted { $0.round > $1.round }.prefix(limit).map(\\.entry)",
+      "replace": "        return played.sorted { $0.round > $1.round }.map(\\.entry)"
+    },
+    {
+      "id": "M3-racha-con-lo-de-despues",
+      "description": "la racha incluye las jornadas posteriores a la pedida",
+      "file": "Sources/Domain/Form.swift",
+      "find": "let round = roundNumbers[match.roundID], round <= roundNumber",
+      "replace": "let round = roundNumbers[match.roundID]"
+    },
+    {
+      "id": "M4-visitante-como-local",
+      "description": "de visitante, el marcador se lee como si fuera local",
+      "file": "Sources/Domain/Form.swift",
+      "find": "            case match.awayTeamID: (scored, conceded) = (result.awayScore, result.homeScore)",
+      "replace": "            case match.awayTeamID: (scored, conceded) = (result.homeScore, result.awayScore)"
+    },
+    {
+      "id": "M5-empate-como-derrota",
+      "description": "un empate cuenta como derrota",
+      "file": "Sources/Domain/Form.swift",
+      "find": "scored > conceded ? .win : scored == conceded ? .draw : .loss",
+      "replace": "scored > conceded ? .win : .loss"
+    },
+    {
+      "id": "M6-partidos-de-otros",
+      "description": "los partidos de otros equipos cuentan en la racha",
+      "file": "Sources/Domain/Form.swift",
+      "find": "            default: return nil\n            }",
+      "replace": "            default: (scored, conceded) = (result.homeScore, result.awayScore)\n            }"
+    },
+    {
+      "id": "M7-rival-con-club-propio",
+      "description": "el rival sale con los nombres del club propio",
+      "file": "Sources/Application/TeamLabels.swift",
+      "find": "            labels[team.id] = LabeledTeam(team: team, clubName: rival.name, clubShortName: rival.shortName)",
+      "replace": "            labels[team.id] = LabeledTeam(team: team, clubName: club.name, clubShortName: club.shortName)"
+    },
+    {
+      "id": "M8-racha-hasta-la-ultima",
+      "description": "la racha se calcula hasta la última jornada, no hasta la pedida",
+      "file": "Sources/Application/GetStanding.swift",
+      "find": "form: Form.of(row.teamID, upTo: round.number,",
+      "replace": "form: Form.of(row.teamID, upTo: Int.max,"
+    },
+    {
+      "id": "M9-sin-jornada-404",
+      "description": "una jornada que no existe da la tabla vacía en vez de 404",
+      "file": "Sources/Application/GetStanding.swift",
+      "find": "        guard let round = try await rounds.find(roundID) else {\n            throw ApplicationError.roundNotFound(id: \"\\(roundID)\")\n        }",
+      "replace": "        guard let round = try await rounds.find(roundID) else {\n            return []\n        }"
+    },
+    {
+      "id": "M10-victoria-como-empate",
+      "description": "una victoria sale como empate en el contrato",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "        case .win: .victoria",
+      "replace": "        case .win: .empate"
+    },
+    {
+      "id": "M11-puesto-anterior-perdido",
+      "description": "previousPosition sale siempre nulo",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "            previousPosition: row.previousPosition,",
+      "replace": "            previousPosition: nil,"
+    },
+    {
+      "id": "M12-goles-cruzados",
+      "description": "goles a favor y en contra cruzados",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "            goalsFor: row.goalsFor,\n            goalsAgainst: row.goalsAgainst,",
+      "replace": "            goalsFor: row.goalsAgainst,\n            goalsAgainst: row.goalsFor,"
+    },
+    {
+      "id": "M13-ganados-por-perdidos",
+      "description": "won sale con los perdidos",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "            won: row.won,",
+      "replace": "            won: row.lost,"
+    },
+    {
+      "id": "M14-nameWithLetter-corto",
+      "description": "nameWithLetter se monta con el nombre corto",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "            nameWithLetter: [clubName, team.letter]",
+      "replace": "            nameWithLetter: [clubShortName, team.letter]"
+    },
+    {
+      "id": "M15-uuid-sin-400",
+      "description": "un roundId que no es un UUID no se rechaza con 400",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "            roundID = RoundID(raw: try Self.uuid(input.query.roundId, field: \"roundId\"))",
+      "replace": "            roundID = RoundID(raw: (try? Self.uuid(input.query.roundId, field: \"roundId\")) ?? UUID())"
+    }
+  ]
+}

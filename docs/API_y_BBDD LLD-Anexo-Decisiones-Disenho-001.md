@@ -77,6 +77,8 @@
 | **D-108**              | Cada lista cerrada lleva en el catálogo el nombre en español de cada valor; la web lo lee de ahí                              | §5.1                               |
 | **D-109**              | El servidor también lee los nombres del catálogo: se generan al compilar, junto al contrato, y los `displayName` los monta el adaptador HTTP | §2.2, §5.1, §5.2                   |
 | **D-110**              | El `/preview` del enganche dice qué equipos del grupo ya tiene el club, y cuál                                                | §5.1                               |
+| **D-111**              | El equipo de una fila también se nombra con el nombre del club, no solo con el corto                                          | §5.2                               |
+| **D-112**              | Cada lado de un partido lleva su fila de la clasificación de esa jornada                                                      | §5.1, §5.2                         |
 | **Integración**        |                                                                                                                               |                                    |
 | **D-16**               | Las coordenadas de la federación son configuración tecleada, no descubrimiento                                                | §3.7, §5.1, §5.6                   |
 | **D-17**               | La federación es un catálogo en código, y hay una por tenant                                                                  | §3.2, §3.6                         |
@@ -5046,6 +5048,89 @@ código, o `null`.
 **Enmienda** a la descripción de `PreviewTeam` y de `teams[]` en el catálogo (R3.5 del plan de la rebanada 3), y a
 §5.1 del LLD.
 
+### D-111 · El equipo de una fila también se nombra con el nombre del club, no solo con el corto
+
+**Lo que lo obligó a decidirse** (2026-10-28, al revisar con el desarrollador la pestaña Resultados de la rebanada 4
+del backoffice, decisión 1). La tabla de partidos de un equipo y la clasificación nombran a cada equipo sin la
+categoría, que dentro de una competición es la misma para todos ([D-32]). Para eso está `shortDisplayName`: el
+**nombre corto** del club + la letra («Celtic A»). El desarrollador quiere ver **el nombre del club + la letra**
+(«Celtic Castilla A»), y el servidor no lo da en ningún sitio.
+
+**Lo que hay hoy, mirado en el código y en la base.** El servidor monta todos sus rótulos de equipo con el nombre
+corto (`short_name`), del club propio y del rival: `displayName` y `shortDisplayName` de `TeamRef`, y `clubName` y
+`displayName` de `TeamResponse`. **`clubName` lo describe el catálogo como «Nombre del club», y da el corto.** En la
+base del desarrollador, el club propio es «Celtic Castilla» / «Celtic»; en los rivales, los dos son el mismo, el
+que publica la federación («A.D. ALHONDIGA»). **La letra del rival sí está**, en `teams.letter`, como la del propio:
+falta en 5 de sus 61 rivales, los que la federación publica sin letra porque el club tiene un solo equipo en esa
+categoría.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Usar `shortDisplayName` | Nada en el servidor; el club propio sale con su nombre corto | Descartada: no es lo que se quiere ver |
+| (b) `clubName` y `letter` sueltos en `TeamRef`, y que el cliente los junte | Dos campos más, y la regla de juntarlos repetida en la web, iOS y Android; y `clubName` sigue siendo el corto | Descartada |
+| (c) Pedir cada rival con `GET /teams/{id}` | Unas quince llamadas por competición, el *N+1* que [D-32] evita | Descartada |
+| **(d) Un rótulo más en `TeamRef`: nombre del club + letra** | Un campo derivado, montado en el adaptador HTTP como los otros dos ([D-109]) | **Elegida** |
+
+**Decisión: (d).** `TeamRef` lleva un tercer rótulo, **el nombre del club + `letter`**, sin categoría; solo el
+nombre si el equipo no tiene letra. **`shortDisplayName` se queda**: el backoffice usa el nuevo, y el corto queda
+para la web del móvil y las apps, que tienen menos sitio; se verá cuando existan. Como `TeamRef` es la proyección
+de las filas, el rótulo llega a todas: los partidos, la clasificación y el `takenBy` del `/preview` ([D-110]). Se
+llama **`nameWithLetter`** (fijado en R4.4 del plan de la rebanada 4).
+
+**Y la descripción de `TeamResponse.clubName`**, que dice lo contrario de lo que hace, se corrige en el mismo paso:
+o la descripción dice «nombre corto», o el campo pasa a dar el nombre. Se decide con lo que lo use. *(R4.4: se corrige
+la descripción. Ninguna pantalla lo usa, y cambiar lo que devuelve cambiaría también su `displayName`.)*
+
+**Lo que se asume a cambio.**
+
+- **Tres rótulos para un mismo equipo** en cada fila. Se acepta porque son de pantallas distintas: con categoría,
+  para un calendario que mezcla liga y copa ([D-12]); sin ella, largo para el escritorio y corto para el móvil.
+- **El nombre de un rival es el de la federación, en mayúsculas y con puntos.** Se corrige a mano (rebanada 12 del
+  backoffice), y la ingesta no pisa la corrección (§3.7).
+
+**Enmienda** a [D-32] (los rótulos de `TeamRef`) y a §5.2 del LLD.
+
+### D-112 · Cada lado de un partido lleva su fila de la clasificación de esa jornada
+
+**Lo que lo obligó a decidirse** (2026-10-28, al revisar con el desarrollador la pestaña Resultados de la rebanada 4
+del backoffice, decisión 2). La pestaña enseña **todos los partidos de un equipo en la temporada** y, en cada uno,
+el puesto de los dos equipos tras esa jornada y la línea del propio (puntos, ganados, empatados, perdidos y la
+diferencia de goles). Con el contrato de hoy, eso es **una `GET /standings?roundId=` por jornada**: en la base del
+desarrollador las competiciones tienen entre 26 y 34 jornadas, así que hasta 35 peticiones para pintar una
+pantalla. La tabla de cada jornada **ya está guardada** (`standing_rows`, la escribe la ingesta, [D-15]); los
+partidos salen de una consulta, y su clasificación puede salir de la misma.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Una `GET /standings` por jornada | Ningún cambio; el *N+1* de [D-32] y [D-34], por jornadas | Descartada |
+| (b) `GET /standings` con `?competitionId=`, todas las jornadas de una vez | Unas 30 tablas de 20 filas para usar dos filas de cada una; y [D-34] ya rechazó la clasificación sin jornada | Descartada |
+| **(c) Cada lado del partido trae su fila de esa jornada** | Un campo más en `MatchTeam`, resuelto en la misma consulta de `listMatches` | **Elegida** |
+
+**Decisión: (c).** `MatchTeam` lleva **la fila de ese equipo en la clasificación de la jornada del partido**:
+posición, jugados, ganados, empatados, perdidos, goles a favor y en contra, y puntos (`MatchTeam.standing`, un
+`MatchStanding`, fijado en R4.4). **Nula** si esa jornada no
+tiene tabla todavía (partidos sin jugar o sin ingerir). Los dos lados la llevan, aunque el backoffice solo pinte la
+línea completa del propio: así la respuesta no depende de quién es el propio, y el puesto del rival sale de la
+misma fila.
+
+1. **Es la fila guardada, no un cálculo**: la misma que sirve `GET /standings`, ingerida o calculada ([D-15],
+   [D-55]). Sin la racha ni el puesto anterior, que son de la tabla de una jornada y no de un partido ([D-34]).
+2. **No cambia [D-34]**: la clasificación sigue sin acceso por identificador y con `?roundId=` obligatorio. Esto
+   no es otra forma de pedir la tabla, sino **lo que varía en cada fila** del calendario de un equipo, que es el
+   criterio de las proyecciones ([D-32]).
+3. **Los partidos por jugar** llevan la fila nula: su jornada no tiene tabla. El puesto de hoy lo pinta el cliente
+   con la clasificación de la jornada en curso, que ya pide para su cabecera.
+
+**Lo que se asume a cambio.**
+
+- **`listMatches` lee una tabla más** en todos sus ámbitos, también en el de una jornada, donde el cliente puede
+  pedir la clasificación entera aparte. Se acepta para no tener dos formas de `MatchResponse`.
+- **Una fila de clasificación repetida**: la del propio en una jornada sale en su partido y en `GET /standings`. Es
+  una proyección, como el nombre en [D-32]: no se guarda dos veces.
+
+**Enmienda** a la descripción de `MatchTeam` en el catálogo (R4.4 del plan de la rebanada 4), y a §5.1 y §5.2 del
+LLD.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5193,5 +5278,7 @@ código, o `null`.
 [D-108]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-109]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-111]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

@@ -28,6 +28,8 @@ const messages: Record<ProblemCode, string> = {
   SEASON_NOT_FOUND: 'No se ha encontrado la temporada',
   TEAM_NOT_FOUND: 'No se ha encontrado el equipo',
   COMPETITION_NOT_FOUND: 'No se ha encontrado la competición',
+  ROUND_NOT_FOUND: 'No se ha encontrado la jornada.',
+  TEAM_NOT_REGISTERED: 'Este equipo no jugó esa temporada.',
 
   // Lo que la web manda mal
   BAD_REQUEST: 'La web ha enviado algo que el servidor no entiende',
@@ -36,6 +38,7 @@ const messages: Record<ProblemCode, string> = {
   INVALID_LIMIT: 'El número de resultados pedido no es válido',
   INVALID_UUID: 'Uno de los datos de la dirección no es válido',
   INVALID_VALUE: 'Hay un dato que no es válido',
+  MISSING_SCOPE: 'La web ha pedido partidos sin decir de qué jornada, competición o equipo.',
   NOT_EDITABLE_AFTER_SYNC: 'Este dato ya no se puede cambiar: la competición ya se ha sincronizado',
 
   // Lo que ya está (Plan R2, decisión 6)

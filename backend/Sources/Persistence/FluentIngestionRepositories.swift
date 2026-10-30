@@ -112,6 +112,10 @@ public struct FluentRoundRepository: RoundRepository {
             .map { try $0.toDomain() }
     }
 
+    public func find(_ id: RoundID) async throws -> Round? {
+        try await RoundRecord.find(id.raw, on: database)?.toDomain()
+    }
+
     public func save(_ round: Round) async throws {
         if let existing = try await RoundRecord.find(round.id.raw, on: database) {
             existing.apply(round)
@@ -133,6 +137,20 @@ public struct FluentMatchRepository: MatchRepository {
         try await MatchRecord.query(on: database)
             .filter(\.$competition.$id == competitionID.raw)
             .sort(\.$matchDate)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(roundID: RoundID) async throws -> [Match] {
+        try await MatchRecord.query(on: database)
+            .filter(\.$round.$id == roundID.raw)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(teamID: TeamID) async throws -> [Match] {
+        try await MatchRecord.query(on: database)
+            .group(.or) { $0.filter(\.$homeTeam.$id == teamID.raw).filter(\.$awayTeam.$id == teamID.raw) }
             .all()
             .map { try $0.toDomain() }
     }
@@ -572,6 +590,14 @@ public struct FluentStandingRowRepository: StandingRowRepository {
         try await StandingRowRecord.query(on: database)
             .filter(\.$round.$id == roundID.raw)
             .sort(\.$position)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(roundIDs: [RoundID]) async throws -> [StandingRow] {
+        guard !roundIDs.isEmpty else { return [] }
+        return try await StandingRowRecord.query(on: database)
+            .filter(\.$round.$id ~~ roundIDs.map(\.raw))
             .all()
             .map { try $0.toDomain() }
     }

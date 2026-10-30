@@ -38,18 +38,7 @@ public struct ListSeasonRegistrations: Sendable {
         let byTeam = Dictionary(grouping: rows, by: \.teamID)
         let teamList = try await teams.list(ids: Array(byTeam.keys))
         let entries = teamList.map { team in
-            SeasonRegistration(
-                team: team, seasonID: seasonID,
-                // La fila de junio no tiene competición y no aporta ninguna: el
-                // equipo sale con la lista vacía. Las demás, en el orden en que se
-                // inscribieron.
-                competitions: (byTeam[team.id] ?? [])
-                    .sorted { $0.createdAt < $1.createdAt }
-                    .compactMap { row in
-                        row.competitionID.map {
-                            RegisteredCompetition(competitionID: $0, federationTeamID: row.federationTeamID)
-                        }
-                    })
+            SeasonRegistration(team: team, seasonID: seasonID, rows: byTeam[team.id] ?? [])
         }
         return SeasonRegistrations(club: club, entries: entries.sorted(by: Self.portadaOrder))
     }
@@ -83,6 +72,20 @@ public struct SeasonRegistration: Equatable, Sendable {
         self.team = team
         self.seasonID = seasonID
         self.competitions = competitions
+    }
+    /// La inscripción leída de sus filas (una por competición, y la de junio sin
+    /// ninguna). La fila de junio no aporta competición: el equipo sale con la
+    /// lista vacía. Las demás, en el orden en que se inscribieron.
+    init(team: Team, seasonID: SeasonID, rows: [TeamRegistration]) {
+        self.init(
+            team: team, seasonID: seasonID,
+            competitions: rows
+                .sorted { $0.createdAt < $1.createdAt }
+                .compactMap { row in
+                    row.competitionID.map {
+                        RegisteredCompetition(competitionID: $0, federationTeamID: row.federationTeamID)
+                    }
+                })
     }
 }
 

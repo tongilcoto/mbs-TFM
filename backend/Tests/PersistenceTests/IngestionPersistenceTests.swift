@@ -631,6 +631,34 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// `find` (R4.6), con **dos** jornadas, como el de los equipos: con una sola,
+    /// devolver *"la primera que haya"* pasaría.
+    @Test("Round: find trae esa jornada y no otra, y nil si no está (R4.6)")
+    func findBringsTheDesignatedRound() async throws {
+        try await Self.withCompetition("round-find") { competitionID, tenant in
+            let (first, second) = try (
+                Round(
+                    id: RoundID(raw: UUID()), competitionID: competitionID, number: 1,
+                    startDate: Self.date("27-09-2025"), endDate: Self.date("28-09-2025"),
+                    createdAt: Date(), updatedAt: Date()),
+                Round(
+                    id: RoundID(raw: UUID()), competitionID: competitionID, number: 2,
+                    startDate: Self.date("04-10-2025"), endDate: Self.date("05-10-2025"),
+                    createdAt: Date(), updatedAt: Date()))
+            try await tenant.scope {
+                try await $0.rounds.save(first)
+                try await $0.rounds.save(second)
+            }
+
+            let found = try #require(try await tenant.scope { try await $0.rounds.find(second.id) })
+            #expect(found.id == second.id)
+            #expect(found.number == 2, "la designada, no la primera de la tabla")
+            #expect(found.competitionID == competitionID)
+            #expect(found.endDate == Self.date("05-10-2025"))
+            #expect(try await tenant.scope { try await $0.rounds.find(RoundID(raw: UUID())) } == nil)
+        }
+    }
+
     /// El partido entero, con las tres piezas que el esquema **no** sabe
     /// expresar y reconstruye el mapeo: el par del marcador, la hora de reloj
     /// como texto `HH:mm` y el `Kickoff` con sus dos mitades.
@@ -685,6 +713,90 @@ struct IngestionPersistenceTests {
         try await repositories.teams.save(home)
         try await repositories.teams.save(away)
         return (round.id, home.id, away.id)
+    }
+
+    // ── Las lecturas de R4.8 (`listMatches` y `D-112`) ──────────────────────
+
+    /// Tres equipos (A, B y C) y dos jornadas: en la 1, A–B; en la 2, C–A y B–C.
+    /// Con una fila de clasificación por equipo y jornada.
+    static func seedTwoRounds(
+        competitionID: CompetitionID, into repositories: any Repositories
+    ) async throws -> (rounds: [RoundID], teams: [TeamID], matches: [MatchID]) {
+        let rounds = try ["27-09-2025", "04-10-2025"].enumerated().map { index, day in
+            try Round(
+                id: RoundID(raw: UUID()), competitionID: competitionID, number: index + 1,
+                startDate: Self.date(day), endDate: Self.date(day), createdAt: Date(), updatedAt: Date())
+        }
+        let teams = try ["A", "B", "C"].map {
+            try Team(
+                id: TeamID(raw: UUID()), category: .cadete, letter: $0, gender: .masculino, modality: .futbol11,
+                createdAt: Date(), updatedAt: Date())
+        }
+        for round in rounds { try await repositories.rounds.save(round) }
+        for team in teams { try await repositories.teams.save(team) }
+        var matches: [MatchID] = []
+        for (round, home, away) in [(0, 0, 1), (1, 2, 0), (1, 1, 2)] {
+            let match = try Match(
+                id: MatchID(raw: UUID()), competitionID: competitionID, roundID: rounds[round].id,
+                kickoff: Kickoff(date: rounds[round].startDate), homeTeamID: teams[home].id,
+                awayTeamID: teams[away].id, status: .programado, createdAt: Date(), updatedAt: Date())
+            try await repositories.matches.save(match)
+            matches.append(match.id)
+        }
+        for round in rounds {
+            for (position, team) in teams.enumerated() {
+                try await repositories.standingRows.save(try StandingRow(
+                    id: StandingRowID(raw: UUID()), competitionID: competitionID, roundID: round.id,
+                    teamID: team.id, position: position + 1, played: round.number, won: 0, drawn: 0,
+                    lost: round.number, goalsFor: 0, goalsAgainst: 0, points: 0, createdAt: Date(), updatedAt: Date()))
+            }
+        }
+        return (rounds.map(\.id), teams.map(\.id), matches)
+    }
+
+    @Test("Match: los de una jornada, y no los de otra (R4.8)")
+    func matchesOfARound() async throws {
+        try await Self.withCompetition("match-round") { competitionID, tenant in
+            let found = try await tenant.scope { repositories -> (one: [Match], two: [Match]) in
+                let seeded = try await Self.seedTwoRounds(competitionID: competitionID, into: repositories)
+                return (try await repositories.matches.list(roundID: seeded.rounds[0]),
+                        try await repositories.matches.list(roundID: seeded.rounds[1]))
+            }
+            #expect(found.one.count == 1)
+            #expect(found.two.count == 2)
+            #expect(Set(found.two.map(\.roundID)).count == 1)
+            #expect(found.one.first?.roundID != found.two.first?.roundID)
+        }
+    }
+
+    @Test("Match: los de un equipo, de local y de visitante, y no los de otros (R4.8)")
+    func matchesOfATeam() async throws {
+        try await Self.withCompetition("match-team") { competitionID, tenant in
+            let (seeded, ofA) = try await tenant.scope { repositories in
+                let seeded = try await Self.seedTwoRounds(competitionID: competitionID, into: repositories)
+                return (seeded, try await repositories.matches.list(teamID: seeded.teams[0]))
+            }
+            // A juega de local en la 1 y de visitante en la 2; B–C no es suyo.
+            #expect(Set(ofA.map(\.id)) == Set(seeded.matches[0...1]))
+            #expect(ofA.allSatisfy { $0.homeTeamID == seeded.teams[0] || $0.awayTeamID == seeded.teams[0] })
+        }
+    }
+
+    @Test("StandingRow: las filas de varias jornadas a la vez, y no las de otras (D-112, R4.8)")
+    func standingRowsOfSeveralRounds() async throws {
+        try await Self.withCompetition("standing-rounds") { competitionID, tenant in
+            let (seeded, both, one, none) = try await tenant.scope { repositories in
+                let seeded = try await Self.seedTwoRounds(competitionID: competitionID, into: repositories)
+                return (seeded,
+                        try await repositories.standingRows.list(roundIDs: seeded.rounds),
+                        try await repositories.standingRows.list(roundIDs: [seeded.rounds[1]]),
+                        try await repositories.standingRows.list(roundIDs: []))
+            }
+            #expect(both.count == 6)
+            #expect(one.count == 3)
+            #expect(one.allSatisfy { $0.roundID == seeded.rounds[1] })
+            #expect(none.isEmpty)
+        }
     }
 
     // ── Las claves de §3.5 que sostienen la cadena de §3.7 ──────────────────

@@ -14,7 +14,7 @@ import { expectApi } from './club-api.ts'
 import type { ScenarioClub } from './clubs.ts'
 import { config } from './config.ts'
 import { fakeFederation } from './fake-federation.ts'
-import { competition, team, type Competition, type Season, type Team } from './invented.ts'
+import { competition, playedCompetition, team, type Competition, type Season, type Team } from './invented.ts'
 import type { Random } from './random.ts'
 import { withDatabase } from './test-database.ts'
 
@@ -70,16 +70,18 @@ export async function addTeam(club: ScenarioClub, season: Season, created: Team)
  * Un equipo nuevo del club, enganchado a una competición de la temporada. Como lo haría el club: da de alta el
  * equipo en la temporada (y la temporada, si no estaba), y después lo engancha. El enganche encuentra la temporada
  * por su etiqueta y le pone el código de la federación (`D-106`), crea la competición, llena la inscripción y
- * lanza la primera ingesta. Vuelve cuando la ingesta ha acabado: la competición queda «Al día».
+ * lanza la primera ingesta. Vuelve cuando la ingesta ha acabado: la competición queda «Al día». Con `played`, la
+ * competición tiene jornadas jugadas (`playedCompetition`, plan R4), y la ingesta trae también su clasificación.
  */
 export async function addPlayingTeam(
   club: ScenarioClub,
   random: Random,
   season: Season,
   taken: Team[] = [],
+  played = false,
 ): Promise<PlayingTeam> {
   const created = await createTeam(club, random, season, taken)
-  const plays = competition(random, season, created)
+  const plays = played ? playedCompetition(random, season, created) : competition(random, season, created)
   fakeFederation().invent(plays)
   const linked = await expectApi<{ competitionId: string }>(
     club,
@@ -136,12 +138,26 @@ interface IngestionRun {
 const runsOf = (club: ScenarioClub, competitionId: string) =>
   expectApi<IngestionRun[]>(club, 'GET', `/ingestion-runs?competitionId=${competitionId}`, undefined, 200)
 
-/** Espera a que la competición no tenga ninguna pasada en marcha. */
+/**
+ * Que la ingesta de la competición ha acabado: nada en marcha y, desde su último calendario, la pasada de goleadores,
+ * que es la última, o una fallida, tras la que no sigue (backend, `IngestClubCalendars`). Sin lo segundo, entre una
+ * pasada y la siguiente la ingesta parecía acabada sin estarlo, y faltaban las últimas tablas (plan R4, R4.3).
+ */
+function finished(runs: IngestionRun[]): boolean {
+  if (runs.some((r) => r.outcome === 'accepted')) return false
+  const calendars = runs.filter((r) => r.kind === 'calendar').map((r) => r.startedAt).sort()
+  const lastCalendar = calendars[calendars.length - 1]
+  if (!lastCalendar) return false
+  const since = runs.filter((r) => r.startedAt >= lastCalendar)
+  return since.some((r) => r.kind === 'scorers' || r.outcome === 'failed')
+}
+
+/** Espera a que acabe la ingesta de la competición (`finished`). */
 export async function ingestionFinished(club: ScenarioClub, competitionId: string, timeoutMs = 10_000): Promise<void> {
   const until = Date.now() + timeoutMs
   for (;;) {
     const runs = await runsOf(club, competitionId)
-    if (!runs.some((r) => r.outcome === 'accepted')) return
+    if (finished(runs)) return
     if (Date.now() > until) throw new Error(`La ingesta de la competición ${competitionId} no acabó en ${timeoutMs} ms`)
     await new Promise((resolve) => setTimeout(resolve, 100))
   }

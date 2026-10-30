@@ -1199,6 +1199,8 @@ extension FederationLinkEndpointTests {
                 #expect(taken?.teamId == neighbour.raw.uuidString.lowercased())
                 #expect(taken?.displayName == "Galapagar Cadete B")
                 #expect(taken?.shortDisplayName == "Galapagar B")
+                // `D-111`: el nombre del club, no el corto, y la letra.
+                #expect(taken?.nameWithLetter == "C.D. GALAPAGAR B")
                 #expect(taken?.isOwn == false)
                 #expect(teams.first { $0.federationTeamId == "3349086" }?.takenBy?.value1 == nil)
             }

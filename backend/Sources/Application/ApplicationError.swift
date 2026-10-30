@@ -47,6 +47,17 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// criterio que `unknownSeason`.
     case teamNotFound(id: String)
 
+    /// **El equipo y la temporada existen, pero el equipo no está inscrito en
+    /// ella** (`GET /v1/teams/{id}/registrations/{seasonId}`, R4.5). Un rival
+    /// nunca lo está (`D-68`). 404 como los otros dos, pero con su propio código:
+    /// la ficha del backoffice lo enseña como «no jugó esa temporada», no como
+    /// «no se ha encontrado».
+    case teamNotRegistered(team: String, season: String)
+
+    /// La jornada no existe en el club (`GET /v1/rounds/{id}`, R4.6). 404: el id
+    /// lo puso quien llama, como `teamNotFound`.
+    case roundNotFound(id: String)
+
     /// **La fuente no publicó etiqueta de temporada y hay que crear una**
     /// (F10, `C-C.8` → **400**).
     ///
