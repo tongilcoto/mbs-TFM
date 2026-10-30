@@ -158,11 +158,15 @@ abbr {
 .strong {
   font-weight: 700;
 }
-/* La fila del club: el fondo de lo que se señala, y en negrita. */
+/* La fila del club: el fondo de la página, una barra del principal a la izquierda y en negrita. El fondo de
+   «señalado» de PrimeVue deja el texto suave y el rojo por debajo de 4,5 de contraste (R4.14, axe). */
 .own td,
 .own th {
-  background: var(--p-content-hover-background);
+  background: var(--p-fondo);
   font-weight: 700;
+}
+.own td:first-child {
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
 }
 .muted {
   color: var(--p-text-muted-color);

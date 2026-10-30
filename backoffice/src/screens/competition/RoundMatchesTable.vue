@@ -114,9 +114,13 @@ thead th {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-/* El partido del club: el fondo de lo que se señala, y su equipo en negrita. */
+/* El partido del club: el fondo de la página, una barra del principal a la izquierda y su equipo en negrita. El
+   fondo de «señalado» de PrimeVue deja el texto suave por debajo de 4,5 de contraste en los dos modos (R4.14, axe). */
 .own td {
-  background: var(--p-content-hover-background);
+  background: var(--p-fondo);
+}
+.own td:first-child {
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
 }
 .strong {
   font-weight: 700;
