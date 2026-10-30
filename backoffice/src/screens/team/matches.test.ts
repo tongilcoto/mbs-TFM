@@ -8,8 +8,20 @@ type Standing = components['schemas']['StandingResponse']
 
 const OWN = 'propio'
 
+// El puesto anterior, distinto del de ahora: así se ve cuál de los dos sale.
 function standing(position: number, fields: Partial<MatchStanding> = {}): MatchStanding {
-  return { position, played: 5, won: 1, drawn: 0, lost: 4, goalsFor: 7, goalsAgainst: 13, points: 3, ...fields }
+  return {
+    position,
+    previousPosition: position + 3,
+    played: 5,
+    won: 1,
+    drawn: 0,
+    lost: 4,
+    goalsFor: 7,
+    goalsAgainst: 13,
+    points: 3,
+    ...fields,
+  }
 }
 
 // Un partido del equipo en casa (`home`) o fuera, contra «RIVAL A».
@@ -60,7 +72,7 @@ describe('las filas de la pestaña Resultados', () => {
     expect(rows.map((r) => r.round)).toEqual([1, 2, 3])
   })
 
-  test('un jugado: la jornada, el día, el nombre del club y su letra, el marcador, la letra y la línea del propio', () => {
+  test('un jugado: la jornada, el día, el nombre del club y su letra con el puesto con el que llegó, el marcador, la letra y la línea del propio tras la jornada', () => {
     const [row] = matchRows([played(4, 3, 1)], OWN, today)
 
     expect(row).toEqual({
@@ -68,8 +80,8 @@ describe('las filas de la pestaña Resultados', () => {
       competitionId: 'liga',
       round: 4,
       date: 'Dom 1 mar',
-      home: { name: 'Celtic Castilla A', position: 2, own: true },
-      away: { name: 'RIVAL A', position: 7, own: false },
+      home: { name: 'Celtic Castilla A', position: 5, own: true },
+      away: { name: 'RIVAL A', position: 10, own: false },
       result: { kind: 'score', text: '3 - 1' },
       outcome: 'V',
       line: { position: 2, points: 10, won: 1, drawn: 0, lost: 4, goalDifference: '+5' },
@@ -147,5 +159,19 @@ describe('las filas de la pestaña Resultados', () => {
     const rows = matchRows([rest('Equipo Fuera (No asignado)', true), rest('Equipo Casa (No asignado)', false), match(9)], OWN, today)
 
     expect(rows.map((r) => r.rest)).toEqual([true, true, false])
+  })
+
+  test('un jugado de la primera jornada: sin puesto, porque se llega sin clasificación', () => {
+    const m = played(1, 2, 0)
+    const first = {
+      ...m,
+      home: { ...m.home, standing: standing(1, { previousPosition: null }) },
+      away: { ...m.away, standing: standing(9, { previousPosition: null }) },
+    }
+    const [row] = matchRows([first], OWN, today)
+
+    expect([row!.home.position, row!.away.position]).toEqual([undefined, undefined])
+    // La línea de la derecha sí: es la de tras la jornada.
+    expect(row!.line?.position).toBe(1)
   })
 })

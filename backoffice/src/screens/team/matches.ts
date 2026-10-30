@@ -6,7 +6,9 @@ type Match = components['schemas']['MatchResponse']
 type MatchTeam = components['schemas']['MatchTeam']
 type Standing = components['schemas']['StandingResponse']
 
-// Un equipo del partido: el nombre de su club y su letra (decisión 1), su puesto al lado y si es el de la ficha.
+// Un equipo del partido: el nombre de su club y su letra (decisión 1), su puesto al lado y si es el de la ficha. El
+// puesto es **con el que llega al partido** (enmienda a D-112, pedida al revisar R4.12): en los jugados, el de la
+// jornada anterior, y ninguno en la primera; en los que faltan, el de hoy.
 export interface SideCell {
   name: string
   position?: number
@@ -65,7 +67,7 @@ export function matchRows(matches: Match[], teamId: string, today: Standing[]): 
       const played = match.status === 'finalizado'
       const side = (team: MatchTeam): SideCell => ({
         name: team.nameWithLetter,
-        position: played ? (team.standing?.position ?? undefined) : todayPositions.get(team.teamId),
+        position: played ? (team.standing?.previousPosition ?? undefined) : todayPositions.get(team.teamId),
         own: team.teamId === teamId,
       })
       const own = match.home.teamId === teamId ? match.home : match.away
