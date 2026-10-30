@@ -28,3 +28,10 @@ test('/equipos/:id, sin temporada, es la ficha; /equipos/nuevo sigue siendo el a
   await router.push('/equipos/nuevo')
   expect(router.currentRoute.value.meta.title).toBe('Alta de equipo')
 })
+
+test('jornada y clasificación de una competición, con la temporada en el camino', async () => {
+  await router.push('/temporadas/2026-27/competiciones/a1b2?jornada=5')
+
+  expect(router.currentRoute.value.meta.title).toBe('Jornada y clasificación')
+  expect(router.currentRoute.value.query).toEqual({ jornada: '5' })
+})

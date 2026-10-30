@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { formatGoalDifference, formatInstant, formatKickoff, formatMatchDay } from './format'
+import { formatDayRange, formatGoalDifference, formatInstant, formatKickoff, formatMatchDay } from './format'
 
 // Las pruebas fijan la zona horaria, para que den lo mismo en cualquier ordenador.
 describe('la fecha y la hora de un instante', () => {
@@ -62,5 +62,19 @@ describe('la diferencia de goles', () => {
     expect(formatGoalDifference(3)).toBe('+3')
     expect(formatGoalDifference(-2)).toBe('−2')
     expect(formatGoalDifference(0)).toBe('0')
+  })
+})
+
+describe('las fechas de una jornada (plan R4, §3.4)', () => {
+  test('en el mismo mes, el mes una vez', () => {
+    expect(formatDayRange('2026-10-24', '2026-10-25')).toBe('24 – 25 oct')
+  })
+
+  test('si cambia el mes, los dos', () => {
+    expect(formatDayRange('2026-10-31', '2026-11-01')).toBe('31 oct – 1 nov')
+  })
+
+  test('un solo día', () => {
+    expect(formatDayRange('2026-10-24', '2026-10-24')).toBe('24 oct')
   })
 })

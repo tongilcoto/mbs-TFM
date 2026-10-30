@@ -32,6 +32,16 @@ export function formatMatchDay(date: string): string {
   return `${weekdays[weekday]} ${day} ${months[month - 1]}`
 }
 
+// Las fechas de una jornada (plan R4, §3.4): «24 – 25 oct»; si cambia el mes, «31 oct – 1 nov»; si es un solo día,
+// «24 oct». Del texto, sin pasar por la zona horaria, como el día de un partido.
+export function formatDayRange(start: string, end: string): string {
+  const [, startMonth, startDay] = start.split('-').map(Number) as [number, number, number]
+  const [, endMonth, endDay] = end.split('-').map(Number) as [number, number, number]
+  if (start === end) return `${startDay} ${months[startMonth - 1]}`
+  if (startMonth === endMonth) return `${startDay} – ${endDay} ${months[endMonth - 1]}`
+  return `${startDay} ${months[startMonth - 1]} – ${endDay} ${months[endMonth - 1]}`
+}
+
 // La hora de un partido, de 24 horas y sin segundos: «12:00», aunque llegue «12:00:00».
 export function formatKickoff(time: string): string {
   return time.slice(0, 5)
