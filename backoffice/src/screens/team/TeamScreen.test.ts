@@ -106,6 +106,13 @@ function fakeServer(fields: Partial<typeof defaults> = {}) {
       return Response.json([1, 2, 3, 4, 5, 6, 7].map((n) => round(id, n, n === 6)))
     }
     if (path === '/standings') return Response.json(server.tables[url.searchParams.get('roundId')!] ?? [])
+    if (path === '/matches') {
+      if (server.matchesFail) return problem(503, 'DATABASE_UNAVAILABLE')
+      const page = Number(url.searchParams.get('page'))
+      const perPage = Number(url.searchParams.get('perPage'))
+      const data = server.matches.slice((page - 1) * perPage, page * perPage)
+      return Response.json({ page, perPage, total: server.matches.length, data })
+    }
     if (path === '/ingestion-runs' && request.method === 'POST') return new Promise<Response>((resolve) => (server.finish = resolve))
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
@@ -119,6 +126,29 @@ const defaults = {
   competitions: [competition('liga', 'PREFERENTE CADETE')],
   // Jugadas hasta la 5; la 6, la en curso, sin tabla todavía.
   tables: { 'liga-j5': table(16, 13), 'liga-j4': table(16, 11) } as Record<string, unknown[]>,
+  matches: [match('liga', 5, 2, 1), match('liga', 6)] as unknown[],
+  matchesFail: false,
+}
+
+// Un partido del equipo en casa contra un rival; con marcador, jugado.
+function match(competitionId: string, number: number, own?: number, other?: number) {
+  const playedNow = own !== undefined
+  return {
+    id: `${competitionId}-p${number}`,
+    competitionId,
+    roundId: `${competitionId}-j${number}`,
+    roundNumber: number,
+    matchDate: '2026-10-24',
+    isKickoffConfirmed: false,
+    status: playedNow ? 'finalizado' : 'programado',
+    home: {
+      teamId: TEAM,
+      nameWithLetter: 'Celtic Castilla A',
+      score: own,
+      standing: playedNow ? { position: 13, played: 5, won: 1, drawn: 0, lost: 4, goalsFor: 7, goalsAgainst: 13, points: 3 } : undefined,
+    },
+    away: { teamId: 'rival', nameWithLetter: 'COLEGIO EL PRADO A', score: other },
+  }
 }
 
 const problem = (status: number, code: string) => Response.json({ type: 'about:blank', title: 'x', status, code }, { status })
@@ -152,6 +182,7 @@ async function openTeam(address = `/temporadas/2026-27/equipos/${TEAM}/resultado
 }
 
 const box = (title: string) => screen.getByRole('region', { name: title })
+const positionShown = () => waitFor(() => expect(box('Posición')).toHaveTextContent('13º'))
 const relaunchButton = () =>
   screen.findByRole('button', { name: 'Volver a traer los datos de la Federación, PREFERENTE CADETE · Grupo 2' })
 
@@ -180,7 +211,7 @@ describe('la cabecera de un equipo que ha jugado', () => {
   test('la posición, de la jornada en curso; sin tabla, de la anterior, y ahí para', async () => {
     const server = fakeServer()
     await openTeam()
-    await screen.findByText('13º')
+    await positionShown()
 
     expect(server.asked.filter((a) => a.startsWith('GET /standings'))).toEqual([
       'GET /standings?roundId=liga-j6',
@@ -277,13 +308,13 @@ describe('la temporada', () => {
     const router = await openTeam(`/equipos/${TEAM}`)
 
     await waitFor(() => expect(router.currentRoute.value.path).toBe(`/temporadas/2026-27/equipos/${TEAM}/resultados`))
-    expect(await screen.findByText('13º')).toBeInTheDocument()
+    await positionShown()
   })
 
   test('el selector, con todas las temporadas del club, cambia la dirección', async () => {
     fakeServer()
     const router = await openTeam()
-    await screen.findByText('13º')
+    await positionShown()
 
     await fireEvent.click(screen.getByRole('combobox', { name: 'Temporada' }))
     await fireEvent.mouseDown(await screen.findByRole('option', { name: '2025/26' }))
@@ -300,7 +331,7 @@ describe('con más de una competición (liga y copa)', () => {
       tables: { 'liga-j5': table(16, 13), 'copa-j5': table(8, 2) },
     })
     await openTeam()
-    await screen.findByText('13º')
+    await positionShown()
 
     await fireEvent.click(within(box('Competición')).getByRole('combobox', { name: 'Competición' }))
     await fireEvent.mouseDown(await screen.findByRole('option', { name: 'COPA CADETE · Grupo 2' }))
@@ -363,5 +394,135 @@ describe('mientras la ingesta está «En marcha», se refresca sola', () => {
     await waitFor(() => expect(box('Competición')).toHaveTextContent('Al día'))
     expect(box('Posición')).toHaveTextContent('10º')
     expect(screen.queryByText('Cargando equipo…')).not.toBeInTheDocument()
+  })
+})
+
+describe('la pestaña Resultados (§3.3)', () => {
+  const matchesTable = () => screen.findByRole('table', { name: 'Partidos de Cadete A en la temporada 2026/27' })
+
+  test('la pestaña, con la etiqueta «Federación», y la tabla con un partido por fila', async () => {
+    fakeServer()
+    await openTeam()
+
+    const table = await matchesTable()
+    expect(screen.getByRole('link', { name: 'Resultados' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Federación')).toBeInTheDocument()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Celtic Castilla A')
+    expect(rows[0]).toHaveTextContent('2 - 1')
+    expect(rows[1]).toHaveTextContent('por fijar')
+  })
+
+  test('el puesto de hoy de los partidos por jugar sale de la clasificación de la cabecera: ninguna petición más', async () => {
+    const server = fakeServer()
+    await openTeam()
+    const table = await matchesTable()
+
+    // El propio, 13º en la tabla de la jornada 5, que es la que encontró la cabecera.
+    expect(within(table).getAllByRole('row')[2]).toHaveTextContent('13º')
+    expect(server.asked.filter((a) => a.startsWith('GET /standings'))).toHaveLength(2)
+  })
+
+  test('☰ lleva a la jornada del partido en su competición', async () => {
+    fakeServer()
+    await openTeam()
+    await matchesTable()
+
+    expect(screen.getByRole('link', { name: 'Ver la jornada 5 y la clasificación' })).toHaveAttribute(
+      'href',
+      '/temporadas/2026-27/competiciones/liga?jornada=5',
+    )
+  })
+
+  test('mientras llegan, «Cargando partidos…»; la cabecera ya está', async () => {
+    fakeServer()
+    const real = globalThis.fetch
+    vi.stubGlobal('fetch', (request: Request) =>
+      new URL(request.url).pathname === '/api/v1/matches' ? new Promise(() => {}) : real(request),
+    )
+    await openTeam()
+
+    expect(await screen.findByText('Cargando partidos…')).toBeInTheDocument()
+    expect(box('Posición')).toHaveTextContent('13º')
+  })
+
+  test('si fallan, el error con «Reintentar», y la cabecera se queda', async () => {
+    const server = fakeServer({ matchesFail: true })
+    await openTeam()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se ha podido conectar con el servidor')
+    expect(box('Posición')).toHaveTextContent('13º')
+
+    server.matchesFail = false
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await matchesTable()).toBeInTheDocument()
+  })
+
+  test('sin sincronizar: «Este equipo aún no tiene partidos.» y el enlace para sincronizarlo', async () => {
+    const server = fakeServer({ competitions: [] })
+    await openTeam()
+
+    expect(await screen.findByText('Este equipo aún no tiene partidos.')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Sincronizar con la Federación' })).toHaveLength(2)
+    expect(server.asked.some((a) => a.startsWith('GET /matches'))).toBe(false)
+  })
+
+  test('sincronizado y sin partidos, con la ingesta en marcha: «Trayendo el calendario…»', async () => {
+    fakeServer({ matches: [], competitions: [competition('liga', 'PREFERENTE CADETE', 'pending')], tables: {} })
+    await openTeam()
+
+    expect(await screen.findByText('Trayendo el calendario de la Federación…')).toBeInTheDocument()
+  })
+
+  test('sincronizado y sin partidos, con la ingesta parada: la Federación aún no los ha publicado', async () => {
+    fakeServer({ matches: [], tables: {} })
+    await openTeam()
+
+    expect(await screen.findByText('La Federación aún no ha publicado partidos de este equipo.')).toBeInTheDocument()
+  })
+
+  test('al acabar la ingesta que estaba en marcha, los partidos salen solos', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const server = fakeServer({ matches: [], competitions: [competition('liga', 'PREFERENTE CADETE', 'pending')], tables: {} })
+    await openTeam()
+    await screen.findByText('Trayendo el calendario de la Federación…')
+
+    server.competitions = [competition('liga', 'PREFERENTE CADETE', 'ok')]
+    server.matches = [match('liga', 1), match('liga', 2)]
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    const table = await matchesTable()
+    expect(within(table).getAllByRole('row').slice(1)).toHaveLength(2)
+  })
+
+  test('con liga y copa, solo los de la elegida', async () => {
+    fakeServer({
+      competitions: [competition('liga', 'PREFERENTE CADETE'), competition('copa', 'COPA CADETE')],
+      tables: { 'liga-j5': table(16, 13), 'copa-j5': table(8, 2) },
+      matches: [match('liga', 1, 2, 0), match('liga', 2), match('copa', 1, 0, 1)],
+    })
+    await openTeam()
+    expect(within(await matchesTable()).getAllByRole('row').slice(1)).toHaveLength(2)
+
+    await fireEvent.click(within(box('Competición')).getByRole('combobox', { name: 'Competición' }))
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: 'COPA CADETE · Grupo 2' }))
+
+    await waitFor(async () => expect(within(await matchesTable()).getAllByRole('row').slice(1)).toHaveLength(1))
+    expect(screen.getByRole('link', { name: 'Ver la jornada 1 y la clasificación' })).toHaveAttribute(
+      'href',
+      '/temporadas/2026-27/competiciones/copa?jornada=1',
+    )
+  })
+
+  test('más de una página: las pide todas', async () => {
+    const server = fakeServer({ matches: Array.from({ length: 101 }, (_, i) => match('liga', i + 1)) })
+    await openTeam()
+
+    await waitFor(async () => expect(within(await matchesTable()).getAllByRole('row').slice(1)).toHaveLength(101))
+    expect(server.asked.filter((a) => a.startsWith('GET /matches'))).toEqual([
+      `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=1&perPage=100`,
+      `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=2&perPage=100`,
+    ])
   })
 })

@@ -19,6 +19,8 @@ const drawings = {
   ],
   // Volver a comprobar (R3, la dirección comprobada).
   'rotate-cw': ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
+  // Ver la jornada y la clasificación de un partido (R4, la pestaña Resultados).
+  list: ['M3 5h.01', 'M3 12h.01', 'M3 19h.01', 'M8 5h13', 'M8 12h13', 'M8 19h13'],
 }
 
 export type IconName = keyof typeof drawings
