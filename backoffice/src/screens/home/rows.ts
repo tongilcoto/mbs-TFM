@@ -2,7 +2,8 @@
 import type { components } from '../../api/schema'
 import { formatInstant } from '../../theme/format'
 import type { CompetitionCell, TeamRow } from '../../components/teamRow'
-import { healthNames, type IngestionHealth, optionsOf, teamNames } from '../../theme/names'
+import { shownHealth } from '../../relaunch'
+import { competitionLabel, type IngestionHealth, optionsOf, teamNames } from '../../theme/names'
 
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
@@ -58,19 +59,10 @@ const ages = optionsOf('TeamCategory').map((option) => option.value)
 
 // Lo que se ordena sigue siendo lo que dice el servidor (`keys.healths`): la fila no salta de sitio al pulsar ↻.
 function cell(competition: Competition, relaunched: boolean): CompetitionCell {
-  const health = relaunched ? 'pending' : competition.ingestionHealth
-  // «La anterior tuvo fallos», como cuando lo dice el servidor (plan R1, decisión 2): al volver a traerla, la
-  // anterior es la que se veía.
-  const previous = relaunched && competition.ingestionHealth !== 'pending' ? competition.ingestionHealth : competition.previousIngestionHealth
   return {
     id: competition.id,
-    // La división y el grupo: «PRIMERA CADETE · Grupo 4». Sin la categoría que el servidor pone delante en
-    // `displayName`, porque en la misma fila ya la dice el equipo (bloque T del plan R2). La que repite la
-    // federación dentro de su propio nombre no se recorta: cada federación escribe a su manera.
-    name: `${competition.divisionLabel} · ${competition.groupLabel}`,
-    health,
-    healthName: health && healthNames[health],
-    previousFailed: health === 'pending' && previous === 'failing',
+    name: competitionLabel(competition),
+    ...shownHealth(competition, relaunched),
     lastSynced: competition.lastSyncedAt ? formatInstant(competition.lastSyncedAt) : 'Nunca',
   }
 }

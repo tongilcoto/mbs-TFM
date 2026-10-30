@@ -15,6 +15,7 @@ import LoadError from '../../components/LoadError.vue'
 import SeasonPicker from '../../components/SeasonPicker.vue'
 import TeamsTable from '../../components/TeamsTable.vue'
 import { refreshWhile } from '../../refresh'
+import { useRelaunch } from '../../relaunch'
 import { nextOrder, orderFromAddress, orderToAddress, sortRows } from '../../sorting'
 import { type Column, columns, rules } from './order'
 import { type HomeRow, teamRows } from './rows'
@@ -52,12 +53,10 @@ let pending: AbortController | undefined
 // El refresco a medias, que también se cancela: lo cancela una carga nueva, o salir.
 let refreshing: AbortController | undefined
 
-// Las competiciones cuyos datos se están volviendo a traer con ↻, y el error de la última que falló (más abajo,
-// en `relaunch`).
-const relaunched = new Set<string>()
-const relaunchError = ref<{ error: ShownError; competitionId: string; competitionName: string }>()
-// Al salir de la pantalla solo se deja de esperar: la pasada ya está pedida (LLD-B §3.2).
-const relaunching = new AbortController()
+// Volver a traer los datos de una competición con su ↻ (plan R4, decisión 7): al acabar, se piden otra vez las
+// competiciones, como en el refresco. La pasada no se cancela al cambiar de temporada: sigue en el servidor, y al
+// volver a ella se ve.
+const { running: relaunched, failure: relaunchError, relaunch } = useRelaunch(refresh)
 
 const chosen = computed(() => (choice.value?.kind === 'chosen' ? choice.value : undefined))
 const pickerLabels = computed(() => newestFirst(seasons.value ?? []).map((s) => s.label))
@@ -146,43 +145,21 @@ async function refresh() {
   }
 }
 
-// Volver a traer los datos de una competición, con su ↻ (plan R4, decisión 7). Con una sola competición el
-// servidor responde cuando la pasada ha terminado, así que mientras tanto la celda dice «En marcha» y el botón
-// está bloqueado; al acabar, bien o mal, se piden otra vez las competiciones, como en el refresco. Si falla, el
-// aviso arriba con el texto de su código. La pasada no se cancela al cambiar de temporada: sigue en el servidor,
-// y al volver a ella se ve.
-function showRows() {
+// Mientras se traen, «En marcha»: las filas se rehacen al empezar y al acabar.
+watch(relaunched, () => {
   if (state.value.kind === 'teams') state.value = { kind: 'teams', rows: teamRows(registrations, competitions, relaunched) }
-}
+})
 
-async function relaunch(competitionId: string) {
-  const competitionName =
-    state.value.kind === 'teams'
-      ? state.value.rows.flatMap((row) => row.competitions).find((c) => c.id === competitionId)?.name ?? ''
-      : ''
-  relaunchError.value = undefined
-  relaunched.add(competitionId)
-  showRows()
-  try {
-    const result = await asResult(
-      api.POST('/ingestion-runs', { body: { competitionIds: [competitionId] }, signal: relaunching.signal }),
-    )
-    if (!result.ok) relaunchError.value = { error: result.error, competitionId, competitionName }
-  } catch (error) {
-    if (relaunching.signal.aborted) return
-    throw error
-  } finally {
-    relaunched.delete(competitionId)
-  }
-  showRows()
-  await refresh()
+function relaunchFromTable(competitionId: string) {
+  const rows = state.value.kind === 'teams' ? state.value.rows : []
+  const name = rows.flatMap((row) => row.competitions).find((c) => c.id === competitionId)?.name ?? ''
+  void relaunch(competitionId, name)
 }
 
 refreshWhile(() => running.value, refresh)
 onBeforeUnmount(() => {
   pending?.abort()
   refreshing?.abort()
-  relaunching.abort()
 })
 
 // «Dar de alta un equipo» lleva al formulario con la temporada que se está viendo, en el estado de la navegación y
@@ -249,7 +226,7 @@ function sortBy(column: string) {
     :message="relaunchError.error.message"
     :code="relaunchError.error.code"
     :retry="relaunchError.error.retry"
-    @retry="relaunch(relaunchError.competitionId)"
+    @retry="relaunch(relaunchError.competitionId, relaunchError.competitionName)"
   >
     <p v-if="relaunchError.competitionName">
       Al volver a traer los datos de {{ relaunchError.competitionName }}.
@@ -313,7 +290,7 @@ function sortBy(column: string) {
     :season-label="chosen?.season.label"
     :season-address="chosen && toAddress(chosen.season.label)"
     @sort="sortBy"
-    @relaunch="relaunch"
+    @relaunch="relaunchFromTable"
   />
 </template>
 

@@ -1,9 +1,10 @@
 <!-- La tabla de la portada: los equipos de una temporada, con su competición y cómo va su ingesta (plan R1, §3.2).
      Un equipo con dos competiciones ocupa dos líneas, con su nombre y sus acciones una sola vez (rowspan). -->
 <script setup lang="ts">
+import HealthStatus from './HealthStatus.vue'
 import IconAction from './IconAction.vue'
 import SortableHeader from './SortableHeader.vue'
-import type { HealthState, TeamRow } from './teamRow'
+import type { TeamRow } from './teamRow'
 
 // `order`, por qué columna está ordenada y si al revés; sin él, el orden del servidor. Las filas llegan ya
 // ordenadas: la tabla solo dice cómo, y avisa de qué cabecera pinchan (bloque T del plan R2). `seasonLabel`, la
@@ -31,9 +32,6 @@ function sortOf(column: string): 'ascending' | 'descending' | undefined {
   if (props.order?.column !== column) return undefined
   return props.order.reversed ? 'descending' : 'ascending'
 }
-
-// Cada estado, con su icono y su color. Nunca solo el color: la palabra va siempre al lado (LLD-B §9.4).
-const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending: '↻', stale: '◷', never: '○' }
 
 // Sincronizar: lo que dice depende de si el equipo ya tiene competición en la temporada (plan R3, decisión 1). La
 // temporada va en el estado de la navegación, no en la dirección, como al dar de alta (plan R2, decisión 5).
@@ -128,26 +126,11 @@ function resultsTarget(row: TeamRow): string | undefined {
                  ya se están trayendo. -->
             <div class="ingestion">
               <div>
-                <span
-                  v-if="competition.health"
-                  class="health"
-                >
-                  <span
-                    aria-hidden="true"
-                    :class="['icon', competition.health]"
-                  >{{ icons[competition.health] }}</span>
-                  <span>{{ competition.healthName }}</span>
-                </span>
-                <span
-                  v-if="competition.previousFailed"
-                  class="note"
-                >
-                  <span
-                    aria-hidden="true"
-                    class="icon failing"
-                  >{{ icons.failing }}</span>
-                  <span>La anterior tuvo fallos</span>
-                </span>
+                <HealthStatus
+                  :health="competition.health"
+                  :name="competition.healthName"
+                  :previous-failed="competition.previousFailed"
+                />
               </div>
               <IconAction
                 class="relaunch"
@@ -224,26 +207,6 @@ thead th {
   display: inline-block;
   min-height: 1.5rem;
   line-height: 1.5rem;
-}
-.icon {
-  display: inline-block;
-  width: 1.25em;
-  font-weight: 700;
-}
-.ok {
-  color: var(--p-estado-bien);
-}
-.failing {
-  color: var(--p-estado-fallo);
-}
-.pending {
-  color: var(--p-estado-en-marcha);
-}
-.stale {
-  color: var(--p-estado-aviso);
-}
-.never {
-  color: var(--p-estado-sin-datos);
 }
 /* Lo lee el lector de pantalla y no se ve. */
 .visually-hidden {
