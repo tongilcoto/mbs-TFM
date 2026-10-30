@@ -155,8 +155,9 @@ When('elijo la temporada pasada en el selector de la portada', async function (t
   await chooseSeason(this, lastPastSeason(this).label)
 })
 
+// La temporada pasada del escenario, si ya tiene una (en la que juega su equipo, plan R4); si no, una nueva.
 Given('he cambiado la portada de mi club a una temporada pasada', async function (this: ScenarioWorld) {
-  const season = await addPastSeason(this)
+  const season = this.data.pastSeasons.at(-1) ?? (await addPastSeason(this))
   await this.page.goto(this.clubUrl())
   await chooseSeason(this, season.label)
 })

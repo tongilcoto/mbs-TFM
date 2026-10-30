@@ -192,6 +192,8 @@ export interface FakeFederation {
   failCalendar(competition: Competition): void
   /** Desde ahora su calendario vuelve a contestar bien. */
   answerCalendar(competition: Competition): void
+  /** Desde ahora sus goleadores vuelven a contestar bien. */
+  answerScorers(competition: Competition): void
   /** Cuando el calendario retenido ya se ha pedido. */
   heldArrived(competition: Competition): Promise<void>
   /**
@@ -284,6 +286,7 @@ export async function startFakeFederation(port = config.federationPort): Promise
     hold: (competition, skip) => void holds.set(competition.federationGroupId, newHold(skip)),
     failCalendar: (competition) => void failingCalendars.add(competition.federationGroupId),
     answerCalendar: (competition) => void failingCalendars.delete(competition.federationGroupId),
+    answerScorers: (competition) => void failing.delete(competition.federationGroupId),
     // Si ya no está entre las que esperan su petición, es que ya llegó.
     heldArrived: (competition) => holds.get(competition.federationGroupId)?.arrived ?? Promise.resolve(),
     releaseAll: () => {

@@ -177,7 +177,9 @@ export async function lastSynced(club: ScenarioClub, competitionId: string): Pro
 /**
  * Deja la ingesta de la competición en un estado. Parte de «Al día», que es como la deja el enganche.
  *
- * - «Con fallos»: la federación contesta mal a los goleadores, y se lanza una pasada (falla de verdad).
+ * - «Con fallos»: la federación contesta mal a los goleadores, y se lanza una pasada (falla de verdad). Después
+ *   vuelve a contestar bien: el estado es que la última falló, no que la Federación siga fallando (plan R4: volver a
+ *   traer los datos la deja «Al día»).
  * - «En marcha»: se lanza una pasada, y la federación retiene su calendario hasta que acaba el escenario.
  * - «Sin datos todavía» y «Desactualizada»: por la base de datos (abajo).
  */
@@ -194,6 +196,7 @@ export async function setIngestion(
     case 'Con fallos':
       fakeFederation().failScorers(plays)
       await expectApi(club, 'POST', '/ingestion-runs', { competitionIds: [id] }, 502)
+      fakeFederation().answerScorers(plays)
       return
     case 'En marcha': {
       fakeFederation().hold(plays)

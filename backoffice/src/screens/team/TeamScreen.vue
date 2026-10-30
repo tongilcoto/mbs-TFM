@@ -485,46 +485,49 @@ function pickSeason(label: string) {
         <span class="source">Federación</span>
       </div>
 
-      <p
-        v-if="matches.kind === 'loading'"
-        role="status"
-      >
-        Cargando partidos…
-      </p>
-      <LoadError
-        v-else-if="matches.kind === 'error'"
-        :message="matches.error.message"
-        :code="matches.error.code"
-        :retry="matches.error.retry"
-        @retry="reloadMatches"
-      />
-      <div
-        v-else-if="!competition"
-        class="empty"
-      >
-        <p>Este equipo aún no tiene partidos.</p>
-        <p>
-          <RouterLink :to="syncTarget">
-            Sincronizar con la Federación
-          </RouterLink>
+      <!-- Lo de la pestaña, como una zona con su nombre: el lector puede saltar a ella. -->
+      <section aria-label="Resultados">
+        <p
+          v-if="matches.kind === 'loading'"
+          role="status"
+        >
+          Cargando partidos…
         </p>
-      </div>
-      <p
-        v-else-if="rows.length === 0"
-        class="empty"
-      >
-        {{
-          health?.health === 'pending'
-            ? 'Trayendo el calendario de la Federación…'
-            : 'La Federación aún no ha publicado partidos de este equipo.'
-        }}
-      </p>
-      <MatchesTable
-        v-else
-        :rows="rows"
-        :caption="`Partidos de ${heading?.title} en la temporada ${state.season.label}`"
-        :season-label="state.season.label"
-      />
+        <LoadError
+          v-else-if="matches.kind === 'error'"
+          :message="matches.error.message"
+          :code="matches.error.code"
+          :retry="matches.error.retry"
+          @retry="reloadMatches"
+        />
+        <div
+          v-else-if="!competition"
+          class="empty"
+        >
+          <p>Este equipo aún no tiene partidos.</p>
+          <p>
+            <RouterLink :to="syncTarget">
+              Sincronizar con la Federación
+            </RouterLink>
+          </p>
+        </div>
+        <p
+          v-else-if="rows.length === 0"
+          class="empty"
+        >
+          {{
+            health?.health === 'pending'
+              ? 'Trayendo el calendario de la Federación…'
+              : 'La Federación aún no ha publicado partidos de este equipo.'
+          }}
+        </p>
+        <MatchesTable
+          v-else
+          :rows="rows"
+          :caption="`Partidos de ${heading?.title} en la temporada ${state.season.label}`"
+          :season-label="state.season.label"
+        />
+      </section>
     </template>
 
     <NoticeBox
