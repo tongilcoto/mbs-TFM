@@ -3,6 +3,7 @@
      jornada en la pantalla de su competición. -->
 <script setup lang="ts">
 import IconAction from '../../components/IconAction.vue'
+import PositionBadge from '../../components/PositionBadge.vue'
 import { competitionPath } from './header'
 import type { MatchRow } from './matches'
 
@@ -82,10 +83,10 @@ function roundTarget(row: MatchRow) {
         <!-- El puesto, a la izquierda del nombre en los dos equipos, en su óvalo. -->
         <td :class="['team', 'home', { own: row.home.own }]">
           <div class="side">
-            <span
+            <PositionBadge
               v-if="row.home.position"
-              class="position"
-            >{{ row.home.position }}º</span>
+              :position="row.home.position"
+            />
             <span>{{ row.home.name }}</span>
           </div>
         </td>
@@ -111,10 +112,10 @@ function roundTarget(row: MatchRow) {
         </td>
         <td :class="['team', 'away', { own: row.away.own }]">
           <div class="side">
-            <span
+            <PositionBadge
               v-if="row.away.position"
-              class="position"
-            >{{ row.away.position }}º</span>
+              :position="row.away.position"
+            />
             <span>{{ row.away.name }}</span>
           </div>
         </td>
@@ -129,7 +130,7 @@ function roundTarget(row: MatchRow) {
         <template v-if="row.line">
           <!-- El puesto tras la jornada, en el mismo óvalo que el de los equipos. -->
           <td class="number">
-            <span class="position line-position">{{ row.line.position }}º</span>
+            <PositionBadge :position="row.line.position" />
           </td>
           <td class="number strong">
             {{ row.line.points }}
@@ -204,10 +205,6 @@ abbr {
 .own {
   font-weight: 700;
 }
-/* En la columna Pos., solo, sin el hueco que lo separa de un nombre. */
-.line-position {
-  margin-right: 0;
-}
 /* El óvalo junto al nombre entero: si el nombre parte en dos líneas, las dos van a su derecha. */
 .side {
   display: flex;
@@ -216,23 +213,9 @@ abbr {
 .home .side {
   justify-content: flex-end;
 }
-/* El puesto en un óvalo, del ancho de dos cifras, para que los nombres empiecen alineados. */
-.position {
-  display: inline-block;
-  min-width: 2.25rem;
-  flex: none;
+/* El óvalo, a un paso del nombre. */
+.side .position-badge {
   margin-right: 0.375rem;
-  padding: 0 0.375rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  background: var(--p-fondo);
-  color: var(--p-text-muted-color);
-  font-size: 0.75rem;
-  font-style: normal;
-  font-weight: 600;
-  line-height: 1.25rem;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 .result {
   white-space: nowrap;

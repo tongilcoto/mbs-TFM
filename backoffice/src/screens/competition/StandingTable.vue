@@ -2,6 +2,7 @@
      fila del club, resaltada. Ant., el puesto anterior con una flecha de cuánto subió o bajó. La racha, un cuadro por
      partido con el número de su jornada sobre el color del resultado, el más reciente a la izquierda. -->
 <script setup lang="ts">
+import PositionBadge from '../../components/PositionBadge.vue'
 import type { StandingLine } from './round'
 
 defineProps<{ lines: StandingLine[]; caption: string }>()
@@ -71,8 +72,8 @@ function changeText(change: number): string {
         :key="line.position"
         :class="{ own: line.own }"
       >
-        <td class="number strong">
-          {{ line.position }}
+        <td class="number">
+          <PositionBadge :position="line.position" />
         </td>
         <th
           scope="row"
