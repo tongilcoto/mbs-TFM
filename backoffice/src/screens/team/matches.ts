@@ -43,7 +43,14 @@ export interface MatchRow {
   result: ResultCell
   outcome?: Outcome
   line?: OwnLine
+  // La jornada de descanso de un grupo impar: se pinta apagada, con los mismos textos.
+  rest: boolean
 }
+
+// La jornada de descanso (D-105): la RFFM empareja al que descansa con un equipo ficticio, «Equipo Casa (No
+// asignado)» o «Equipo Fuera (No asignado)». El adaptador lo sabe, pero el servidor no lo manda; la web lo reconoce
+// por el nombre, decidido así por el desarrollador a sabiendas de que es una costumbre de la RFFM (R4.12).
+const restDayName = '(No asignado)'
 
 // `today`, la clasificación que ya pidió la cabecera (la de la jornada en curso, o la última con tabla): de ella
 // sale el puesto de hoy de los equipos de los partidos sin jugar, sin pedir nada más (§3.3).
@@ -73,6 +80,7 @@ export function matchRows(matches: Match[], teamId: string, today: Standing[]): 
         result: resultOf(match),
         outcome: played ? outcomeOf(own.score, other.score) : undefined,
         line: played ? lineOf(own) : undefined,
+        rest: other.nameWithLetter.includes(restDayName),
       }
     })
 }

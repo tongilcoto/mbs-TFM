@@ -71,6 +71,7 @@ function roundTarget(row: MatchRow) {
       <tr
         v-for="row in rows"
         :key="row.id"
+        :class="{ rest: row.rest }"
       >
         <td class="number">
           {{ row.round }}
@@ -249,6 +250,15 @@ abbr {
 }
 .D {
   background: var(--p-estado-fallo);
+}
+/* La jornada de descanso, apagada: el fondo de la página, el texto suave y en cursiva. Los textos, los mismos. */
+.rest td {
+  background: var(--p-fondo);
+  color: var(--p-text-muted-color);
+  font-style: italic;
+}
+.rest .own {
+  font-weight: 400;
 }
 /* El icono, de 40 px, ocupa casi toda la altura de la fila. */
 .actions {

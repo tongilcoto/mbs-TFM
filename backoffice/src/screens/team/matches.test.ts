@@ -73,6 +73,7 @@ describe('las filas de la pestaña Resultados', () => {
       result: { kind: 'score', text: '3 - 1' },
       outcome: 'V',
       line: { position: 2, points: 10, won: 1, drawn: 0, lost: 4, goalDifference: '+5' },
+      rest: false,
     })
   })
 
@@ -136,5 +137,15 @@ describe('las filas de la pestaña Resultados', () => {
     const own = { ...m.home, standing: standing(13, { goalsFor: 7, goalsAgainst: 13 }) }
 
     expect(matchRows([{ ...m, home: own }], OWN, today)[0]!.line?.goalDifference).toBe('−6')
+  })
+
+  test('la jornada de descanso: el rival ficticio de la RFFM, juegue en casa o fuera (D-105)', () => {
+    const rest = (name: string, ownHome: boolean) => {
+      const m = match(8, { ownHome })
+      return ownHome ? { ...m, away: { ...m.away, nameWithLetter: name } } : { ...m, home: { ...m.home, nameWithLetter: name } }
+    }
+    const rows = matchRows([rest('Equipo Fuera (No asignado)', true), rest('Equipo Casa (No asignado)', false), match(9)], OWN, today)
+
+    expect(rows.map((r) => r.rest)).toEqual([true, true, false])
   })
 })
