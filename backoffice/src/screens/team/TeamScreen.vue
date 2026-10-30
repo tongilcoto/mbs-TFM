@@ -46,7 +46,7 @@ type State =
 // clasificación de la que sale (`table`): da el puesto de hoy de los partidos sin jugar (§3.3).
 type Position =
   | { kind: 'loading' }
-  | { kind: 'none'; table: Standing[] }
+  | { kind: 'none'; table: Standing[]; round?: number }
   | { kind: 'found'; position: number; of: number; round: number; table: Standing[] }
 
 // Los partidos de la temporada, también por separado: si fallan, la cabecera se queda (§3.3).
@@ -84,7 +84,9 @@ const rows = computed(() =>
     ? matchRows(
         matches.value.matches.filter((match) => match.competitionId === chosenId.value),
         teamId.value,
-        position.value.kind === 'loading' ? [] : position.value.table,
+        position.value.kind === 'loading' || position.value.round === undefined
+          ? undefined
+          : { round: position.value.round, table: position.value.table },
       )
     : [],
 )
@@ -212,7 +214,7 @@ async function findPosition(competitionId: string, signal: AbortSignal): Promise
     if (!table.ok) return table
     if (table.data.length === 0) continue
     const found = positionIn(table.data, teamId.value)
-    return ok(found ? { kind: 'found', ...found, round: round.number, table: table.data } : { kind: 'none', table: table.data })
+    return ok(found ? { kind: 'found', ...found, round: round.number, table: table.data } : { kind: 'none', table: table.data, round: round.number })
   }
   return ok({ kind: 'none', table: [] })
 }

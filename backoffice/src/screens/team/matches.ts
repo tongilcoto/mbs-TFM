@@ -7,8 +7,9 @@ type MatchTeam = components['schemas']['MatchTeam']
 type Standing = components['schemas']['StandingResponse']
 
 // Un equipo del partido: el nombre de su club y su letra (decisión 1), su puesto al lado y si es el de la ficha. El
-// puesto es **con el que llega al partido** (enmienda a D-112, pedida al revisar R4.12): en los jugados, el de la
-// jornada anterior, y ninguno en la primera; en los que faltan, el de hoy.
+// puesto es **con el que llega al partido**, el de la clasificación de la jornada anterior (enmienda a D-112, pedida
+// al revisar R4.12): ninguno en la primera. En los que faltan, solo en la jornada siguiente a la última con tabla;
+// más allá, nadie sabe todavía con qué puesto se llegará.
 export interface SideCell {
   name: string
   position?: number
@@ -54,20 +55,28 @@ export interface MatchRow {
 // por el nombre, decidido así por el desarrollador a sabiendas de que es una costumbre de la RFFM (R4.12).
 const restDayName = '(No asignado)'
 
-// `today`, la clasificación que ya pidió la cabecera (la de la jornada en curso, o la última con tabla): de ella
-// sale el puesto de hoy de los equipos de los partidos sin jugar, sin pedir nada más (§3.3).
-//
+// La última clasificación que hay, la que ya pidió la cabecera, y su jornada: da el puesto de los partidos de la
+// jornada siguiente, que aún no se han jugado, sin pedir nada más (§3.3).
+export interface LatestTable {
+  round: number
+  table: Standing[]
+}
+
 // En orden de jornada, no de fecha: el servidor los da por fecha, y un aplazado se iría a su fecha nueva; se queda
 // en la fila de su jornada (decisión 6).
-export function matchRows(matches: Match[], teamId: string, today: Standing[]): MatchRow[] {
-  const todayPositions = new Map(today.map((row) => [row.team.teamId, row.position]))
+export function matchRows(matches: Match[], teamId: string, latest?: LatestTable): MatchRow[] {
+  const latestPositions = new Map((latest?.table ?? []).map((row) => [row.team.teamId, row.position]))
   return [...matches]
     .sort((a, b) => a.roundNumber - b.roundNumber || a.matchDate.localeCompare(b.matchDate))
     .map((match) => {
       const played = match.status === 'finalizado'
       const side = (team: MatchTeam): SideCell => ({
         name: team.nameWithLetter,
-        position: played ? (team.standing?.previousPosition ?? undefined) : todayPositions.get(team.teamId),
+        position: played
+          ? (team.standing?.previousPosition ?? undefined)
+          : match.roundNumber === (latest?.round ?? 0) + 1
+            ? latestPositions.get(team.teamId)
+            : undefined,
         own: team.teamId === teamId,
       })
       const own = match.home.teamId === teamId ? match.home : match.away

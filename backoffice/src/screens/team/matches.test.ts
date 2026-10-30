@@ -55,11 +55,14 @@ function played(round: number, ownScore: number, otherScore: number, ownHome = t
   }
 }
 
-// La clasificación de hoy, la que pidió la cabecera: el propio 4º y el rival 9º.
-const today = [
-  { team: { teamId: OWN }, position: 4 },
-  { team: { teamId: 'rival' }, position: 9 },
-] as Standing[]
+// La última clasificación, la que pidió la cabecera, de la jornada 5: el propio 4º y el rival 9º.
+const today = {
+  round: 5,
+  table: [
+    { team: { teamId: OWN }, position: 4 },
+    { team: { teamId: 'rival' }, position: 9 },
+  ] as Standing[],
+}
 
 describe('las filas de la pestaña Resultados', () => {
   test('en orden de jornada, aunque lleguen por fecha', () => {
@@ -99,7 +102,7 @@ describe('las filas de la pestaña Resultados', () => {
     expect(matchRows([played(1, 2, 0, false)], OWN, today)[0]!.result).toEqual({ kind: 'score', text: '0 - 2' })
   })
 
-  test('por jugar con hora: la hora, sin letra ni línea, y el puesto de hoy de cada uno', () => {
+  test('por jugar con hora, en la jornada siguiente a la última tabla: la hora, sin letra ni línea, y el puesto de hoy de cada uno', () => {
     const [row] = matchRows([match(6, { kickoffTime: '12:00:00', isKickoffConfirmed: true })], OWN, today)
 
     expect(row!.result).toEqual({ kind: 'time', text: '12:00' })
@@ -112,8 +115,20 @@ describe('las filas de la pestaña Resultados', () => {
     expect(matchRows([match(7)], OWN, today)[0]!.result).toEqual({ kind: 'unset' })
   })
 
-  test('sin clasificación de hoy, sin puesto', () => {
-    const [row] = matchRows([match(1)], OWN, [])
+  test('por jugar más allá de la jornada siguiente: sin puesto, todavía no se sabe con cuál se llegará', () => {
+    const rows = matchRows([match(7), match(12)], OWN, today)
+
+    expect(rows.flatMap((r) => [r.home.position, r.away.position])).toEqual([undefined, undefined, undefined, undefined])
+  })
+
+  test('un aplazado de una jornada ya pasada, sin jugar: sin puesto', () => {
+    const [row] = matchRows([match(3, { status: 'aplazado' })], OWN, today)
+
+    expect([row!.home.position, row!.away.position]).toEqual([undefined, undefined])
+  })
+
+  test('sin ninguna clasificación todavía, sin puesto', () => {
+    const [row] = matchRows([match(1)], OWN, undefined)
 
     expect([row!.home.position, row!.away.position]).toEqual([undefined, undefined])
   })
