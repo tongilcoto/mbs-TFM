@@ -79,13 +79,15 @@ function roundTarget(row: MatchRow) {
         <td class="date">
           {{ row.date }}
         </td>
-        <!-- En espejo: el puesto del local a su izquierda y el del visitante a su derecha. -->
+        <!-- El puesto, a la izquierda del nombre en los dos equipos, en su óvalo. -->
         <td :class="['team', 'home', { own: row.home.own }]">
-          <span
-            v-if="row.home.position"
-            class="position"
-          >{{ row.home.position }}º</span>
-          <span>{{ row.home.name }}</span>
+          <div class="side">
+            <span
+              v-if="row.home.position"
+              class="position"
+            >{{ row.home.position }}º</span>
+            <span>{{ row.home.name }}</span>
+          </div>
         </td>
         <td class="result center">
           <template v-if="row.result.kind === 'score' || row.result.kind === 'time'">
@@ -108,11 +110,13 @@ function roundTarget(row: MatchRow) {
           </template>
         </td>
         <td :class="['team', 'away', { own: row.away.own }]">
-          <span>{{ row.away.name }}</span>
-          <span
-            v-if="row.away.position"
-            class="position"
-          >{{ row.away.position }}º</span>
+          <div class="side">
+            <span
+              v-if="row.away.position"
+              class="position"
+            >{{ row.away.position }}º</span>
+            <span>{{ row.away.name }}</span>
+          </div>
         </td>
         <td>
           <!-- La letra, siempre: el color no es lo único que lo dice (LLD-B §9.4). -->
@@ -199,16 +203,31 @@ abbr {
 .own {
   font-weight: 700;
 }
+/* El óvalo junto al nombre entero: si el nombre parte en dos líneas, las dos van a su derecha. */
+.side {
+  display: flex;
+  align-items: flex-start;
+}
+.home .side {
+  justify-content: flex-end;
+}
+/* El puesto en un óvalo, del ancho de dos cifras, para que los nombres empiecen alineados. */
 .position {
-  font-size: 0.8125rem;
-  font-weight: 400;
-  color: var(--p-text-muted-color);
-}
-.away .position {
-  margin-left: 0.375rem;
-}
-.home .position {
+  display: inline-block;
+  min-width: 2.25rem;
+  flex: none;
   margin-right: 0.375rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  background: var(--p-fondo);
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.25rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 .result {
   white-space: nowrap;
