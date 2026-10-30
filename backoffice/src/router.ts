@@ -3,6 +3,7 @@ import HomeScreen from './screens/home/HomeScreen.vue'
 import NewTeamScreen from './screens/new-team/NewTeamScreen.vue'
 import NotFoundScreen from './screens/not-found/NotFoundScreen.vue'
 import SyncTeamScreen from './screens/sync-team/SyncTeamScreen.vue'
+import TeamScreen from './screens/team/TeamScreen.vue'
 
 // Lo que cada pantalla pone delante del nombre del club en la pestaña del navegador (LLD-B §10.2).
 declare module 'vue-router' {
@@ -21,6 +22,11 @@ export const router = createRouter({
     { path: '/equipos/nuevo', component: NewTeamScreen, meta: { title: 'Alta de equipo' } },
     // El enganche, en dos pasos en el mismo camino (plan R3, decisión 2).
     { path: '/equipos/:id/federacion', component: SyncTeamScreen, meta: { title: 'Sincronizar con la Federación' } },
+    // La ficha del equipo, con la temporada en el camino (plan R4, decisión 3; LLD-B §6.4 y §6.5). Sin pestaña, la
+    // de Resultados; sin temporada, la pantalla pone la que toca en cuanto sabe cuáles hay.
+    { path: '/temporadas/:temporada/equipos/:id/resultados', component: TeamScreen, meta: { title: 'Resultados' } },
+    { path: '/temporadas/:temporada/equipos/:id', redirect: (to) => `${to.path.replace(/\/$/, '')}/resultados` },
+    { path: '/equipos/:id', component: TeamScreen, meta: { title: 'Resultados' } },
     // Cualquier otro camino (LLD-B §6.7).
     { path: '/:anything(.*)*', component: NotFoundScreen, meta: { title: 'Esta página no existe' } },
   ],
