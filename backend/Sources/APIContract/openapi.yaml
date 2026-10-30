@@ -5590,8 +5590,9 @@ components:
       type: object
       description: |
         **Un equipo en la clasificación de una jornada, recortado a lo que cabe en la fila de un partido** (D-112).
-        No es un recurso: es una proyección de `StandingResponse`, sin su `team` (es el lado del partido), sin
-        la racha ni el puesto anterior (D-34).
+        No es un recurso: es una proyección de `StandingResponse`, sin su `team` (es el lado del partido) y sin
+        la racha (D-34). **Con el puesto anterior** (enmienda a D-112): es el puesto con el que cada equipo llegó
+        al partido, y eso sí varía en cada fila del calendario de un equipo.
       required: [position, played, won, drawn, lost, goalsFor, goalsAgainst, points]
       properties:
         position:
@@ -5599,6 +5600,15 @@ components:
           minimum: 1
           readOnly: true
           examples: [2]
+        previousPosition:
+          type: [integer, 'null']
+          minimum: 1
+          readOnly: true
+          description: |
+            El puesto en la jornada anterior: **con el que el equipo llegó al partido** (enmienda a D-112). El
+            mismo dato que `StandingResponse.previousPosition`, guardado y no derivado (D-33). **Nulo** en la
+            primera jornada de la competición y en la primera ingerida de un alta tardía.
+          examples: [3]
         played:
           type: integer
           minimum: 0

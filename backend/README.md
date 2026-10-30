@@ -605,8 +605,8 @@ curl -s "http://atleti.localhost:8080/v1/matches?roundId=<id de la jornada>" | j
 - **Cada partido**: su jornada (`roundNumber`), la fecha como día y la hora como `HH:MM` (sin ella si la Federación no
   la ha fijado), el estado, el campo y el código del acta.
 - **Cada lado** (`home`, `away`): el equipo, con los nombres de su club como en la clasificación, su marcador (sin él
-  si no se ha jugado) y **`standing`, su fila de la clasificación de esa jornada** (`D-112`): puesto, J, G, E, P,
-  goles y puntos. **Si la jornada no tiene tabla, `standing` no viene** (los nulos no viajan, LLD-B §3.8).
+  si no se ha jugado) y **`standing`, su fila de la clasificación de esa jornada** (`D-112`): puesto, el puesto
+  anterior (con el que llegó al partido; sin él en la jornada 1), J, G, E, P, goles y puntos. **Si la jornada no tiene tabla, `standing` no viene** (los nulos no viajan, LLD-B §3.8).
 - **404 con el código de su ámbito**: `ROUND_NOT_FOUND`, `COMPETITION_NOT_FOUND`, `TEAM_NOT_FOUND` o
   `SEASON_NOT_FOUND`; **400 `INVALID_UUID`** si un id no es un UUID.
 ---
