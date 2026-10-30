@@ -127,8 +127,9 @@ function roundTarget(row: MatchRow) {
           >{{ row.outcome }}</abbr>
         </td>
         <template v-if="row.line">
-          <td class="number strong">
-            {{ row.line.position }}º
+          <!-- El puesto tras la jornada, en el mismo óvalo que el de los equipos. -->
+          <td class="number">
+            <span class="position line-position">{{ row.line.position }}º</span>
           </td>
           <td class="number strong">
             {{ row.line.points }}
@@ -202,6 +203,10 @@ abbr {
 /* El de la ficha, resaltado. */
 .own {
   font-weight: 700;
+}
+/* En la columna Pos., solo, sin el hueco que lo separa de un nombre. */
+.line-position {
+  margin-right: 0;
 }
 /* El óvalo junto al nombre entero: si el nombre parte en dos líneas, las dos van a su derecha. */
 .side {
