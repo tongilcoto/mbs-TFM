@@ -30,9 +30,9 @@ function theRound(world: ScenarioWorld): Round {
   return roundNumbered(theCompetition(world), world.data.round)
 }
 
-/** Abre la pantalla en una jornada (o sin ella) y espera a que salga. */
+/** Abre la pantalla en una jornada (o sin ella: la última jugada) y espera a que salga. */
 async function openCompetition(world: ScenarioWorld, round?: number) {
-  world.data.round = round ?? currentRound(theCompetition(world)).number
+  world.data.round = round ?? playedRounds(theCompetition(world)).length
   const query = round === undefined ? '' : `?jornada=${round}`
   await world.page.goto(world.clubUrl(`${competitionPath(theCompetition(world).id!)}${query}`))
   await roundShown(world)
@@ -68,7 +68,7 @@ Given(
 
 Given('estoy en la pantalla de la competición del equipo de mi club que ha jugado, en la jornada en curso', async function (this: ScenarioWorld) {
   await addTeamThatPlayed(this)
-  await openCompetition(this)
+  await openCompetition(this, currentRound(theCompetition(this)).number)
 })
 
 Given('la petición de las jornadas de la competición del equipo está retenida', async function (this: ScenarioWorld) {
@@ -79,7 +79,7 @@ Given('la petición de las jornadas de la competición del equipo está retenida
 // ── Lo que se hace ───────────────────────────────────────────────────────────────────────────────────────────
 
 When('abro la pantalla de la competición del equipo, sin jornada', async function (this: ScenarioWorld) {
-  this.data.round = currentRound(theCompetition(this)).number
+  this.data.round = playedRounds(theCompetition(this)).length
   await this.page.goto(this.clubUrl(competitionPath(theCompetition(this).id!)))
   await this.page.locator('h1').first().waitFor()
 })
@@ -147,8 +147,8 @@ async function onRound(world: ScenarioWorld, withQuery = true) {
   await world.check('el selector', () => contains(world.page, () => roundPicker(world).innerText(), roundLabel(round), 'el selector'))
 }
 
-Then('estoy en la jornada en curso de la competición del equipo', async function (this: ScenarioWorld) {
-  this.data.round = currentRound(theCompetition(this)).number
+Then('estoy en la última jornada jugada de la competición del equipo', async function (this: ScenarioWorld) {
+  this.data.round = playedRounds(theCompetition(this)).length
   await roundShown(this)
   await onRound(this, false)
 })
@@ -167,8 +167,9 @@ Then('el título de la pantalla de la competición dice su división y su grupo'
   await this.check('el título', () => shows(this.page.getByRole('heading', { level: 1, name, exact: true }), `el título «${name}»`))
 })
 
-Then('el selector de jornada tiene elegida la jornada en curso, con sus fechas', async function (this: ScenarioWorld) {
-  const label = roundLabel(currentRound(theCompetition(this)))
+Then('el selector de jornada tiene elegida la última jornada jugada, con sus fechas', async function (this: ScenarioWorld) {
+  const plays = theCompetition(this)
+  const label = roundLabel(roundNumbered(plays, playedRounds(plays).length))
   await this.check('el selector', () => contains(this.page, () => roundPicker(this).innerText(), label, 'el selector'))
 })
 

@@ -29,12 +29,10 @@ export function roundOptions(rounds: Round[]): { value: number; label: string }[
     .map((round) => ({ value: round.number, label: `Jornada ${round.number} · ${formatDayRange(round.startDate, round.endDate)}` }))
 }
 
-// La jornada que se enseña: la de la dirección (`?jornada=5`); sin ella, la en curso, y si la competición terminó,
-// la última. `unknown`, si la de la dirección no existe o no es un número.
-export function chooseRound(rounds: Round[], asked: string | undefined): Round | 'unknown' | undefined {
-  if (asked !== undefined) return rounds.find((round) => String(round.number) === asked) ?? 'unknown'
-  const byNumber = [...rounds].sort((a, b) => a.number - b.number)
-  return byNumber.find((round) => round.isCurrent) ?? byNumber.at(-1)
+// La jornada de la dirección (`?jornada=5`). `unknown`, si no existe o no es un número. Sin jornada en la dirección,
+// la pantalla busca la de la última clasificación, desde la en curso hacia atrás (`roundsToLookIn`, §3.4).
+export function askedRound(rounds: Round[], asked: string): Round | 'unknown' {
+  return rounds.find((round) => String(round.number) === asked) ?? 'unknown'
 }
 
 // ── Los partidos de la jornada ──

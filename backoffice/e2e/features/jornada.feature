@@ -5,15 +5,16 @@
 # Vocabulario de los pasos:
 # - «la pantalla de la competición»: la de jornada y clasificación.
 # - «la jornada en curso»: la que el servidor marca como tal (`isCurrent`), la primera sin jugar.
+# - «la última jornada jugada»: la más reciente que tiene clasificación; la misma de la caja Posición de la ficha.
 # - «una jornada jugada»: una de las que tienen marcador y clasificación, elegida al azar.
 Feature: La jornada y la clasificación de una competición
 
   @ui
-  Scenario: La pantalla de la competición, abierta sin jornada, enseña la jornada en curso
+  Scenario: La pantalla de la competición, abierta sin jornada, enseña la última jornada jugada
     Given en la temporada en curso de mi club juega un equipo en una competición con jornadas jugadas
     When abro la pantalla de la competición del equipo, sin jornada
     Then el título de la pantalla de la competición dice su división y su grupo
-    And el selector de jornada tiene elegida la jornada en curso, con sus fechas
+    And el selector de jornada tiene elegida la última jornada jugada, con sus fechas
 
   @ui
   Scenario: Los partidos de una jornada jugada, partido a partido

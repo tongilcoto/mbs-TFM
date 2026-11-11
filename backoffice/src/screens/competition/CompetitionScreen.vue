@@ -10,15 +10,16 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
-import { asResult } from '../../api/result'
+import { asResult, type Result } from '../../api/result'
 import type { components } from '../../api/schema'
 import LoadError from '../../components/LoadError.vue'
 import { competitionLabel } from '../../theme/names'
 import { isTeamCode } from '../sync-team/link'
 import { type Season, toAddress } from '../home/seasons'
+import { roundsToLookIn } from '../team/header'
 import RoundMatchesTable from './RoundMatchesTable.vue'
 import StandingTable from './StandingTable.vue'
-import { chooseRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
+import { askedRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
 
 type Competition = components['schemas']['CompetitionResponse']
 type Round = components['schemas']['RoundResponse']
@@ -115,27 +116,56 @@ async function loadCompetition() {
   }
 }
 
-// La jornada de la dirección, o la que toca: sus partidos y su clasificación, a la vez.
+// La jornada de la dirección, o la que toca: sus partidos y su clasificación.
 async function loadRound(signal = startRequest()) {
   if (state.value.kind !== 'ready') return
-  const asked = typeof route.query.jornada === 'string' ? route.query.jornada : undefined
-  const chosen = chooseRound(state.value.rounds, asked)
-  if (chosen === undefined) {
+  const rounds = state.value.rounds
+  if (rounds.length === 0) {
     shown.value = { kind: 'none' }
     return
   }
-  if (chosen === 'unknown') {
+  const asked = typeof route.query.jornada === 'string' ? route.query.jornada : undefined
+  const found = asked === undefined ? undefined : askedRound(rounds, asked)
+  if (found === 'unknown') {
     shown.value = { kind: 'unknown', asked: asked! }
     return
   }
   shown.value = { kind: 'loading' }
   try {
-    const [matches, table] = await Promise.all([
-      asResult(api.GET('/matches', { params: { query: { roundId: chosen.id, perPage: 100 } }, signal })),
-      asResult(api.GET('/standings', { params: { query: { roundId: chosen.id } }, signal })),
-    ])
+    const matchesOf = (round: Round) =>
+      asResult(api.GET('/matches', { params: { query: { roundId: round.id, perPage: 100 } }, signal }))
+    let chosen: Round
+    let table: Result<Standing[]>
+    let matches: Result<{ data: Match[] }> | undefined
+    if (found) {
+      // La pedida: sus partidos y su clasificación, a la vez.
+      chosen = found
+      ;[table, matches] = await Promise.all([
+        asResult(api.GET('/standings', { params: { query: { roundId: chosen.id } }, signal })),
+        matchesOf(chosen),
+      ])
+    } else {
+      // Sin jornada en la dirección, la de la última clasificación: desde la en curso hacia atrás, como la caja
+      // Posición de la ficha (§3.4). Si ninguna la tiene todavía, la en curso; si la competición terminó, desde la
+      // última.
+      const candidates = roundsToLookIn(rounds)
+      chosen = candidates[0]!
+      table = { ok: true, data: [] }
+      for (const candidate of candidates) {
+        const answer = await asResult(api.GET('/standings', { params: { query: { roundId: candidate.id } }, signal }))
+        if (!answer.ok || answer.data.length > 0) {
+          chosen = candidate
+          table = answer
+          break
+        }
+      }
+    }
+    if (!table.ok) {
+      shown.value = { kind: 'error', error: table.error }
+      return
+    }
+    matches ??= await matchesOf(chosen)
     if (!matches.ok) shown.value = { kind: 'error', error: matches.error }
-    else if (!table.ok) shown.value = { kind: 'error', error: table.error }
     else shown.value = { kind: 'round', round: chosen, matches: matches.data.data, table: table.data }
   } catch (error) {
     if (signal.aborted) return
@@ -258,7 +288,7 @@ function goTo(number: number | undefined) {
     >
       <p>
         <RouterLink :to="{ query: {} }">
-          Ir a la jornada en curso
+          Ir a la última jornada jugada
         </RouterLink>
       </p>
     </LoadError>

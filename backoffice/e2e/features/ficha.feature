@@ -63,10 +63,10 @@ Feature: La ficha del equipo
     Then se abre el paso 1 de sincronizar el equipo de mi club inscrito sin competición
 
   @e2e
-  Scenario: En la ficha, la competición lleva a su jornada en curso y su clasificación
+  Scenario: En la ficha, la competición lleva a su última jornada jugada y su clasificación
     Given estoy en la ficha del equipo de mi club que ha jugado
     When pulso la competición en la caja de la competición
-    Then estoy en la jornada en curso de la competición del equipo
+    Then estoy en la última jornada jugada de la competición del equipo
 
   # ── Relanzar la ingesta desde la ficha (decisión 7) ──
 

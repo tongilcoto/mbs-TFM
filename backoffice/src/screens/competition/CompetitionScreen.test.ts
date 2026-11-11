@@ -81,7 +81,7 @@ const standingRow = (position: number, name: string, isOwn = false) => ({
 })
 
 // El servidor de mentira. Solo la jornada 1 tiene clasificación. Apunta lo que se le pidió.
-function fakeServer(fields: { rounds?: unknown[]; failStandings?: boolean } = {}) {
+function fakeServer(fields: { rounds?: unknown[]; failStandings?: boolean; noTables?: boolean } = {}) {
   const asked: string[] = []
   vi.stubGlobal('fetch', async (request: Request) => {
     const url = new URL(request.url)
@@ -101,7 +101,7 @@ function fakeServer(fields: { rounds?: unknown[]; failStandings?: boolean } = {}
     if (path === '/standings') {
       if (fields.failStandings) return Response.json({ code: 'DATABASE_UNAVAILABLE', status: 503 }, { status: 503 })
       return Response.json(
-        url.searchParams.get('roundId') === 'j1' ? [standingRow(2, 'COLEGIO EL PRADO A'), standingRow(1, 'Celtic Castilla A', true)] : [],
+        url.searchParams.get('roundId') === 'j1' && !fields.noTables ? [standingRow(2, 'COLEGIO EL PRADO A'), standingRow(1, 'Celtic Castilla A', true)] : [],
       )
     }
     throw new Error(`Petición no esperada: ${path}`)
@@ -143,14 +143,41 @@ const next = () => screen.getByRole('button', { name: 'Siguiente ›' })
 afterEach(() => vi.unstubAllGlobals())
 
 describe('la jornada que se enseña', () => {
-  test('sin jornada en la dirección, la en curso; con la competición arriba, su edad, género, modalidad y temporada', async () => {
-    fakeServer()
+  test('sin jornada en la dirección, la de la última clasificación; con la competición arriba, su edad, género, modalidad y temporada', async () => {
+    const asked = fakeServer()
     await openCompetition()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'PREFERENTE CADETE · Grupo 2' })).toBeInTheDocument()
     expect(screen.getByText('Cadete · Masculino · Fútbol 11 · 2026/27')).toBeInTheDocument()
-    await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 2 · 2 – 3 oct'))
+    await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 1 · 1 – 2 oct'))
+    expect(screen.getByRole('table', { name: 'Clasificación tras la jornada 1' })).toBeInTheDocument()
     expect(screen.getByText('Federación')).toBeInTheDocument()
+    // Desde la en curso hacia atrás, y los partidos solo de la que se enseña.
+    expect(asked.filter((a) => a.startsWith('/standings') || a.startsWith('/matches'))).toEqual([
+      '/standings?roundId=j2',
+      '/standings?roundId=j1',
+      '/matches?roundId=j1&perPage=100',
+    ])
+  })
+
+  test('sin jornada en la dirección y sin ninguna clasificación todavía, la en curso', async () => {
+    fakeServer({ noTables: true })
+    await openCompetition()
+
+    await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 2 · 2 – 3 oct'))
+    expect(await screen.findByText('Esta jornada aún no tiene clasificación.')).toBeInTheDocument()
+  })
+
+  test('sin jornada en la dirección y con la competición terminada, desde la última hacia atrás', async () => {
+    const asked = fakeServer({ rounds: rounds.map((r) => ({ ...r, isCurrent: false })) })
+    await openCompetition()
+
+    await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 1 · 1 – 2 oct'))
+    expect(asked.filter((a) => a.startsWith('/standings'))).toEqual([
+      '/standings?roundId=j3',
+      '/standings?roundId=j2',
+      '/standings?roundId=j1',
+    ])
   })
 
   test('con ?jornada=, esa; sus partidos, el del club señalado, y su clasificación por puesto', async () => {
@@ -174,18 +201,18 @@ describe('la jornada que se enseña', () => {
 
   test('una jornada sin clasificación todavía: los partidos y el aviso', async () => {
     fakeServer()
-    await openCompetition()
+    await openCompetition(`/temporadas/2026-27/competiciones/${LIGA}?jornada=2`)
 
     expect(await screen.findByText('Esta jornada aún no tiene clasificación.')).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Partidos de la jornada 2' })).toBeInTheDocument()
   })
 
-  test('una jornada que la competición no tiene: el error y el enlace a la en curso', async () => {
+  test('una jornada que la competición no tiene: el error y el enlace a la última jugada', async () => {
     fakeServer()
     await openCompetition(`/temporadas/2026-27/competiciones/${LIGA}?jornada=40`)
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No hay ninguna jornada 40 en esta competición')
-    expect(screen.getByRole('link', { name: 'Ir a la jornada en curso' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ir a la última jornada jugada' })).toBeInTheDocument()
   })
 
   test('sin jornadas: la Federación aún no ha publicado el calendario', async () => {
@@ -199,7 +226,7 @@ describe('la jornada que se enseña', () => {
 describe('moverse entre jornadas', () => {
   test('«Siguiente» y «Anterior» cambian la dirección, y solo se piden los partidos y la clasificación', async () => {
     const asked = fakeServer()
-    const router = await openCompetition()
+    const router = await openCompetition(`/temporadas/2026-27/competiciones/${LIGA}?jornada=2`)
     await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 2'))
 
     await fireEvent.click(next())
@@ -215,7 +242,7 @@ describe('moverse entre jornadas', () => {
 
   test('el selector abre la jornada elegida', async () => {
     fakeServer()
-    const router = await openCompetition()
+    const router = await openCompetition(`/temporadas/2026-27/competiciones/${LIGA}?jornada=2`)
     await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 2'))
 
     await fireEvent.click(roundPicker())

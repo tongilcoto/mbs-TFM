@@ -171,8 +171,10 @@ jornada**, la más reciente a la izquierda. Descartadas las dos tablas lado a la
 
 - **Arriba**: «← Volver» (a donde se estaba: la ficha del equipo, si se vino de ella), la competición y el grupo
   («PREFERENTE CADETE · Grupo 2»), y debajo la edad, el género, la modalidad y la temporada.
-- **La jornada que se enseña** es la en curso (`isCurrent`), o la última si la competición terminó. **Si se llega
-  desde ☰**, la de ese partido. La jornada no va en el camino (decisión 3): va detrás de `?` (`?jornada=22`), para
+- **La jornada que se enseña** es la de la última clasificación: desde la en curso (`isCurrent`) hacia atrás, la
+  primera que tiene tabla, la misma de la caja Posición de la ficha (§3.2); si ninguna la tiene todavía, la en
+  curso, y si la competición terminó, desde la última. *Cambiado en R4.15*: abría la en curso, la siguiente por
+  jugar, que aún no tiene clasificación. **Si se llega desde ☰**, la de ese partido, se haya jugado o no. La jornada no va en el camino (decisión 3): va detrás de `?` (`?jornada=22`), para
   que recargar deje en la misma.
 - **«‹ Anterior» · un selector de jornada · «Siguiente ›»**, con la etiqueta «Federación» al lado. El selector dice
   cada jornada con sus fechas («Jornada 5 · 24 – 25 oct»), y no está en el boceto: con 30 jornadas ahorra clics.
@@ -356,7 +358,7 @@ escenarios, con las etiquetas `@e2e` y `@ui` y axe en los dos modos.
 
 **Jornada y clasificación** (§3.4)
 
-- Abre en la jornada en curso, con sus partidos y su clasificación; el club resaltado.
+- Abre en la última jornada jugada, con sus partidos y su clasificación; el club resaltado.
 - *Anterior* y *Siguiente*, y bloqueados en los extremos.
 - Recargar deja en la misma jornada.
 - Una jornada sin clasificación todavía.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { components } from '../../api/schema'
-import { chooseRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
+import { askedRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
 
 type Competition = components['schemas']['CompetitionResponse']
 type Round = components['schemas']['RoundResponse']
@@ -46,26 +46,14 @@ describe('el selector de jornada', () => {
   })
 })
 
-describe('qué jornada se enseña', () => {
-  test('la de la dirección', () => {
-    expect(chooseRound(rounds, '3')).toMatchObject({ number: 3 })
-  })
-
-  test('sin ella, la en curso', () => {
-    expect(chooseRound(rounds, undefined)).toMatchObject({ number: 2 })
-  })
-
-  test('sin jornada en curso, la competición terminó: la última', () => {
-    expect(chooseRound(rounds.map((r) => ({ ...r, isCurrent: false })), undefined)).toMatchObject({ number: 3 })
+describe('la jornada de la dirección', () => {
+  test('la que se pide', () => {
+    expect(askedRound(rounds, '3')).toMatchObject({ number: 3 })
   })
 
   test('una que no existe, o que no es un número', () => {
-    expect(chooseRound(rounds, '40')).toBe('unknown')
-    expect(chooseRound(rounds, 'abc')).toBe('unknown')
-  })
-
-  test('sin jornadas, ninguna', () => {
-    expect(chooseRound([], undefined)).toBeUndefined()
+    expect(askedRound(rounds, '40')).toBe('unknown')
+    expect(askedRound(rounds, 'abc')).toBe('unknown')
   })
 })
 
