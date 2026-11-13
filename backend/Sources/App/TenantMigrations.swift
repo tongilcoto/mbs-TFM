@@ -113,6 +113,9 @@ public enum TenantMigrations {
             // `D-106`: la temporada puede nacer sin código de la federación. Al
             // final de lo que altera, que es su único requisito de orden ([D-90]).
             AllowSeasonWithoutFederationCode(),
+            // `D-114`: el partido sabe si es un descanso. Al final de lo que
+            // altera, que es su único requisito de orden ([D-90]).
+            AddRestDayToMatches(),
         ]
     }
 }

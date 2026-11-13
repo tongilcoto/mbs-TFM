@@ -504,8 +504,10 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
   (`federationTeamId`) de cada una.
 - **Cada competición trae `summary`, cómo le va al equipo en ella** (`D-113`, rebanada 5): `position` y `form` (la
   racha, las últimas 5 jornadas con el descanso como una más, `D-114`) de la última clasificación; `lastMatch` y
-  `nextMatch`, con la forma de `/matches`; y `nextOpponentPosition`. **Hasta R5.5 llega vacío** (todo nulo y la
-  racha sin elementos): el catálogo ya lo tiene y el cálculo llega en ese paso.
+  `nextMatch`, con la forma de `/matches` (el próximo puede ser el descanso, el partido contra el ficticio); y
+  `nextOpponentPosition`, el puesto del rival en la última clasificación. **La última clasificación** es la de la
+  jornada más alta que tiene tabla. Sin clasificación, sin partidos jugados o con todo jugado, la parte que falta
+  sale nula (y la racha, vacía).
 - **Un equipo inscrito sin competición todavía** (el estado de junio) sale con `competitions` vacía.
 - Solo equipos **propios**. Ordenados por categoría, de menor a mayor edad, y por letra.
 - `team.clubName` es el **nombre corto** del club, y `team.displayName`, «nombre corto + categoría + letra»

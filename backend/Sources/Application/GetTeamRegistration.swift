@@ -9,17 +9,20 @@ public struct GetTeamRegistration: Sendable {
     private let seasons: any SeasonRepository
     private let teams: any TeamRepository
     private let registrations: any TeamRegistrationRepository
+    private let summaries: CompetitionSummaries
 
     public init(
         clubs: any ClubRepository,
         seasons: any SeasonRepository,
         teams: any TeamRepository,
-        registrations: any TeamRegistrationRepository
+        registrations: any TeamRegistrationRepository,
+        summaries: CompetitionSummaries
     ) {
         self.clubs = clubs
         self.seasons = seasons
         self.teams = teams
         self.registrations = registrations
+        self.summaries = summaries
     }
 
     public func execute(actor: ActorContext, teamID: TeamID, seasonID: SeasonID) async throws -> TeamInSeason {
@@ -40,7 +43,10 @@ public struct GetTeamRegistration: Sendable {
         guard !rows.isEmpty else {
             throw ApplicationError.teamNotRegistered(team: "\(teamID)", season: "\(seasonID)")
         }
-        return TeamInSeason(club: club, registration: SeasonRegistration(team: team, seasonID: seasonID, rows: rows))
+        // Con el resumen de cada competición (`D-113`): la misma forma que la lista.
+        let registration = SeasonRegistration(team: team, seasonID: seasonID, rows: rows)
+        let summarized = try await summaries.adding(to: [registration], club: club)
+        return TeamInSeason(club: club, registration: summarized[0])
     }
 }
 

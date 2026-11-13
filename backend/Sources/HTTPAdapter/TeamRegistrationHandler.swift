@@ -21,7 +21,8 @@ extension APIHandler {
         let result = try await unitOfWork.withRepositories(actor: actor) { repositories in
             try await ListSeasonRegistrations(
                 clubs: repositories.clubs, seasons: repositories.seasons,
-                teams: repositories.teams, registrations: repositories.teamRegistrations
+                teams: repositories.teams, registrations: repositories.teamRegistrations,
+                summaries: Self.summaries(repositories)
             ).execute(actor: actor, seasonID: seasonID)
         }
         return .ok(.init(body: .json(result.entries.map { $0.toResponse(club: result.club) })))
@@ -48,10 +49,20 @@ extension APIHandler {
         let result = try await unitOfWork.withRepositories(actor: actor) { repositories in
             try await GetTeamRegistration(
                 clubs: repositories.clubs, seasons: repositories.seasons,
-                teams: repositories.teams, registrations: repositories.teamRegistrations
+                teams: repositories.teams, registrations: repositories.teamRegistrations,
+                summaries: Self.summaries(repositories)
             ).execute(actor: actor, teamID: teamID, seasonID: seasonID)
         }
         return .ok(.init(body: .json(result.registration.toResponse(club: result.club))))
+    }
+}
+
+extension APIHandler {
+    /// El resumen de cada competición (`D-113`), con los repositorios del ámbito.
+    static func summaries(_ repositories: any Repositories) -> CompetitionSummaries {
+        CompetitionSummaries(
+            rounds: repositories.rounds, matches: repositories.matches, standingRows: repositories.standingRows,
+            teams: repositories.teams, opponentClubs: repositories.opponentClubs)
     }
 }
 
@@ -65,10 +76,7 @@ extension SeasonRegistration {
             competitions: competitions.map {
                 .init(
                     competitionId: "\($0.competitionID)", federationTeamId: $0.federationTeamID,
-                    // Provisional hasta R5.5 (plan R5): el resumen vacío, como el de
-                    // una competición sin nada jugado. El censo lo apunta como hueco.
-                    summary: .init(value1: .init(
-                        position: nil, form: [], lastMatch: nil, nextMatch: nil, nextOpponentPosition: nil)))
+                    summary: .init(value1: $0.summary.toResponse()))
             })
     }
 }
@@ -129,5 +137,21 @@ extension Domain.Team {
             createdAt: createdAt,
             updatedAt: updatedAt
         )
+    }
+}
+
+extension CompetitionSummary {
+    /// Mapeo `Caso de uso → DTO` del resumen (`D-113`): el último y el próximo
+    /// partido con la forma de `GET /matches` (el mismo mapeo), y la racha con la
+    /// de la clasificación.
+    func toResponse() -> Components.Schemas.TeamCompetitionSummary {
+        .init(
+            position: position,
+            form: form.map { .init(roundNumber: $0.roundNumber, outcome: .init(value1: $0.outcome.toContract())) },
+            // Sin partido, **nada**, y la clave no viaja (`DW-21`), como la fila
+            // de cada lado de un partido.
+            lastMatch: lastMatch.map { .init(value1: $0.toResponse()) },
+            nextMatch: nextMatch.map { .init(value1: $0.toResponse()) },
+            nextOpponentPosition: nextOpponentPosition)
     }
 }

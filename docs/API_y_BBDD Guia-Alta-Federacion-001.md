@@ -132,6 +132,7 @@ de sus partidos ([D-81]).
 | `kickoff` | `WallClockTime?`, hora de reloj **sin huso** | `Match.kickoff`. Va separada de la fecha ([D-30]): *"sábado, hora por decidir"* | Hora por decidir |
 | `venue` | `String?` | `Match.venue`, texto libre | Nada |
 | `venueCode` | `String?` | **Hoy nadie lo lee.** Lo necesitarán los mapas, para las consultas de direcciones | Nada |
+| `isRestDay` | `Bool` | **La jornada de descanso de un grupo impar** ([D-105], [D-114]): el partido contra el equipo ficticio con el que la fuente empareja al que descansa. Se guarda en `matches.is_rest_day`, y de ahí la leen la racha y el resumen de la portada. **Reconocerlo es del adaptador** (promesa 8): el núcleo no sabe cómo llama cada federación a su ficticio | Si el adaptador no lo marca, el descanso es un partido sin marcador más: no sale en la racha, y el «próximo partido» no dice «Descansa» |
 
 **Cada equipo, `FederationTeamRef`** (lo usan el calendario y la clasificación):
 
@@ -222,7 +223,7 @@ equivoque de número.
 
 ## 5. Lo que cada adaptador promete
 
-Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las siete están
+Son las obligaciones que el tipo no puede imponer y que el núcleo da por cumplidas. Las ocho están
 también en la cabecera de `FederationClient.swift`.
 
 | # | Promesa | Si no se cumple |
@@ -234,6 +235,7 @@ también en la cabecera de `FederationClient.swift`.
 | 5 | **La URL que no es suya se rechaza** | El enganche lee una coordenada de otra federación |
 | 6 | **El ranking de goleadores es completo**: todo el que ha marcado, sin *top-N*. Si la fuente pagina, el adaptador junta las páginas | La guarda de H-53 da por hecho que el total no baja nunca. Con un *top-N*, quien sale del corte **se retira** de la tabla o la pasada falla cada semana. **La FCF incumple esta premisa** (su lista es un *top*-50), y la propia guarda lo avisa: hay que revisarla antes de reutilizarla |
 | 7 | **Dentro de una competición, un equipo lleva el mismo `federationTeamID` toda la temporada.** Entre temporadas **no** se exige nada: el número es la plaza del club en la división, y la letra del club puede pasar a otro número ([D-101], [Anexo FCF §C.13]) | El enganche apunta un código que deja de salir: la pasada no reconoce al equipo propio y lo da de alta como rival |
+| 8 | **La jornada de descanso se marca con `isRestDay`** ([D-114]). Si la fuente empareja al que descansa con un equipo ficticio (la RFFM: «Equipo Casa/Fuera (No asignado)», código `-1`), el adaptador lo reconoce y marca ese partido; si la fuente no publica el descanso, no hay nada que marcar. **Es condición para integrar un conector nuevo** | La racha cuenta jornadas y el descanso es una de ellas: sin la marca, el descanso no sale en la racha ni en el próximo partido, y nada lo avisa |
 
 ---
 

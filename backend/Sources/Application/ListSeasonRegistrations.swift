@@ -11,17 +11,20 @@ public struct ListSeasonRegistrations: Sendable {
     private let seasons: any SeasonRepository
     private let teams: any TeamRepository
     private let registrations: any TeamRegistrationRepository
+    private let summaries: CompetitionSummaries
 
     public init(
         clubs: any ClubRepository,
         seasons: any SeasonRepository,
         teams: any TeamRepository,
-        registrations: any TeamRegistrationRepository
+        registrations: any TeamRegistrationRepository,
+        summaries: CompetitionSummaries
     ) {
         self.clubs = clubs
         self.seasons = seasons
         self.teams = teams
         self.registrations = registrations
+        self.summaries = summaries
     }
 
     public func execute(actor: ActorContext, seasonID: SeasonID) async throws -> SeasonRegistrations {
@@ -40,7 +43,9 @@ public struct ListSeasonRegistrations: Sendable {
         let entries = teamList.map { team in
             SeasonRegistration(team: team, seasonID: seasonID, rows: byTeam[team.id] ?? [])
         }
-        return SeasonRegistrations(club: club, entries: entries.sorted(by: Self.portadaOrder))
+        // El resumen de cada competición (`D-113`), de una vez para toda la lista.
+        let summarized = try await summaries.adding(to: entries, club: club)
+        return SeasonRegistrations(club: club, entries: summarized.sorted(by: Self.portadaOrder))
     }
 
     /// El orden de la portada: por categoría, **de menor a mayor edad** (el orden
@@ -89,13 +94,16 @@ public struct SeasonRegistration: Equatable, Sendable {
     }
 }
 
-/// Una competición de la inscripción, con el código del equipo en ella (`D-101`).
+/// Una competición de la inscripción, con el código del equipo en ella (`D-101`)
+/// y su resumen (`D-113`).
 public struct RegisteredCompetition: Equatable, Sendable {
     public let competitionID: CompetitionID
     public let federationTeamID: String?
+    public let summary: CompetitionSummary
 
-    public init(competitionID: CompetitionID, federationTeamID: String?) {
+    public init(competitionID: CompetitionID, federationTeamID: String?, summary: CompetitionSummary = .empty) {
         self.competitionID = competitionID
         self.federationTeamID = federationTeamID
+        self.summary = summary
     }
 }

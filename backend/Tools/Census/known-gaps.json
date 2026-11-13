@@ -23,10 +23,6 @@
     "StandingResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.7)",
     "StandingResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.7)",
     "MatchResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
-    "MatchResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
-    "TeamRegistrationCompetition.summary": "R5.4 (plan R5): nuevo en el catálogo (D-113) y relleno provisional vacío; lo calcula de verdad y lo prueba R5.5, que lo quita de aquí",
-    "TeamCompetitionSummary.lastMatch": "R5.4 (plan R5): nuevo en el catálogo (D-113) y relleno provisional vacío; lo calcula de verdad y lo prueba R5.5, que lo quita de aquí",
-    "TeamCompetitionSummary.nextMatch": "R5.4 (plan R5): nuevo en el catálogo (D-113) y relleno provisional vacío; lo calcula de verdad y lo prueba R5.5, que lo quita de aquí",
-    "TeamCompetitionSummary.nextOpponentPosition": "R5.4 (plan R5): nuevo en el catálogo (D-113) y relleno provisional vacío; lo calcula de verdad y lo prueba R5.5, que lo quita de aquí"
+    "MatchResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)"
   }
 }

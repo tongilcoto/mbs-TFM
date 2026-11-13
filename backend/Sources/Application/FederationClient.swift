@@ -42,6 +42,11 @@ public import enum Domain.Modality
 ///    `federationTeamID` toda la temporada.** Entre temporadas no se exige
 ///    nada: el número es la plaza del club en la división, y la letra puede
 ///    pasar a otro (`D-101`, [Anexo FCF §C.13]).
+/// 8. **La jornada de descanso se marca con `isRestDay`** (`D-114`): si la
+///    fuente empareja al que descansa con un equipo ficticio, el adaptador lo
+///    reconoce y marca ese partido. Sin la marca, la racha y el resumen de la
+///    portada no ven el descanso, y nada lo avisa. **Es condición para integrar
+///    un conector nuevo.**
 ///
 /// El detalle de cada método, campo a campo, está en la guía de alta de una
 /// federación nueva (`docs/API_y_BBDD Guia-Alta-Federacion-001.md`).

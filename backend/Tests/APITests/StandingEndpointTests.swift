@@ -187,6 +187,40 @@ struct StandingEndpointTests {
         }
     }
 
+    /// **El descanso viaja como `descanso`** (`D-114`): en la jornada 3 el propio
+    /// descansa contra el ficticio, y su racha tras esa jornada la empieza.
+    @Test("la racha manda el descanso como una jornada más, con outcome descanso (D-114)")
+    func theRestDayTravelsInTheForm() async throws {
+        try await Self.withSeededClub { app, seeded in
+            // La misma fecha que la siembra, local: así el censo no confunde
+            // la fecha de la siembra con el campo de la respuesta.
+            let stamp = Date(timeIntervalSince1970: 1_760_000_000)
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            try await unitOfWork.withRepositories(actor: ActorContext(clubSlug: try Slug(Self.slug))) { repositories in
+                let placeholder = try Team(
+                    id: TeamID(raw: UUID()), category: .cadete, letter: nil, gender: .masculino,
+                    modality: .futbol11, createdAt: stamp, updatedAt: stamp)
+                try await repositories.teams.save(placeholder)
+                try await repositories.matches.save(try Match(
+                    id: MatchID(raw: UUID()), competitionID: seeded.competition, roundID: seeded.rounds[2],
+                    kickoff: Kickoff(date: Self.day("2025-10-06")), homeTeamID: seeded.own,
+                    awayTeamID: placeholder.id, status: .programado, isRestDay: true,
+                    createdAt: stamp, updatedAt: stamp))
+                try await repositories.standingRows.save(try StandingRow(
+                    id: StandingRowID(raw: UUID()), competitionID: seeded.competition, roundID: seeded.rounds[2],
+                    teamID: seeded.own, position: 2, previousPosition: 2, played: 2, won: 1, drawn: 0, lost: 1,
+                    goalsFor: 3, goalsAgainst: 3, points: 3, createdAt: stamp, updatedAt: stamp))
+            }
+            try await app.testing().test(
+                .GET, "/v1/standings?roundId=\(seeded.rounds[2])", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                let own = try #require(try Self.decode(response).first { $0.team.value1.isOwn })
+                #expect(own.form.map { "\($0.roundNumber):\($0.outcome.value1.rawValue)" }
+                    == ["3:descanso", "2:derrota", "1:victoria"])
+            }
+        }
+    }
+
     @Test("una jornada sin tabla todavía da la lista vacía")
     func aRoundWithoutTable() async throws {
         try await Self.withSeededClub { app, seeded in

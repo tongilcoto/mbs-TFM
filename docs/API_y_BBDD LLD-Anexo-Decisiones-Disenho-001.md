@@ -5187,8 +5187,11 @@ rival y el puesto de este. **Fijado en la mini-fase del catálogo** (R5.4 del pl
 
 **Lo que se asume a cambio.**
 
-- **`listSeasonRegistrations` lee más tablas** (clasificación y partidos) por cada competición. Estimado, sin
-  medir: de 28 ms a menos de 100 ms en la base del desarrollador. Se mide al programarlo (R5.5).
+- **`listSeasonRegistrations` lee más tablas** (clasificación y partidos) por cada competición. Estimado de 28 ms a
+  menos de 100 ms; **medido en R5.5** con una copia del club del desarrollador y el servidor de depuración: 327 ms
+  leyendo todos los partidos de cada competición y las tablas de todas sus jornadas, y **97 ms** leyendo solo los
+  partidos del equipo y solo la última tabla (`StandingRowRepository.latest`). El tiempo no era de Postgres
+  (menos de 1 ms por consulta) sino de convertir las filas.
 - **Un dato repetido**: el puesto y la racha del equipo salen aquí y en `GET /standings`; el último y el próximo
   partido, aquí y en `GET /matches`. Proyecciones, no se guardan dos veces.
 - **Cambia una respuesta que ya existe**, sumando campos: no rompe a ningún cliente. El único hoy es la web.
@@ -5215,9 +5218,16 @@ hueco lo estropea.
    de las cinco, con `outcome: descanso`. Las jornadas sin jugar (un aplazado) siguen fuera.
 2. **Vale en todas partes donde viaja la racha**: en la clasificación (`StandingResponse.form`) y en el resumen de
    la portada ([D-113]). Las dos pantallas dicen lo mismo.
-3. **El servidor reconoce el descanso en un solo sitio**. Hoy lo sabe el adaptador al leer el calendario
-   (`FederationMatch.isRestDay`), pero no se guarda: el ficticio se reconoce por su nombre ([D-105], punto 2), y la
-   web lo hace buscando «(No asignado)». Cómo lo sabe el cálculo de la racha se decide al programarlo (R5.5).
+3. **El servidor reconoce el descanso en un solo sitio: una marca en el partido** (`matches.is_rest_day`, decidido
+   con el desarrollador el 2026-11-13, en R5.5). La escribe la ingesta con lo que dice el adaptador al leer el
+   calendario (`FederationMatch.isRestDay`), y la leen la racha y el resumen. Descartadas una marca en el equipo
+   ficticio, porque la pregunta es si **el partido** es un descanso, y reconocerlo por el nombre «(No asignado)»,
+   que metería una costumbre de la RFFM en el núcleo ([D-97], [D-105]): si la RFFM cambia el texto, la racha
+   dejaría de ver los descansos sin que nada avise. **La marca es volátil**: la fuente la dice en cada pasada, y así
+   los descansos guardados antes se marcan en la pasada siguiente de su competición, sin relleno en la migración
+   (que no tiene adaptador que pregunte). **Y es una condición para integrar un conector nuevo** (lo pidió el
+   desarrollador): todo adaptador tiene que marcar el descanso de su federación, o la racha no lo verá; está en la
+   guía de alta de federaciones (§3.2 y la promesa 8).
 4. **El último y el próximo partido no cambian** ([D-113], punto 6): el último es el último jugado de verdad.
 
 **Lo que se asume a cambio.**

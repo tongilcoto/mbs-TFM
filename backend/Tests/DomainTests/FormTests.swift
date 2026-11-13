@@ -69,6 +69,42 @@ struct FormTests {
                         roundNumbers: Self.numbers).isEmpty)
     }
 
+    /// Un descanso, contra el ficticio: sin marcador, con la marca (`D-114`).
+    static func rest(_ round: Int, _ team: TeamID) throws -> Match {
+        try Match(
+            id: MatchID(raw: UUID()), competitionID: CompetitionID(raw: UUID()), roundID: rounds[round - 1],
+            kickoff: Kickoff(date: epoch, time: nil), homeTeamID: team, awayTeamID: TeamID(raw: UUID()),
+            status: .programado, isRestDay: true, createdAt: epoch, updatedAt: epoch)
+    }
+
+    /// **La racha cuenta jornadas** (`D-114`): el descanso de la 4 entra como una
+    /// más, en su sitio, y empuja fuera a la 1. Uno de otro equipo, no.
+    @Test("el descanso es una jornada más de la racha, y cuenta entre las cinco (D-114)")
+    func theRestDayIsAFormEntry() throws {
+        let matches = [
+            try Self.match(1, Self.us, Self.them, (3, 0)), try Self.match(2, Self.them, Self.us, (2, 1)),
+            try Self.match(3, Self.them, Self.us, (2, 2)), try Self.rest(4, Self.us),
+            try Self.match(5, Self.them, Self.us, (0, 1)), try Self.match(6, Self.us, Self.them, (0, 4)),
+            try Self.rest(5, Self.them),
+        ]
+        #expect(Form.of(Self.us, upTo: 7, matches: matches, roundNumbers: Self.numbers) == [
+            FormEntry(roundNumber: 6, outcome: .loss),
+            FormEntry(roundNumber: 5, outcome: .win),
+            FormEntry(roundNumber: 4, outcome: .rest),
+            FormEntry(roundNumber: 3, outcome: .draw),
+            FormEntry(roundNumber: 2, outcome: .loss),
+        ])
+    }
+
+    /// Un descanso **después** de la jornada pedida tampoco cuenta: es una jornada
+    /// que todavía no ha llegado.
+    @Test("un descanso posterior a la jornada pedida no cuenta (D-114)")
+    func aLaterRestDayDoesNotCount() throws {
+        let matches = [try Self.match(1, Self.us, Self.them, (3, 0)), try Self.rest(2, Self.us)]
+        #expect(Form.of(Self.us, upTo: 1, matches: matches, roundNumbers: Self.numbers)
+            == [FormEntry(roundNumber: 1, outcome: .win)])
+    }
+
     @Test("el rival ve el mismo partido al revés")
     func theOtherSide() throws {
         let form = Form.of(Self.them, upTo: 1, matches: try Self.season(), roundNumbers: Self.numbers)

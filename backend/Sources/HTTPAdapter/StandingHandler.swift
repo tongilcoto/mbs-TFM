@@ -57,6 +57,7 @@ extension Domain.TeamOutcome {
         case .win: .victoria
         case .draw: .empate
         case .loss: .derrota
+        case .rest: .descanso
         }
     }
 }

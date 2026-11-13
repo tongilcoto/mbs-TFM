@@ -44,6 +44,13 @@ public struct Match: Identifiable, Equatable, Sendable {
     /// de 240 ([Anexo FCF §C.10.4]). La anulabilidad no cambia; su defensa sí.
     public let federationMatchID: String?
 
+    /// **La jornada de descanso de un grupo impar** (`D-105`, `D-114`): el partido
+    /// contra el equipo ficticio con el que la federación empareja al que
+    /// descansa. Lo dice el adaptador al leer el calendario, que es quien conoce
+    /// la costumbre de su federación; aquí solo se guarda, para que la racha y el
+    /// resumen lo sepan sin reconocer al ficticio por su nombre.
+    public let isRestDay: Bool
+
     public let createdAt: Date
     public let updatedAt: Date
 
@@ -58,6 +65,7 @@ public struct Match: Identifiable, Equatable, Sendable {
         status: MatchStatus,
         venue: String? = nil,
         federationMatchID: String? = nil,
+        isRestDay: Bool = false,
         createdAt: Date,
         updatedAt: Date
     ) throws {
@@ -77,6 +85,7 @@ public struct Match: Identifiable, Equatable, Sendable {
         self.status = status
         self.venue = venue
         self.federationMatchID = federationMatchID
+        self.isRestDay = isRestDay
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -109,6 +118,7 @@ extension Match {
     /// | `roundID`, `result`, `venue`, `kickoff` | **volátil** | la fuente gana cuando dice algo (`D-56`) |
     /// | `status` | **derivado** | del marcador **ya fusionado** (`D-57`) |
     /// | `federationMatchID` | **de emparejamiento** | no sobrescribe; rellena hueco (`D-76`) |
+    /// | `isRestDay` | **volátil** | la fuente gana cuando dice algo; `nil`, se queda (`D-114`) |
     /// | `homeTeamID`, `awayTeamID`, `competitionID` | **identidad** | no están en la firma |
     ///
     /// `roundID` es volátil y no identidad, aunque entre en la clave única de
@@ -120,7 +130,8 @@ extension Match {
         time: WallClockTime?,
         result incomingResult: MatchResult?,
         venue incomingVenue: String?,
-        federationMatchID incomingFederationMatchID: String?
+        federationMatchID incomingFederationMatchID: String?,
+        isRestDay incomingIsRestDay: Bool? = nil
     ) throws -> Match {
         // Se calcula **una vez** y se reparte, en vez de recalcularlo en cada
         // sitio que lo necesita: `Kickoff` y `MatchStatus` tienen que ver el
@@ -143,6 +154,7 @@ extension Match {
             venue: UpsertPolicy.volatile(existing: venue, incoming: incomingVenue),
             federationMatchID: UpsertPolicy.matching(
                 existing: federationMatchID, incoming: incomingFederationMatchID),
+            isRestDay: incomingIsRestDay ?? isRestDay,
             createdAt: createdAt,
             updatedAt: updatedAt
         )

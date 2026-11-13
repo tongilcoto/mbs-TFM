@@ -1,6 +1,8 @@
 import Domain
 public import Fluent
+import FluentSQL
 import Foundation
+import SQLKit
 
 /// Modelo de persistencia del partido (§4.4).
 public final class MatchRecord: Model, @unchecked Sendable {
@@ -35,6 +37,11 @@ public final class MatchRecord: Model, @unchecked Sendable {
     @OptionalField(key: "venue") public var venue: String?
 
     @OptionalField(key: "federation_match_id") public var federationMatchID: String?
+
+    /// La jornada de descanso (`D-114`). `NOT NULL` con `false` por defecto: los
+    /// partidos de antes de la migración son normales hasta que la pasada
+    /// siguiente diga lo contrario.
+    @Field(key: "is_rest_day") public var isRestDay: Bool
 
     @Timestamp(key: "created_at", on: .create) public var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) public var updatedAt: Date?
@@ -98,5 +105,24 @@ public struct CreateMatch: AsyncMigration {
 
     public func revert(on database: any Database) async throws {
         try await database.schema(MatchRecord.schema).delete()
+    }
+}
+
+/// `D-114`: el partido sabe si es la jornada de descanso de un grupo impar. La
+/// columna nace en `false` para todos: **no se rellena aquí**, porque reconocer el
+/// descanso es cosa del adaptador de cada federación (`D-105`), y la migración no
+/// tiene adaptador. Los descansos que ya hay se marcan en la pasada siguiente de
+/// su competición, que trae la marca y la escribe (`Match.merging`).
+public struct AddRestDayToMatches: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.schema(MatchRecord.schema)
+            .field("is_rest_day", .bool, .required, .sql(.default(false)))
+            .update()
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.schema(MatchRecord.schema).deleteField("is_rest_day").update()
     }
 }

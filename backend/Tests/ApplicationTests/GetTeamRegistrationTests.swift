@@ -25,7 +25,11 @@ struct GetTeamRegistrationTests {
         GetTeamRegistration(
             clubs: FakeClubRepository(store: store), seasons: FakeSeasonRepository(store: store),
             teams: FakeTeamRepository(store: store),
-            registrations: FakeTeamRegistrationRepository(store: store))
+            registrations: FakeTeamRegistrationRepository(store: store),
+            summaries: CompetitionSummaries(
+                rounds: FakeRoundRepository(store: store), matches: FakeMatchRepository(store: store),
+                standingRows: FakeStandingRowRepository(store: store), teams: FakeTeamRepository(store: store),
+                opponentClubs: FakeOpponentClubRepository(store: store)))
     }
 
     /// El Cadete B con liga y copa en 2026/27 (guardadas con la copa primero) y

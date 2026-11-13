@@ -4,6 +4,8 @@
 /// el desenlace de la cadena de emparejamiento de la ingesta.
 public enum TeamOutcome: Equatable, Sendable {
     case win, draw, loss
+    /// La jornada en la que el equipo descansa, en un grupo impar (`D-114`).
+    case rest
 }
 
 /// Un partido de la racha: su jornada y cómo le fue al equipo.
@@ -18,20 +20,26 @@ public struct FormEntry: Equatable, Sendable {
 }
 
 public enum Form {
-    /// **La racha de un equipo hasta una jornada** (`D-34`): sus últimos `limit`
-    /// partidos **jugados** de esas jornadas, del más reciente al más antiguo.
+    /// **La racha de un equipo hasta una jornada** (`D-34`): sus últimas `limit`
+    /// jornadas **jugadas**, del más reciente al más antiguo, con la de descanso
+    /// como una más (`D-114`).
     /// Se deriva de `Match`, no de restar clasificaciones consecutivas, que en
     /// un alta a mitad de temporada no están (`D-33`).
     ///
     /// - `matches`: los partidos de la competición; los de otros equipos y los
-    ///   sin marcador no cuentan.
+    ///   sin marcador no cuentan, salvo el descanso del equipo.
     /// - `roundNumbers`: el número de cada jornada, que el partido no lleva.
     public static func of(
         _ team: TeamID, upTo roundNumber: Int, matches: [Match], roundNumbers: [RoundID: Int], limit: Int = 5
     ) -> [FormEntry] {
         let played: [(round: Int, entry: FormEntry)] = matches.compactMap { match in
-            guard let result = match.result, let round = roundNumbers[match.roundID], round <= roundNumber
-            else { return nil }
+            guard let round = roundNumbers[match.roundID], round <= roundNumber else { return nil }
+            // La racha cuenta jornadas (`D-114`): el descanso del equipo es una más.
+            if match.isRestDay {
+                guard match.homeTeamID == team || match.awayTeamID == team else { return nil }
+                return (round, FormEntry(roundNumber: round, outcome: .rest))
+            }
+            guard let result = match.result else { return nil }
             let (scored, conceded): (Int, Int)
             switch team {
             case match.homeTeamID: (scored, conceded) = (result.homeScore, result.awayScore)

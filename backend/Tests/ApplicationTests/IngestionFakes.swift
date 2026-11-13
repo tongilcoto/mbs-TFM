@@ -309,6 +309,12 @@ struct FakeStandingRowRepository: StandingRowRepository {
             .filter { $0.roundID == roundID }
             .sorted { $0.position < $1.position }
     }
+    func latest(competitionID: CompetitionID) async throws -> [StandingRow] {
+        let numbers = Dictionary(uniqueKeysWithValues: await store.rounds.map { ($0.id, $0.number) })
+        let rows = await store.standingRows.filter { $0.competitionID == competitionID }
+        let top = rows.compactMap { numbers[$0.roundID] }.max()
+        return rows.filter { top != nil && numbers[$0.roundID] == top }
+    }
     func save(_ row: StandingRow) async throws { await store.save(standingRow: row) }
 }
 
