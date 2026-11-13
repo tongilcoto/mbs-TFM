@@ -41,6 +41,8 @@ export interface ScenarioData {
   otherTeam?: Team
   /** El nombre que se eligió en la lista del paso 2, como lo escribe la Federación (plan R3). */
   chosen?: string
+  /** La jornada que mira el escenario (plan R4). */
+  round?: number
 }
 
 export class ScenarioWorld extends World {

@@ -73,6 +73,7 @@ async function openHome(address = '/') {
       { path: '/', component: HomeScreen },
       { path: '/equipos/nuevo', component: landing('Dar de alta un equipo') },
       { path: '/equipos/:id/federacion', component: landing('Sincronizar con la Federación') },
+      { path: '/temporadas/:temporada/equipos/:id/resultados', component: landing('Resultados') },
     ],
   })
   await router.push(address)
@@ -214,6 +215,132 @@ describe('las acciones de la fila (plan R3, §3.1)', () => {
 
     await waitFor(() => expect(opened?.path).toBe('/equipos/equipo/federacion'))
     expect(opened?.state).toMatchObject({ seasonLabel: '2026/27' })
+  })
+})
+
+describe('el nombre del equipo (plan R4, §3.1)', () => {
+  test('lleva a su ficha en la temporada que se ve', async () => {
+    fakeServer([season('2026/27', true), season('2025/26')], [aTeam])
+    await openHome('/?temporada=2025-26')
+
+    expect(await screen.findByRole('link', { name: 'Alevín A' })).toHaveAttribute(
+      'href',
+      '/temporadas/2025-26/equipos/equipo/resultados',
+    )
+  })
+})
+
+// ── Volver a traer los datos con ↻ (plan R4, decisión 7) ──
+
+describe('volver a traer los datos de una competición', () => {
+  const liga = (ingestionHealth: string) => ({
+    id: 'liga',
+    seasonId: 'id-2026',
+    modality: 'futbol_11',
+    gender: 'masculino',
+    ageCategory: 'alevin',
+    divisionLabel: 'PRIMERA ALEVIN',
+    groupLabel: 'Grupo 8',
+    federationCompetitionId: '1',
+    federationGroupId: '2',
+    displayName: 'Liga',
+    ingestionHealth,
+    createdAt: '2026-10-09T21:50:27Z',
+    updatedAt: '2026-10-09T21:50:27Z',
+  })
+  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga' }] }
+
+  // Las competiciones salen con `health`, que la prueba cambia; la pasada responde cuando la prueba la suelta
+  // (`finish`), con lo que diga. Apunta lo que se le pidió.
+  function serverWithRun(health: string) {
+    const server: { health: string; competitionsAsked: number; runs: unknown[]; finish: (answer: Response) => void } = {
+      health,
+      competitionsAsked: 0,
+      runs: [],
+      finish: () => {},
+    }
+    vi.stubGlobal('fetch', async (request: Request) => {
+      const path = new URL(request.url).pathname
+      if (path === '/api/v1/seasons') return Response.json([season('2026/27', true)])
+      if (path.endsWith('/registrations')) return Response.json([inscribed])
+      if (path === '/api/v1/competitions') {
+        server.competitionsAsked++
+        return Response.json([liga(server.health)])
+      }
+      if (path === '/api/v1/ingestion-runs' && request.method === 'POST') {
+        server.runs.push(await request.json())
+        return new Promise<Response>((resolve) => (server.finish = resolve))
+      }
+      throw new Error(`Petición no esperada: ${request.method} ${path}`)
+    })
+    return server
+  }
+  const ingestion = () => screen.getAllByRole('cell')[1]!
+  const relaunch = () => screen.findByRole('button', { name: 'Volver a traer los datos de la Federación, PRIMERA ALEVIN · Grupo 8' })
+  const problem = (status: number, code: string) => Response.json({ type: 'about:blank', title: 'x', status, code }, { status })
+
+  test('pide la pasada de esa competición; mientras, «En marcha» y bloqueado; al acabar, lo nuevo sin «Cargando…»', async () => {
+    const server = serverWithRun('failing')
+    await openHome('/')
+    await fireEvent.click(await relaunch())
+
+    await waitFor(() => expect(server.runs).toEqual([{ competitionIds: ['liga'] }]))
+    expect(ingestion()).toHaveTextContent('En marcha')
+    expect(ingestion()).toHaveTextContent('La anterior tuvo fallos')
+    expect(await relaunch()).toBeDisabled()
+
+    server.health = 'ok'
+    server.finish(Response.json({}))
+
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
+    expect(server.competitionsAsked).toBe(2)
+    expect(await relaunch()).toBeEnabled()
+    expect(screen.queryByText('Cargando equipos…')).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  test('si falla: el aviso arriba con su texto, su código y la competición, y la celda como quedó', async () => {
+    const server = serverWithRun('ok')
+    await openHome('/')
+    await fireEvent.click(await relaunch())
+    await waitFor(() => expect(server.runs).toHaveLength(1))
+
+    server.health = 'failing'
+    server.finish(problem(502, 'INGESTION_FAILED'))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('No se han podido traer los datos de la Federación. Prueba otra vez en un rato.')
+    expect(alert).toHaveTextContent('Al volver a traer los datos de PRIMERA ALEVIN · Grupo 8.')
+    expect(alert).toHaveTextContent('Código: INGESTION_FAILED')
+    await waitFor(() => expect(ingestion()).toHaveTextContent('Con fallos'))
+    // La tabla sigue a la vista.
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
+  test('«Reintentar» vuelve a pedir la misma, y el aviso se va', async () => {
+    const server = serverWithRun('ok')
+    await openHome('/')
+    await fireEvent.click(await relaunch())
+    await waitFor(() => expect(server.runs).toHaveLength(1))
+    server.finish(problem(502, 'INGESTION_FAILED'))
+
+    await fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }))
+
+    await waitFor(() => expect(server.runs).toHaveLength(2))
+    expect(server.runs[1]).toEqual({ competitionIds: ['liga'] })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  test('un error que no es pasajero, sin «Reintentar»: el ↻ de la celda sigue ahí', async () => {
+    const server = serverWithRun('ok')
+    await openHome('/')
+    await fireEvent.click(await relaunch())
+    await waitFor(() => expect(server.runs).toHaveLength(1))
+    server.finish(problem(501, 'FEDERATION_ADAPTER_MISSING'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Todavía no se puede sincronizar con la federación de este club.')
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument()
+    await waitFor(async () => expect(await relaunch()).toBeEnabled())
   })
 })
 

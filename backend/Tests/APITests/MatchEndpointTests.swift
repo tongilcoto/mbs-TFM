@@ -82,13 +82,15 @@ struct MatchEndpointTests {
                 try await repositories.matches.save(try Match(
                     id: pending, competitionID: competition, roundID: rounds[1], kickoff: Kickoff(date: day("2025-10-11")),
                     homeTeamID: rival, awayTeamID: own, status: .programado, createdAt: createdAt, updatedAt: createdAt))
-                // Cada número distinto de los demás: así se ve si se cruzan dos campos.
-                for (team, position, won, drawn, lost, goalsFor, goalsAgainst, points) in [
-                    (own, 1, 4, 2, 1, 15, 6, 14), (rival, 3, 3, 0, 4, 9, 12, 9),
+                // Cada número distinto de los demás: así se ve si se cruzan dos campos. El puesto anterior, solo
+                // en el propio: el rival no lo tiene, como en la primera jornada.
+                for (team, position, previous, won, drawn, lost, goalsFor, goalsAgainst, points) in [
+                    (own, 1, 2 as Int?, 4, 2, 1, 15, 6, 14), (rival, 3, nil, 3, 0, 4, 9, 12, 9),
                 ] {
                     try await repositories.standingRows.save(try StandingRow(
                         id: StandingRowID(raw: UUID()), competitionID: competition, roundID: rounds[0], teamID: team,
-                        position: position, played: won + drawn + lost, won: won, drawn: drawn, lost: lost,
+                        position: position, previousPosition: previous, played: won + drawn + lost, won: won,
+                        drawn: drawn, lost: lost,
                         goalsFor: goalsFor, goalsAgainst: goalsAgainst, points: points,
                         createdAt: createdAt, updatedAt: createdAt))
                 }
@@ -173,7 +175,7 @@ struct MatchEndpointTests {
         }
     }
 
-    @Test("los dos lados de un partido jugado: el equipo, el marcador y su fila de esa jornada (D-112)")
+    @Test("los dos lados de un partido jugado: el equipo, el marcador y su fila de esa jornada, con el puesto anterior (D-112)")
     func theSidesOfAPlayedMatch() async throws {
         try await Self.withSeededClub { app, seeded in
             try await app.testing().test(
@@ -187,6 +189,7 @@ struct MatchEndpointTests {
                 #expect(home.value2.score == 3)
                 let standing = try #require(home.value2.standing?.value1)
                 #expect(standing.position == 1)
+                #expect(standing.previousPosition == 2)
                 #expect(standing.played == 7)
                 #expect(standing.won == 4)
                 #expect(standing.drawn == 2)
@@ -201,6 +204,7 @@ struct MatchEndpointTests {
                 #expect(away.value1.isOwn == false)
                 #expect(away.value2.score == 1)
                 #expect(away.value2.standing?.value1?.position == 3)
+                #expect(away.value2.standing?.value1?.previousPosition == nil)
             }
         }
     }

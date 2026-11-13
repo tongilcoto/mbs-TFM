@@ -13,3 +13,25 @@ test('un camino que la web no conoce es «Esta página no existe»', async () =>
 
   expect(router.currentRoute.value.meta.title).toBe('Esta página no existe')
 })
+
+test('la ficha sin pestaña lleva a Resultados (LLD-B §6.4)', async () => {
+  await router.push('/temporadas/2026-27/equipos/a1b2/')
+
+  expect(router.currentRoute.value.path).toBe('/temporadas/2026-27/equipos/a1b2/resultados')
+  expect(router.currentRoute.value.meta.title).toBe('Resultados')
+})
+
+test('/equipos/:id, sin temporada, es la ficha; /equipos/nuevo sigue siendo el alta', async () => {
+  await router.push('/equipos/a1b2')
+  expect(router.currentRoute.value.meta.title).toBe('Resultados')
+
+  await router.push('/equipos/nuevo')
+  expect(router.currentRoute.value.meta.title).toBe('Alta de equipo')
+})
+
+test('jornada y clasificación de una competición, con la temporada en el camino', async () => {
+  await router.push('/temporadas/2026-27/competiciones/a1b2?jornada=5')
+
+  expect(router.currentRoute.value.meta.title).toBe('Jornada y clasificación')
+  expect(router.currentRoute.value.query).toEqual({ jornada: '5' })
+})

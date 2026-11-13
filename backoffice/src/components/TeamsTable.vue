@@ -1,20 +1,24 @@
 <!-- La tabla de la portada: los equipos de una temporada, con su competición y cómo va su ingesta (plan R1, §3.2).
      Un equipo con dos competiciones ocupa dos líneas, con su nombre y sus acciones una sola vez (rowspan). -->
 <script setup lang="ts">
+import HealthStatus from './HealthStatus.vue'
 import IconAction from './IconAction.vue'
 import SortableHeader from './SortableHeader.vue'
-import type { HealthState, TeamRow } from './teamRow'
+import type { TeamRow } from './teamRow'
 
 // `order`, por qué columna está ordenada y si al revés; sin él, el orden del servidor. Las filas llegan ya
 // ordenadas: la tabla solo dice cómo, y avisa de qué cabecera pinchan (bloque T del plan R2). `seasonLabel`, la
-// temporada que se está viendo, para que la pantalla a la que lleva una acción sepa volver a ella.
+// temporada que se está viendo, para que la pantalla a la que lleva una acción sepa volver a ella; y
+// `seasonAddress`, la misma como va en la dirección («2026-27»), para el enlace a la ficha de cada equipo.
 const props = defineProps<{
   rows: TeamRow[]
   caption: string
   order?: { column: string; reversed: boolean }
   seasonLabel?: string
+  seasonAddress?: string
 }>()
-defineEmits<{ sort: [column: string] }>()
+// `relaunch`, volver a traer los datos de una competición (plan R4, decisión 7): lo hace la portada.
+defineEmits<{ sort: [column: string]; relaunch: [competitionId: string] }>()
 
 // Las columnas, con su nombre en la dirección (`?orden=ingesta`) y el que se ve.
 const columns = [
@@ -29,9 +33,6 @@ function sortOf(column: string): 'ascending' | 'descending' | undefined {
   return props.order.reversed ? 'descending' : 'ascending'
 }
 
-// Cada estado, con su icono y su color. Nunca solo el color: la palabra va siempre al lado (LLD-B §9.4).
-const icons: Record<HealthState, string> = { ok: '✓', failing: '✕', pending: '↻', stale: '◷', never: '○' }
-
 // Sincronizar: lo que dice depende de si el equipo ya tiene competición en la temporada (plan R3, decisión 1). La
 // temporada va en el estado de la navegación, no en la dirección, como al dar de alta (plan R2, decisión 5).
 function syncLabel(row: TeamRow): string {
@@ -39,6 +40,11 @@ function syncLabel(row: TeamRow): string {
 }
 function syncTarget(row: TeamRow) {
   return { path: `/equipos/${row.id}/federacion`, state: props.seasonLabel ? { seasonLabel: props.seasonLabel } : {} }
+}
+
+// El nombre del equipo lleva a su ficha, en la temporada que se ve (plan R4, §3.1; LLD-B §6.5).
+function resultsTarget(row: TeamRow): string | undefined {
+  return props.seasonAddress && `/temporadas/${props.seasonAddress}/equipos/${row.id}/resultados`
 }
 </script>
 
@@ -69,7 +75,15 @@ function syncTarget(row: TeamRow) {
       >
         <tr v-if="row.competitions.length === 0">
           <th scope="row">
-            {{ row.team }}
+            <RouterLink
+              v-if="resultsTarget(row)"
+              :to="resultsTarget(row)!"
+            >
+              {{ row.team }}
+            </RouterLink>
+            <template v-else>
+              {{ row.team }}
+            </template>
           </th>
           <td colspan="3">
             Sin competición
@@ -96,30 +110,37 @@ function syncTarget(row: TeamRow) {
             scope="row"
             :rowspan="row.competitions.length"
           >
-            {{ row.team }}
+            <RouterLink
+              v-if="resultsTarget(row)"
+              :to="resultsTarget(row)!"
+            >
+              {{ row.team }}
+            </RouterLink>
+            <template v-else>
+              {{ row.team }}
+            </template>
           </th>
           <td>{{ competition.name }}</td>
           <td>
-            <span
-              v-if="competition.health"
-              class="health"
-            >
-              <span
-                aria-hidden="true"
-                :class="['icon', competition.health]"
-              >{{ icons[competition.health] }}</span>
-              <span>{{ competition.healthName }}</span>
-            </span>
-            <span
-              v-if="competition.previousFailed"
-              class="note"
-            >
-              <span
-                aria-hidden="true"
-                class="icon failing"
-              >{{ icons.failing }}</span>
-              <span>La anterior tuvo fallos</span>
-            </span>
+            <!-- El estado a la izquierda y ↻ a la derecha (plan R4, decisión 7). Bloqueado mientras está «En marcha»:
+                 ya se están trayendo. -->
+            <div class="ingestion">
+              <div>
+                <HealthStatus
+                  :health="competition.health"
+                  :name="competition.healthName"
+                  :previous-failed="competition.previousFailed"
+                />
+              </div>
+              <IconAction
+                class="relaunch"
+                label="Volver a traer los datos de la Federación"
+                :subject="competition.name"
+                icon="rotate-cw"
+                :disabled="competition.health === 'pending'"
+                @press="$emit('relaunch', competition.id)"
+              />
+            </div>
           </td>
           <td>{{ competition.lastSynced }}</td>
           <td
@@ -157,6 +178,17 @@ thead th {
   font-size: 0.875rem;
   color: var(--p-text-muted-color);
 }
+/* El estado y ↻ en la misma línea. El texto, a la altura del de las otras celdas; el icono, de 40 px, centrado con
+   su primera línea, sin hacer la fila más alta. */
+.ingestion {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.relaunch {
+  margin: -0.5rem 0;
+}
 /* El icono, de 40 px, ocupa casi toda la altura de la fila. */
 .actions {
   width: 1px;
@@ -175,26 +207,6 @@ thead th {
   display: inline-block;
   min-height: 1.5rem;
   line-height: 1.5rem;
-}
-.icon {
-  display: inline-block;
-  width: 1.25em;
-  font-weight: 700;
-}
-.ok {
-  color: var(--p-estado-bien);
-}
-.failing {
-  color: var(--p-estado-fallo);
-}
-.pending {
-  color: var(--p-estado-en-marcha);
-}
-.stale {
-  color: var(--p-estado-aviso);
-}
-.never {
-  color: var(--p-estado-sin-datos);
 }
 /* Lo lee el lector de pantalla y no se ve. */
 .visually-hidden {

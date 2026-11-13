@@ -4,6 +4,7 @@
 export type HealthState = 'ok' | 'failing' | 'stale' | 'never' | 'pending'
 
 export interface CompetitionCell {
+  id: string
   name: string
   health?: HealthState
   healthName?: string

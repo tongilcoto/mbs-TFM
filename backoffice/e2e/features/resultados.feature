@@ -25,7 +25,7 @@ Feature: Los resultados de un equipo
     And el partido tiene el marcador de la Federación
     And el partido tiene la letra del resultado del equipo: V, E o D
     And el partido tiene el puesto, los puntos, los ganados, empatados y perdidos, y la diferencia de goles del equipo tras esa jornada
-    And cada equipo del partido tiene a su lado su puesto tras esa jornada
+    And cada equipo del partido tiene a su lado el puesto con el que llegó, el de la jornada anterior
 
   @ui
   Scenario: En la tabla de resultados, un partido por jugar con hora tiene la hora y los puestos de hoy
@@ -66,13 +66,13 @@ Feature: Los resultados de un equipo
 
   @ui
   Scenario: La pestaña Resultados de un equipo recién sincronizado dice que está trayendo el calendario
-    Given en la temporada en curso de mi club juega un equipo, con su ingesta en marcha y retenida en la Federación
+    Given en la temporada en curso de mi club juega un equipo recién sincronizado, con su primera ingesta retenida en la Federación
     When abro la ficha del equipo
     Then la pestaña Resultados dice "Trayendo el calendario de la Federación…"
 
   @e2e
   Scenario: Cuando acaba la ingesta que estaba en marcha, la pestaña Resultados enseña los partidos sin recargar
-    Given en la temporada en curso de mi club juega un equipo, con su ingesta en marcha y retenida en la Federación
+    Given en la temporada en curso de mi club juega un equipo recién sincronizado, con su primera ingesta retenida en la Federación
     And estoy en la ficha del equipo
     When la Federación suelta la ingesta retenida
     Then la tabla de resultados tiene un partido por cada jornada en la que juega el equipo

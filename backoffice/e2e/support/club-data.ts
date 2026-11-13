@@ -130,6 +130,7 @@ export function addTeamWithoutCompetition(club: ScenarioClub, random: Random, se
 }
 
 interface IngestionRun {
+  id: string
   kind: 'calendar' | 'standings' | 'scorers'
   outcome: 'accepted' | 'succeeded' | 'failed'
   startedAt: string
@@ -177,7 +178,9 @@ export async function lastSynced(club: ScenarioClub, competitionId: string): Pro
 /**
  * Deja la ingesta de la competición en un estado. Parte de «Al día», que es como la deja el enganche.
  *
- * - «Con fallos»: la federación contesta mal a los goleadores, y se lanza una pasada (falla de verdad).
+ * - «Con fallos»: la federación contesta mal a los goleadores, y se lanza una pasada (falla de verdad). Después
+ *   vuelve a contestar bien: el estado es que la última falló, no que la Federación siga fallando (plan R4: volver a
+ *   traer los datos la deja «Al día»).
  * - «En marcha»: se lanza una pasada, y la federación retiene su calendario hasta que acaba el escenario.
  * - «Sin datos todavía» y «Desactualizada»: por la base de datos (abajo).
  */
@@ -194,6 +197,7 @@ export async function setIngestion(
     case 'Con fallos':
       fakeFederation().failScorers(plays)
       await expectApi(club, 'POST', '/ingestion-runs', { competitionIds: [id] }, 502)
+      fakeFederation().answerScorers(plays)
       return
     case 'En marcha': {
       fakeFederation().hold(plays)
@@ -277,12 +281,33 @@ export async function leaveClubHalfProvisioned(club: ScenarioClub): Promise<void
   await sql(club, (query) => query('DELETE FROM $schema.clubs'))
 }
 
-/** Lo que un escenario puede haber dejado a medias en el servidor: suelta lo retenido y espera a que acabe. */
+/**
+ * Lo que un escenario puede haber dejado a medias en el servidor: suelta lo retenido y espera a que acabe.
+ *
+ * Se espera a una pasada **nueva**: la retenida no se apunta en el registro hasta que acaba su calendario, así que
+ * justo al soltarla el registro solo tiene las viejas (la ingesta del alta), y con ellas la ingesta parecía acabada.
+ * Se borraba el club mientras la soltada escribía clasificaciones y goleadores, y Postgres paraba una de las dos
+ * (`deadlock detected`, visto en R4.15).
+ */
 export async function settleIngestions(club: ScenarioClub, competitionIds: string[]): Promise<void> {
+  const known = new Map<string, Set<string>>()
+  for (const id of competitionIds) known.set(id, new Set((await runsOf(club, id)).map((r) => r.id)))
   fakeFederation().releaseAll()
   for (const id of competitionIds) {
-    // Si el escenario paró el servidor con una pasada en marcha, esa pasada no acabará nunca: no se espera más.
-    await ingestionFinished(club, id, 5_000).catch(() => undefined)
+    // Si el escenario paró el servidor con una pasada en marcha, o no llegó a lanzar la retenida, no acabará
+    // nunca: no se espera más.
+    await newIngestionFinished(club, id, known.get(id)!, 5_000).catch(() => undefined)
+  }
+}
+
+/** Que acabe una pasada que no estaba entre las `known`: la de goleadores, que es la última, o una fallida. */
+async function newIngestionFinished(club: ScenarioClub, competitionId: string, known: Set<string>, timeoutMs: number) {
+  const until = Date.now() + timeoutMs
+  for (;;) {
+    const fresh = (await runsOf(club, competitionId)).filter((r) => !known.has(r.id))
+    if (fresh.some((r) => r.outcome !== 'accepted' && (r.kind === 'scorers' || r.outcome === 'failed'))) return
+    if (Date.now() > until) throw new Error(`La ingesta de la competición ${competitionId} no acabó en ${timeoutMs} ms`)
+    await new Promise((resolve) => setTimeout(resolve, 100))
   }
 }
 

@@ -80,8 +80,9 @@ extension ListMatches.Side {
             // cliente no lo puede leer (lo enseñó la prueba del partido sin jugar).
             value2: .init(score: score, standing: standing.map {
                 .init(value1: .init(
-                    position: $0.position, played: $0.played, won: $0.won, drawn: $0.drawn, lost: $0.lost,
-                    goalsFor: $0.goalsFor, goalsAgainst: $0.goalsAgainst, points: $0.points))
+                    position: $0.position, previousPosition: $0.previousPosition, played: $0.played, won: $0.won,
+                    drawn: $0.drawn, lost: $0.lost, goalsFor: $0.goalsFor, goalsAgainst: $0.goalsAgainst,
+                    points: $0.points))
             }))
     }
 }

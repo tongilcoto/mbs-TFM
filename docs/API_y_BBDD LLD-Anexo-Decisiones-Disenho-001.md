@@ -5115,6 +5115,7 @@ misma fila.
 
 1. **Es la fila guardada, no un cálculo**: la misma que sirve `GET /standings`, ingerida o calculada ([D-15],
    [D-55]). Sin la racha ni el puesto anterior, que son de la tabla de una jornada y no de un partido ([D-34]).
+   > **Enmendado el 2026-10-30** (abajo): el puesto anterior sí viaja.
 2. **No cambia [D-34]**: la clasificación sigue sin acceso por identificador y con `?roundId=` obligatorio. Esto
    no es otra forma de pedir la tabla, sino **lo que varía en cada fila** del calendario de un equipo, que es el
    criterio de las proyecciones ([D-32]).
@@ -5130,6 +5131,16 @@ misma fila.
 
 **Enmienda** a la descripción de `MatchTeam` en el catálogo (R4.4 del plan de la rebanada 4), y a §5.1 y §5.2 del
 LLD.
+
+**Enmienda (2026-10-30): con el puesto anterior.** Al revisar la pestaña Resultados (R4.12), el desarrollador
+pidió que el número junto a cada equipo de un partido jugado sea **el puesto con el que llegó al partido**, no el
+de después: en la jornada 1, ninguno. Ese puesto es el de la jornada anterior, y para el rival la web no lo tiene
+(solo ve su fila en los partidos del propio). La fila guardada ya lo lleva (`standing_rows.previous_position`,
+[D-33]), y en la base del desarrollador coincide en las 325 filas con el puesto de la jornada anterior, y es nulo
+en las de la jornada 1. **Decisión**: `MatchStanding` suma **`previousPosition`**, anulable, con el mismo sentido
+que en `StandingResponse`. Lo que se dijo en el punto 1 deja de valer para él: el puesto con el que se llega a un
+partido **sí varía en cada fila** del calendario de un equipo, que es el criterio de [D-32]. La racha sigue
+fuera. Una prueba por HTTP con rojo visto y **2/2 mutaciones** (`Tools/Mutate/Catalogs/R4-12.json`).
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

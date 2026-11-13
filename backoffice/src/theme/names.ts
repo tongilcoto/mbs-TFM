@@ -53,6 +53,13 @@ export function teamName(category: TeamCategory, letter?: string | null): string
   return letter ? `${categoryNames[category]} ${letter}` : categoryNames[category]
 }
 
+// Una competición por su división y su grupo: «PRIMERA CADETE · Grupo 4». Sin la categoría que el servidor pone
+// delante en `displayName`: al lado ya está el equipo, que la dice (bloque T del plan R2). La que repite la
+// federación dentro de su propio nombre no se recorta: cada federación escribe a su manera.
+export function competitionLabel(competition: { divisionLabel: string; groupLabel: string }): string {
+  return `${competition.divisionLabel} · ${competition.groupLabel}`
+}
+
 const genderNames = namesOf('Gender')
 const modalityNames = namesOf('Modality')
 

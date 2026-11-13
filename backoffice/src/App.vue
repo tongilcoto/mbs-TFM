@@ -123,6 +123,9 @@ function exampleAddress(): string {
 }
 .content {
   grid-area: content;
+  /* Que la columna se estreche con la ventana: sin esto, una tabla ancha la estira y la página se sale por la
+     derecha. La tabla se desplaza dentro de su caja (`ScrollBox`). */
+  min-width: 0;
   padding: 1.5rem;
 }
 .content:focus {

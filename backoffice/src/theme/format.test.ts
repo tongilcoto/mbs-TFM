@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest'
-import { formatInstant } from './format'
+import { describe, expect, test, vi } from 'vitest'
+import { formatDayRange, formatGoalDifference, formatInstant, formatKickoff, formatMatchDay } from './format'
 
 // Las pruebas fijan la zona horaria, para que den lo mismo en cualquier ordenador.
 describe('la fecha y la hora de un instante', () => {
@@ -27,5 +27,54 @@ describe('la fecha y la hora de un instante', () => {
     const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
     expect(formatInstant('2026-10-17T21:40:00Z')).toBe(formatInstant('2026-10-17T21:40:00Z', browserZone))
+  })
+})
+
+describe('el día de un partido (plan R4, §3.3)', () => {
+  test('con el día de la semana, el día y el mes: «Dom 1 mar»', () => {
+    expect(formatMatchDay('2026-03-01')).toBe('Dom 1 mar')
+    expect(formatMatchDay('2026-10-31')).toBe('Sáb 31 oct')
+    expect(formatMatchDay('2027-09-04')).toBe('Sáb 4 sept')
+  })
+
+  // LLD-B §9.7: convertida en la medianoche UTC y enseñada en Honolulu, sería el viernes 28 de febrero.
+  test('en un navegador de otra zona horaria, el mismo día', () => {
+    try {
+      for (const other of ['Pacific/Honolulu', 'Pacific/Kiritimati']) {
+        vi.stubEnv('TZ', other)
+        expect(formatMatchDay('2026-03-01')).toBe('Dom 1 mar')
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+})
+
+describe('la hora de un partido', () => {
+  test('de 24 horas, sin segundos', () => {
+    expect(formatKickoff('12:00')).toBe('12:00')
+    expect(formatKickoff('09:30:00')).toBe('09:30')
+  })
+})
+
+describe('la diferencia de goles', () => {
+  test('con su signo; el menos, de verdad', () => {
+    expect(formatGoalDifference(3)).toBe('+3')
+    expect(formatGoalDifference(-2)).toBe('−2')
+    expect(formatGoalDifference(0)).toBe('0')
+  })
+})
+
+describe('las fechas de una jornada (plan R4, §3.4)', () => {
+  test('en el mismo mes, el mes una vez', () => {
+    expect(formatDayRange('2026-10-24', '2026-10-25')).toBe('24 – 25 oct')
+  })
+
+  test('si cambia el mes, los dos', () => {
+    expect(formatDayRange('2026-10-31', '2026-11-01')).toBe('31 oct – 1 nov')
+  })
+
+  test('un solo día', () => {
+    expect(formatDayRange('2026-10-24', '2026-10-24')).toBe('24 oct')
   })
 })

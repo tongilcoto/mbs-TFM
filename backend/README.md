@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1, 2 y 3 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) y [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md)), y la 4 en marcha ([resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **831 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 4 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md) y [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **831 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -605,8 +605,8 @@ curl -s "http://atleti.localhost:8080/v1/matches?roundId=<id de la jornada>" | j
 - **Cada partido**: su jornada (`roundNumber`), la fecha como día y la hora como `HH:MM` (sin ella si la Federación no
   la ha fijado), el estado, el campo y el código del acta.
 - **Cada lado** (`home`, `away`): el equipo, con los nombres de su club como en la clasificación, su marcador (sin él
-  si no se ha jugado) y **`standing`, su fila de la clasificación de esa jornada** (`D-112`): puesto, J, G, E, P,
-  goles y puntos. **Si la jornada no tiene tabla, `standing` no viene** (los nulos no viajan, LLD-B §3.8).
+  si no se ha jugado) y **`standing`, su fila de la clasificación de esa jornada** (`D-112`): puesto, el puesto
+  anterior (con el que llegó al partido; sin él en la jornada 1), J, G, E, P, goles y puntos. **Si la jornada no tiene tabla, `standing` no viene** (los nulos no viajan, LLD-B §3.8).
 - **404 con el código de su ámbito**: `ROUND_NOT_FOUND`, `COMPETITION_NOT_FOUND`, `TEAM_NOT_FOUND` o
   `SEASON_NOT_FOUND`; **400 `INVALID_UUID`** si un id no es un UUID.
 ---

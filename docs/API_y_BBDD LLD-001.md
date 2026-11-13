@@ -1364,8 +1364,8 @@ Tres lecturas que no son evidentes en la tabla:
   (`?teamId=` + `?seasonId=`, que puede abarcar liga **y** copa — dos `Competition`, [D-12]).
 - **`?teamId=` casa contra los dos lados**, local y visitante. La sostienen los índices compuestos de §4.6,
   los mismos que quedaron al eliminar `Participation` ([D-27]).
-- **Cada lado lleva su fila de la clasificación de esa jornada** ([D-112]): puesto, jugados, ganados, empatados,
-  perdidos, goles y puntos, o nula si la jornada no tiene tabla. Así el calendario de un equipo pinta el puesto de
+- **Cada lado lleva su fila de la clasificación de esa jornada** ([D-112]): puesto, el puesto anterior (con el que
+  llegó al partido), jugados, ganados, empatados, perdidos, goles y puntos, o nula si la jornada no tiene tabla. Así el calendario de un equipo pinta el puesto de
   cada partido sin una `GET /standings` por jornada.
 - **Paginado**, a diferencia de `Round`, aunque los dos exijan ámbito: aquí el ámbito **no trae techo**
   ([D-49]).
@@ -1851,8 +1851,9 @@ struct SeasonResponse: Content {
 - **Y un tercer rótulo, `nameWithLetter`: el nombre del club + `letter`** ([D-111]): sin categoría, como `shortDisplayName`, pero
   con el **nombre** del club y no el corto («Celtic Castilla A» frente a «Celtic A»). Es el que usa el backoffice;
   el corto queda para las pantallas del móvil. Los tres se montan en el adaptador HTTP ([D-109]).
-- **`MatchTeam` lleva también la fila de la clasificación de su jornada**, `standing` ([D-112]), sin la racha ni el puesto
-  anterior, que son de la tabla entera ([D-34]): es lo que varía en cada fila del calendario de un equipo.
+- **`MatchTeam` lleva también la fila de la clasificación de su jornada**, `standing` ([D-112]), sin la racha, que es de
+  la tabla entera ([D-34]): es lo que varía en cada fila del calendario de un equipo. **Con el puesto anterior**
+  (enmienda a [D-112], 2026-10-30): el puesto con el que el equipo llegó al partido.
 - **El marcador vive dentro de `home`/`away`, no como `homeScore`/`awayScore` sueltos.** Ata cada número a su
   equipo en la propia estructura: el cliente pinta `fila.score` junto a `fila.crestUrl` sin cruzar dos
   campos paralelos y sin poder equivocarse de lado. Ambos son anulables hasta que el partido se juega.

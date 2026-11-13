@@ -1,0 +1,20 @@
+{
+  "title": "R4.12 · listMatches: el puesto anterior en la fila de cada lado del partido (enmienda a D-112)",
+  "filter": "MatchEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-sin-puesto-anterior",
+      "description": "la fila del partido no lleva el puesto anterior",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "previousPosition: $0.previousPosition,",
+      "replace": "previousPosition: nil,"
+    },
+    {
+      "id": "M2-puesto-anterior-es-el-de-ahora",
+      "description": "el puesto anterior es el de tras la jornada",
+      "file": "Sources/HTTPAdapter/MatchHandler.swift",
+      "find": "previousPosition: $0.previousPosition,",
+      "replace": "previousPosition: $0.position,"
+    }
+  ]
+}
