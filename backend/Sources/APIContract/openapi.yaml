@@ -4480,11 +4480,15 @@ components:
         Resultado de un partido **relativo a un equipo**. No confundir con `MatchStatus`, que es absoluto:
         un mismo partido es `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el
         otro. Solo aparece dentro de la racha (`StandingResponse.form`, D-34).
-      enum: [victoria, empate, derrota]
+
+        **`descanso`** es la jornada en la que el equipo descansa, en un grupo impar (D-105): la racha cuenta
+        jornadas, no partidos (D-114).
+      enum: [victoria, empate, derrota, descanso]
       x-enum-names:
         victoria: Victoria
         empate: Empate
         derrota: Derrota
+        descanso: Descanso
 
     PlayerPosition:
       type: string
@@ -5211,8 +5215,10 @@ components:
 
     TeamRegistrationCompetition:
       type: object
-      description: Una competición de la inscripción, con el código del equipo en ella (D-101).
-      required: [competitionId, federationTeamId]
+      description: |
+        Una competición de la inscripción, con el código del equipo en ella (D-101) y **el resumen del equipo en
+        ella** (D-113): lo que la portada enseña de cada equipo sin pedir nada más.
+      required: [competitionId, federationTeamId, summary]
       properties:
         competitionId:
           type: string
@@ -5227,6 +5233,69 @@ components:
             **Nulo ⇒ la competición se inscribió a mano** (`PUT .../registrations/{seasonId}`) y el equipo
             todavía no está enganchado en ella.
           examples: ['3349086']
+        summary:
+          allOf:
+            - $ref: '#/components/schemas/TeamCompetitionSummary'
+          readOnly: true
+
+    TeamCompetitionSummary:
+      type: object
+      description: |
+        **Cómo le va al equipo en una competición** (D-113): su puesto y su racha en la última clasificación, su
+        último partido y el próximo. **Se calcula al leer**, no se guarda: es una proyección de la clasificación y
+        de los partidos, los mismos datos que dan `GET /standings` y `GET /matches`.
+
+        **Cada parte es nula (o vacía) si no hay dato**: sin clasificación, ni puesto ni racha; sin partidos
+        jugados, sin último; con la competición acabada, sin próximo.
+      required: [position, form, lastMatch, nextMatch, nextOpponentPosition]
+      properties:
+        position:
+          type: [integer, 'null']
+          minimum: 1
+          readOnly: true
+          description: |
+            El puesto del equipo en **la última clasificación** de la competición: la de la jornada más alta que
+            tiene tabla (D-113). No se deduce de `Round.isCurrent`, que señala la primera por jugar. Nulo si
+            todavía no hay ninguna.
+          examples: [3]
+        form:
+          type: array
+          readOnly: true
+          maxItems: 5
+          description: |
+            **La racha** de esa misma fila, la que da `StandingResponse.form`: las últimas 5 jornadas del equipo,
+            la más reciente primero, con la de descanso como una más (D-114). Vacía si no hay clasificación.
+          items:
+            $ref: '#/components/schemas/FormEntry'
+        lastMatch:
+          type: [object, 'null']
+          anyOf:
+            - $ref: '#/components/schemas/MatchResponse'
+          readOnly: true
+          description: |
+            **El último partido jugado** del equipo en la competición, con la misma forma que en `GET /matches`:
+            cada lado con su marcador y con su fila de la clasificación de esa jornada, cuyo `previousPosition` es
+            el puesto con el que el rival llegó al partido (D-112). **La jornada de descanso no cuenta** (D-105):
+            es el último que se jugó de verdad. Nulo si todavía no ha jugado ninguno.
+        nextMatch:
+          type: [object, 'null']
+          anyOf:
+            - $ref: '#/components/schemas/MatchResponse'
+          readOnly: true
+          description: |
+            **El próximo partido** del equipo: el de la primera jornada que viene después de la última que jugó,
+            con la misma forma que en `GET /matches`. **Si en esa jornada descansa, es su descanso** (D-105): el
+            partido contra el equipo ficticio, para que el cliente diga «Descansa». Sin marcador ni fila de
+            clasificación, porque no se ha jugado. Nulo si la competición se ha acabado.
+        nextOpponentPosition:
+          type: [integer, 'null']
+          minimum: 1
+          readOnly: true
+          description: |
+            **El puesto con el que el rival llega al próximo partido**: el suyo en la última clasificación (D-113,
+            punto 5). Va aparte porque un partido sin jugar no trae fila (`MatchTeam.standing` nulo). Nulo si no
+            hay próximo, si es un descanso o si no hay clasificación todavía.
+          examples: [5]
 
     CreateTeamRequest:
       type: object
@@ -5745,8 +5814,9 @@ components:
     FormEntry:
       type: object
       description: |
-        Un resultado dentro de la racha, **visto desde el equipo de la fila**. Lleva el número de jornada
-        para que la app pueda rotular cada distintivo, que es lo que hace el mockup.
+        Una jornada dentro de la racha, **vista desde el equipo de la fila**: su resultado, o `descanso` si
+        descansó (D-114). Lleva el número de jornada para que la app pueda rotular cada distintivo, que es lo que
+        hace el mockup.
       required: [roundNumber, outcome]
       properties:
         roundNumber:
@@ -5861,14 +5931,15 @@ components:
           readOnly: true
           maxItems: 5
           description: |
-            **Racha**: los últimos **5** resultados del equipo hasta esta jornada, el más reciente primero.
-            La columna RACHA del mockup.
+            **Racha**: las últimas **5** jornadas del equipo hasta esta, la más reciente primero, con su
+            resultado o `descanso` (D-114): la racha cuenta jornadas, no partidos. Una jornada sin jugar (un
+            aplazado) no entra. La columna RACHA del mockup.
 
             **Derivada desde `Match`**, no de diferenciar *snapshots* consecutivos (D-34): esa segunda vía
             dependería de que la cadena de clasificaciones esté completa, y no lo está en un alta a mitad
             de temporada (D-33). Se resuelve en el mismo puerto de lectura que la tabla (§4.5).
 
-            **Menos de 5 elementos** al principio de la competición o si el equipo ha jugado menos. El
+            **Menos de 5 elementos** al principio de la competición o si el equipo ha jugado menos jornadas. El
             cliente que pinte tres distintivos recorta la lista: no hay parámetro para elegir N.
           items:
             $ref: '#/components/schemas/FormEntry'

@@ -40,6 +40,14 @@ Feature: La jornada y la clasificación de una competición
     And cada partido de la racha dice el número de su jornada
     And cada partido de la racha dice al lector si fue victoria, empate o derrota, y en qué jornada
 
+  # Plan R5, D-114: la racha cuenta jornadas, y la de descanso entra como un cuadro vacío.
+  @ui
+  Scenario: En la racha de la clasificación, la jornada en la que un equipo descansó es un cuadro vacío
+    Given en la temporada en curso de mi club juega un equipo que descansó en una de las jornadas jugadas
+    When abro la pantalla de la competición del equipo en la última jornada jugada
+    Then la racha del equipo de mi club tiene un cuadro vacío en la jornada en la que descansó
+    And el cuadro vacío de la racha del equipo de mi club dice al lector "Descansó en la jornada" y su número
+
   @ui
   Scenario: Una jornada por jugar no tiene clasificación todavía
     Given en la temporada en curso de mi club juega un equipo en una competición con jornadas jugadas

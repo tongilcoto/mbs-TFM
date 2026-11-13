@@ -201,6 +201,86 @@ struct SeasonRegistrationEndpointTests {
         }
     }
 
+    /// **El resumen viaja en las dos lecturas** (`D-113`), con la misma forma: el
+    /// Cadete B gana al Galapagar A en la jornada 1 (2-1, tabla con el Cadete B
+    /// primero) y la 2 está por jugar en casa del Galapagar. El borde: la ruta y
+    /// cada campo del resumen; las reglas, los niveles 1 y 2.
+    @Test("las dos lecturas mandan el resumen de cada competición, campo a campo (D-113)")
+    func bothReadsCarryTheSummary() async throws {
+        try await Self.withSeededClub { app, seeded in
+            // La misma fecha que la siembra, local: así el censo no confunde
+            // la fecha de la siembra con el campo de la respuesta.
+            let stamp = Date(timeIntervalSince1970: 1_760_000_000)
+            let (played, next) = (MatchID(raw: UUID()), MatchID(raw: UUID()))
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            try await unitOfWork.withRepositories(actor: ActorContext(clubSlug: try Slug(Self.slug))) { repositories in
+                let rounds = try (1...2).map { number in
+                    try Round(
+                        id: RoundID(raw: UUID()), competitionID: seeded.competition, number: number,
+                        startDate: Date(timeIntervalSince1970: 1_790_000_000 + Double(number) * 604_800),
+                        endDate: Date(timeIntervalSince1970: 1_790_000_000 + Double(number) * 604_800),
+                        createdAt: stamp, updatedAt: stamp)
+                }
+                for round in rounds { try await repositories.rounds.save(round) }
+                let club = try OpponentClub(
+                    id: OpponentClubID(raw: UUID()), name: "C.D. GALAPAGAR", shortName: "Galapagar",
+                    slug: try Slug("c-d-galapagar"), createdAt: stamp, updatedAt: stamp)
+                try await repositories.opponentClubs.save(club)
+                let rival = try Team(
+                    id: TeamID(raw: UUID()), opponentClubID: club.id, seasonID: seeded.season, category: .cadete,
+                    letter: "A", gender: .masculino, modality: .futbol11, createdAt: stamp,
+                    updatedAt: stamp)
+                try await repositories.teams.save(rival)
+                try await repositories.matches.save(try Match(
+                    id: played, competitionID: seeded.competition, roundID: rounds[0].id,
+                    kickoff: Kickoff(date: rounds[0].startDate, time: WallClockTime(hour: 11, minute: 0)),
+                    homeTeamID: seeded.cadeteB, awayTeamID: rival.id,
+                    result: try MatchResult(homeScore: 2, awayScore: 1), status: .finalizado,
+                    createdAt: stamp, updatedAt: stamp))
+                try await repositories.matches.save(try Match(
+                    id: next, competitionID: seeded.competition, roundID: rounds[1].id,
+                    kickoff: Kickoff(date: rounds[1].startDate), homeTeamID: rival.id,
+                    awayTeamID: seeded.cadeteB, status: .programado,
+                    createdAt: stamp, updatedAt: stamp))
+                for (team, position) in [(seeded.cadeteB, 1), (rival.id, 2)] {
+                    try await repositories.standingRows.save(try StandingRow(
+                        id: StandingRowID(raw: UUID()), competitionID: seeded.competition, roundID: rounds[0].id,
+                        teamID: team, position: position, previousPosition: nil, played: 1, won: 2 - position,
+                        drawn: 0, lost: position - 1, goalsFor: 3 - position, goalsAgainst: position,
+                        points: 3 * (2 - position), createdAt: stamp, updatedAt: stamp))
+                }
+            }
+
+            func check(_ competition: Components.Schemas.TeamRegistrationCompetition) throws {
+                let summary = competition.summary.value1
+                #expect(summary.position == 1)
+                #expect(summary.form.map { "\($0.roundNumber):\($0.outcome.value1.rawValue)" } == ["1:victoria"])
+                #expect(summary.nextOpponentPosition == 2)
+                let last = try #require(summary.lastMatch?.value1)
+                #expect(last.id == "\(played)")
+                #expect(last.roundNumber == 1)
+                #expect(last.home.value1.value2.score == 2)
+                #expect(last.away.value1.value1.nameWithLetter == "C.D. GALAPAGAR A")
+                #expect(last.away.value1.value2.standing?.value1?.position == 2)
+                let upcoming = try #require(summary.nextMatch?.value1)
+                #expect(upcoming.id == "\(next)")
+                #expect(upcoming.roundNumber == 2)
+                #expect(upcoming.isKickoffConfirmed == false)
+            }
+            try await app.testing().test(
+                .GET, "/v1/seasons/\(seeded.season)/registrations", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                let entry = try #require(try Self.decode(response).first { $0.team.id == "\(seeded.cadeteB)" })
+                try check(try #require(entry.competitions.first))
+            }
+            try await app.testing().test(
+                .GET, "/v1/teams/\(seeded.cadeteB)/registrations/\(seeded.season)", beforeRequest: { Self.header(&$0) }
+            ) { response async throws in
+                try check(try #require(try Self.decodeOne(response).competitions.first))
+            }
+        }
+    }
+
     @Test("getTeamRegistration: inscrito sin competición, la lista vacía")
     func getsATeamWithoutCompetition() async throws {
         try await Self.withSeededClub { app, seeded in

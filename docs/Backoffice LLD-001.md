@@ -742,6 +742,8 @@ Por qué los dos, si los bocetos son solo oscuros: [DW-12].
 
 - **El color nunca es la única pista.** Una victoria es verde **y además** lleva una «V»: quien no distingue
   el verde del rojo tiene que poder leerla igual (WCAG 2.2, criterio 1.4.1).
+  **Una excepción, la racha**: el número de cada jornada sobre el color del resultado, y el resultado en el
+  texto al pasar el ratón y en el que lee el lector de pantalla; un partido suelto sí lleva su letra [DW-23].
 - **Todo texto tiene el contraste mínimo de nivel AA en los dos modos.** Un verde que se lee bien sobre fondo
   oscuro puede no leerse sobre blanco. Por eso **el análisis de axe de cada escenario mira la pantalla dos
   veces, una en cada modo** (ADR, decisión 6). No se duplican los escenarios, solo el análisis del final.
@@ -1041,3 +1043,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-20]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-21]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-22]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

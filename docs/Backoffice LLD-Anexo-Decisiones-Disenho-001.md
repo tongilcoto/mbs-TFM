@@ -46,6 +46,7 @@
 | **Lo transversal** | | |
 | **DW-11** | Un club por dirección, sin selector de club | §8.2, §12 |
 | **DW-12** | Modo claro y oscuro, aunque los bocetos son solo oscuros | §9.3, §9.4 |
+| **DW-23** | La racha pinta el número de cada jornada sobre el color del resultado; un solo partido, su letra V, E o D | §9.4 |
 | **Las pruebas** | | |
 | **DW-13** | Los clubs de los escenarios llevan el prefijo `bo_` | §11.2 |
 | **DW-14** | La federación falsa va detrás del servidor, y eso no es un simulacro | §11.3 |
@@ -561,6 +562,39 @@ lo que se ve.
   saberla.
 - **La sección de gestión `/temporadas`** (rebanada 11) y estos caminos comparten el principio; no chocan, porque
   `/temporadas` a secas es la lista y lo de debajo, lo de cada una.
+
+### DW-23 · La racha pinta el número de cada jornada sobre el color del resultado; un solo partido, su letra V, E o D
+
+**Qué hay que decidir** (2026-11-13, rebanada 5, decisión 3 de su plan). La portada suma la racha de cada equipo:
+sus últimos 5 resultados, el más reciente primero, cada uno con su jornada (`FormEntry`). El LLD-B §9.4 dice que el
+color nunca va solo: «una victoria es verde **y además** lleva una V». La rebanada 4 ya pintaba dos cosas distintas:
+en la pestaña Resultados, **la letra** de cada partido sobre su color; en la racha de la clasificación, **el número
+de la jornada** sobre el color, con el resultado en el texto al pasar el ratón y en el que lee el lector de
+pantalla («Victoria en la jornada 7»).
+
+| Opción | Veredicto |
+|---|---|
+| (a) La letra V, E o D en cada cuadro de la racha, y la jornada al pasar el ratón | Descartada: en una fila de cinco letras no se sabe hacia qué lado va el tiempo |
+| **(b) El número de la jornada sobre el color, como el boceto y la clasificación de la R4** | **Elegida** |
+| (c) El número y la letra a la vez | Descartada: no caben en un cuadro pequeño sin leerse mal |
+
+**Decisión: (b).** Lo que dijo el desarrollador: en otras webs nunca sabe si la racha va de izquierda a derecha o al
+revés; con el número de la jornada, el orden se lee solo. **Un partido suelto** (la pestaña Resultados) sigue con
+su letra: ahí el orden lo da la fila, y lo que falta es el resultado.
+
+- **La racha es la misma pieza en la portada y en la clasificación**: el número sobre el color, el texto «Victoria
+  en la jornada 7» al pasar el ratón o al llegar con el teclado, y el mismo texto para el lector de pantalla.
+- **Los colores, los de la rebanada 4** (`--p-estado-bien`, `--p-estado-sin-datos`, `--p-estado-fallo`), con el
+  número en el color del fondo para que axe dé el contraste por bueno en los dos modos.
+- **La jornada de descanso, un cuadro vacío**: solo el borde y su número, con el texto «Descansó en la jornada 28».
+  Lo propuso el desarrollador al revisar los escenarios (R5.3): sin él, los números de la racha tenían un hueco. El
+  servidor lo manda como una jornada más de la racha (`D-114`).
+
+**Lo que se asume a cambio.**
+
+- **En la racha, el resultado se ve solo por el color**: quien no distingue el verde del rojo tiene que pasar el
+  ratón o leerlo con el lector de pantalla. Es una excepción a la primera regla del §9.4, que se acepta porque el
+  número es lo que hace legible la racha, y el resultado de cada partido se ve entero en la pestaña Resultados.
 ---
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

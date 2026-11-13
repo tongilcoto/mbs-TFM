@@ -39,10 +39,10 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
 | `POST /v1/seasons`                                                                    | Backoffice R2 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
-| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
+| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1; el resumen, R5 — [§4.5](#equipos-de-la-temporada) |
 | `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
 | `GET /v1/teams/{id}`                                                                  | Backoffice R3 — [§4.6](#alta-de-equipo) |
-| `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4 — [§4.5](#equipos-de-la-temporada) |
+| `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4; el resumen, R5 — [§4.5](#equipos-de-la-temporada) |
 | `GET /v1/rounds?competitionId=` · `GET /v1/rounds/{id}`                               | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/standings?roundId=`                                                          | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/matches?…`                                                                   | Backoffice R4 — [§4.8](#partidos) |
@@ -502,6 +502,12 @@ curl -s http://atleti.localhost:8080/v1/seasons/<id de la temporada>/registratio
 - **Un elemento por equipo**: `team` (el equipo, igual que en cualquier otra respuesta), `seasonId` y
   `competitions`, una lista con el `competitionId` y el código del equipo en la federación
   (`federationTeamId`) de cada una.
+- **Cada competición trae `summary`, cómo le va al equipo en ella** (`D-113`, rebanada 5): `position` y `form` (la
+  racha, las últimas 5 jornadas con el descanso como una más, `D-114`) de la última clasificación; `lastMatch` y
+  `nextMatch`, con la forma de `/matches` (el próximo puede ser el descanso, el partido contra el ficticio); y
+  `nextOpponentPosition`, el puesto del rival en la última clasificación. **La última clasificación** es la de la
+  jornada más alta que tiene tabla. Sin clasificación, sin partidos jugados o con todo jugado, la parte que falta
+  sale nula (y la racha, vacía).
 - **Un equipo inscrito sin competición todavía** (el estado de junio) sale con `competitions` vacía.
 - Solo equipos **propios**. Ordenados por categoría, de menor a mayor edad, y por letra.
 - `team.clubName` es el **nombre corto** del club, y `team.displayName`, «nombre corto + categoría + letra»
@@ -1034,9 +1040,9 @@ a dar de alta el agente**: apunta a `current/`, e `install.sh` cambia ese enlace
 **avisa** si instalas desde una rama que no es `main`, o con cambios sin commitear en `Sources/` (que no
 entran).
 
-**Regla: una migración que cambia lo que significa una columna se instala el mismo día.** El servidor de
-desarrollo migra la base al arrancar, pero la ingesta de `launchd` sigue con el binario de `current/`, que no
-cambia hasta `install.sh`. Mientras tanto, ese binario lee la base nueva con las reglas viejas, y no falla:
+**Regla: una migración que cambia lo que significa una columna se instala el mismo día.** La base se migra con
+`swift run Run migrate-tenants` (`serve` no migra nada al arrancar), pero la ingesta de `launchd` sigue con el
+binario de `current/`, que no cambia hasta `install.sh`. Mientras tanto, ese binario lee la base nueva con las reglas viejas, y no falla:
 escribe mal sin avisar. Pasó el 2026-10-18: `D-101` sacó de `teams` el código de los equipos propios, la base se
 migró a las 16:25, y a las 23:30 la ingesta corrió con el binario del 12 de octubre (`f982c9d`). No encontró a
 los propios por su código y los creó como rivales. Hubo que limpiarlos a mano el 27 (plan R3, fila de R3.11).

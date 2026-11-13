@@ -126,6 +126,8 @@
 | **D-99**               | Los errores que no son de la ruta van en un `default` común, y se distinguen por `code`                                       | §5.4                               |
 | **D-102**              | El equipo en una temporada tiene su propia lectura, y sus competiciones salen solo de la inscripción                          | §3.4, §5.1, §9.12                  |
 | **D-103**              | La temporada en curso es la que contiene el día de hoy, no la de fin más próximo                                              | §3.2, §5.1                         |
+| **D-113**              | Cada competición del equipo en una temporada trae su resumen: posición, racha, último y próximo partido                        | §5.1, §5.2                         |
+| **D-114**              | La racha cuenta jornadas, no partidos: el descanso entra en ella                                                               | §4.5, §5.1                         |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5142,6 +5144,101 @@ que en `StandingResponse`. Lo que se dijo en el punto 1 deja de valer para él: 
 partido **sí varía en cada fila** del calendario de un equipo, que es el criterio de [D-32]. La racha sigue
 fuera. Una prueba por HTTP con rojo visto y **2/2 mutaciones** (`Tools/Mutate/Catalogs/R4-12.json`).
 
+### D-113 · Cada competición del equipo en una temporada trae su resumen: posición, racha, último y próximo partido
+
+**Lo que lo obligó a decidirse** (2026-11-13, al revisar con el desarrollador la portada de la rebanada 5 del
+backoffice, decisión 1). La portada enseña, en cada equipo, lo que el boceto 1 llama su rendimiento: el puesto, la
+racha, el último resultado y el próximo partido. Con el contrato de hoy, eso son **tres peticiones por equipo**:
+las jornadas de su competición (`GET /rounds`), la clasificación de la última jugada (`GET /standings?roundId=`,
+cuyo identificador sale de la anterior) y sus partidos (`GET /matches?teamId=&seasonId=`). La portada ya pide la
+lista de equipos de la temporada (`GET /seasons/{seasonId}/registrations`, [D-102]), y es una por pantalla.
+
+**Medido** en la base del desarrollador, con el servidor de depuración y por Vite (media de 5): la lista de equipos,
+28 ms y 3,4 KB; las jornadas, 21 ms y 9 KB; la clasificación, 64 ms y 18 KB; los partidos, 51 ms y 29 KB. Con sus
+5 equipos con competición, la opción (a) suma **15 peticiones y unos 280 KB**, de los que se usa una fila de 16 y
+dos partidos de 30; y la portada lo repite cada 10 s mientras hay una ingesta en marcha.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Equipo por equipo, con lo que hay | Ningún cambio; el *N+1* de [D-32] y [D-34], por equipos. Y el cliente tiene que deducir cuál es «la última jornada jugada», que no es la que el servidor llama en curso | Descartada |
+| **(b) Un resumen en cada competición de la inscripción** | Campos nuevos en `TeamRegistrationCompetition`, resueltos al leer `listSeasonRegistrations` | **Elegida** |
+| (c) Una operación nueva que lo junte | Una operación más (86), y la portada pide dos cosas sobre los mismos equipos | Descartada |
+
+**Decisión: (b).** Cada `TeamRegistrationCompetition` suma **el resumen del equipo en esa competición**: su puesto
+y su racha en la última clasificación que tiene, el último partido jugado y el próximo por jugar, cada uno con su
+rival y el puesto de este. **Fijado en la mini-fase del catálogo** (R5.4 del plan de la rebanada 5): el campo
+`summary`, un `TeamCompetitionSummary` con `position`, `form`, `lastMatch` y `nextMatch` (los dos con la forma de
+`MatchResponse`, para no inventar otra forma de un partido) y `nextOpponentPosition`.
+
+1. **Se calcula al leer, no se guarda**: la posición y la racha son las de la fila del equipo en la tabla guardada
+   ([D-15], [D-34]), y los partidos, los de `Match`. Es una proyección, como el nombre en [D-32].
+2. **«La última clasificación» la decide el servidor**: la de la jornada más alta que tiene tabla. Así la web no
+   deduce nada de `isCurrent`, que señala la primera por jugar.
+3. **Viaja también en `getTeamRegistration`**, que tiene la misma forma que cada elemento de la lista ([D-102]).
+   Se acepta para no tener dos formas de lo mismo; la ficha del equipo lo recibe y no lo usa.
+4. **Cada parte es nula si no hay dato**: sin tabla, ni puesto ni racha; sin partidos jugados, sin último; con la
+   temporada acabada, sin próximo. La competición sigue en la lista.
+5. **El puesto del rival es el que tiene al llegar al partido** (decisión 5 del plan R5): en el último, el de
+   antes de jugarlo (`previousPosition` de su fila, como en [D-112]); en el próximo, el de la última
+   clasificación, porque los partidos sin jugar no traen fila (`MatchTeam.standing` nulo). Es lo único del resumen
+   que la web no podría sacar de los partidos del equipo.
+6. **La jornada de descanso** ([D-105]) no cuenta como último partido; si la siguiente jornada es de descanso, el
+   próximo es ese descanso, el partido contra el ficticio, para que la web pinte «Descansa». Sin puesto del rival.
+
+**Lo que se asume a cambio.**
+
+- **`listSeasonRegistrations` lee más tablas** (clasificación y partidos) por cada competición. Estimado de 28 ms a
+  menos de 100 ms; **medido en R5.5** con una copia del club del desarrollador y el servidor de depuración: 327 ms
+  leyendo todos los partidos de cada competición y las tablas de todas sus jornadas, y **97 ms** leyendo solo los
+  partidos del equipo y solo la última tabla (`StandingRowRepository.latest`). El tiempo no era de Postgres
+  (menos de 1 ms por consulta) sino de convertir las filas.
+- **Un dato repetido**: el puesto y la racha del equipo salen aquí y en `GET /standings`; el último y el próximo
+  partido, aquí y en `GET /matches`. Proyecciones, no se guardan dos veces.
+- **Cambia una respuesta que ya existe**, sumando campos: no rompe a ningún cliente. El único hoy es la web.
+
+**Enmienda** a la descripción de `TeamRegistrationCompetition` en el catálogo (R5.4), y a §5.1 y §5.2 del LLD.
+
+### D-114 · La racha cuenta jornadas, no partidos: el descanso entra en ella
+
+**Lo que lo obligó a decidirse** (2026-11-13, al revisar con el desarrollador los escenarios de la portada de la
+rebanada 5, R5.3). La racha ([D-34]) son los últimos 5 partidos **jugados** del equipo, y el descanso de un grupo
+impar ([D-105]) es un partido sin marcador, así que no entra: si el equipo descansó en la jornada 28, la racha llega
+como 29, 27, 26, 25, 24. La web pinta el número de cada jornada para que el orden se lea solo ([DW-23]), y ese
+hueco lo estropea.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Como está: el descanso no entra | Un hueco en los números | Descartada por el desarrollador |
+| **(b) El descanso entra en la racha, con un valor propio** | `MatchOutcome` suma `descanso`; el cálculo reconoce el partido de descanso | **Elegida** |
+| (c) La web lo deduce del hueco | Sin cambio en el servidor | Descartada: un hueco también puede ser un partido aplazado, y se pintaría como descanso |
+
+**Decisión: (b).**
+
+1. **La racha son las últimas 5 jornadas del equipo**, no sus últimos 5 partidos: una jornada de descanso es una
+   de las cinco, con `outcome: descanso`. Las jornadas sin jugar (un aplazado) siguen fuera.
+2. **Vale en todas partes donde viaja la racha**: en la clasificación (`StandingResponse.form`) y en el resumen de
+   la portada ([D-113]). Las dos pantallas dicen lo mismo.
+3. **El servidor reconoce el descanso en un solo sitio: una marca en el partido** (`matches.is_rest_day`, decidido
+   con el desarrollador el 2026-11-13, en R5.5). La escribe la ingesta con lo que dice el adaptador al leer el
+   calendario (`FederationMatch.isRestDay`), y la leen la racha y el resumen. Descartadas una marca en el equipo
+   ficticio, porque la pregunta es si **el partido** es un descanso, y reconocerlo por el nombre «(No asignado)»,
+   que metería una costumbre de la RFFM en el núcleo ([D-97], [D-105]): si la RFFM cambia el texto, la racha
+   dejaría de ver los descansos sin que nada avise. **La marca es volátil**: la fuente la dice en cada pasada, y así
+   los descansos guardados antes se marcan en la pasada siguiente de su competición, sin relleno en la migración
+   (que no tiene adaptador que pregunte). **Y es una condición para integrar un conector nuevo** (lo pidió el
+   desarrollador): todo adaptador tiene que marcar el descanso de su federación, o la racha no lo verá; está en la
+   guía de alta de federaciones (§3.2 y la promesa 8).
+4. **El último y el próximo partido no cambian** ([D-113], punto 6): el último es el último jugado de verdad.
+
+**Lo que se asume a cambio.**
+
+- **Un valor nuevo en una lista cerrada que ya se usa**: la web es el único cliente y se cambia a la vez.
+- **Un equipo de un grupo impar enseña menos partidos en su racha**: cuatro resultados y un descanso, en vez de
+  cinco resultados. Es lo que pasó en esas cinco jornadas.
+
+**Enmienda** a [D-34] (la racha), a la descripción de `MatchOutcome` y de `form` en el catálogo (R5.4), y a §4.5 y
+§5.1 del LLD.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5291,5 +5388,8 @@ fuera. Una prueba por HTTP con rojo visto y **2/2 mutaciones** (`Tools/Mutate/Ca
 [D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-111]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-113]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-114]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

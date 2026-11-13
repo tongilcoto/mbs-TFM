@@ -186,7 +186,8 @@ final class CalendarPass {
             let merged = try existing.merging(
                 roundID: roundID, date: date, time: federationMatch.kickoff,
                 result: result, venue: federationMatch.venue,
-                federationMatchID: federationMatch.federationMatchID)
+                federationMatchID: federationMatch.federationMatchID,
+                isRestDay: federationMatch.isRestDay)
             if merged != existing {
                 try await repositories.matches.save(merged)
                 if let index = matches.firstIndex(where: { $0.id == merged.id }) {
@@ -214,6 +215,8 @@ final class CalendarPass {
                 status: MatchStatus.derived(from: result),
                 venue: federationMatch.venue,
                 federationMatchID: federationMatch.federationMatchID,
+                // `D-114`: lo dice el adaptador, que conoce su federación.
+                isRestDay: federationMatch.isRestDay,
                 createdAt: now, updatedAt: now)
 
             try await repositories.matches.save(match)

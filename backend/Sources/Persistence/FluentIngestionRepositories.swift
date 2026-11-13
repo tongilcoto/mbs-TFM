@@ -281,6 +281,7 @@ extension MatchRecord {
         status = match.status.rawValue
         venue = match.venue
         federationMatchID = match.federationMatchID
+        isRestDay = match.isRestDay
     }
 
     func toDomain() throws -> Match {
@@ -333,6 +334,7 @@ extension MatchRecord {
             status: status,
             venue: venue,
             federationMatchID: federationMatchID,
+            isRestDay: isRestDay,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -598,6 +600,21 @@ public struct FluentStandingRowRepository: StandingRowRepository {
         guard !roundIDs.isEmpty else { return [] }
         return try await StandingRowRecord.query(on: database)
             .filter(\.$round.$id ~~ roundIDs.map(\.raw))
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func latest(competitionID: CompetitionID) async throws -> [StandingRow] {
+        // La jornada: la de número más alto **con alguna fila**. El `join` repite
+        // la jornada una vez por fila, y `first` se queda con una.
+        guard let round = try await RoundRecord.query(on: database)
+            .filter(\.$competition.$id == competitionID.raw)
+            .join(StandingRowRecord.self, on: \RoundRecord.$id == \StandingRowRecord.$round.$id)
+            .sort(\.$number, .descending)
+            .first()
+        else { return [] }
+        return try await StandingRowRecord.query(on: database)
+            .filter(\.$round.$id == round.requireID())
             .all()
             .map { try $0.toDomain() }
     }

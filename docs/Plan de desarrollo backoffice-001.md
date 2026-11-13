@@ -225,7 +225,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **2** · Alta de equipo | Alta de equipo, con «Crear nueva temporada» · Portada: botón «Dar de alta un equipo» y en los dos vacíos | `createTeam` ● — si el equipo ya existe, lo inscribe en la temporada (`D-107`) · `createSeason` ● — adelantada de la 11: la temporada nace sin código de la federación, y el primer enganche se lo pone (`D-106`) |
 | **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
-| **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | Los de la 4, pedidos equipo por equipo · o 🆕 una petición que lo junte (por decidir) |
+| **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | `listSeasonRegistrations` ● ⚠️ y `getTeamRegistration` ● ⚠️ — cada competición del equipo trae su resumen (`D-113`, Plan R5, decisión 1) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
@@ -250,8 +250,8 @@ activa con la rebanada que la usa**.
   amarillas pendientes dependen de sus tramos de sanción.
 - **La 10 es la única con diseño grande en el servidor**: el LLD del backend diseña las estadísticas por dentro
   (§3.4, §4.5) pero **nunca llegaron al catálogo**.
-- **Lo que se pide por partes**: la portada del boceto (5) sale de pedir la clasificación y los partidos equipo
-  por equipo; se decide al escribir su ficha si se acepta o si se diseña una petición que lo junte. **Las
+- **Lo que se pide por partes**: la portada del boceto (5), **resuelta** (2026-11-13, `D-113`): en vez de pedir
+  la clasificación y los partidos equipo por equipo, cada competición de la lista de equipos trae su resumen. **Las
   posiciones de cada partido en Resultados (4), resueltas** (2026-10-28, `D-112`): cada lado del partido trae su
   fila de la clasificación de esa jornada, en la misma consulta.
 
@@ -406,6 +406,7 @@ su comprobación.
 | **2** · Alta de equipo · [su plan](./Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md) | ✅ hecha | 17/17 y el bloque T (7/7) | 2026-10-24 |
 | **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
 | **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | ✅ hecha | 16/16 | 2026-11-13 |
+| **5** · Portada del boceto · [su plan](./Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md) | 🔨 en curso | 6/11 | — |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

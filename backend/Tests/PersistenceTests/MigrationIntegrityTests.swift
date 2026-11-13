@@ -318,14 +318,16 @@ struct MigrationIntegrityTests {
     ///
     /// **19 con `D-106`**: la temporada puede nacer sin código de la federación.
     ///
+    /// **20 con `D-114`**: el partido sabe si es la jornada de descanso.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 19, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 20, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 19,
+        #expect(nombres.count == 20,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")

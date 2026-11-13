@@ -1,0 +1,202 @@
+{
+  "title": "R5.5 · el resumen de cada competición (D-113) y el descanso en la racha (D-114)",
+  "filter": "IngestCalendarTests|IngestionPersistenceTests|FormTests|StandingEndpointTests|TeamSummaryTests|ListSeasonRegistrationsTests|GetTeamRegistrationTests|SeasonRegistrationEndpointTests",
+  "mutations": [
+    {
+      "id": "M1-alta-sin-marca",
+      "description": "la ingesta no marca el descanso al crear el partido",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "                isRestDay: federationMatch.isRestDay,\n                createdAt: now, updatedAt: now)",
+      "replace": "                isRestDay: false,\n                createdAt: now, updatedAt: now)"
+    },
+    {
+      "id": "M2-fusion-sin-marca",
+      "description": "la pasada siguiente no marca un descanso ya guardado",
+      "file": "Sources/Application/CalendarPass.swift",
+      "find": "                federationMatchID: federationMatch.federationMatchID,\n                isRestDay: federationMatch.isRestDay)",
+      "replace": "                federationMatchID: federationMatch.federationMatchID)"
+    },
+    {
+      "id": "M3-fusion-ignora-la-fuente",
+      "description": "la fusión se queda con la marca vieja aunque la fuente diga otra",
+      "file": "Sources/Domain/Match.swift",
+      "find": "isRestDay: incomingIsRestDay ?? isRestDay,",
+      "replace": "isRestDay: isRestDay,"
+    },
+    {
+      "id": "M4-columna-no-se-escribe",
+      "description": "la base no guarda la marca",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "        isRestDay = match.isRestDay\n",
+      "replace": "        isRestDay = false\n"
+    },
+    {
+      "id": "M5-columna-no-se-lee",
+      "description": "la base no devuelve la marca",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            isRestDay: isRestDay,\n            createdAt: createdAt,",
+      "replace": "            isRestDay: false,\n            createdAt: createdAt,"
+    },
+    {
+      "id": "M6-racha-sin-descanso",
+      "description": "la racha se salta el descanso, como antes de D-114",
+      "file": "Sources/Domain/Form.swift",
+      "find": "            if match.isRestDay {",
+      "replace": "            if match.isRestDay { return nil }\n            if false {"
+    },
+    {
+      "id": "M7-descanso-de-cualquiera",
+      "description": "la racha cuenta el descanso de otro equipo",
+      "file": "Sources/Domain/Form.swift",
+      "find": "                guard match.homeTeamID == team || match.awayTeamID == team else { return nil }\n                return (round, FormEntry(roundNumber: round, outcome: .rest))",
+      "replace": "                return (round, FormEntry(roundNumber: round, outcome: .rest))"
+    },
+    {
+      "id": "M8-descanso-posterior",
+      "description": "un descanso posterior a la jornada pedida entra en la racha",
+      "file": "Sources/Domain/Form.swift",
+      "find": "            guard let round = roundNumbers[match.roundID], round <= roundNumber else { return nil }",
+      "replace": "            guard let round = roundNumbers[match.roundID] else { return nil }\n            if !match.isRestDay, round > roundNumber { return nil }"
+    },
+    {
+      "id": "M9-descanso-como-empate",
+      "description": "el descanso viaja como empate",
+      "file": "Sources/HTTPAdapter/StandingHandler.swift",
+      "find": "        case .rest: .descanso",
+      "replace": "        case .rest: .empate"
+    },
+    {
+      "id": "M10-ultima-tabla-la-primera",
+      "description": "la última clasificación es la de la jornada más baja",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "let latest = rows.compactMap { roundNumbers[$0.roundID] }.max()",
+      "replace": "let latest = rows.compactMap { roundNumbers[$0.roundID] }.min()"
+    },
+    {
+      "id": "M11-puesto-de-otro",
+      "description": "el puesto es el del primer equipo de la tabla, no el del equipo",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "let own = table.first { $0.teamID == team }",
+      "replace": "let own = table.first"
+    },
+    {
+      "id": "M12-ultimo-con-descanso",
+      "description": "el descanso cuenta como último partido",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "numbered.filter { $0.match.result != nil && !$0.match.isRestDay }",
+      "replace": "numbered.filter { $0.match.result != nil || $0.match.isRestDay }"
+    },
+    {
+      "id": "M13-ultimo-el-primero",
+      "description": "el último partido es el de la jornada más baja",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "!$0.match.isRestDay }.max { $0.round < $1.round }",
+      "replace": "!$0.match.isRestDay }.min { $0.round < $1.round }"
+    },
+    {
+      "id": "M14-proximo-el-ultimo",
+      "description": "el próximo es el de la jornada sin jugar más alta",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "$0.round > reached }.min { $0.round < $1.round }",
+      "replace": "$0.round > reached }.max { $0.round < $1.round }"
+    },
+    {
+      "id": "M15-proximo-sin-lo-alcanzado",
+      "description": "el próximo no mira hasta dónde se ha jugado",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "let reached = max(latest ?? 0, last?.round ?? 0)",
+      "replace": "let reached = 0"
+    },
+    {
+      "id": "M16-proximo-solo-por-tabla",
+      "description": "lo alcanzado es solo la última tabla, no el último partido",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "let reached = max(latest ?? 0, last?.round ?? 0)",
+      "replace": "let reached = latest ?? 0"
+    },
+    {
+      "id": "M17-rival-con-puesto-propio",
+      "description": "el puesto del rival del próximo es el del propio",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "let opponent = next.homeTeamID == team ? next.awayTeamID : next.homeTeamID",
+      "replace": "let opponent = team"
+    },
+    {
+      "id": "M19-racha-sin-tabla-propia",
+      "description": "la racha sale vacía aunque haya tabla",
+      "file": "Sources/Domain/TeamSummary.swift",
+      "find": "form: (own == nil ? nil : latest)",
+      "replace": "form: (own == nil ? nil : Optional<Int>.none)"
+    },
+    {
+      "id": "M20-ficha-sin-resumen",
+      "description": "la lectura de un equipo no añade el resumen",
+      "file": "Sources/Application/GetTeamRegistration.swift",
+      "find": "let summarized = try await summaries.adding(to: [registration], club: club)",
+      "replace": "let summarized = [registration]"
+    },
+    {
+      "id": "M21-lista-sin-resumen",
+      "description": "la lista de equipos no añade el resumen",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "let summarized = try await summaries.adding(to: entries, club: club)",
+      "replace": "let summarized = entries"
+    },
+    {
+      "id": "M22-lados-sin-fila",
+      "description": "los lados del último partido no llevan su fila de la jornada",
+      "file": "Sources/Application/CompetitionSummaries.swift",
+      "find": "rows.first { $0.roundID == match.roundID && $0.teamID == team }",
+      "replace": "nil as StandingRow?"
+    },
+    {
+      "id": "M23-lados-cruzados",
+      "description": "el local lleva la fila del visitante",
+      "file": "Sources/Application/CompetitionSummaries.swift",
+      "find": "home: .init(team: home, standing: standing(match.homeTeamID)),",
+      "replace": "home: .init(team: home, standing: standing(match.awayTeamID)),"
+    },
+    {
+      "id": "M24-sin-numero-de-jornada",
+      "description": "el partido del resumen no lleva su número de jornada",
+      "file": "Sources/Application/CompetitionSummaries.swift",
+      "find": "match: match, roundNumber: numbers[id]?[match.roundID] ?? 0,",
+      "replace": "match: match, roundNumber: 0,"
+    },
+    {
+      "id": "M25-proximo-no-viaja",
+      "description": "el adaptador no manda el próximo partido",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "nextMatch: nextMatch.map { .init(value1: $0.toResponse()) },",
+      "replace": "nextMatch: nil,"
+    },
+    {
+      "id": "M26-puesto-del-rival-no-viaja",
+      "description": "el adaptador no manda el puesto del rival del próximo",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            nextOpponentPosition: nextOpponentPosition)",
+      "replace": "            nextOpponentPosition: nil)"
+    },
+    {
+      "id": "M27-ultima-tabla-la-primera-en-la-base",
+      "description": "la base da la tabla de la jornada más baja con filas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": ".sort(\\.$number, .descending)\n            .first()",
+      "replace": ".sort(\\.$number, .ascending)\n            .first()"
+    },
+    {
+      "id": "M28-ultima-tabla-sin-filas",
+      "description": "la base da la jornada más alta aunque no tenga filas",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "            .join(StandingRowRecord.self, on: \\RoundRecord.$id == \\StandingRowRecord.$round.$id)\n",
+      "replace": ""
+    },
+    {
+      "id": "M29-sin-filas-de-otras-jornadas",
+      "description": "los lados de un partido de otra jornada que la última tabla van sin su fila",
+      "file": "Sources/Application/CompetitionSummaries.swift",
+      "find": "let rows = tables.values.flatMap { $0 } + others",
+      "replace": "let rows = tables.values.flatMap { $0 } + others.prefix(0)"
+    }
+  ]
+}

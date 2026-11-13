@@ -692,6 +692,29 @@ struct IngestionPersistenceTests {
         }
     }
 
+    /// **La marca de descanso va y vuelve** (`D-114`), y un partido normal
+    /// vuelve sin ella: la columna nueva no puede valer lo mismo para los dos.
+    @Test("Match: guarda y recupera la marca de descanso, y el normal vuelve sin ella (D-114)")
+    func matchRestDayRoundTrip() async throws {
+        try await Self.withCompetition("match-rest") { competitionID, tenant in
+            let stored = try await tenant.scope { repositories -> [Match] in
+                let (round, home, away) = try await Self.seed(
+                    competitionID: competitionID, into: repositories)
+                for (federationMatchID, isRestDay, pair) in [("1", true, (home, away)), ("2", false, (away, home))] {
+                    try await repositories.matches.save(try Match(
+                        id: MatchID(raw: UUID()), competitionID: competitionID, roundID: round,
+                        kickoff: Kickoff(date: Self.date("27-09-2025")), homeTeamID: pair.0, awayTeamID: pair.1,
+                        status: .programado, federationMatchID: federationMatchID, isRestDay: isRestDay,
+                        createdAt: Date(), updatedAt: Date()))
+                }
+                return try await repositories.matches.list(competitionID: competitionID)
+            }
+
+            #expect(stored.first { $0.federationMatchID == "1" }?.isRestDay == true)
+            #expect(stored.first { $0.federationMatchID == "2" }?.isRestDay == false)
+        }
+    }
+
     /// Siembra una jornada y dos equipos propios, que es lo mínimo con lo que se
     /// puede insertar un partido.
     static func seed(
@@ -796,6 +819,29 @@ struct IngestionPersistenceTests {
             #expect(one.count == 3)
             #expect(one.allSatisfy { $0.roundID == seeded.rounds[1] })
             #expect(none.isEmpty)
+        }
+    }
+
+    /// **La última tabla** (`D-113`, R5.5): la de la jornada más alta **con
+    /// filas**, aunque haya otra más alta sin ellas (la 3, por jugar); y nada si
+    /// la competición no tiene ninguna.
+    @Test("StandingRow: la última tabla es la de la jornada más alta con filas (D-113)")
+    func theLatestTable() async throws {
+        try await Self.withCompetition("standing-latest") { competitionID, tenant in
+            let (seeded, latest) = try await tenant.scope { repositories in
+                let seeded = try await Self.seedTwoRounds(competitionID: competitionID, into: repositories)
+                try await repositories.rounds.save(try Round(
+                    id: RoundID(raw: UUID()), competitionID: competitionID, number: 3,
+                    startDate: Self.date("11-10-2025"), endDate: Self.date("11-10-2025"),
+                    createdAt: Date(), updatedAt: Date()))
+                return (seeded, try await repositories.standingRows.latest(competitionID: competitionID))
+            }
+            #expect(latest.count == 3)
+            #expect(latest.allSatisfy { $0.roundID == seeded.rounds[1] })
+        }
+        try await Self.withCompetition("standing-latest-none") { competitionID, tenant in
+            let latest = try await tenant.scope { try await $0.standingRows.latest(competitionID: competitionID) }
+            #expect(latest.isEmpty)
         }
     }
 

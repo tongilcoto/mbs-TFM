@@ -1544,6 +1544,59 @@ struct IngestCalendarTests {
         #expect(rest.kickoff.time == nil)
     }
 
+    /// **El descanso se guarda marcado** (`D-114`): la racha y el resumen lo
+    /// leen de la marca, sin reconocer al ficticio por su nombre. El partido
+    /// normal de la misma jornada, sin marca.
+    @Test("el partido de descanso se guarda marcado como descanso, y el normal no (D-114)")
+    func theRestDayIsStoredMarked() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let (useCase, store, _) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.roundWithRestDay())
+
+        _ = try await useCase.execute(
+            competitionID: competition.id,
+            actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        let matches = await store.matches
+        let rest = try #require(matches.first { $0.federationMatchID == "5670186" })
+        let normal = try #require(matches.first { $0.federationMatchID == "5670185" })
+        #expect(rest.isRestDay)
+        #expect(!normal.isRestDay)
+    }
+
+    /// **Un descanso guardado antes de `D-114` se marca en la pasada
+    /// siguiente**: la marca es volátil, y la fuente la dice en cada pasada.
+    /// Es lo que pone al día los descansos que ya había en la base.
+    @Test("un descanso guardado sin marca se marca en la pasada siguiente (D-114)")
+    func anUnmarkedRestDayGetsMarkedOnTheNextPass() async throws {
+        let season = try Self.season()
+        let competition = try Self.competition(seasonID: season.id)
+        let store = IngestionStore()
+        let (first, _, _) = await Self.pass(
+            competition: competition, season: season, calendar: try Self.roundWithRestDay(), store: store)
+        _ = try await first.execute(
+            competitionID: competition.id, actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+        // Como lo dejó una ingesta anterior a `D-114`: el mismo partido, sin marca.
+        let stored = try #require(await store.matches.first { $0.federationMatchID == "5670186" })
+        let unmarked = try Match(
+            id: stored.id, competitionID: stored.competitionID, roundID: stored.roundID,
+            kickoff: stored.kickoff, homeTeamID: stored.homeTeamID, awayTeamID: stored.awayTeamID,
+            status: stored.status, federationMatchID: stored.federationMatchID,
+            createdAt: stored.createdAt, updatedAt: stored.updatedAt)
+        await store.save(unmarked)
+
+        let second = IngestCalendar(
+            unitOfWork: FakeUnitOfWork(store: store),
+            federation: SpyFederationClient(returning: try Self.roundWithRestDay()),
+            clock: FixedClock(instant: Self.syncInstant), ids: SequentialUUIDProvider())
+        let report = try await second.execute(
+            competitionID: competition.id, actor: .init(clubSlug: try Slug("atleti"), isSystem: true))
+
+        #expect(report.matchesUpdated == 1)
+        #expect(try #require(await store.matches.first { $0.federationMatchID == "5670186" }).isRestDay)
+    }
+
     /// **Un partido sin fecha que no es descanso sigue sin guardarse**: la
     /// fecha de la jornada solo se presta al descanso. Inventarla para un
     /// partido de verdad es lo que `D-75` prohíbe.

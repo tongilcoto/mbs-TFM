@@ -254,6 +254,12 @@ public protocol StandingRowRepository: Sendable {
     /// lado de los partidos de una página en una sola consulta (`D-112`, R4.8).
     func list(roundIDs: [RoundID]) async throws -> [StandingRow]
 
+    /// **La última tabla de una competición** (`D-113`): las filas de su jornada
+    /// de número más alto que tenga alguna, sin orden; vacía si no hay ninguna. Es
+    /// lo que el resumen de la portada necesita, sin leer las de todas las
+    /// jornadas (R5.5: leerlas todas costaba la mayor parte del tiempo).
+    func latest(competitionID: CompetitionID) async throws -> [StandingRow]
+
     /// *Upsert* por `id`, igual que sus hermanas de F5: el id lo pone el caso de
     /// uso para que la fila recién escrita entre en los candidatos de la misma
     /// pasada sin releerla.
