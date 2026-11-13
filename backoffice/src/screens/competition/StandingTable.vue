@@ -2,6 +2,7 @@
      fila del club, resaltada. Ant., el puesto anterior con una flecha de cuánto subió o bajó. La racha, un cuadro por
      partido con el número de su jornada sobre el color del resultado, el más reciente a la izquierda. -->
 <script setup lang="ts">
+import ScrollBox from '../../components/ScrollBox.vue'
 import PositionBadge from '../../components/PositionBadge.vue'
 import type { StandingLine } from './round'
 
@@ -26,102 +27,104 @@ function changeText(change: number): string {
 </script>
 
 <template>
-  <table class="standing">
-    <caption class="visually-hidden">
-      {{ caption }}
-    </caption>
-    <thead>
-      <tr>
-        <th
-          scope="col"
-          class="number"
+  <ScrollBox :label="caption">
+    <table class="standing">
+      <caption class="visually-hidden">
+        {{ caption }}
+      </caption>
+      <thead>
+        <tr>
+          <th
+            scope="col"
+            class="number"
+          >
+            <abbr title="Puesto">Pos.</abbr>
+          </th>
+          <th scope="col">
+            Equipo
+          </th>
+          <th
+            v-for="column in numbers"
+            :key="column.key"
+            scope="col"
+            class="number"
+          >
+            <abbr :title="column.long">{{ column.short }}</abbr>
+          </th>
+          <th
+            scope="col"
+            class="number"
+          >
+            <abbr title="Puntos">Pts</abbr>
+          </th>
+          <th
+            scope="col"
+            class="number"
+          >
+            <abbr title="Puesto anterior">Ant.</abbr>
+          </th>
+          <th scope="col">
+            Racha
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="line in lines"
+          :key="line.position"
+          :class="{ own: line.own }"
         >
-          <abbr title="Puesto">Pos.</abbr>
-        </th>
-        <th scope="col">
-          Equipo
-        </th>
-        <th
-          v-for="column in numbers"
-          :key="column.key"
-          scope="col"
-          class="number"
-        >
-          <abbr :title="column.long">{{ column.short }}</abbr>
-        </th>
-        <th
-          scope="col"
-          class="number"
-        >
-          <abbr title="Puntos">Pts</abbr>
-        </th>
-        <th
-          scope="col"
-          class="number"
-        >
-          <abbr title="Puesto anterior">Ant.</abbr>
-        </th>
-        <th scope="col">
-          Racha
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr
-        v-for="line in lines"
-        :key="line.position"
-        :class="{ own: line.own }"
-      >
-        <td class="number">
-          <PositionBadge :position="line.position" />
-        </td>
-        <th
-          scope="row"
-          class="team"
-        >
-          {{ line.name }}
-        </th>
-        <td
-          v-for="column in numbers"
-          :key="column.key"
-          class="number"
-        >
-          {{ line[column.key] }}
-        </td>
-        <td class="number strong">
-          {{ line.points }}
-        </td>
-        <td class="number previous">
-          <template v-if="line.previous">
-            {{ line.previous.position }}
-            <!-- La flecha y su número no se leen tal cual: el lector oye «subió 2». -->
+          <td class="number">
+            <PositionBadge :position="line.position" />
+          </td>
+          <th
+            scope="row"
+            class="team"
+          >
+            {{ line.name }}
+          </th>
+          <td
+            v-for="column in numbers"
+            :key="column.key"
+            class="number"
+          >
+            {{ line[column.key] }}
+          </td>
+          <td class="number strong">
+            {{ line.points }}
+          </td>
+          <td class="number previous">
+            <template v-if="line.previous">
+              {{ line.previous.position }}
+              <!-- La flecha y su número no se leen tal cual: el lector oye «subió 2». -->
+              <span
+                aria-hidden="true"
+                :class="['change', line.previous.change > 0 ? 'up' : line.previous.change < 0 ? 'down' : 'same']"
+              >{{ line.previous.change > 0 ? `▲${line.previous.change}` : line.previous.change < 0 ? `▼${-line.previous.change}` : '=' }}</span>
+              <span class="visually-hidden">, {{ changeText(line.previous.change) }}</span>
+            </template>
             <span
-              aria-hidden="true"
-              :class="['change', line.previous.change > 0 ? 'up' : line.previous.change < 0 ? 'down' : 'same']"
-            >{{ line.previous.change > 0 ? `▲${line.previous.change}` : line.previous.change < 0 ? `▼${-line.previous.change}` : '=' }}</span>
-            <span class="visually-hidden">, {{ changeText(line.previous.change) }}</span>
-          </template>
-          <span
-            v-else
-            class="muted"
-          >–</span>
-        </td>
-        <td>
-          <ol class="form">
-            <li
-              v-for="box in line.form"
-              :key="box.round"
-              :class="['box', box.outcome]"
-              :title="box.label"
-            >
-              <span aria-hidden="true">{{ box.round }}</span>
-              <span class="visually-hidden">{{ box.label }}</span>
-            </li>
-          </ol>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+              v-else
+              class="muted"
+            >–</span>
+          </td>
+          <td>
+            <ol class="form">
+              <li
+                v-for="box in line.form"
+                :key="box.round"
+                :class="['box', box.outcome]"
+                :title="box.label"
+              >
+                <span aria-hidden="true">{{ box.round }}</span>
+                <span class="visually-hidden">{{ box.label }}</span>
+              </li>
+            </ol>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </ScrollBox>
 </template>
 
 <style scoped>
