@@ -259,17 +259,32 @@ lado de un partido (`D-112`, R4.8) y el rótulo nombre del club + letra (`D-111`
 
 ## 6. Los escenarios
 
-**Lista provisional.** Se escriben y se revisan con el desarrollador antes de programar la web, con la *skill* de
-escenarios, con las etiquetas `@e2e` y `@ui` y axe en los dos modos.
+**Escritos y revisados con el desarrollador el 2026-11-13** (`R5.3`), con la *skill* de escenarios: **16**, sin definir
+todavía, con las etiquetas `@e2e` y `@ui` y axe en los dos modos. Quince en
+[`portada-resumen.feature`](../backoffice/e2e/features/portada-resumen.feature) y uno en `jornada.feature`, porque
+el descanso de la racha (`D-114`) también se ve en la clasificación. La revisión cambió el del descanso: de «no
+está en la racha» a «es un cuadro vacío», y con él la decisión 3 (`D-114`).
 
-- Un equipo con jornadas jugadas enseña su posición, su racha, su último resultado y su próximo partido.
-- La racha enseña la jornada de cada resultado, y dice el resultado al pasar el ratón y al lector de pantalla.
-- Un equipo sin competición no enseña ninguno de los cuatro datos.
-- Una competición sin jornadas jugadas enseña solo el próximo partido.
-- Una temporada acabada no enseña próximo partido.
-- Cada cuadro de la racha lleva a su jornada, y el próximo partido a la suya; la posición y el último, a ningún sitio.
-- La portada se ordena por posición.
-- Tras relanzar la ingesta, los datos se ponen al día solos.
+| Grupo | Escenarios | Etiqueta |
+|---|---|---|
+| La posición | El puesto tras la última jornada jugada | `@ui` |
+| La racha | Las últimas jornadas, hasta cinco, la más reciente primero, con su número y lo que dice al lector · el descanso, un cuadro vacío | `@ui` |
+| El último partido | La letra, casa o fuera, el marcador con el local primero, el rival y su puesto con el que llegó · si descansó en la última jugada, el de antes | `@ui` |
+| El próximo partido | El día, la fecha y la hora, casa o fuera, el rival y su puesto de hoy · «hora por fijar» · «descansa, y en qué jornada» | `@ui` |
+| Los que no tienen todo | Sin competición, nada · sin jornadas jugadas, solo el próximo · todas jugadas, sin próximo | `@ui` |
+| Adónde lleva | Un cuadro de la racha abre su jornada · el próximo partido abre la suya | `@e2e` |
+| Ordenar | Por posición, el mejor primero y al final los que no tienen puesto | `@ui` |
+| Ponerse al día | Al acabar la ingesta, el resumen sin recargar | `@e2e` |
+| La clasificación (`jornada.feature`) | En la racha, el descanso es un cuadro vacío | `@ui` |
+
+**Sin escenario, a propósito** (lo dice la cabecera del fichero): un equipo con dos competiciones, que el enganche
+no da; la ingesta con fallos con datos ya traídos, que se ve igual que «Al día»; y los colores, que son los de la R4.
+
+**La federación falsa**, con lo que pedían (`invented.ts`, `playedCompetition` con opciones): un grupo impar de
+cinco equipos, con el descanso del club en una jornada jugada, en la última jugada o en la jornada en curso, como la
+RFFM (el ficticio «Equipo Casa/Fuera (No asignado)», código `-1`, sin fecha); todas las jornadas jugadas; y la
+jornada en curso sin hora. Sin opciones, la competición sale igual que en la R4. **Los tres equipos en puestos
+distintos** para ordenar los coloca el paso, no la federación: con marcadores al azar pueden empatar.
 
 ---
 
@@ -316,6 +331,7 @@ Los pasos pueden cambiar tras `R5.1`.
 |---|---|---|
 | `R5.1` | 2026-11-13 | Las seis decisiones, una a una. La 1 con lo medido en el servidor del desarrollador (§4, decisión 1); la 3 y la 5, con los partidos de su Cadete A; la 4, ya resuelta en la R4 (sus colores pasaron axe en los dos modos en R4.14) |
 | `R5.2` | 2026-11-13 | Escritas con cada decisión: `D-113` en la bitácora del backend (con los puntos 5 y 6 de la decisión 5), `DW-23` en el anexo de la web y su excepción en el LLD-B §9.4; el plan del backoffice (§4 y §6) y `AGENTS.md`, al día. La enmienda a §5.1 y §5.2 del LLD del backend va con el catálogo (`R5.4`), como con `D-112` |
+| `R5.3` | 2026-11-13 | **16 escenarios** revisados con el desarrollador, sin definir: la pasada en seco da 170, los 16 nuevos sin definir (46 pasos) y los 154 de antes intactos. La revisión reabrió la decisión 3 (`D-114`, en su commit). La federación falsa, con descansos, todas jugadas y la jornada en curso sin hora: **comprobado con la ingesta de verdad** (un guion de usar y tirar contra el servidor de pruebas, 5 competiciones por pasada, 5 pasadas): el descanso llega como partido contra «Equipo Fuera (No asignado)», con la fecha de su jornada y sin marcador; la clasificación de cada jornada jugada, sin el ficticio y con el puesto que calcula la federación falsa; la jornada en curso, la siguiente a la última jugada; con todas jugadas, sin jornada en curso; y el próximo sin hora, sin confirmar. **La primera pasada falló una vez** (el quinto equipo, sin partidos tras su ingesta) y no se repitió en las cuatro siguientes: a vigilar en `R5.9`. Hoy la racha del servidor todavía salta el descanso (lo cambia `R5.5`). Y los 154 escenarios de la R4, en verde con la federación falsa nueva (5 min 36 s) |
 
 ---
 

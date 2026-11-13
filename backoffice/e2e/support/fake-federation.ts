@@ -11,7 +11,7 @@
 // los que ya hay. Ojo con el `null` pasajero de la RFFM (H-61): si llega, se vuelve a pedir.
 //
 // Además de las grabadas, sirve las competiciones que se inventa cada escenario (invented.ts): su calendario,
-// sin jugar o con jornadas jugadas (plan R4); la clasificación de cada jornada jugada, calculada de sus marcadores;
+// sin jugar o con jornadas jugadas (plan R4), con sus descansos si el grupo es impar (plan R5); la clasificación de cada jornada jugada, calculada de sus marcadores;
 // y sus goleadores, todavía ninguno. Así el servidor las da de alta y las sincroniza por su camino
 // de siempre, y los datos no se escriben a mano en la base (la skill de escenarios, principio 9). Y a una
 // competición inventada se le puede pedir que falle o que tarde: es lo que hace la RFFM de verdad.
@@ -83,7 +83,7 @@ function inventedCalendar(competition: Competition): string {
     return {
       codjornada: String(round.number),
       jornada: `${round.number} (${date})`,
-      equipos: round.matches.map(({ home, away, time, score }, m) => ({
+      equipos: round.matches.map(({ home, away, time, score, rest }, m) => ({
         codacta: `${competition.federationGroupId}${round.number - 1}${m}`,
         codigo_equipo_local: home.code,
         equipo_local: home.rawName,
@@ -96,7 +96,8 @@ function inventedCalendar(competition: Competition): string {
         goles_visitante: score ? String(score.away) : '',
         codigo_campo: '',
         campo: '',
-        fecha: date,
+        // El descanso, sin fecha (D-105): el servidor le pone la del primer día de su jornada.
+        fecha: rest ? '' : date,
         hora: time ?? '',
       })),
     }

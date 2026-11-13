@@ -195,6 +195,16 @@ export interface Fixture {
   time?: string
   /** Nada si no se ha jugado. */
   score?: { home: number; away: number }
+  /**
+   * La jornada de descanso de un grupo impar (D-105): la RFFM empareja al que descansa con un equipo ficticio,
+   * `restTeam`, sin fecha, sin hora y sin marcador. No cuenta en la clasificación.
+   */
+  rest?: true
+}
+
+/** El ficticio de la jornada de descanso, como lo publica la RFFM: código `-1`, «Casa» o «Fuera» según el lado. */
+export function restTeam(side: 'home' | 'away'): FederationTeam {
+  return { code: '-1', rawName: side === 'home' ? 'Equipo Casa (No asignado)' : 'Equipo Fuera (No asignado)' }
 }
 
 /**
@@ -258,48 +268,93 @@ function todayInMadrid(today: Date): Date {
   return new Date(Date.UTC(parts.year!, parts.month! - 1, parts.day!))
 }
 
+/** Lo que un escenario puede pedirle a una competición con jornadas jugadas (plan R5). */
+export interface PlayedOptions {
+  /**
+   * Un grupo impar, de cinco equipos, en el que el del club descansa (D-105) en una jornada: una jugada que no es
+   * la última (`'played'`), la última jugada (`'lastPlayed'`) o la jornada en curso (`'next'`).
+   */
+  ownRests?: 'played' | 'lastPlayed' | 'next'
+  /** Todas las jornadas jugadas: la temporada se ha acabado y no hay jornada en curso. */
+  allPlayed?: boolean
+  /** La jornada en curso, sin hora todavía. */
+  nextWithoutTime?: boolean
+}
+
+/** Las jornadas de un grupo a ida y vuelta, por el método del círculo; con `null`, el hueco del que descansa. */
+function doubleRoundRobin(teams: (FederationTeam | null)[]): [FederationTeam | null, FederationTeam | null][][] {
+  // El primero se queda quieto y los demás giran; cada vuelta es una jornada.
+  const firstLeg: [FederationTeam | null, FederationTeam | null][][] = []
+  let ring = teams.slice(1)
+  for (let r = 0; r < teams.length - 1; r++) {
+    const order = [teams[0]!, ...ring]
+    const pairs: [FederationTeam | null, FederationTeam | null][] = []
+    for (let i = 0; i < order.length / 2; i++) {
+      const pair: [FederationTeam | null, FederationTeam | null] = [order[i]!, order[order.length - 1 - i]!]
+      pairs.push(r % 2 === 0 ? pair : [pair[1], pair[0]])
+    }
+    firstLeg.push(pairs)
+    ring = [ring[ring.length - 1]!, ...ring.slice(0, -1)]
+  }
+  return [...firstLeg, ...firstLeg.map((pairs) => pairs.map(([home, away]) => [away, home] as [FederationTeam | null, FederationTeam | null]))]
+}
+
 /**
  * Una competición de la temporada en curso con **jornadas jugadas**: seis equipos a ida y vuelta (diez jornadas, una
  * por semana). Las primeras ya se jugaron, con marcador al azar; la siguiente, la jornada en curso, tiene hora; el
  * resto, sin hora. Las fechas, alrededor de hoy: la última jugada hace tres días y la en curso dentro de cuatro, para
  * que el servidor la marque como tal (`Round.isCurrent`). El primer equipo es el del club, y juega todas.
+ *
+ * Con `options` (plan R5): un grupo impar con la jornada en la que descansa el del club, todas jugadas, o la jornada
+ * en curso sin hora.
  */
 export function playedCompetition(
   random: Random,
   of: Season,
   forTeam: Pick<Team, 'category' | 'gender' | 'modality'>,
   today = new Date(),
+  options: PlayedOptions = {},
 ): Competition {
-  const plays = competition(random, of, forTeam, false, 6)
-  const played = random.int(3, 5)
+  const odd = options.ownRests !== undefined
+  const plays = competition(random, of, forTeam, false, odd ? 5 : 6)
   const base = todayInMadrid(today)
   const teams = plays.teams
-  // El método del círculo: el primero se queda quieto y los demás giran; cada vuelta es una jornada.
-  const firstLeg: [FederationTeam, FederationTeam][][] = []
-  let ring = teams.slice(1)
-  for (let r = 0; r < teams.length - 1; r++) {
-    const order = [teams[0]!, ...ring]
-    const pairs: [FederationTeam, FederationTeam][] = []
-    for (let i = 0; i < order.length / 2; i++) {
-      const pair: [FederationTeam, FederationTeam] = [order[i]!, order[order.length - 1 - i]!]
-      pairs.push(r % 2 === 0 ? pair : [pair[1], pair[0]])
+  let legs = doubleRoundRobin(odd ? [...teams, null] : teams)
+  let played = options.allPlayed ? legs.length : random.int(3, 5)
+  if (odd) {
+    // El del club descansa en dos jornadas, una por vuelta. Se mueve la de la ida a la que pide el escenario, y la de
+    // la vuelta tiene que quedar después de la jornada en curso, para que no se vea.
+    const restsOf = (rounds: typeof legs) => rounds.flatMap((pairs, index) => (pairs.some((pair) => pair.includes(teams[0]!) && pair.includes(null)) ? [index] : []))
+    const [first] = restsOf(legs)
+    for (let attempt = 0; ; attempt++) {
+      played = options.allPlayed ? legs.length : random.int(3, 5)
+      const target = options.ownRests === 'played' ? random.int(0, played - 2) : options.ownRests === 'lastPlayed' ? played - 1 : played
+      const moved = [...legs]
+      moved.splice(target, 0, moved.splice(first!, 1)[0]!)
+      const visible = restsOf(moved).filter((index) => index <= played)
+      if (visible.length === 1 && visible[0] === target) {
+        legs = moved
+        break
+      }
+      if (attempt > 50) throw new Error('No se ha podido colocar el descanso del club donde pide el escenario')
     }
-    firstLeg.push(pairs)
-    ring = [ring[ring.length - 1]!, ...ring.slice(0, -1)]
   }
-  const legs = [...firstLeg, ...firstLeg.map((pairs) => pairs.map(([home, away]) => [away, home] as [FederationTeam, FederationTeam]))]
   plays.schedule = legs.map((pairs, index) => {
     const number = index + 1
     const date = new Date(base.getTime() + (7 * (number - played) - 3) * DAY)
+    const hasTime = number <= played || (number === played + 1 && !options.nextWithoutTime)
     return {
       number,
       date,
-      matches: pairs.map(([home, away]) => ({
-        home,
-        away,
-        ...(number <= played + 1 ? { time: random.pick(['09:30', '11:00', '12:15', '16:45', '18:30']) } : {}),
-        ...(number <= played ? { score: { home: random.int(0, 4), away: random.int(0, 4) } } : {}),
-      })),
+      matches: pairs.map(([home, away]): Fixture => {
+        if (!home || !away) return home ? { home, away: restTeam('away'), rest: true } : { home: restTeam('home'), away: away!, rest: true }
+        return {
+          home,
+          away,
+          ...(hasTime ? { time: random.pick(['09:30', '11:00', '12:15', '16:45', '18:30']) } : {}),
+          ...(number <= played ? { score: { home: random.int(0, 4), away: random.int(0, 4) } } : {}),
+        }
+      }),
     }
   })
   return plays
@@ -324,11 +379,11 @@ export interface StandingRow {
 export function standingsAfter(plays: Competition, roundNumber: number): StandingRow[] {
   const rounds = plays.schedule ?? []
   const round = rounds.find((r) => r.number === roundNumber)
-  if (!round || round.matches.some((m) => !m.score)) return []
+  if (!round || round.matches.some((m) => !m.score && !m.rest)) return []
   const rows = new Map(plays.teams.map((team) => [team.code, { team, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 }]))
   for (const { matches } of rounds.filter((r) => r.number <= roundNumber)) {
     for (const { home, away, score } of matches) {
-      if (!score) continue
+      if (!score) continue // sin jugar, o el descanso
       for (const [team, scored, conceded] of [[home, score.home, score.away], [away, score.away, score.home]] as const) {
         const row = rows.get(team.code)!
         row.played++
