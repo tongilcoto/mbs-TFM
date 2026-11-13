@@ -39,10 +39,10 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/seasons`                                                                     | Backoffice R1 — [§4.3](#temporadas) |
 | `POST /v1/seasons`                                                                    | Backoffice R2 — [§4.3](#temporadas) |
 | `GET /v1/competitions`                                                                | Backoffice R1 — [§4.4](#competiciones) |
-| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1 — [§4.5](#equipos-de-la-temporada) |
+| `GET /v1/seasons/{id}/registrations`                                                  | Backoffice R1; el resumen, R5 — [§4.5](#equipos-de-la-temporada) |
 | `POST /v1/teams`                                                                      | Backoffice R2 — [§4.6](#alta-de-equipo) |
 | `GET /v1/teams/{id}`                                                                  | Backoffice R3 — [§4.6](#alta-de-equipo) |
-| `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4 — [§4.5](#equipos-de-la-temporada) |
+| `GET /v1/teams/{id}/registrations/{seasonId}`                                         | Backoffice R4; el resumen, R5 — [§4.5](#equipos-de-la-temporada) |
 | `GET /v1/rounds?competitionId=` · `GET /v1/rounds/{id}`                               | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/standings?roundId=`                                                          | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/matches?…`                                                                   | Backoffice R4 — [§4.8](#partidos) |
