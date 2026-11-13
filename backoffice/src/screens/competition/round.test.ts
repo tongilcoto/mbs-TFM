@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { components } from '../../api/schema'
-import { askedRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
+import { askedRound, competitionDetails, roundMatchRows, roundOptions, standingLines, streakBoxes } from './round'
 
 type Competition = components['schemas']['CompetitionResponse']
 type Round = components['schemas']['RoundResponse']
@@ -143,21 +143,42 @@ describe('la clasificación', () => {
     expect(standingLines([row(13, 13, { team: side('Celtic Castilla A', true) })])[0]).toMatchObject({ name: 'Celtic Castilla A', own: true })
   })
 
-  test('la racha, en el orden en que llega (la más reciente primero), con lo que dice al lector', () => {
-    const lines = standingLines([
-      row(1, 3, {
-        form: [
-          { roundNumber: 5, outcome: 'victoria' },
-          { roundNumber: 4, outcome: 'derrota' },
-          { roundNumber: 3, outcome: 'empate' },
-        ],
-      }),
-    ])
+  test('cada fila, con su racha', () => {
+    const lines = standingLines([row(1, 3, { form: [{ roundNumber: 5, outcome: 'victoria' }] })])
 
-    expect(lines[0]!.form).toEqual([
+    expect(lines[0]!.form).toEqual([{ round: 5, outcome: 'victoria', label: 'Victoria en la jornada 5' }])
+  })
+})
+
+describe('la racha (plan R5, decisión 3 · DW-23)', () => {
+  test('en el orden en que llega (la más reciente primero), con lo que dice al lector', () => {
+    expect(
+      streakBoxes([
+        { roundNumber: 5, outcome: 'victoria' },
+        { roundNumber: 4, outcome: 'derrota' },
+        { roundNumber: 3, outcome: 'empate' },
+      ]),
+    ).toEqual([
       { round: 5, outcome: 'victoria', label: 'Victoria en la jornada 5' },
       { round: 4, outcome: 'derrota', label: 'Derrota en la jornada 4' },
       { round: 3, outcome: 'empate', label: 'Empate en la jornada 3' },
     ])
+  })
+
+  // El nombre del catálogo daría «Descanso en la jornada 4»; el plan pide «Descansó» (D-114).
+  test('la jornada de descanso, una más, que dice «Descansó en la jornada N»', () => {
+    expect(
+      streakBoxes([
+        { roundNumber: 5, outcome: 'victoria' },
+        { roundNumber: 4, outcome: 'descanso' },
+      ]),
+    ).toEqual([
+      { round: 5, outcome: 'victoria', label: 'Victoria en la jornada 5' },
+      { round: 4, outcome: 'descanso', label: 'Descansó en la jornada 4' },
+    ])
+  })
+
+  test('sin jornadas, sin cuadros', () => {
+    expect(streakBoxes([])).toEqual([])
   })
 })
