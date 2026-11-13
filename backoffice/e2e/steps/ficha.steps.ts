@@ -292,12 +292,16 @@ Then(
     const action = relaunchIn(row(this, theTeam(this).name), this, name)
     await this.check(`la acción «${name}»`, async () => {
       await shows(action, `«${name}, ${theCompetition(this).rowName}»`)
-      // En la celda de la ingesta: la tercera de la fila (equipo, competición, ingesta).
-      const cell = await action.evaluate((el) => {
+      // En la celda de la ingesta: la de la columna que se llama así (desde la R5 hay columnas en medio).
+      const [cell, ingestion] = await action.evaluate((el) => {
         const td = el.closest('td')!
-        return Array.prototype.indexOf.call(td.parentElement!.children, td)
+        const headers = Array.from(td.closest('table')!.querySelectorAll('thead th'))
+        return [
+          Array.prototype.indexOf.call(td.parentElement!.children, td),
+          headers.findIndex((th) => th.textContent!.trim().startsWith('Ingesta')),
+        ]
       })
-      if (cell !== 2) throw new Error(`está en la columna ${cell + 1}, no en la de la ingesta`)
+      if (cell !== ingestion) throw new Error(`está en la columna ${cell + 1}, no en la de la ingesta (${ingestion + 1})`)
     })
   },
 )

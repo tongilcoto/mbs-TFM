@@ -1,10 +1,13 @@
 <!-- La racha (plan R5, decisión 3 · DW-23): un cuadro por jornada con su número sobre el color del resultado, la más
      reciente a la izquierda. El descanso (D-114), un cuadro vacío: solo el borde y su número. La usan la clasificación
-     (R4.13) y la portada (R5.8). -->
+     (R4.13) y la portada (R5.8). `to`, adónde lleva cada cuadro: solo en la portada (decisión 6); en la clasificación ya
+     se está en la competición, y el texto sale con `title` al pasar el ratón. -->
 <script setup lang="ts">
+import type { RouteLocationRaw } from 'vue-router'
+import StreakLink from './StreakLink.vue'
 import type { StreakBox } from './streak'
 
-defineProps<{ boxes: StreakBox[] }>()
+defineProps<{ boxes: StreakBox[]; to?: (round: number) => RouteLocationRaw }>()
 </script>
 
 <template>
@@ -13,10 +16,18 @@ defineProps<{ boxes: StreakBox[] }>()
       v-for="box in boxes"
       :key="box.round"
       :class="['box', box.outcome]"
-      :title="box.label"
+      :title="to ? undefined : box.label"
     >
-      <span aria-hidden="true">{{ box.round }}</span>
-      <span class="visually-hidden">{{ box.label }}</span>
+      <StreakLink
+        v-if="to"
+        :round="box.round"
+        :label="box.label"
+        :to="to(box.round)"
+      />
+      <template v-else>
+        <span aria-hidden="true">{{ box.round }}</span>
+        <span class="visually-hidden">{{ box.label }}</span>
+      </template>
     </li>
   </ol>
 </template>

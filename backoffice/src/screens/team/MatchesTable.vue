@@ -4,6 +4,7 @@
 <script setup lang="ts">
 import ScrollBox from '../../components/ScrollBox.vue'
 import IconAction from '../../components/IconAction.vue'
+import OutcomeLetter from '../../components/OutcomeLetter.vue'
 import PositionBadge from '../../components/PositionBadge.vue'
 import { competitionPath } from './header'
 import type { MatchRow } from './matches'
@@ -20,7 +21,6 @@ const lineColumns = [
   { short: 'DG', long: 'Diferencia de goles' },
 ]
 
-const outcomeNames = { V: 'Victoria', E: 'Empate', D: 'Derrota' }
 
 function roundTarget(row: MatchRow) {
   return { path: competitionPath(props.seasonLabel, row.competitionId), query: { jornada: String(row.round) } }
@@ -122,12 +122,10 @@ function roundTarget(row: MatchRow) {
             </div>
           </td>
           <td>
-            <!-- La letra, siempre: el color no es lo único que lo dice (LLD-B §9.4). -->
-            <abbr
+            <OutcomeLetter
               v-if="row.outcome"
-              :class="['outcome', row.outcome]"
-              :title="outcomeNames[row.outcome]"
-            >{{ row.outcome }}</abbr>
+              :outcome="row.outcome"
+            />
           </td>
           <template v-if="row.line">
             <!-- El puesto tras la jornada, en el mismo óvalo que el de los equipos. -->
@@ -241,26 +239,6 @@ abbr {
   font-weight: 700;
 }
 /* V, E o D en su cuadro: verde, gris y rojo, con el texto del color del fondo para que se lea en los dos modos. */
-.outcome {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  color: var(--p-content-background);
-}
-.V {
-  background: var(--p-estado-bien);
-}
-.E {
-  background: var(--p-estado-sin-datos);
-}
-.D {
-  background: var(--p-estado-fallo);
-}
 /* La jornada de descanso, apagada: el fondo de la página, el texto suave y en cursiva. Los textos, los mismos. */
 .rest td {
   background: var(--p-fondo);

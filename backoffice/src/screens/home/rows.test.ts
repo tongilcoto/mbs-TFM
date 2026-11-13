@@ -53,6 +53,18 @@ function competition(id: string, fields: Partial<Competition>): Competition {
 }
 
 describe('las filas de la portada', () => {
+  test('cada competición, con el resumen del equipo en ella (plan R5)', () => {
+    const plain = registration('cadete-a', 'cadete', 'A', ['liga', 'copa'])
+    const team = { ...plain, competitions: plain.competitions.map((c, index) => ({ ...c, summary: { ...noSummary, position: [2, 7][index]! } })) }
+
+    const rows = teamRows([team], [competition('copa', {}), competition('liga', {})])
+
+    expect(rows[0]!.competitions.map((c) => [c.id, c.summary.position])).toEqual([
+      ['liga', 2],
+      ['copa', 7],
+    ])
+  })
+
   test('cada equipo con su nombre en español, su competición, su ingesta y su última sincronización', () => {
     const rows = teamRows(
       [registration('cadete-b', 'cadete', 'B', ['liga'])],

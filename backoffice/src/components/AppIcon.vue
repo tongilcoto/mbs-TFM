@@ -21,6 +21,14 @@ const drawings = {
   'rotate-cw': ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
   // Ver la jornada y la clasificación de un partido (R4, la pestaña Resultados).
   list: ['M3 5h.01', 'M3 12h.01', 'M3 19h.01', 'M8 5h13', 'M8 12h13', 'M8 19h13'],
+  // En casa y fuera, en el último y el próximo partido de la portada (R5, decisión 5).
+  house: [
+    'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+    'M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  ],
+  plane: [
+    'M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z',
+  ],
 }
 
 export type IconName = keyof typeof drawings
