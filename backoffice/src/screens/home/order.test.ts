@@ -6,13 +6,16 @@ import { teamRows } from './rows'
 
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
+
+// El resumen de cada competición (D-113), vacío: estas pruebas no lo miran.
+const noSummary = { position: null, form: [], lastMatch: null, nextMatch: null, nextOpponentPosition: null }
 type Category = components['schemas']['TeamCategory']
 
 // Un equipo inscrito en unas competiciones; y una competición con su ingesta y su última sincronización.
 function team(id: string, category: Category, letter: string | null, competitionIds: string[]): Registration {
   return {
     seasonId: 'temporada',
-    competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '1' })),
+    competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '1', summary: noSummary })),
     team: {
       id,
       category,

@@ -354,7 +354,7 @@ Calculadas por consulta o vistas materializadas:
 - **Desglose de goles del equipo** (marcados/recibidos por dimensión) — desde `Goal`, filtrando directamente por `scoring_team_id = :id_del_equipo` (marcados) o `conceding_team_id = :id_del_equipo` (recibidos); **sin join** a `Match`.
 - **Estadísticas de jugador por temporada** — goles, asistencias, participaciones por estado, tarjetas — desde eventos.
 - **Amarillas pendientes de sanción** (por jugador) — según los *brackets* de la competición (`CompetitionSanctionBracket`): distancia al siguiente `yellow_to`. Reinicio de ciclo tras cumplir sanción.
-- **Racha (forma)** — últimos **5** resultados por equipo, **desde `Match`** (no desde los *snapshots*, [D-34]). No se sirve como recurso propio: **viaja embebida en la clasificación** (§5.1), que es donde la pide la pantalla.
+- **Racha (forma)** — últimas **5** jornadas por equipo, **desde `Match`** (no desde los *snapshots*, [D-34]), con la de descanso como una más ([D-114]). No se sirve como recurso propio: **viaja embebida en la clasificación** (§5.1), que es donde la pide la pantalla, y en el resumen de la inscripción ([D-113]).
 - **Goleadores de la liga (global)** — **directamente desde `LeagueScorer`** (ingerida de la API de la liga; **no** se calcula desde `Goal` — ver §3.7).
 
 ### 3.5 Convenciones y restricciones
@@ -1245,6 +1245,10 @@ Tres lecturas que no son evidentes en la tabla:
   —el equipo, la temporada y sus competiciones con el código de la federación en cada una ([D-101])—. Las
   competiciones salen **solo de la inscripción**. `TeamResponse` no cambia de forma: lo de la temporada viaja
   en la pareja.
+- **Cada competición de la pareja trae el resumen del equipo en ella** ([D-113]): su puesto y su racha en la
+  última clasificación (la de la jornada más alta con tabla), su último partido jugado y el próximo, con el
+  puesto con el que llega el rival. Se calcula al leer; es lo que la portada enseña de cada equipo con una
+  sola petición.
 - **`displayName` se compone en el servidor** y solo aparece en las **respuestas**: no se envía en el `POST`,
   no se almacena en BD. Se forma con el nombre del club + `category` + `letter`: el **nombre corto** del club
   si es propio (`Club.shortName`, como lo monta el adaptador desde la rebanada 1 del backoffice; aquí decía
@@ -1409,8 +1413,8 @@ Tres lecturas que no son evidentes en la tabla:
 - **`previousPosition` es anulable, y su ausencia no es un error** ([D-33]): no hay jornada anterior en la
   primera, ni *snapshot* previo si el club dio de alta la competición a mitad de temporada. El cliente pinta
   "–" en la columna PREV, que es justo lo que hace el mockup.
-- **`form` (la racha) viaja embebida en cada fila** ([D-34]): los últimos **5** resultados del equipo, cada
-  uno con su número de jornada. Se calcula desde `Match` en el mismo puerto de lectura (§4.5). Sin esto, la
+- **`form` (la racha) viaja embebida en cada fila** ([D-34]): las últimas **5** jornadas del equipo, cada
+  una con su número y su resultado, o `descanso` ([D-114]). Se calcula desde `Match` en el mismo puerto de lectura (§4.5). Sin esto, la
   pantalla de clasificación tendría que pedir varias jornadas de partidos para pintar tres distintivos por
   fila.
 - **No lleva marca de procedencia** (ingerida vs calculada) ([D-29]): la clasificación existe **siempre**
@@ -1857,13 +1861,17 @@ struct SeasonResponse: Content {
 - **El marcador vive dentro de `home`/`away`, no como `homeScore`/`awayScore` sueltos.** Ata cada número a su
   equipo en la propia estructura: el cliente pinta `fila.score` junto a `fila.crestUrl` sin cruzar dos
   campos paralelos y sin poder equivocarse de lado. Ambos son anulables hasta que el partido se juega.
-- **`StandingResponse` lleva `form`, que no sale de su propia tabla** ([D-34]): los últimos 5 resultados del
-  equipo, calculados desde `Match`. Es la excepción que confirma el patrón de los derivados —los demás
+- **`StandingResponse` lleva `form`, que no sale de su propia tabla** ([D-34]): las últimas 5 jornadas del
+  equipo, calculadas desde `Match`, con la de descanso como una más ([D-114]). Es la excepción que confirma el patrón de los derivados —los demás
   (`isCurrent`, `isOwn`, `displayName`) se deducen de la fila que los lleva; este se resuelve **con otra
   consulta** en el mismo puerto de lectura (§4.5). Sigue siendo `readOnly` y sigue sin almacenarse.
-- **`MatchOutcome` (`victoria`/`empate`/`derrota`) es un enumerado *relativo al equipo de la fila***, no un
-  estado del partido. Convive con `MatchStatus`, que es absoluto, y no se confunden: un mismo partido es
+- **`MatchOutcome` (`victoria`/`empate`/`derrota`/`descanso`) es un enumerado *relativo al equipo de la fila***,
+  no un estado del partido; `descanso` es la jornada en la que descansa ([D-114]). Convive con `MatchStatus`, que es absoluto, y no se confunden: un mismo partido es
   `finalizado` para los dos equipos, pero `victoria` para uno y `derrota` para el otro.
+- **`TeamCompetitionSummary`, el resumen de un equipo en una competición** ([D-113]): `position` y `form` de su
+  fila en la última clasificación; `lastMatch` y `nextMatch`, con la forma de `MatchResponse` (el próximo puede
+  ser su descanso, [D-105]); y `nextOpponentPosition`, el puesto del rival en la última clasificación, porque un
+  partido sin jugar no trae fila. Cada parte, nula o vacía si no hay dato.
 - **`AppearanceResponse` no embebe *ninguno* de sus dos padres**, y es el único DTO del contrato del que
   eso se puede decir. No es una excepción a [D-32] sino su aplicación literal: se lee por sus **dos**
   lados —convocatoria de un partido, historial de un jugador— y en cada uno de ellos **uno de los dos
@@ -2849,6 +2857,8 @@ Los dos niveles inferiores son **muchos, rápidos y deterministas** (los puertos
 [D-110]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-111]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-113]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-114]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-102]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-103]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-64]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

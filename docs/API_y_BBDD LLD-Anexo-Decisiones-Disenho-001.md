@@ -5166,8 +5166,9 @@ dos partidos de 30; y la portada lo repite cada 10 s mientras hay una ingesta en
 
 **Decisión: (b).** Cada `TeamRegistrationCompetition` suma **el resumen del equipo en esa competición**: su puesto
 y su racha en la última clasificación que tiene, el último partido jugado y el próximo por jugar, cada uno con su
-rival y el puesto de este. Los campos exactos se fijan en la mini-fase del catálogo (R5.4 del plan de la
-rebanada 5), con lo que decidan las demás decisiones de ese plan sobre los partidos.
+rival y el puesto de este. **Fijado en la mini-fase del catálogo** (R5.4 del plan de la rebanada 5): el campo
+`summary`, un `TeamCompetitionSummary` con `position`, `form`, `lastMatch` y `nextMatch` (los dos con la forma de
+`MatchResponse`, para no inventar otra forma de un partido) y `nextOpponentPosition`.
 
 1. **Se calcula al leer, no se guarda**: la posición y la racha son las de la fila del equipo en la tabla guardada
    ([D-15], [D-34]), y los partidos, los de `Match`. Es una proyección, como el nombre en [D-32].
@@ -5181,8 +5182,8 @@ rebanada 5), con lo que decidan las demás decisiones de ese plan sobre los part
    antes de jugarlo (`previousPosition` de su fila, como en [D-112]); en el próximo, el de la última
    clasificación, porque los partidos sin jugar no traen fila (`MatchTeam.standing` nulo). Es lo único del resumen
    que la web no podría sacar de los partidos del equipo.
-6. **La jornada de descanso** ([D-105]) no cuenta como último ni como próximo partido; si la siguiente jornada es
-   de descanso, el resumen lo dice para que la web pinte «Descansa».
+6. **La jornada de descanso** ([D-105]) no cuenta como último partido; si la siguiente jornada es de descanso, el
+   próximo es ese descanso, el partido contra el ficticio, para que la web pinte «Descansa». Sin puesto del rival.
 
 **Lo que se asume a cambio.**
 

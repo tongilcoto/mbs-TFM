@@ -63,7 +63,12 @@ extension SeasonRegistration {
             team: team.toResponse(club: club),
             seasonId: "\(seasonID)",
             competitions: competitions.map {
-                .init(competitionId: "\($0.competitionID)", federationTeamId: $0.federationTeamID)
+                .init(
+                    competitionId: "\($0.competitionID)", federationTeamId: $0.federationTeamID,
+                    // Provisional hasta R5.5 (plan R5): el resumen vacío, como el de
+                    // una competición sin nada jugado. El censo lo apunta como hueco.
+                    summary: .init(value1: .init(
+                        position: nil, form: [], lastMatch: nil, nextMatch: nil, nextOpponentPosition: nil)))
             })
     }
 }
