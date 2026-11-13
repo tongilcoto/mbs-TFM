@@ -17,7 +17,8 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
-> **Estado del documento: decisiones revisadas el 2026-10-27 y 28**, con el desarrollador, sobre tres versiones de
+> **Estado del documento: cerrado el 2026-11-13**, con los dieciséis pasos hechos (§8) y lo aprendido en la §9.
+> Antes, **decisiones revisadas el 2026-10-27 y 28**, con el desarrollador, sobre tres versiones de
 > una maqueta en HTML (la cabecera de la ficha, la portada y los partidos). La revisión cambió tres cosas de la propuesta inicial:
 > el nombre de los equipos (el nombre del club + letra, no el corto), **las posiciones de cada partido en una sola
 > consulta** en vez de una petición por jornada, y relanzar la ingesta, que se adelanta de la rebanada 14 a esta.
@@ -380,7 +381,7 @@ Cada paso dice qué se hace, cómo se comprueba y qué se graba. **Al acabar cad
 bueno del desarrollador antes del siguiente, y su renglón va en la §8. Cada paso deja el árbol en verde por sí
 solo, y lo que no venga en el plan va en su propio commit.
 
-### A · Las decisiones y los escenarios
+### A · Las decisiones y los escenarios ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -401,7 +402,7 @@ Con el método del backend (§5).
 | **R4.8** | **`listMatches`**, con los tres ámbitos y el puesto de cada lado (`D-112`) | Ídem (`R4-8.json`); y en el `curl`, la temporada de un equipo de verdad en una sola petición | Un commit |
 | **R4.9** | Cierre del servidor: el recuento leído del XML, el censo con las cinco operaciones, los catálogos de la rebanada otra vez sobre el código final, y el README del backend | `REQUIRE_DB=1 swift test --xunit-output`, el censo con salida `0` | Un commit |
 
-### C · La web
+### C · La web ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -410,7 +411,7 @@ Con el método del backend (§5).
 | **R4.12** | **La pestaña Resultados**: la tabla, cada estado de partido, el orden por jornada y sus estados | Vitest, y la web abierta | Un commit |
 | **R4.13** | **Jornada y clasificación**: los partidos de la jornada, *Anterior* / *Siguiente*, `?jornada=` y la clasificación con su racha | Vitest, y la web abierta | Un commit |
 
-### D · Los escenarios en verde y el cierre
+### D · Los escenarios en verde y el cierre ✅
 
 | Paso | Qué | Cómo se comprueba | Se graba |
 |---|---|---|---|
@@ -439,9 +440,39 @@ Con el método del backend (§5).
 | **R4.13** | ✅ 2026-10-31 | **Jornada y clasificación** (`screens/competition/`: la pantalla, sus dos tablas y lo que decide sin pintar en `round.ts`), en `/temporadas/:temporada/competiciones/:id?jornada=5`. **Lo que pide**: las temporadas, las competiciones de la del camino (el servidor no da una competición suelta: `getCompetition` no está entre las 17) y sus jornadas; con la jornada, sus partidos y su clasificación a la vez. Al cambiar de jornada, solo esas dos. **Arriba**, «← Volver» a donde se estaba (la ficha, si se vino de ella; entrando por la dirección, la portada de esa temporada), la competición («PREFERENTE CADETE · Grupo 2») y debajo «Cadete · Masculino · Fútbol 11 · 2026/27». **La jornada**: la de `?jornada=`, o la en curso, o la última si terminó; «‹ Anterior», el selector («Jornada 6 · 31 oct – 1 nov») y «Siguiente ›», bloqueados en los extremos, con la etiqueta «Federación»; moverse cambia la dirección, así que recargar deja en la misma. **Los partidos**: fecha, hora (o «por fijar»), local, resultado y visitante, con los estados de Resultados; el del club, con fondo y en negrita; el descanso, apagado como en Resultados. **La clasificación**, «Clasificación tras la jornada 5»: Pos., Equipo, J, G, E, P, GF, GC, DG, Pts, **Ant.** (el puesto anterior con ▲, ▼ o =, y «subió 2» para el lector; «–» sin él) y **Racha**, un cuadro por partido con el número de su jornada sobre su color, la más reciente a la izquierda, y «Victoria en la jornada 5» para el lector y al pasar el ratón; la fila del club, resaltada. **Los estados**: «Cargando jornada…»; «No se ha encontrado la competición» con el enlace a la portada (la que el club no tiene, un código que no es un UUID o una temporada que no existe); sin jornadas, «La Federación aún no ha publicado el calendario.»; una jornada sin tabla, sus partidos y «Esta jornada aún no tiene clasificación.»; una jornada que no existe, su error y el enlace a la en curso; y el error con *Reintentar*, con la competición a la vista. En `format.ts`, las fechas de una jornada. Vitest: **34 pruebas nuevas** (3 de formatos, 15 de `round.ts`, 15 de la pantalla y 1 del router). **Encontrado por una de ellas**: al cambiar de jornada se volvían a pedir la competición y sus jornadas, porque el `watch` comparaba una lista nueva en cada cambio de la dirección; ahora, una clave de texto. Y las pruebas de «← Volver» usan el historial del navegador de jsdom, porque el de memoria no apunta de dónde se viene. El rojo, rompiendo a mano (las cinco, cazadas): la competición terminada abre la primera, subir y bajar al revés, «Volver» siempre a la portada, «Anterior» nunca bloqueado y el partido del club sin señalar. **393 → 427**; `typecheck` y `lint` en verde. `npm run e2e`: 154 escenarios, los 112 de antes en verde y los 42 de la rebanada sin definir. **La web abierta con los datos del desarrollador**, en los dos modos: PREFERENTE CADETE · Grupo 2 desde la ficha del Cadete A abre la jornada 6 (31 oct – 1 nov), sin tabla todavía; en la 5, la clasificación igual que en R4.7 (el Canal líder con 12 puntos y racha V5 D4 V3 V2 V1; el Celtic Castilla A 13º, 3 puntos, D5 V4 D3 D2 D1); ☰ de la jornada 3 desde el Senior A abre esa jornada, recargar la deja, y «← Volver» lleva a la ficha. **Al revisarla**, la columna Pos. de la clasificación, en el mismo óvalo que en Resultados, pedido por el desarrollador; el óvalo pasa a ser una pieza común (`PositionBadge.vue`), la de los tres sitios
 | **R4.14** | ✅ 2026-10-31 | **Los 42 escenarios de la rebanada, en verde.** Los pasos, en tres ficheros nuevos (`ficha.steps.ts`, con ↻ en la portada y en la ficha; `resultados.steps.ts`; `jornada.steps.ts`), y **lo que se espera, calculado de la competición inventada y no leído de la web** (`e2e/support/expected.ts`: el nombre del club + letra de cada equipo, el día, las jornadas jugadas y la en curso, el puesto tras cada jornada y la racha). **Dos frases de los escenarios, cambiadas** porque lo decidido después de escribirlas (R4.3) las dejó atrás: «cada equipo del partido tiene a su lado su puesto tras esa jornada» pasa a «…el puesto con el que llegó, el de la jornada anterior» (la enmienda a `D-112`); y los dos de la pestaña Resultados con la ingesta retenida usaban la frase de la R3, que da de alta un equipo **ya sincronizado y con partidos** y relanza la ingesta, así que la ficha nunca decía «Trayendo el calendario…»: ahora «juega un equipo recién sincronizado, con su primera ingesta retenida en la Federación» (el enganche, con la primera ingesta retenida). **Lo que cambió fuera de los pasos**: la frase de la R1 «he cambiado la portada de mi club a una temporada pasada» usa la temporada pasada del escenario si ya tiene una (antes daba de alta otra, y el equipo no estaba en ella); «Con fallos» deja a la Federación contestando bien después de la pasada que falla (el estado es que la última falló, no que siga fallando); la federación falsa sabe volver a contestar bien a los goleadores (`answerScorers`); y la pestaña Resultados es una zona con su nombre («Resultados»), para buscar dentro de ella y para el lector. **Encontrado por axe, y arreglado en su propio commit**: el resaltado de la fila del club en la pantalla de jornada (el fondo de «señalado» de PrimeVue) dejaba el texto suave y el rojo de las flechas por debajo de 4,5 en los dos modos (4,34 y 4,03); ahora, el fondo de la página, una barra del color principal a la izquierda y la negrita. `npm run e2e`: **154 escenarios, 1257 pasos, todos en verde**, con axe en los dos modos, en **4 min 45 s** (eran 3 min 45 s con 112 en verde y 42 sin definir); 427 pruebas de piezas; `typecheck` y `lint` en verde (los 3 avisos de `App.test.ts` ya estaban)
 | **R4.15** | ✅ 2026-11-13 | **La revisión a mano del LLD-B §10.7 *b***. **Chrome con el teclado**, del desarrollador: «Saltar al contenido» es lo primero del tabulador y aparece encima del nombre del club (lo esperado); la caja Posición no recibe el foco porque no tiene nada que pulsar (lo esperado: se lee con VoiceOver). **Zoom al 200 %** (1280 de ancho, 640 útiles): la ficha y la pantalla de jornada se salían por la derecha y cortaban la caja Posición, «Cambiar a modo claro» y «Federación». Ahora la página no se mueve a los lados; la tabla se desplaza dentro de su recuadro, con la barra al final de la tabla, que se acepta así. **Sin comprobar a mano**: Safari y los dos modos, que se dan por buenos con axe en los dos modos de los escenarios; y **VoiceOver, aplazado al final del proyecto** a petición del desarrollador. **Encontrado, y arreglado cada uno en su commit**: el nombre de la competición en la ficha abría la jornada siguiente, sin clasificación, y ahora abre la de la última clasificación (`a016633`); las tablas anchas al 200 %, en una caja que se desplaza sola (`ScrollBox`, `374ec35`); y el *deadlock* que salía a veces al borrar el club de un escenario «mientras se vuelven a traer los datos»: la limpieza daba la ingesta por acabada antes de que la pasada soltada terminara (`5930f67`). 154 escenarios en verde y 426 pruebas de piezas |
+| **R4.16** | ✅ 2026-11-13 | **Cierre.** Los cinco pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **831** (828 + 3 omitidos), sin fallos, en 58 s con la compilación, los mismos que en R4.9 (la enmienda a `D-112` de R4.12 cambió pruebas, no su número); el censo en `0` (17 operaciones, 31 de 37 códigos y 152 de 168 campos nombrados); en la web, **426 pruebas de piezas** (`npm test`; eran 427 en R4.13: R4.15 quitó tres de la regla vieja de la jornada y puso dos) y **154 escenarios** en verde (`npm run e2e`, R4.15); (2) la cabecera del README del backend: «rebanadas 1 a 4 cerradas», con el enlace a este plan (831 y «~40 s» ya estaban; los endpoints de la rebanada, en §0 desde que se hicieron); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada, lo que queda abierto y lo siguiente; (4) los rótulos de la §7 con su ✅ y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol: en el plan del backoffice, la fila de la rebanada («✅ hecha, 16/16») y los nodos de Resultados y de jornada y clasificación del mapa, de `enCurso` a `hecha`; 427 y «4 min 45 s» solo quedan en registros con fecha, que no se tocan. El README de la web dice qué enseña hoy: ↻, la ficha con Resultados, jornada y clasificación, y las tablas al 200 %; y que ↻ va a la Federación de verdad. Lo aprendido, en la §9 |
 
 ---
 
 ## 9. Lo aprendido
 
-*(Al cerrar la rebanada.)*
+- **Lo que el servidor llama «en curso» no es lo que el club quiere ver.** La jornada en curso es la primera por
+  jugar, y abrir la pantalla en ella enseñaba «Esta jornada aún no tiene clasificación»: ya se vio en R4.13 con la
+  jornada 6 y se dio por bueno. Lo cambió la revisión a mano (R4.15): ahora abre la de la última clasificación, la
+  misma que dice la caja Posición. Cuando dos sitios de la web hablan de «la jornada de ahora», tienen que decir la
+  misma.
+- **Los datos de verdad cambian el diseño, no solo lo prueban.** El puesto junto a cada equipo de un partido era
+  el de después de la jornada; al mirarlo con los partidos del club se vio que lo que se quiere es el puesto con el
+  que llega, y eso fue una enmienda a `D-112` (`previousPosition`) a mitad de la web (R4.12).
+- **El zoom al 200 % solo lo ve quien lo pone.** axe y los escenarios pasan a la anchura de un portátil, y ahí las
+  tablas caben; a 640 la ficha y la jornada se salían por la derecha. Una tabla ancha va desde el principio en una
+  caja que se desplaza sola (`ScrollBox`).
+- **Esperar a que algo acabe es comparar con lo que había antes.** Dos veces en la rebanada se dio una ingesta
+  por acabada demasiado pronto: en R4.3, entre una pasada y la siguiente, y en R4.15, porque la pasada retenida no
+  está en el registro hasta que acaba su calendario y, justo al soltarla, solo se veían las viejas. La segunda
+  dejaba un *deadlock* de vez en cuando al borrar el club; ahora se apuntan las pasadas de antes y se espera a una
+  nueva.
+- **Un servidor viejo enseña una web rota.** En R4.12 el desarrollador probó la web contra su servidor de antes de
+  la enmienda, vio los partidos sin puesto y lo creyó un fallo. Desde entonces, cada paso que toca el servidor dice
+  en una línea si hay que relanzarlo.
+- **axe encuentra lo que el ojo da por bueno.** El resaltado de la fila del club en la clasificación, con el fondo
+  de «señalado» de PrimeVue, se veía bien y no llegaba al contraste 4,5 en ninguno de los dos modos (R4.14).
+- **Una prueba escrita después de la pantalla se ve en rojo rompiendo la pantalla a mano.** Así se hizo en toda la
+  web de la rebanada. Y las pruebas, al escribirlas, encontraron dos fallos de verdad: la barra al final de una
+  dirección de la ficha y las peticiones repetidas al cambiar de jornada.
+
+**Queda abierto, con dueño:** **VoiceOver**, aplazado al final del proyecto por el desarrollador, y Safari y los
+dos modos, que en R4.15 no se miraron a mano; **leer el acta** (`D-57`), sin la que aplazado y suspendido no se
+alcanzan con datos de verdad, en el plan del backoffice; que la web use el puesto de después si un servidor viejo
+no manda `previousPosition` (propuesto, sin pedir); y vigilar cuánto tarda `npm run e2e`, que pasa de unos
+3 min 30 s a unos 5 min con los 42 escenarios de la rebanada.

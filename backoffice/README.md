@@ -8,7 +8,7 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
-**Lo que enseña hoy** (rebanadas 1, 2 y 3, cerradas el 2026-10-20, el 2026-10-24 y el 2026-10-27):
+**Lo que enseña hoy** (rebanadas 1 a 4, cerradas el 2026-10-20, el 2026-10-24, el 2026-10-27 y el 2026-11-13):
 
 - **La portada**, con los equipos del club en una temporada: la competición en la que juega cada uno (sin la
   categoría delante, «PRIMERA CADETE · Grupo 4»), cómo va su ingesta y cuándo se sincronizó por última vez, en tu
@@ -29,12 +29,24 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
   jornadas, si no cuadra con el equipo), **elegir el equipo del club** entre los del grupo y «Sincronizar». Vuelve
   a la portada en la temporada del calendario, con el aviso «Sincronizado. La primera ingesta está en marcha.».
 - **La portada se refresca sola** cada 10 s mientras alguna ingesta esté «En marcha», sin recargar.
+- **Volver a traer los datos de la Federación**: el icono ↻ junto al estado de la ingesta, en la portada y en la
+  ficha del equipo, lanza otra vez la ingesta de esa competición sin esperar a la de cada noche.
+- **La ficha del equipo**: el nombre de cada equipo en la portada lleva a ella
+  (`/temporadas/2026-27/equipos/:id/resultados`). Arriba, tres cajas: la temporada, la competición con su
+  ingesta y ↻, y la posición («13º, de 16 · tras la jornada 7»). Debajo, la pestaña **Resultados**: los partidos
+  de la temporada por jornada, con el marcador o la hora, el puesto con el que llega cada equipo, victoria, empate
+  o derrota, y la línea del equipo tras cada jornada. ☰ en cada fila lleva a esa jornada.
+- **Jornada y clasificación** (`/temporadas/2026-27/competiciones/:id?jornada=5`): los partidos de una jornada,
+  «‹ Anterior», el selector y «Siguiente ›», y la clasificación tras ella, con el puesto anterior y la racha.
+  Sin jornada en la dirección, abre la de la última clasificación. El nombre de la competición en la ficha lleva
+  aquí.
+- **Con el zoom al 200 %**, las tablas anchas se desplazan a los lados dentro de su recuadro, y la página no.
 - Alrededor, la cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
 **Ojo: guardar da de alta el equipo de verdad en tu club, «Crear» crea la temporada de verdad, y «Sincronizar»
 engancha el equipo y lanza su primera ingesta contra la Federación de verdad.** Borrar un equipo o deshacer un
 enganche no se podrá hasta la rebanada 13, ni borrar una temporada hasta la 11. «Comprobar en la Federación» no
-guarda nada.
+guarda nada. **↻ también va a la Federación de verdad**, y escribe lo que traiga.
 
 ## Antes de empezar
 
