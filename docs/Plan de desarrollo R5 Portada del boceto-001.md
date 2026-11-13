@@ -321,6 +321,22 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 | `R5.10` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R5.11` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
 
+### E · Después del cierre: el descanso con otro código en la RFFM (mini-fase)
+
+Encontrado al revisar `R5.8` (2026-11-14) con los datos del desarrollador: **el Infantil B no tiene ningún descanso
+guardado**, y su racha salta de la jornada 5 a la 3. El adaptador de la RFFM reconoce el equipo ficticio del
+descanso solo por el código `-1`, que es el que se midió en el grupo de alevín (`D-105`); en el de infantil
+(Segunda Infantil, Grupo 26) la RFFM le da **`-27824126`**, en sus 26 descansos. Sin la marca, el partido no toma la
+fecha de su jornada, y la ingesta lo descarta por no tener fecha (`missingMatchDate`) en cada pasada. De ahí también
+el ficticio con ese código y sin partidos que se vio en `R5.5`. En los dos grupos medidos, el del ficticio es el
+único código negativo. La web pinta bien lo que le llega: el fallo es del servidor.
+
+**Se hace al cerrar la rebanada** (lo pidió el desarrollador), con el servidor en su propia rama y su renglón aquí:
+
+| Paso | Qué |
+|---|---|
+| `R5.12` | El adaptador de la RFFM toma por ficticio **cualquier código negativo**, y lo quita como hace con el `-1`, en ciclos TDD con una grabación del grupo de infantil. La enmienda a `D-105` en la bitácora, el anexo de la RFFM (la fila de «(No asignado)») y la guía de alta. Qué hacer con la fila sobrante del ficticio `-27824126` en la base del desarrollador. **Para instalar**: relanzar el servidor, `install.sh` y ↻ en el Infantil B |
+
 Los pasos pueden cambiar tras `R5.1`.
 
 ---
