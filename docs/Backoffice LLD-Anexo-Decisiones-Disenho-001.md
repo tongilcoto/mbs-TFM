@@ -586,6 +586,9 @@ su letra: ahí el orden lo da la fila, y lo que falta es el resultado.
   en la jornada 7» al pasar el ratón o al llegar con el teclado, y el mismo texto para el lector de pantalla.
 - **Los colores, los de la rebanada 4** (`--p-estado-bien`, `--p-estado-sin-datos`, `--p-estado-fallo`), con el
   número en el color del fondo para que axe dé el contraste por bueno en los dos modos.
+- **La jornada de descanso, un cuadro vacío**: solo el borde y su número, con el texto «Descansó en la jornada 28».
+  Lo propuso el desarrollador al revisar los escenarios (R5.3): sin él, los números de la racha tenían un hueco. El
+  servidor lo manda como una jornada más de la racha (`D-114`).
 
 **Lo que se asume a cambio.**
 

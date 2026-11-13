@@ -127,6 +127,7 @@
 | **D-102**              | El equipo en una temporada tiene su propia lectura, y sus competiciones salen solo de la inscripción                          | §3.4, §5.1, §9.12                  |
 | **D-103**              | La temporada en curso es la que contiene el día de hoy, no la de fin más próximo                                              | §3.2, §5.1                         |
 | **D-113**              | Cada competición del equipo en una temporada trae su resumen: posición, racha, último y próximo partido                        | §5.1, §5.2                         |
+| **D-114**              | La racha cuenta jornadas, no partidos: el descanso entra en ella                                                               | §4.5, §5.1                         |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5193,6 +5194,40 @@ rebanada 5), con lo que decidan las demás decisiones de ese plan sobre los part
 
 **Enmienda** a la descripción de `TeamRegistrationCompetition` en el catálogo (R5.4), y a §5.1 y §5.2 del LLD.
 
+### D-114 · La racha cuenta jornadas, no partidos: el descanso entra en ella
+
+**Lo que lo obligó a decidirse** (2026-11-13, al revisar con el desarrollador los escenarios de la portada de la
+rebanada 5, R5.3). La racha ([D-34]) son los últimos 5 partidos **jugados** del equipo, y el descanso de un grupo
+impar ([D-105]) es un partido sin marcador, así que no entra: si el equipo descansó en la jornada 28, la racha llega
+como 29, 27, 26, 25, 24. La web pinta el número de cada jornada para que el orden se lea solo ([DW-23]), y ese
+hueco lo estropea.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Como está: el descanso no entra | Un hueco en los números | Descartada por el desarrollador |
+| **(b) El descanso entra en la racha, con un valor propio** | `MatchOutcome` suma `descanso`; el cálculo reconoce el partido de descanso | **Elegida** |
+| (c) La web lo deduce del hueco | Sin cambio en el servidor | Descartada: un hueco también puede ser un partido aplazado, y se pintaría como descanso |
+
+**Decisión: (b).**
+
+1. **La racha son las últimas 5 jornadas del equipo**, no sus últimos 5 partidos: una jornada de descanso es una
+   de las cinco, con `outcome: descanso`. Las jornadas sin jugar (un aplazado) siguen fuera.
+2. **Vale en todas partes donde viaja la racha**: en la clasificación (`StandingResponse.form`) y en el resumen de
+   la portada ([D-113]). Las dos pantallas dicen lo mismo.
+3. **El servidor reconoce el descanso en un solo sitio**. Hoy lo sabe el adaptador al leer el calendario
+   (`FederationMatch.isRestDay`), pero no se guarda: el ficticio se reconoce por su nombre ([D-105], punto 2), y la
+   web lo hace buscando «(No asignado)». Cómo lo sabe el cálculo de la racha se decide al programarlo (R5.5).
+4. **El último y el próximo partido no cambian** ([D-113], punto 6): el último es el último jugado de verdad.
+
+**Lo que se asume a cambio.**
+
+- **Un valor nuevo en una lista cerrada que ya se usa**: la web es el único cliente y se cambia a la vez.
+- **Un equipo de un grupo impar enseña menos partidos en su racha**: cuatro resultados y un descanso, en vez de
+  cinco resultados. Es lo que pasó en esas cinco jornadas.
+
+**Enmienda** a [D-34] (la racha), a la descripción de `MatchOutcome` y de `form` en el catálogo (R5.4), y a §4.5 y
+§5.1 del LLD.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5343,5 +5378,7 @@ rebanada 5), con lo que decidan las demás decisiones de ese plan sobre los part
 [D-111]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-113]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-114]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

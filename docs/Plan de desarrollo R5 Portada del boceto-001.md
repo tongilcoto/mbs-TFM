@@ -91,8 +91,8 @@ en la columna Posición. Las columnas de hoy, sin cambios; las nuevas, en
 - **Una competición sin jornadas jugadas** (el calendario ya publicado, nada jugado): sin posición ni racha ni
   último resultado; sí el próximo partido.
 - **Una temporada acabada**: el último resultado, pero sin próximo partido.
-- **Una jornada de descanso** en medio: no cuenta en la racha (la racha sale de los partidos, `D-34`), y el
-  próximo partido es el siguiente que se juega de verdad.
+- **Una jornada de descanso**: en la racha, un cuadro vacío con su número (`D-114`, decisión 3); no es «último
+  partido», y si es la siguiente, el próximo dice «Descansa · jornada N» (decisión 5).
 - **Un equipo con dos competiciones** (liga y copa, `D-12`): hoy ninguno tiene más de una, pero la lista lo
   permite. Con la tabla (decisión 2) no hay nada que decidir: desde la R1 cada competición es su propia fila, con
   el nombre del equipo una sola vez, así que cada una lleva su resumen.
@@ -172,6 +172,10 @@ la pestaña Resultados.
   el texto «Victoria en la jornada 7» al pasar el ratón o al llegar con el teclado, y el mismo para el lector.
 - **La pestaña Resultados sigue con V, E o D**: es un solo partido, y su orden lo da la fila.
 - El más reciente, a la izquierda; con menos de 5, los que haya, sin huecos.
+- **La jornada de descanso, un cuadro vacío**: solo el borde y su número, «Descansó en la jornada 28». Lo propuso el
+  desarrollador al revisar los escenarios (R5.3), para que los números de la racha vayan seguidos. El servidor
+  manda el descanso como una jornada más de la racha, y cuenta entre las cinco → [`D-114`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md).
+  Sale igual en la clasificación de la R4, que usa la misma racha.
 
 ### Decisión 4 · Los colores de victoria, empate y derrota: los de la rebanada 4
 
@@ -241,6 +245,7 @@ Con la decisión 1 (B, `D-113`):
 |---|---|---|---|
 | **El catálogo**: el resumen en `TeamRegistrationCompetition` (posición, racha, último y próximo partido con su rival y el puesto de este), con lo que vale cuando falta cada dato | Catálogo | **Sí** | 1, 5 |
 | **`listSeasonRegistrations` y `getTeamRegistration`** devuelven el resumen, calculado al leer: la posición y la racha de la última clasificación (como `getStanding`), y los partidos (como `listMatches`) | Aplicación, Persistencia y HTTP | Con la de arriba | 1 |
+| **La racha cuenta jornadas** (`D-114`): `MatchOutcome` suma `descanso`, y el cálculo de la racha (`Form`) reconoce el partido de descanso, en un solo sitio. Cambia también la racha de `getStanding` | Catálogo, Dominio y lo que haga falta para reconocer el descanso | Con la de arriba | 3 |
 | **La federación falsa**, con lo que necesiten los casos de la §3 que aún no tenga | Ninguna del servidor | No | — |
 
 **Lo que ya está y se reutiliza**: la racha calculada de los partidos (`getStanding`, R4.7), el puesto de cada
@@ -290,7 +295,7 @@ escenarios, con las etiquetas `@e2e` y `@ui` y axe en los dos modos.
 
 | Paso | Qué |
 |---|---|
-| `R5.7` | La racha de la clasificación, sacada a una pieza común para la portada |
+| `R5.7` | La racha de la clasificación, sacada a una pieza común para la portada, con el cuadro vacío del descanso (`D-114`) también en la pantalla de jornada y clasificación |
 | `R5.8` | Las columnas nuevas de la portada, con su orden y sus enlaces |
 
 ### D · Los escenarios en verde y el cierre
