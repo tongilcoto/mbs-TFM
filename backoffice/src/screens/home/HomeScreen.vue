@@ -118,8 +118,9 @@ async function load() {
 // Al abrir, y cada vez que cambia la temporada de la dirección (el selector, o «Atrás»).
 watch(() => route.query.temporada, load, { immediate: true })
 
-// El refresco (decisión 5): mientras alguna competición de la temporada esté «En marcha», cada 10 s, solo las
-// competiciones. Sin «Cargando…»: lo que hay se queda hasta que llega lo nuevo, y las filas son las mismas (por su
+// El refresco (decisión 5): mientras alguna competición de la temporada esté «En marcha», cada 10 s, las
+// competiciones y los equipos, que desde la R5 traen el resumen de cada competición (D-113), y ese cambia con la
+// ingesta. Sin «Cargando…»: lo que hay se queda hasta que llega lo nuevo, y las filas son las mismas (por su
 // `id`), así que el orden y el foco no se mueven. Si falla, se deja como estaba: un refresco no pinta errores. Y
 // no se anuncia al lector: el aviso de arriba ya dice que la ingesta está en marcha.
 const running = computed(
@@ -134,9 +135,13 @@ async function refresh() {
   const current = new AbortController()
   refreshing = current
   try {
-    const answered = await asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: current.signal }))
+    const [registered, answered] = await Promise.all([
+      asResult(api.GET('/seasons/{seasonId}/registrations', { params: { path: { seasonId } }, signal: current.signal })),
+      asResult(api.GET('/competitions', { params: { query: { seasonId } }, signal: current.signal })),
+    ])
     // Una carga nueva (otra temporada) manda sobre un refresco a medias.
-    if (!answered.ok || state.value.kind !== 'teams' || chosen.value?.season.id !== seasonId) return
+    if (!registered.ok || !answered.ok || state.value.kind !== 'teams' || chosen.value?.season.id !== seasonId) return
+    registrations = registered.data
     competitions = answered.data
     state.value = { kind: 'teams', rows: teamRows(registrations, competitions, relaunched) }
   } catch (error) {

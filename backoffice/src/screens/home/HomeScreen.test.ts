@@ -377,8 +377,9 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
       const path = new URL(request.url).pathname
       if (path === '/api/v1/seasons') return Response.json([season('2026/27', true)])
       if (path.endsWith('/registrations')) {
-        asked.registrations++
-        return Response.json([inscribed])
+        // La primera vez, sin resumen (la ingesta no ha traído nada); después, ya con su puesto (plan R5).
+        const placed = asked.registrations++ > 0
+        return Response.json([placed ? { ...inscribed, competitions: [{ competitionId: 'liga', summary: { ...noSummary, position: 3 } }] } : inscribed])
       }
       if (path === '/api/v1/competitions') return answers[Math.min(asked.competitions++, answers.length - 1)]!()
       throw new Error(`Petición no esperada: ${path}`)
@@ -388,7 +389,7 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
   const json = (health: string) => () => Response.json([liga(health)])
   const ingestion = () => screen.getAllByRole('cell')[5]!
 
-  test('«En marcha»: a los 10 s pide las competiciones otra vez, y la fila sale «Al día» sin «Cargando…»', async () => {
+  test('«En marcha»: a los 10 s pide otra vez los equipos y las competiciones, y la fila sale «Al día» y con su puesto, sin «Cargando…»', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const asked = serverWith([json('pending'), json('ok')])
     await openHome('/')
@@ -398,8 +399,9 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
 
     await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
     expect(screen.queryByText('Cargando equipos…')).not.toBeInTheDocument()
-    // Solo las competiciones: los equipos inscritos no cambian con una ingesta.
-    expect(asked).toEqual({ competitions: 2, registrations: 1 })
+    // También los equipos: desde la R5 traen el resumen de cada competición (D-113), que cambia con la ingesta.
+    expect(screen.getAllByRole('cell')[1]).toHaveTextContent('3º')
+    expect(asked).toEqual({ competitions: 2, registrations: 2 })
   })
 
   test('sin nada en marcha, no vuelve a pedir nada', async () => {
