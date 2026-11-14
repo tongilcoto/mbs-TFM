@@ -130,7 +130,7 @@ cada pantalla se revisa al escribir su ficha (§2.2).
 **Al cerrar cada rebanada, lo que construye pasa a la clase `hecha`**; lo que esté en marcha, a `enCurso`.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph MENU["Menú lateral · cada entrada llega con su rebanada (LLD-B §6.6)"]
         direction TB
         mEq["Equipos · R1"]
@@ -187,11 +187,12 @@ flowchart LR
     P -->|"icono de la fila, o «Sincronizar con la Federación»"| F
     P -->|"clic en un equipo"| R
     R <--> E
-    E <--> PL
+    R <--> PL
     R --> AX
     R -->|"clic en un partido"| ACTA
     R -->|"☰ de cada partido, o la competición de la cabecera"| J
     PL --> JUG
+    E --> JUG
     NF --> P
 
     classDef hecha fill:#1f6f43,stroke:#5bd38a,color:#fff
