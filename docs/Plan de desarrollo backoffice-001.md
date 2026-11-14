@@ -159,7 +159,7 @@ flowchart TB
 
     J["<b>Jornada + clasificación</b> · R4<br/>/temporadas/:temporada/competiciones/:id<br/>?jornada=22<br/><i>boceto 3</i>"]
     ACTA["<b>Acta del partido</b> · R7<br/>/partidos/:id"]
-    JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
+    JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/temporadas/:temporada/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
 
     subgraph GESTION["Gestión"]
         direction TB
@@ -227,7 +227,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | `listSeasonRegistrations` ● ⚠️ y `getTeamRegistration` ● ⚠️ — cada competición del equipo trae su resumen (`D-113`, Plan R5, decisión 1) |
-| **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
+| **6** · Plantilla | Plantilla: lista y gestión, sin cifras, y «Sincronizar con la Federación» · Ficha del jugador: datos y foto | `listPlayers` ⚠️ · `getPlayer` ⚠️ · `createPlayer` ⚠️ · `updatePlayer` ⚠️ — el perfil del jugador que dura entre temporadas, el dorsal y la demarcación opcionales y si está federado (`D-118` a `D-120`) · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` — la foto en una carpeta del disco, saneada y con enlace firmado (`D-115` a `D-117`) · 🆕 **buscar perfiles de jugador** por nombre, para el alta (`D-120`) · 🆕 **sincronizar la plantilla** con la federación, si la publica (`D-120`) |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
