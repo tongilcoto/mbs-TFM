@@ -8,14 +8,21 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
 (`backend/`), y las descripciones de esos datos se fabrican solas del catálogo
 `backend/Sources/APIContract/openapi.yaml`.
 
-**Lo que enseña hoy** (rebanadas 1 a 4, cerradas el 2026-10-20, el 2026-10-24, el 2026-10-27 y el 2026-11-13):
+**Lo que enseña hoy** (rebanadas 1 a 5, cerradas el 2026-10-20, el 2026-10-24, el 2026-10-27, el 2026-11-13 y el
+2026-11-14):
 
 - **La portada**, con los equipos del club en una temporada: la competición en la que juega cada uno (sin la
   categoría delante, «PRIMERA CADETE · Grupo 4»), cómo va su ingesta y cuándo se sincronizó por última vez, en tu
   hora. Si dos equipos se llamarían igual, cada uno lleva lo que lo distingue («Alevín A · Fútbol 7»). La temporada
   se elige arriba a la derecha y queda en la dirección (`/?temporada=2025-26`).
+- **Cómo le va a cada equipo**, en la misma tabla: su **posición**, su **racha** (las últimas cinco jornadas, con
+  el número de cada una sobre el color del resultado; la de descanso, un cuadro vacío), el **último partido** (la
+  letra V, E o D, en casa o fuera, el marcador con el local primero y el rival con el puesto con el que llegó) y el
+  **próximo** (el día y la hora, o «hora por fijar», en casa o fuera y el rival con su puesto de hoy; o «Descansa ·
+  jornada N»). Cada cuadro de la racha y el próximo partido llevan a su jornada, con su clasificación.
 - **La tabla se ordena** pinchando la cabecera de cada columna: la primera vez en su orden, la segunda al revés y
-  la tercera vuelve al de siempre. El orden también queda en la dirección (`/?orden=ingesta`).
+  la tercera vuelve al de siempre. El orden también queda en la dirección (`/?orden=ingesta`). Por posición, el
+  mejor clasificado primero y al final los que no tienen puesto.
 - **El alta de equipo**: «Dar de alta un equipo», junto al selector de temporada y debajo del mensaje cuando no hay
   temporadas o la elegida no tiene equipos. El formulario (`/equipos/nuevo`) comprueba todos los campos a la vez
   antes de enviar y avisa si se sale con cambios sin guardar; al lado de su selector, «Crear nueva temporada» la
@@ -28,7 +35,8 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
   de la Federación, y «Comprobar en la Federación»; **2**, ver lo que hay en ella (competición, temporada,
   jornadas, si no cuadra con el equipo), **elegir el equipo del club** entre los del grupo y «Sincronizar». Vuelve
   a la portada en la temporada del calendario, con el aviso «Sincronizado. La primera ingesta está en marcha.».
-- **La portada se refresca sola** cada 10 s mientras alguna ingesta esté «En marcha», sin recargar.
+- **La portada se refresca sola** cada 10 s mientras alguna ingesta esté «En marcha», sin recargar, con el resumen
+  de cada equipo.
 - **Volver a traer los datos de la Federación**: el icono ↻ junto al estado de la ingesta, en la portada y en la
   ficha del equipo, lanza otra vez la ingesta de esa competición sin esperar a la de cada noche.
 - **La ficha del equipo**: el nombre de cada equipo en la portada lleva a ella
@@ -40,7 +48,8 @@ Hecha con Vue y TypeScript, con las piezas de PrimeVue. Los datos se los pide al
   «‹ Anterior», el selector y «Siguiente ›», y la clasificación tras ella, con el puesto anterior y la racha.
   Sin jornada en la dirección, abre la de la última clasificación. El nombre de la competición en la ficha lleva
   aquí.
-- **Con el zoom al 200 %**, las tablas anchas se desplazan a los lados dentro de su recuadro, y la página no.
+- **Con el zoom al 200 %**, las tablas anchas (también la de la portada) se desplazan a los lados dentro de su
+  recuadro, y la página no.
 - Alrededor, la cabecera con el club, el menú (de momento solo «Equipos») y el botón de modo claro u oscuro.
 
 **Ojo: guardar da de alta el equipo de verdad en tu club, «Crear» crea la temporada de verdad, y «Sincronizar»

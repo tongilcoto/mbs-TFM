@@ -17,7 +17,7 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
-> **Estado del documento: en curso.** **Las seis decisiones de la §4, revisadas una a una con el desarrollador el
+> **Estado del documento: cerrado el 2026-11-14**, con la mini-fase `R5.12` (§7.E) pendiente. **Las seis decisiones de la §4, revisadas una a una con el desarrollador el
 > 2026-11-13**, con medidas de su servidor y sus propios partidos. La revisión cambió cuatro cosas de la propuesta
 > inicial: la racha lleva el número de cada jornada y no la letra (`DW-23`); casa o fuera, con un icono; el puesto
 > del rival, a la izquierda de su nombre; y solo lleva a algún sitio lo que no está ya enlazado en la fila.
@@ -290,7 +290,7 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 
 ## 7. Los pasos
 
-### A · Las decisiones y los escenarios
+### A · Las decisiones y los escenarios ✅
 
 | Paso | Qué |
 |---|---|
@@ -298,7 +298,7 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 | `R5.2` | Los documentos de lo decidido: `D-113` en la bitácora, el LLD-B y su anexo si hace falta (`DW-23`), y esta ficha al día |
 | `R5.3` | Los escenarios escritos y revisados, sin definir, y la federación falsa con lo que necesiten |
 
-### B · El servidor
+### B · El servidor ✅
 
 | Paso | Qué |
 |---|---|
@@ -306,14 +306,14 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 | `R5.5` | El resumen en `listSeasonRegistrations` y `getTeamRegistration`, en ciclos TDD |
 | `R5.6` | El cierre del servidor: tests, mutación, censo; y su renglón en el README del backend |
 
-### C · La web
+### C · La web ✅
 
 | Paso | Qué |
 |---|---|
 | `R5.7` | La racha de la clasificación, sacada a una pieza común para la portada, con el cuadro vacío del descanso (`D-114`) también en la pantalla de jornada y clasificación |
 | `R5.8` | Las columnas nuevas de la portada, con su orden y sus enlaces |
 
-### D · Los escenarios en verde y el cierre
+### D · Los escenarios en verde y el cierre ✅
 
 | Paso | Qué |
 |---|---|
@@ -355,9 +355,33 @@ Los pasos pueden cambiar tras `R5.1`.
 | `R5.8` | 2026-11-14 | **Las cuatro columnas de la portada.** Entre Competición e Ingesta: **Posición** (el óvalo de la R4), **Racha** (`StreakBoxes`, con cada cuadro como enlace a su jornada), **Último** (la letra, casa o fuera, el marcador con el local primero y el rival con el puesto con el que llegó) y **Próximo** (el día y la hora, o «hora por fijar», encima; casa o fuera y el rival con su puesto de hoy debajo; o «Descansa · jornada N»), todo él enlace a su jornada. Sin dato, una raya, como en la clasificación. La fecha, como en la pestaña Resultados («Sáb 14 nov 16:45»), no «sáb 14/11» de la decisión 5. Lo que traduce el resumen, en `screens/home/summary.ts`; la fila guarda el puesto de cada competición para **ordenar por Posición**: el mejor primero, el de dos competiciones por la mejor, y al final los que no tienen puesto (`?orden=posicion`). Racha, Último y Próximo no se ordenan. **Piezas comunes nuevas**: el texto al pasar el ratón y al llegar con el teclado, sacado de `IconAction` a `useTip` y `TipBubble` (sus 11 pruebas, sin tocar y en verde), para los cuadros de la racha y el icono de casa o fuera (`VenueIcon`, con `house` y `plane` de Lucide 1.62.0 en `AppIcon`); y la letra del resultado, sacada de la pestaña Resultados a `OutcomeLetter`. El nombre del enlace del próximo es su propio texto, con un espacio de verdad entre cada pieza («Sáb 14 nov 16:45 Fuera 5º JUVENTUD SANSE B»): sin él, el lector lo oía todo seguido. **Primero se le dio un nombre aparte, y axe lo paró en 31 escenarios** (`label-content-name-mismatch`): el nombre tiene que contener lo que se ve, para quien maneja la web con la voz (WCAG 2.5.3). Y un paso de la R4 (`ficha.steps.ts`) buscaba la celda de la ingesta por su número; ahora, por el nombre de su columna. Ciclos con su rojo: el resumen (8 pruebas), la fila y el orden (4), los enlaces de la racha (2) y la tabla (11 rotas o nuevas); las de la portada y la tabla que buscaban la celda de la ingesta por su número, al día. `typecheck`, `lint` (los 3 avisos de siempre), **431 → 453** pruebas de piezas y `build` en verde. **Visto en el navegador con los datos del desarrollador** (1500 px): los seis equipos con su resumen, el cuadro de la jornada 7 del Cadete A lleva a su jornada, y `?orden=posicion` los pone del 1º al 18º con el de sin competición al final. Con nueve columnas la tabla va justa: el rival baja a una segunda línea, y «Al día» parte en dos; a mirar en `R5.10`. Los escenarios, la pasada entera tras el arreglo (semilla 474138, 5 min 39 s): **los 154 de antes en verde** y los 16 de la R5 sin definir. LLD-B §3.7, la nota de `useTip`. **No hay que relanzar el servidor**: solo cambia la web |
 | `R5.9` | 2026-11-14 | **Los 16 escenarios de la rebanada, definidos y en verde.** Quince en `portada-resumen.steps.ts` y uno en `jornada.steps.ts`; lo que se compara se calcula de la competición inventada (`expected.ts`: `streakOf`, la racha con el descanso, y `ownRestRound`), no se lee de la web, y cada celda se busca por el nombre de su columna. Los equipos de «Ordenar» se colocan en puestos distintos inventando otra competición hasta que no se repiten (§6). Por el camino: **`playedRounds` no daba ninguna jornada por jugada en un grupo impar**, porque el descanso nunca tiene marcador. **Y el escenario de «Ponerse al día» encontró un fallo de la web**: al acabar la ingesta, el refresco de la portada solo volvía a pedir las competiciones, y el resumen viene con los equipos (`D-113`); la posición se quedaba en «–» hasta recargar. Ahora pide las dos cosas (su prueba de piezas, en rojo antes del arreglo; en su propio commit). La primera pasada: 169 de 170, ese. Tras el arreglo, la pasada entera (semilla 913735, 6 min 3 s): **170 escenarios en verde**, con axe en los dos modos; el guion de R5.3 vio una vez un equipo sin partidos tras su ingesta, y en estas tres pasadas no se repitió. `typecheck`, `lint` y **453** pruebas de piezas en verde. **No hay que relanzar el servidor**: solo cambia la web |
 | `R5.10` | 2026-11-14 | **La revisión a mano.** **Zoom al 200 %** (una ventana de 640 px, como en R4.15), con los datos del desarrollador: con las nueve columnas de R5.8, **la tabla de la portada medía 1120 px y la página entera se desplazaba a los lados**; va ahora en su `ScrollBox`, como las de la R4. Y aun dentro de la caja la página medía 1105: el «Acciones» de la cabecera, un texto solo para el lector en `position: absolute`, se escapaba de la caja; la caja es ahora su marco (`position: relative`), lo que vale también para las tablas de la R4 (`b87733a`). La portada y la pantalla de jornada miden 640 justos y solo se desplaza la tabla. **Con el teclado**, la tecla Tab de verdad en el primer cuadro de la racha: el anillo del foco, el texto «Derrota en la jornada 5» encima, y Escape lo esconde sin mover el foco. **Las paradas del tabulador** (decisión 6): 52 en la tabla con los seis equipos del desarrollador, 9 por fila (el equipo, 5 cuadros, el próximo, ↻ y sincronizar), antes 3; propuesta la racha como una sola parada con las flechas, y **el desarrollador lo da por bueno así**, sin recorrerla él. **Sin mirar a mano**: Safari y los dos modos, por buenos con axe; y VoiceOver, aplazado al final del proyecto, como en la R4. 170 escenarios en verde (semilla 437977, 6 min 10 s) y 453 pruebas de piezas. **No hay que relanzar el servidor** |
+| `R5.11` | 2026-11-14 | **Cierre.** Los pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez aunque la web no lo tocó y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **850** (847 + 3 omitidos), sin fallos, en 55 s con la compilación; el censo con salida `0` (17 operaciones, 31 de 37 códigos y 158 de 174 campos nombrados); en la web, **453 pruebas de piezas** (426 al empezar: 5 de `R5.7` y 22 de `R5.8`) y **170 escenarios** en verde (`R5.10`); (2) la cabecera del README del backend, «rebanadas 1 a 5 cerradas», con el enlace a este plan, y **850** donde decía 831 (§0 y §5: el `831` de §5 se quedó viejo en `R5.6`); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada, lo abierto y lo siguiente (la mini-fase `R5.12`); (4) los rótulos de la §7 con su ✅ y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol. En el plan del backoffice, la fila de la rebanada («✅ hecha, 11/11», con `R5.12` después). El README de la web dice qué enseña hoy: las cuatro columnas, ordenar por posición, el refresco con el resumen y la tabla de la portada al 200 %. Lo aprendido, en la §9 |
 
 ---
 
 ## 9. Lo aprendido
 
-*(Se escribe al cerrar la rebanada.)*
+- **Lo medido en un grupo no vale para todos.** El código `-1` del ficticio del descanso se midió en un grupo de
+  alevín y se tomó por regla (`D-105`); en el de infantil del desarrollador es `-27824126`, y la ingesta descartaba
+  sus 26 descansos en silencio, con un motivo (`missingMatchDate`) que nadie mira. Se vio por la web, en la racha
+  del Infantil B, no por el registro de la ingesta. Lo arregla `R5.12`.
+- **Un dato nuevo puede venir por una petición que no se refresca.** El resumen viaja con los equipos de la
+  temporada (`D-113`), y el refresco de la portada solo pedía las competiciones porque hasta entonces era lo único
+  que cambiaba con una ingesta. En R5.8 se miró la portada ya cargada; lo encontró el escenario de «Ponerse al
+  día» (R5.9). Al añadir datos a una respuesta, mirar quién la vuelve a pedir.
+- **Lo que no se ve también ocupa sitio.** Con la tabla ya en su caja, la página seguía midiendo 1105 px al 200 %:
+  un texto solo para el lector, en `position: absolute`, se escapaba de la caja. Ahora la caja es su marco (R5.10).
+- **El nombre de un enlace tiene que contener lo que se ve.** Darle al próximo partido un nombre aparte, más
+  claro para el lector, lo paró axe en 31 escenarios (WCAG 2.5.3): quien usa la web con la voz dice lo que ve. La
+  salida fue poner espacios de verdad entre las piezas, para que el nombre salga del propio texto (R5.8).
+- **Una pieza que se repite se saca antes de copiarla.** El texto al pasar el ratón y al llegar con el teclado
+  vivía dentro de `IconAction`; la racha y casa o fuera lo necesitaban igual, y se sacó a `useTip` con las pruebas
+  de `IconAction` intactas como prueba de que nada cambiaba.
+- **Una regla de los escenarios puede no valer para un caso nuevo.** «Jornada jugada» era «todos sus partidos con
+  marcador», y el descanso nunca lo tiene: en un grupo impar no había ninguna jugada (R5.9).
+
+**Queda abierto, con dueño:** la mini-fase **`R5.12`** (el descanso con otro código en la RFFM), justo después;
+**quitar la letra V, E o D del último partido**, que el desarrollador se lo está pensando (las razones para dejarla:
+el color no es la única pista y, si descansó en la última jornada, el último partido
+no es el primer cuadro de la racha); y, como en la R4, **VoiceOver** al final del proyecto, Safari y los dos modos
+sin mirar a mano, y **leer el acta** (`D-57`). `npm run e2e` tarda ya unos 6 min con los 170 escenarios.
