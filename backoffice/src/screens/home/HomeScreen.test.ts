@@ -23,6 +23,9 @@ function season(label: string, isCurrent = false): Season {
   }
 }
 
+// El resumen de cada competición (D-113), vacío: el servidor siempre lo manda; estas pruebas no lo miran.
+const noSummary = { position: null, form: [], lastMatch: null, nextMatch: null, nextOpponentPosition: null }
+
 const aTeam = {
   seasonId: 'id-2026',
   competitions: [],
@@ -129,7 +132,7 @@ describe('ordenar la tabla (bloque T)', () => {
   ]
   const teamIn = (id: string, category: string, letter: string, competitionIds: string[]) => ({
     ...aTeam,
-    competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '1' })),
+    competitions: competitionIds.map((competitionId) => ({ competitionId, federationTeamId: '1', summary: noSummary })),
     team: { ...aTeam.team, id, category, letter, displayName: id },
   })
   // El orden del servidor: por edad. El alevín, al día; el cadete, con fallos.
@@ -248,7 +251,7 @@ describe('volver a traer los datos de una competición', () => {
     createdAt: '2026-10-09T21:50:27Z',
     updatedAt: '2026-10-09T21:50:27Z',
   })
-  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga' }] }
+  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga', summary: noSummary }] }
 
   // Las competiciones salen con `health`, que la prueba cambia; la pasada responde cuando la prueba la suelta
   // (`finish`), con lo que diga. Apunta lo que se le pidió.
@@ -275,7 +278,7 @@ describe('volver a traer los datos de una competición', () => {
     })
     return server
   }
-  const ingestion = () => screen.getAllByRole('cell')[1]!
+  const ingestion = () => screen.getAllByRole('cell')[5]!
   const relaunch = () => screen.findByRole('button', { name: 'Volver a traer los datos de la Federación, PRIMERA ALEVIN · Grupo 8' })
   const problem = (status: number, code: string) => Response.json({ type: 'about:blank', title: 'x', status, code }, { status })
 
@@ -365,7 +368,7 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
     createdAt: '2026-10-09T21:50:27Z',
     updatedAt: '2026-10-09T21:50:27Z',
   })
-  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga' }] }
+  const inscribed = { ...aTeam, competitions: [{ competitionId: 'liga', summary: noSummary }] }
 
   // Las competiciones, una respuesta por petición, en orden; la última se repite. Apunta cuántas se pidieron.
   function serverWith(answers: (() => Response)[]) {
@@ -374,8 +377,9 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
       const path = new URL(request.url).pathname
       if (path === '/api/v1/seasons') return Response.json([season('2026/27', true)])
       if (path.endsWith('/registrations')) {
-        asked.registrations++
-        return Response.json([inscribed])
+        // La primera vez, sin resumen (la ingesta no ha traído nada); después, ya con su puesto (plan R5).
+        const placed = asked.registrations++ > 0
+        return Response.json([placed ? { ...inscribed, competitions: [{ competitionId: 'liga', summary: { ...noSummary, position: 3 } }] } : inscribed])
       }
       if (path === '/api/v1/competitions') return answers[Math.min(asked.competitions++, answers.length - 1)]!()
       throw new Error(`Petición no esperada: ${path}`)
@@ -383,9 +387,9 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
     return asked
   }
   const json = (health: string) => () => Response.json([liga(health)])
-  const ingestion = () => screen.getAllByRole('cell')[1]!
+  const ingestion = () => screen.getAllByRole('cell')[5]!
 
-  test('«En marcha»: a los 10 s pide las competiciones otra vez, y la fila sale «Al día» sin «Cargando…»', async () => {
+  test('«En marcha»: a los 10 s pide otra vez los equipos y las competiciones, y la fila sale «Al día» y con su puesto, sin «Cargando…»', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const asked = serverWith([json('pending'), json('ok')])
     await openHome('/')
@@ -395,8 +399,9 @@ describe('la portada se refresca sola mientras algo está en marcha', () => {
 
     await waitFor(() => expect(ingestion()).toHaveTextContent('Al día'))
     expect(screen.queryByText('Cargando equipos…')).not.toBeInTheDocument()
-    // Solo las competiciones: los equipos inscritos no cambian con una ingesta.
-    expect(asked).toEqual({ competitions: 2, registrations: 1 })
+    // También los equipos: desde la R5 traen el resumen de cada competición (D-113), que cambia con la ingesta.
+    expect(screen.getAllByRole('cell')[1]).toHaveTextContent('3º')
+    expect(asked).toEqual({ competitions: 2, registrations: 2 })
   })
 
   test('sin nada en marcha, no vuelve a pedir nada', async () => {

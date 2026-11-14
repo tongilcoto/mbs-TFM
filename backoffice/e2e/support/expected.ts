@@ -43,9 +43,9 @@ export function rounds(plays: Competition): Round[] {
   return plays.schedule
 }
 
-/** Las jornadas jugadas: las que tienen todos sus marcadores. */
+/** Las jornadas jugadas: las que tienen todos sus marcadores. El descanso de un grupo impar no lleva (plan R5). */
 export function playedRounds(plays: Competition): Round[] {
-  return rounds(plays).filter((round) => round.matches.every((m) => m.score))
+  return rounds(plays).filter((round) => round.matches.every((m) => m.score || m.rest))
 }
 
 /** La jornada en curso: la siguiente a la última jugada (`playedCompetition`). */
@@ -84,4 +84,36 @@ export function formOf(plays: Competition, code: string, upTo: number): { round:
     )
     .reverse()
     .slice(0, 5)
+}
+
+export type StreakOutcome = 'Victoria' | 'Empate' | 'Derrota' | 'Descansó'
+
+/**
+ * La racha de un equipo tras una jornada, como la manda el servidor desde `D-114`: sus jornadas, la de descanso como
+ * una más, de la más reciente a la más antigua, hasta cinco. Sin descansos, la misma que `formOf`.
+ */
+export function streakOf(plays: Competition, code: string, upTo: number): { round: number; outcome: StreakOutcome }[] {
+  return rounds(plays)
+    .filter((round) => round.number <= upTo)
+    .flatMap((round) =>
+      round.matches
+        .filter((m) => (m.score || m.rest) && (m.home.code === code || m.away.code === code))
+        .map((m) => {
+          if (m.rest) return { round: round.number, outcome: 'Descansó' as const }
+          const [mine, theirs] = m.home.code === code ? [m.score!.home, m.score!.away] : [m.score!.away, m.score!.home]
+          return { round: round.number, outcome: mine > theirs ? ('Victoria' as const) : mine < theirs ? ('Derrota' as const) : ('Empate' as const) }
+        }),
+    )
+    .reverse()
+    .slice(0, 5)
+}
+
+/** Lo que dice al lector cada cuadro de la racha: «Victoria en la jornada 5», «Descansó en la jornada 4». */
+export function streakLabel(entry: { round: number; outcome: StreakOutcome }): string {
+  return `${entry.outcome} en la jornada ${entry.round}`
+}
+
+/** La jornada jugada en la que descansó el del club, o nada. */
+export function ownRestRound(plays: Competition, upTo = playedRounds(plays).length): Round | undefined {
+  return rounds(plays).find((round) => round.number <= upTo && ownFixture(plays, round).rest)
 }

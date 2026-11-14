@@ -4,9 +4,11 @@ import { formatInstant } from '../../theme/format'
 import type { CompetitionCell, TeamRow } from '../../components/teamRow'
 import { shownHealth } from '../../relaunch'
 import { competitionLabel, type IngestionHealth, optionsOf, teamNames } from '../../theme/names'
+import { summaryCell } from './summary'
 
 type Registration = components['schemas']['TeamRegistrationResponse']
 type Competition = components['schemas']['CompetitionResponse']
+type Summary = components['schemas']['TeamCompetitionSummary']
 
 // Una fila de la portada, con lo que necesita para ordenarse (bloque T del plan R2): la tabla pinta la fila, y las
 // reglas de orden (order.ts) miran sus claves, que son los datos de verdad y no los textos que se ven.
@@ -23,6 +25,8 @@ export interface SortKeys {
   competitionNames: string[]
   healths: (IngestionHealth | undefined)[]
   lastSynced: (string | null)[]
+  // El puesto en cada una (`null`, sin clasificación todavía), del resumen (plan R5).
+  positions: (number | null)[]
 }
 
 // Junta cada inscripción con sus competiciones. El orden de las filas es el del servidor: por categoría, de
@@ -37,8 +41,13 @@ export function teamRows(
   // Si dos equipos se llamarían igual («Alevín A» masculino y femenino), cada uno con lo que lo distingue.
   const names = teamNames(registrations.map((registration) => registration.team))
   return registrations.map((registration) => {
-    const own = registration.competitions.flatMap(({ competitionId }) => byId.get(competitionId) ?? [])
-    const cells = own.map((competition) => cell(competition, relaunched.has(competition.id)))
+    // Cada competición, con el resumen del equipo en ella.
+    const entries = registration.competitions.flatMap(({ competitionId, summary }) => {
+      const competition = byId.get(competitionId)
+      return competition ? [{ competition, summary }] : []
+    })
+    const own = entries.map((entry) => entry.competition)
+    const cells = entries.map((entry) => cell(entry.competition, entry.summary, registration.team.id, relaunched.has(entry.competition.id)))
     return {
       id: registration.team.id,
       team: names.get(registration.team.id)!,
@@ -49,6 +58,7 @@ export function teamRows(
         competitionNames: cells.map((c) => c.name),
         healths: own.map((c) => c.ingestionHealth),
         lastSynced: own.map((c) => c.lastSyncedAt ?? null),
+        positions: entries.map((entry) => entry.summary.position ?? null),
       },
     }
   })
@@ -58,11 +68,12 @@ export function teamRows(
 const ages = optionsOf('TeamCategory').map((option) => option.value)
 
 // Lo que se ordena sigue siendo lo que dice el servidor (`keys.healths`): la fila no salta de sitio al pulsar ↻.
-function cell(competition: Competition, relaunched: boolean): CompetitionCell {
+function cell(competition: Competition, summary: Summary, teamId: string, relaunched: boolean): CompetitionCell {
   return {
     id: competition.id,
     name: competitionLabel(competition),
     ...shownHealth(competition, relaunched),
     lastSynced: competition.lastSyncedAt ? formatInstant(competition.lastSyncedAt) : 'Nunca',
+    summary: summaryCell(summary, teamId),
   }
 }

@@ -295,7 +295,8 @@ competiciones.
   ingesta de una competición, en la celda de su ingesta).
 - **El texto de la acción no se ve hasta pasar el ratón o llegar con el teclado**, y los dos caminos funcionan;
   *Escape* lo cierra (WCAG 1.4.13). El `Tooltip` de PrimeVue hace uno u otro, no los dos: la web tiene su propia
-  pieza, `IconAction` (un enlace o un botón).
+  pieza, `IconAction` (un enlace o un botón). Desde la rebanada 5, ese comportamiento está en `useTip` (`tip.ts`) y
+  el texto en `TipBubble`, para usarlo también en los cuadros de la racha y en el icono de casa o fuera.
 - **Los iconos son los de Lucide, copiados** en `AppIcon` con su licencia al lado, y se añaden según hagan falta.
   No PrimeIcons: desde la 8 su licencia es comercial.
 - **El lector de pantalla lee siempre el nombre, con la fila detrás**: «Sincronizar otra competición, Cadete A».

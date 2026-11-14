@@ -2,13 +2,14 @@
 import type { components } from '../../api/schema'
 import { formatDayRange, formatGoalDifference, formatKickoff, formatMatchDay } from '../../theme/format'
 import { namesOf } from '../../theme/names'
+import type { StreakBox } from '../../components/streak'
 import { type ResultCell, restDayName, resultOf } from '../team/matches'
 
 type Competition = components['schemas']['CompetitionResponse']
 type Round = components['schemas']['RoundResponse']
 type Match = components['schemas']['MatchResponse']
 type Standing = components['schemas']['StandingResponse']
-type MatchOutcome = components['schemas']['MatchOutcome']
+type FormEntry = components['schemas']['FormEntry']
 
 const categoryNames = namesOf('TeamCategory')
 const genderNames = namesOf('Gender')
@@ -72,11 +73,18 @@ export function roundMatchRows(matches: Match[]): RoundMatchRow[] {
 
 // ── La clasificación ──
 
-export interface FormBox {
-  round: number
-  outcome: MatchOutcome
-  // Para el lector y al pasar el ratón: «Victoria en la jornada 5». El color es lo único que lo dice a la vista.
-  label: string
+// La racha (plan R5, decisión 3 · DW-23), para la pieza común: la usan la clasificación y la portada. En el orden en
+// que llega, la más reciente primero. El descanso (D-114) es una jornada más; su nombre en el catálogo es
+// «Descanso», pero aquí se dice «Descansó en la jornada N».
+export function streakBoxes(form: FormEntry[]): StreakBox[] {
+  return form.map((entry) => ({
+    round: entry.roundNumber,
+    outcome: entry.outcome,
+    label:
+      entry.outcome === 'descanso'
+        ? `Descansó en la jornada ${entry.roundNumber}`
+        : `${outcomeNames[entry.outcome]} en la jornada ${entry.roundNumber}`,
+  }))
 }
 
 export interface StandingLine {
@@ -93,7 +101,8 @@ export interface StandingLine {
   points: number
   // El puesto anterior y cuánto subió (positivo) o bajó (negativo); sin él, «–».
   previous?: { position: number; change: number }
-  form: FormBox[]
+  // La racha, con el descanso como una jornada más (D-114).
+  form: StreakBox[]
 }
 
 // En orden de puesto, aunque lleguen de otra manera. La racha, la más reciente a la izquierda: el servidor ya la
@@ -114,10 +123,6 @@ export function standingLines(table: Standing[]): StandingLine[] {
       goalDifference: formatGoalDifference(row.goalsFor - row.goalsAgainst),
       points: row.points,
       previous: row.previousPosition == null ? undefined : { position: row.previousPosition, change: row.previousPosition - row.position },
-      form: row.form.map((entry) => ({
-        round: entry.roundNumber,
-        outcome: entry.outcome,
-        label: `${outcomeNames[entry.outcome]} en la jornada ${entry.roundNumber}`,
-      })),
+      form: streakBoxes(row.form),
     }))
 }

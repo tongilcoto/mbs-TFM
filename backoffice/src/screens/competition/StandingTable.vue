@@ -1,9 +1,10 @@
 <!-- La clasificación tras una jornada (plan R4, §3.4): Pos., Equipo, J, G, E, P, GF, GC, DG, Pts, Ant. y Racha. La
-     fila del club, resaltada. Ant., el puesto anterior con una flecha de cuánto subió o bajó. La racha, un cuadro por
-     partido con el número de su jornada sobre el color del resultado, el más reciente a la izquierda. -->
+     fila del club, resaltada. Ant., el puesto anterior con una flecha de cuánto subió o bajó. La racha, la pieza común
+     (`StreakBoxes`): un cuadro por jornada, con el descanso vacío (D-114). -->
 <script setup lang="ts">
 import ScrollBox from '../../components/ScrollBox.vue'
 import PositionBadge from '../../components/PositionBadge.vue'
+import StreakBoxes from '../../components/StreakBoxes.vue'
 import type { StandingLine } from './round'
 
 defineProps<{ lines: StandingLine[]; caption: string }>()
@@ -109,17 +110,7 @@ function changeText(change: number): string {
             >–</span>
           </td>
           <td>
-            <ol class="form">
-              <li
-                v-for="box in line.form"
-                :key="box.round"
-                :class="['box', box.outcome]"
-                :title="box.label"
-              >
-                <span aria-hidden="true">{{ box.round }}</span>
-                <span class="visually-hidden">{{ box.label }}</span>
-              </li>
-            </ol>
+            <StreakBoxes :boxes="line.form" />
           </td>
         </tr>
       </tbody>
@@ -190,34 +181,6 @@ abbr {
 }
 .same {
   color: var(--p-text-muted-color);
-}
-.form {
-  display: flex;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-/* Cada partido, el número de su jornada sobre el color del resultado, en los dos modos. */
-.box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.625rem;
-  height: 1.5rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--p-content-background);
-}
-.victoria {
-  background: var(--p-estado-bien);
-}
-.empate {
-  background: var(--p-estado-sin-datos);
-}
-.derrota {
-  background: var(--p-estado-fallo);
 }
 /* Lo lee el lector de pantalla y no se ve. */
 .visually-hidden {

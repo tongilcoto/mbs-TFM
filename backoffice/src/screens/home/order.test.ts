@@ -52,8 +52,8 @@ function competition(id: string, division: string, fields: Partial<Competition> 
 const ids = (rows: { id: string }[]) => rows.map((row) => row.id)
 
 describe('las columnas de la portada', () => {
-  test('son cuatro, con su nombre en la dirección', () => {
-    expect(columns).toEqual(['equipo', 'competicion', 'ingesta', 'sincronizacion'])
+  test('son cinco, con su nombre en la dirección', () => {
+    expect(columns).toEqual(['equipo', 'competicion', 'posicion', 'ingesta', 'sincronizacion'])
   })
 })
 
@@ -174,5 +174,31 @@ describe('Última sincronización: de la más antigua a la más reciente, con «
 
   test('al revés, la más reciente primero y «Nunca» la última de las que tienen competición', () => {
     expect(ids(sortRows(rows, rules.sincronizacion, true))).toEqual(['reciente', 'antigua', 'dos', 'nunca', 'sin'])
+  })
+})
+
+describe('Posición: el mejor clasificado primero, y al final los que no tienen puesto (plan R5)', () => {
+  // El puesto de cada una de sus competiciones, en el resumen (D-113).
+  const placed = (registration: Registration, positions: (number | null)[]): Registration => ({
+    ...registration,
+    competitions: registration.competitions.map((c, index) => ({ ...c, summary: { ...noSummary, position: positions[index] ?? null } })),
+  })
+  const rows = teamRows(
+    [
+      placed(team('quinto', 'alevin', 'A', ['a']), [5]),
+      team('sin', 'alevin', 'B', []),
+      placed(team('primero', 'alevin', 'C', ['b']), [1]),
+      placed(team('sin-jugar', 'alevin', 'D', ['c']), [null]),
+      placed(team('dos', 'alevin', 'E', ['d', 'e']), [9, 3]),
+    ],
+    ['a', 'b', 'c', 'd', 'e'].map((id) => competition(id, 'A')),
+  )
+
+  test('del primero al último; el de dos competiciones, por la mejor de las suyas; sin puesto, al final', () => {
+    expect(ids(sortRows(rows, rules.posicion, false))).toEqual(['primero', 'dos', 'quinto', 'sin', 'sin-jugar'])
+  })
+
+  test('al revés, del último al primero, y los que no tienen puesto siguen al final', () => {
+    expect(ids(sortRows(rows, rules.posicion, true))).toEqual(['quinto', 'dos', 'primero', 'sin', 'sin-jugar'])
   })
 })

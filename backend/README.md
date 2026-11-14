@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 4 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md) y [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md)). **831 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)). **850 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -620,7 +620,7 @@ curl -s "http://atleti.localhost:8080/v1/matches?roundId=<id de la jornada>" | j
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 831 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 850 tests, ~40 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

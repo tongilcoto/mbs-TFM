@@ -1,12 +1,12 @@
 // Cómo se ordena la tabla de la portada por cada columna (bloque T del plan R2). Cada regla da el orden del primer
-// clic; el segundo es el mismo al revés (sorting.ts). Los equipos sin competición van siempre al final en las tres
+// clic; el segundo es el mismo al revés (sorting.ts). Los equipos sin competición van siempre al final en las
 // columnas de las competiciones. Una columna nueva es una regla más aquí y una cabecera más en la tabla.
 import type { SortRule } from '../../sorting'
 import type { IngestionHealth } from '../../theme/names'
 import type { HomeRow } from './rows'
 
 // Los nombres de las columnas en la dirección: `?orden=ingesta`.
-export const columns = ['equipo', 'competicion', 'ingesta', 'sincronizacion'] as const
+export const columns = ['equipo', 'competicion', 'posicion', 'ingesta', 'sincronizacion'] as const
 export type Column = (typeof columns)[number]
 
 // De peor a mejor: lo que hay que mirar, primero. Sin estado, detrás de todos.
@@ -28,6 +28,13 @@ export const rules: Record<Column, SortRule<HomeRow>> = {
     isEmpty: withoutCompetition,
   },
 
+  // Del primero al último (plan R5). Un equipo con varias, por la mejor de las suyas. Sin puesto (sin competición o
+  // sin clasificación todavía), al final.
+  posicion: {
+    compare: (a, b) => best(a) - best(b),
+    isEmpty: (row) => !row.keys.positions.some((position) => position !== null),
+  },
+
   // De peor a mejor. Un equipo con varias, por la peor de las suyas.
   ingesta: {
     compare: (a, b) => worst(a) - worst(b),
@@ -45,6 +52,10 @@ export const rules: Record<Column, SortRule<HomeRow>> = {
 
 function first(names: string[]): string {
   return [...names].sort(text.compare)[0] ?? ''
+}
+
+function best(row: HomeRow): number {
+  return Math.min(...row.keys.positions.filter((position) => position !== null))
 }
 
 function worst(row: HomeRow): number {

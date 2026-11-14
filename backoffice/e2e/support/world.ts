@@ -43,6 +43,9 @@ export interface ScenarioData {
   chosen?: string
   /** La jornada que mira el escenario (plan R4). */
   round?: number
+  /** Los equipos con su puesto, y el que no tiene, para ordenar por posición (plan R5). */
+  placed?: { team: Team; position: number }[]
+  unplaced?: Team
 }
 
 export class ScenarioWorld extends World {

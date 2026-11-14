@@ -17,7 +17,7 @@
 >
 > **Este fichero es plan y registro a la vez.** Un paso sin su renglón de estado no está hecho.
 >
-> **Estado del documento: en curso.** **Las seis decisiones de la §4, revisadas una a una con el desarrollador el
+> **Estado del documento: cerrado el 2026-11-14**, con la mini-fase `R5.12` (§7.E) pendiente. **Las seis decisiones de la §4, revisadas una a una con el desarrollador el
 > 2026-11-13**, con medidas de su servidor y sus propios partidos. La revisión cambió cuatro cosas de la propuesta
 > inicial: la racha lleva el número de cada jornada y no la letra (`DW-23`); casa o fuera, con un icono; el puesto
 > del rival, a la izquierda de su nombre; y solo lleva a algún sitio lo que no está ya enlazado en la fila.
@@ -290,7 +290,7 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 
 ## 7. Los pasos
 
-### A · Las decisiones y los escenarios
+### A · Las decisiones y los escenarios ✅
 
 | Paso | Qué |
 |---|---|
@@ -298,7 +298,7 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 | `R5.2` | Los documentos de lo decidido: `D-113` en la bitácora, el LLD-B y su anexo si hace falta (`DW-23`), y esta ficha al día |
 | `R5.3` | Los escenarios escritos y revisados, sin definir, y la federación falsa con lo que necesiten |
 
-### B · El servidor
+### B · El servidor ✅
 
 | Paso | Qué |
 |---|---|
@@ -306,20 +306,36 @@ distintos** para ordenar los coloca el paso, no la federación: con marcadores a
 | `R5.5` | El resumen en `listSeasonRegistrations` y `getTeamRegistration`, en ciclos TDD |
 | `R5.6` | El cierre del servidor: tests, mutación, censo; y su renglón en el README del backend |
 
-### C · La web
+### C · La web ✅
 
 | Paso | Qué |
 |---|---|
 | `R5.7` | La racha de la clasificación, sacada a una pieza común para la portada, con el cuadro vacío del descanso (`D-114`) también en la pantalla de jornada y clasificación |
 | `R5.8` | Las columnas nuevas de la portada, con su orden y sus enlaces |
 
-### D · Los escenarios en verde y el cierre
+### D · Los escenarios en verde y el cierre ✅
 
 | Paso | Qué |
 |---|---|
 | `R5.9` | Los escenarios de la rebanada en verde, con axe en los dos modos |
 | `R5.10` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R5.11` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
+
+### E · Después del cierre: el descanso con otro código en la RFFM (mini-fase)
+
+Encontrado al revisar `R5.8` (2026-11-14) con los datos del desarrollador: **el Infantil B no tiene ningún descanso
+guardado**, y su racha salta de la jornada 5 a la 3. El adaptador de la RFFM reconoce el equipo ficticio del
+descanso solo por el código `-1`, que es el que se midió en el grupo de alevín (`D-105`); en el de infantil
+(Segunda Infantil, Grupo 26) la RFFM le da **`-27824126`**, en sus 26 descansos. Sin la marca, el partido no toma la
+fecha de su jornada, y la ingesta lo descarta por no tener fecha (`missingMatchDate`) en cada pasada. De ahí también
+el ficticio con ese código y sin partidos que se vio en `R5.5`. En los dos grupos medidos, el del ficticio es el
+único código negativo. La web pinta bien lo que le llega: el fallo es del servidor.
+
+**Se hace al cerrar la rebanada** (lo pidió el desarrollador), con el servidor en su propia rama y su renglón aquí:
+
+| Paso | Qué |
+|---|---|
+| `R5.12` | El adaptador de la RFFM toma por ficticio **cualquier código negativo**, y lo quita como hace con el `-1`, en ciclos TDD con una grabación del grupo de infantil. La enmienda a `D-105` en la bitácora, el anexo de la RFFM (la fila de «(No asignado)») y la guía de alta. Qué hacer con la fila sobrante del ficticio `-27824126` en la base del desarrollador. **Para instalar**: relanzar el servidor, `install.sh` y ↻ en el Infantil B |
 
 Los pasos pueden cambiar tras `R5.1`.
 
@@ -335,9 +351,37 @@ Los pasos pueden cambiar tras `R5.1`.
 | `R5.4` | 2026-11-13 | **El catálogo (la mini-fase).** `TeamRegistrationCompetition.summary`, obligatorio: un `TeamCompetitionSummary` nuevo con `position`, `form` (la racha, `FormEntry`), `lastMatch` y `nextMatch` (anulables, con la forma de `MatchResponse`, la misma que da `/matches`: así la web reutiliza lo de la pestaña Resultados) y `nextOpponentPosition` (`D-113`, campos apuntados en su entrada). El próximo partido puede ser el descanso, el partido contra el ficticio. `MatchOutcome` suma **`descanso`** (`D-114`), y las descripciones de `FormEntry` y `StandingResponse.form` dicen «jornadas». Sin códigos de error nuevos: no hay operación nueva. El servidor rellena el resumen **provisional vacío** hasta `R5.5`, y el censo apunta los cuatro campos en `known-gaps.json` con ese motivo. LLD del backend, §4.5, §5.1 y §5.2; `backend/README.md` §4.5. Redocly sin errores (2 avisos más, los de `lastMatch` y `nextMatch`, la forma «objeto o nulo» de siempre); `swift build`; `REQUIRE_DB=1 swift test` con **831** leídos del XML (828 + 3 omitidos), como al cerrar la R4; censo con salida `0`. En la web, los tipos regenerados; dos pruebas de la portada montaban inscripciones sin `summary` y se les da uno vacío; `typecheck`, `lint`, **426** pruebas y `build` en verde. **Hay que relanzar el servidor** (`swift run Run serve`): sin él, la web nueva no se entera, pero la de hoy no lo nota |
 | `R5.5` | 2026-11-13 | **El resumen calculado y el descanso en la racha.** Antes de programar, decidido con el desarrollador **cómo reconoce el servidor el descanso** (`D-114`, punto 3): **una marca en el partido**, `matches.is_rest_day`, que escribe la ingesta con lo que dice el adaptador (migración `AddRestDayToMatches`, la 20ª; sin relleno: la pasada siguiente marca los descansos que ya había, porque la marca es volátil), y **condición para integrar un conector nuevo** (guía de alta, §3.2 y promesa 8). Descartadas la marca en el ficticio y reconocerlo por el nombre. **Ciclos TDD**, cada uno con su rojo: la ingesta marca el descanso al crear y al fusionar; la marca va y vuelve de la base; la racha lo cuenta como `descanso` entre las cinco, solo el del equipo y solo hasta la jornada pedida; `getStanding` lo manda; la regla del resumen en el dominio (`TeamSummary`: la última tabla, el último jugado sin el descanso, el próximo que puede ser el descanso, el puesto del rival); el caso de uso lo monta en la lista y en la ficha (`CompetitionSummaries`); y el adaptador lo traduce con el mapeo de `/matches`. Los cuatro huecos del censo de `R5.4`, fuera. **Medido con una copia del club del desarrollador** en `tfm_test` (borrada después; su base, sin tocar): la lista con el resumen tardaba **327 ms** en el servidor de depuración, por encima de los 100 estimados (`D-113`); Postgres respondía en menos de 1 ms, y el tiempo era convertir cientos de filas. Con **solo los partidos del equipo y solo la última tabla** (una lectura nueva, `StandingRowRepository.latest`), **97 ms** y la misma respuesta. **Mutación 28/28** (`Tools/Mutate/Catalogs/R5-5.json`), tras dos rondas: la primera dejó vivas tres (faltaban dos pruebas, y la comprobación de que el próximo no es un descanso antes de buscar el puesto del rival sobraba: el ficticio no tiene fila), y al cambiar las lecturas se quitó otro filtro que sobraba. **831 → 850 tests** leídos del XML (847 + 3 omitidos); censo con salida `0`. La racha de la clasificación de la R4 también manda el descanso. **Hay que pasar `swift run Run migrate-tenants` y relanzar el servidor** (`swift run Run serve`): sin la migración, el servidor nuevo falla al leer los partidos; y los descansos que ya hay se marcan en la siguiente ingesta (o con ↻) |
 | `R5.6` | 2026-11-13 | **Cierre del servidor.** El recuento, leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **850** (847 + 3 omitidos), sin fallos; **831 → 850** en la rebanada, todos de `R5.5` (`R5.4` no añadió ninguno). El censo, salida `0`, con los cuatro campos del resumen fuera de `known-gaps.json`. La mutación, **28/28** (`Catalogs/R5-5.json`), sobre el código final: después solo cambió la cabecera de `FederationClient.swift` (la promesa 8, un comentario). En `backend/README.md`, el resumen en §4.5 y la rebanada en la tabla de §0. Y, aparte (`cdd6ab7`), la regla de despliegue del README, que decía que `serve` migra al arrancar: no lo hace, migra `migrate-tenants`. **Para instalar**: fusionar la rama, `swift run Run migrate-tenants` (en la base del desarrollador ya está pasada) e `install.sh`, porque el binario de `launchd` (`0871fa2`) no marca los descansos |
+| `R5.7` | 2026-11-14 | **La racha, pieza común.** Sacada de `StandingTable.vue` a `components/StreakBoxes.vue`, con la misma estructura (una lista, el número a la vista y el texto para el lector y al pasar el ratón), así que los escenarios de la R4 la leen igual. **El descanso, un cuadro vacío**: el borde gris del empate y el número del color del texto, con «Descansó en la jornada N» (el nombre del catálogo daría «Descanso en…»). Lo que traduce la racha del servidor, `streakBoxes`, va en `screens/competition/round.ts` y no en `components/`: una pieza no puede leer los tipos del servidor (`DW-01`, lo para el revisor); la pieza solo conoce la forma de lo que pinta (`components/streak.ts`), como `teamRow.ts`. La portada la tomará de ahí en `R5.8`. Sin enlaces todavía: llegan con la portada. Ciclos con su rojo: la racha con el descanso (3 pruebas, fallan sin la función) y la pieza (2). `typecheck`, `lint` (los 3 avisos de siempre), **426 → 431** pruebas de piezas y `build` en verde. Los escenarios, la pasada entera (semilla 52212, 5 min 35 s): **los 154 de antes en verde**, con los de la racha de la clasificación, y los 16 de la R5 sin definir (el del descanso en la clasificación se define en `R5.9`). **No hay que relanzar el servidor**: solo cambia la web |
+| `R5.8` | 2026-11-14 | **Las cuatro columnas de la portada.** Entre Competición e Ingesta: **Posición** (el óvalo de la R4), **Racha** (`StreakBoxes`, con cada cuadro como enlace a su jornada), **Último** (la letra, casa o fuera, el marcador con el local primero y el rival con el puesto con el que llegó) y **Próximo** (el día y la hora, o «hora por fijar», encima; casa o fuera y el rival con su puesto de hoy debajo; o «Descansa · jornada N»), todo él enlace a su jornada. Sin dato, una raya, como en la clasificación. La fecha, como en la pestaña Resultados («Sáb 14 nov 16:45»), no «sáb 14/11» de la decisión 5. Lo que traduce el resumen, en `screens/home/summary.ts`; la fila guarda el puesto de cada competición para **ordenar por Posición**: el mejor primero, el de dos competiciones por la mejor, y al final los que no tienen puesto (`?orden=posicion`). Racha, Último y Próximo no se ordenan. **Piezas comunes nuevas**: el texto al pasar el ratón y al llegar con el teclado, sacado de `IconAction` a `useTip` y `TipBubble` (sus 11 pruebas, sin tocar y en verde), para los cuadros de la racha y el icono de casa o fuera (`VenueIcon`, con `house` y `plane` de Lucide 1.62.0 en `AppIcon`); y la letra del resultado, sacada de la pestaña Resultados a `OutcomeLetter`. El nombre del enlace del próximo es su propio texto, con un espacio de verdad entre cada pieza («Sáb 14 nov 16:45 Fuera 5º JUVENTUD SANSE B»): sin él, el lector lo oía todo seguido. **Primero se le dio un nombre aparte, y axe lo paró en 31 escenarios** (`label-content-name-mismatch`): el nombre tiene que contener lo que se ve, para quien maneja la web con la voz (WCAG 2.5.3). Y un paso de la R4 (`ficha.steps.ts`) buscaba la celda de la ingesta por su número; ahora, por el nombre de su columna. Ciclos con su rojo: el resumen (8 pruebas), la fila y el orden (4), los enlaces de la racha (2) y la tabla (11 rotas o nuevas); las de la portada y la tabla que buscaban la celda de la ingesta por su número, al día. `typecheck`, `lint` (los 3 avisos de siempre), **431 → 453** pruebas de piezas y `build` en verde. **Visto en el navegador con los datos del desarrollador** (1500 px): los seis equipos con su resumen, el cuadro de la jornada 7 del Cadete A lleva a su jornada, y `?orden=posicion` los pone del 1º al 18º con el de sin competición al final. Con nueve columnas la tabla va justa: el rival baja a una segunda línea, y «Al día» parte en dos; a mirar en `R5.10`. Los escenarios, la pasada entera tras el arreglo (semilla 474138, 5 min 39 s): **los 154 de antes en verde** y los 16 de la R5 sin definir. LLD-B §3.7, la nota de `useTip`. **No hay que relanzar el servidor**: solo cambia la web |
+| `R5.9` | 2026-11-14 | **Los 16 escenarios de la rebanada, definidos y en verde.** Quince en `portada-resumen.steps.ts` y uno en `jornada.steps.ts`; lo que se compara se calcula de la competición inventada (`expected.ts`: `streakOf`, la racha con el descanso, y `ownRestRound`), no se lee de la web, y cada celda se busca por el nombre de su columna. Los equipos de «Ordenar» se colocan en puestos distintos inventando otra competición hasta que no se repiten (§6). Por el camino: **`playedRounds` no daba ninguna jornada por jugada en un grupo impar**, porque el descanso nunca tiene marcador. **Y el escenario de «Ponerse al día» encontró un fallo de la web**: al acabar la ingesta, el refresco de la portada solo volvía a pedir las competiciones, y el resumen viene con los equipos (`D-113`); la posición se quedaba en «–» hasta recargar. Ahora pide las dos cosas (su prueba de piezas, en rojo antes del arreglo; en su propio commit). La primera pasada: 169 de 170, ese. Tras el arreglo, la pasada entera (semilla 913735, 6 min 3 s): **170 escenarios en verde**, con axe en los dos modos; el guion de R5.3 vio una vez un equipo sin partidos tras su ingesta, y en estas tres pasadas no se repitió. `typecheck`, `lint` y **453** pruebas de piezas en verde. **No hay que relanzar el servidor**: solo cambia la web |
+| `R5.10` | 2026-11-14 | **La revisión a mano.** **Zoom al 200 %** (una ventana de 640 px, como en R4.15), con los datos del desarrollador: con las nueve columnas de R5.8, **la tabla de la portada medía 1120 px y la página entera se desplazaba a los lados**; va ahora en su `ScrollBox`, como las de la R4. Y aun dentro de la caja la página medía 1105: el «Acciones» de la cabecera, un texto solo para el lector en `position: absolute`, se escapaba de la caja; la caja es ahora su marco (`position: relative`), lo que vale también para las tablas de la R4 (`b87733a`). La portada y la pantalla de jornada miden 640 justos y solo se desplaza la tabla. **Con el teclado**, la tecla Tab de verdad en el primer cuadro de la racha: el anillo del foco, el texto «Derrota en la jornada 5» encima, y Escape lo esconde sin mover el foco. **Las paradas del tabulador** (decisión 6): 52 en la tabla con los seis equipos del desarrollador, 9 por fila (el equipo, 5 cuadros, el próximo, ↻ y sincronizar), antes 3; propuesta la racha como una sola parada con las flechas, y **el desarrollador lo da por bueno así**, sin recorrerla él. **Sin mirar a mano**: Safari y los dos modos, por buenos con axe; y VoiceOver, aplazado al final del proyecto, como en la R4. 170 escenarios en verde (semilla 437977, 6 min 10 s) y 453 pruebas de piezas. **No hay que relanzar el servidor** |
+| `R5.11` | 2026-11-14 | **Cierre.** Los pasos de `AGENTS.md`: (1) el recuento del backend, medido otra vez aunque la web no lo tocó y leído del XML de `REQUIRE_DB=1 swift test --xunit-output`: **850** (847 + 3 omitidos), sin fallos, en 55 s con la compilación; el censo con salida `0` (17 operaciones, 31 de 37 códigos y 158 de 174 campos nombrados); en la web, **453 pruebas de piezas** (426 al empezar: 5 de `R5.7` y 22 de `R5.8`) y **170 escenarios** en verde (`R5.10`); (2) la cabecera del README del backend, «rebanadas 1 a 5 cerradas», con el enlace a este plan, y **850** donde decía 831 (§0 y §5: el `831` de §5 se quedó viejo en `R5.6`); (3) «Estado actual» y «Documentación clave» de `AGENTS.md`, con la rebanada cerrada, lo abierto y lo siguiente (la mini-fase `R5.12`); (4) los rótulos de la §7 con su ✅ y la cabecera con la fecha de cierre; (5) las cifras viejas, buscadas en todo el árbol. En el plan del backoffice, la fila de la rebanada («✅ hecha, 11/11», con `R5.12` después). El README de la web dice qué enseña hoy: las cuatro columnas, ordenar por posición, el refresco con el resumen y la tabla de la portada al 200 %. Lo aprendido, en la §9 |
 
 ---
 
 ## 9. Lo aprendido
 
-*(Se escribe al cerrar la rebanada.)*
+- **Lo medido en un grupo no vale para todos.** El código `-1` del ficticio del descanso se midió en un grupo de
+  alevín y se tomó por regla (`D-105`); en el de infantil del desarrollador es `-27824126`, y la ingesta descartaba
+  sus 26 descansos en silencio, con un motivo (`missingMatchDate`) que nadie mira. Se vio por la web, en la racha
+  del Infantil B, no por el registro de la ingesta. Lo arregla `R5.12`.
+- **Un dato nuevo puede venir por una petición que no se refresca.** El resumen viaja con los equipos de la
+  temporada (`D-113`), y el refresco de la portada solo pedía las competiciones porque hasta entonces era lo único
+  que cambiaba con una ingesta. En R5.8 se miró la portada ya cargada; lo encontró el escenario de «Ponerse al
+  día» (R5.9). Al añadir datos a una respuesta, mirar quién la vuelve a pedir.
+- **Lo que no se ve también ocupa sitio.** Con la tabla ya en su caja, la página seguía midiendo 1105 px al 200 %:
+  un texto solo para el lector, en `position: absolute`, se escapaba de la caja. Ahora la caja es su marco (R5.10).
+- **El nombre de un enlace tiene que contener lo que se ve.** Darle al próximo partido un nombre aparte, más
+  claro para el lector, lo paró axe en 31 escenarios (WCAG 2.5.3): quien usa la web con la voz dice lo que ve. La
+  salida fue poner espacios de verdad entre las piezas, para que el nombre salga del propio texto (R5.8).
+- **Una pieza que se repite se saca antes de copiarla.** El texto al pasar el ratón y al llegar con el teclado
+  vivía dentro de `IconAction`; la racha y casa o fuera lo necesitaban igual, y se sacó a `useTip` con las pruebas
+  de `IconAction` intactas como prueba de que nada cambiaba.
+- **Una regla de los escenarios puede no valer para un caso nuevo.** «Jornada jugada» era «todos sus partidos con
+  marcador», y el descanso nunca lo tiene: en un grupo impar no había ninguna jugada (R5.9).
+
+**Queda abierto, con dueño:** la mini-fase **`R5.12`** (el descanso con otro código en la RFFM), justo después;
+**quitar la letra V, E o D del último partido**, que el desarrollador se lo está pensando (las razones para dejarla:
+el color no es la única pista y, si descansó en la última jornada, el último partido
+no es el primer cuadro de la racha); y, como en la R4, **VoiceOver** al final del proyecto, Safari y los dos modos
+sin mirar a mano, y **leer el acta** (`D-57`). `npm run e2e` tarda ya unos 6 min con los 170 escenarios.

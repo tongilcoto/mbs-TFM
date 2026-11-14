@@ -5,7 +5,7 @@ import { addPlayingTeam, addTeamWithoutCompetition, linkTeam, rivalTeamId, setIn
 import { playedRounds, positionsAfter } from '../support/expected.ts'
 import { fakeFederation } from '../support/fake-federation.ts'
 import { holdRequest } from '../support/hold-request.ts'
-import { competition, currentSeason, pastSeason, type Season } from '../support/invented.ts'
+import { competition, currentSeason, pastSeason, type PlayedOptions, type Season } from '../support/invented.ts'
 import { absent, becomes, contains, shows } from '../support/look.ts'
 import type { ScenarioWorld } from '../support/world.ts'
 import { addTeamPlaying, content, inAddress, lastPastSeason, row, theTeam } from './portada.steps.ts'
@@ -36,9 +36,9 @@ async function fichaReady(world: ScenarioWorld) {
 
 // ── Los datos ────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** El equipo del club que juega una competición con jornadas jugadas (plan R4, R4.3). */
-export async function addTeamThatPlayed(world: ScenarioWorld) {
-  const { team, competition: plays } = await addPlayingTeam(world.club, world.random, currentSeason(), world.data.teams, true)
+/** El equipo del club que juega una competición con jornadas jugadas (plan R4, R4.3); con opciones, las de la R5. */
+export async function addTeamThatPlayed(world: ScenarioWorld, options: PlayedOptions = {}) {
+  const { team, competition: plays } = await addPlayingTeam(world.club, world.random, currentSeason(), world.data.teams, options)
   world.data.teams.push(team)
   world.data.team = team
   world.data.competition = plays
@@ -292,12 +292,16 @@ Then(
     const action = relaunchIn(row(this, theTeam(this).name), this, name)
     await this.check(`la acción «${name}»`, async () => {
       await shows(action, `«${name}, ${theCompetition(this).rowName}»`)
-      // En la celda de la ingesta: la tercera de la fila (equipo, competición, ingesta).
-      const cell = await action.evaluate((el) => {
+      // En la celda de la ingesta: la de la columna que se llama así (desde la R5 hay columnas en medio).
+      const [cell, ingestion] = await action.evaluate((el) => {
         const td = el.closest('td')!
-        return Array.prototype.indexOf.call(td.parentElement!.children, td)
+        const headers = Array.from(td.closest('table')!.querySelectorAll('thead th'))
+        return [
+          Array.prototype.indexOf.call(td.parentElement!.children, td),
+          headers.findIndex((th) => th.textContent!.trim().startsWith('Ingesta')),
+        ]
       })
-      if (cell !== 2) throw new Error(`está en la columna ${cell + 1}, no en la de la ingesta`)
+      if (cell !== ingestion) throw new Error(`está en la columna ${cell + 1}, no en la de la ingesta (${ingestion + 1})`)
     })
   },
 )
