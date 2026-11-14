@@ -320,14 +320,17 @@ struct MigrationIntegrityTests {
     ///
     /// **20 con `D-114`**: el partido sabe si es la jornada de descanso.
     ///
+    /// **21 con `R5.12`** (enmienda a `D-105`): se borra el ficticio del descanso
+    /// que se creó con su código negativo y se quedó sin partidos.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 20, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 21, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 20,
+        #expect(nombres.count == 21,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -1018,6 +1021,80 @@ struct MigrationIntegrityTests {
             #expect(seasons == 2, "el revert tocó la columna antes de pararse")
 
             try await Self.cleanUp(["d106"], on: app)
+        }
+    }
+
+    // ── R5.12 · el ficticio del descanso que se quedó con su código ──────────
+
+    /// **La migración de `R5.12` borra el ficticio que nada usa** (enmienda a
+    /// `D-105`). Antes de reconocer cualquier código negativo, la ingesta creaba
+    /// el ficticio con el suyo (`-27824126` en el infantil del desarrollador) y
+    /// descartaba sus partidos; desde el arreglo, el ficticio llega sin código y
+    /// la cadena no casa con aquel (`D-101`), así que se quedaría sin partidos para
+    /// siempre. Se va **solo** ese: un rival con código negativo y nada que lo
+    /// use. Se quedan el propio, un rival con código negativo que sí juega, otro
+    /// que solo sale en una clasificación, un rival sin partidos con su código
+    /// positivo y el ficticio sin código.
+    @Test("la migración borra el ficticio con código negativo que nada usa, y nada más (R5.12)")
+    func theOrphanPlaceholderWithItsCodeGoes() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)r512"
+            let sql = app.db(.control) as! any SQLDatabase
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+            try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+            try await MigrateTenantsCommand.migrate(
+                schema: schema,
+                migrations: Self.migrations(through: "AddRestDayToMatches"), on: app)
+
+            let (season, competition, round, club, placeholderClub) = (UUID(), UUID(), UUID(), UUID(), UUID())
+            let (own, playing, orphanCode, idle, placeholder) = (UUID(), UUID(), UUID(), UUID(), UUID())
+            let ranked = UUID()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).seasons (id, label, federation_season_id, start_date, end_date)
+                VALUES (\(bind: season), '2026/27', '22', '2026-07-01', '2027-06-30')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).competitions (id, season_id, modality, gender, age_category,
+                    federation_competition_id, federation_group_id, division_label, group_label)
+                VALUES (\(bind: competition), \(bind: season), 'futbol_11', 'masculino', 'infantil',
+                    '26738324', '26738350', 'SEGUNDA INFANTIL', 'Grupo 26')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).rounds (id, competition_id, number, start_date, end_date)
+                VALUES (\(bind: round), \(bind: competition), 1, '2026-10-10', '2026-10-11')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).opponent_clubs (id, name, short_name, slug)
+                VALUES (\(bind: club), 'FUNDACION ADF', 'ADF', 'fundacion-adf'),
+                       (\(bind: placeholderClub), 'Equipo Fuera (No asignado)', 'Equipo Fuera', 'equipo-fuera-no-asignado')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).teams (id, opponent_club_id, season_id, category, letter, gender, modality, federation_team_id)
+                VALUES (\(bind: own), NULL, NULL, 'infantil', 'B', 'masculino', 'futbol_11', NULL),
+                       (\(bind: playing), \(bind: club), \(bind: season), 'infantil', 'D', 'masculino', 'futbol_11', '-5'),
+                       (\(bind: orphanCode), \(bind: placeholderClub), \(bind: season), 'infantil', NULL, 'masculino', 'futbol_11', '-27824126'),
+                       (\(bind: idle), \(bind: club), \(bind: season), 'infantil', 'E', 'masculino', 'futbol_11', '1424'),
+                       (\(bind: placeholder), \(bind: placeholderClub), \(bind: season), 'alevin', NULL, 'masculino', 'futbol_11', NULL),
+                       (\(bind: ranked), \(bind: club), \(bind: season), 'infantil', 'F', 'masculino', 'futbol_11', '-7')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).standing_rows (id, competition_id, round_id, team_id, position,
+                    played, won, drawn, lost, goals_for, goals_against, points)
+                VALUES (\(bind: UUID()), \(bind: competition), \(bind: round), \(bind: ranked), 2, 1, 0, 1, 0, 1, 1, 1)
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).matches (id, competition_id, round_id, match_date, home_team_id, away_team_id, status)
+                VALUES (\(bind: UUID()), \(bind: competition), \(bind: round), '2026-10-10', \(bind: own), \(bind: playing), 'programado')
+                """).run()
+
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+
+            let teams = try await sql.raw("SELECT id::text AS id FROM \(ident: schema).teams")
+                .all(decodingColumn: "id", as: String.self)
+            #expect(Set(teams) == Set([own, playing, idle, placeholder, ranked].map { $0.uuidString.lowercased() }),
+                    "tenía que irse el ficticio con su código y sin partidos, y solo él")
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
         }
     }
 }

@@ -4735,6 +4735,35 @@ partidos de la jornada 1 del alevín, copiados de la RFFM) y de la pasada (el de
 partido normal sin fecha que sigue fuera, y un ficticio por categoría). Los tests del descanso salen en rojo
 sin el arreglo. **4/4 mutaciones** (`Tools/Mutate/Catalogs/D-105.json`).
 
+> ### ⚠️ Enmienda del 2026-11-14 · el ficticio no siempre es `-1`: es cualquier código negativo
+>
+> **Lo que se vio** (plan R5, al revisar `R5.8` con los datos del desarrollador). La racha del Infantil B saltaba
+> de la jornada 5 a la 3: **ninguno de sus descansos estaba guardado**. En su grupo (Segunda Infantil, Grupo 26,
+> `temporada=22&competicion=26738324&grupo=26738350`) la RFFM da al ficticio el código **`-27824126`**, en los 26
+> descansos, en casa y fuera; en el del alevín sigue siendo `-1`. El adaptador solo reconocía el `-1`, así que el
+> partido no se marcaba como descanso, no tomaba la fecha de su jornada y la ingesta lo descartaba como «sin
+> fecha» (`missingMatchDate`) en cada pasada, desde el primer día. Antes de descartarlo, la cadena ya había creado
+> el ficticio como un rival **con ese código**: una fila sin partidos.
+>
+> **Lo que cambia.**
+>
+> 1. **El adaptador toma por ficticio cualquier código negativo** (punto 1 de arriba), y lo quita igual que el
+>    `-1` (punto 2). En los dos grupos medidos, el del ficticio es el único código negativo: los equipos de verdad
+>    lo tienen positivo. Un `0` no cuenta, porque no se ha visto nunca.
+> 2. **Una migración borra el ficticio que se quedó con su código** (`DropOrphanRestPlaceholders`, la 21ª): el
+>    rival con código negativo al que no usa ningún partido ni ninguna clasificación. Desde el arreglo el ficticio
+>    llega sin código, y la cadena no casa con una fila que tiene otro ([D-101]): sin la migración, esa fila se
+>    quedaría para siempre. Lo decidió el desarrollador, entre borrarla así, dejarla o borrarla a mano.
+>
+> **Lo que se asume.** Si la RFFM usara algún día un código negativo para un equipo de verdad, se tomaría por
+> descanso. No se ha visto, y lo vigila el mismo síntoma que encontró este caso: una racha con huecos.
+>
+> **Hecho el mismo día**: el adaptador y su prueba, con tres partidos del grupo de infantil copiados de la RFFM
+> (los dos descansos, en casa y fuera, y uno normal) y otra para el `0`; la migración y su prueba (se va el
+> ficticio con su código, y se quedan el que juega con código negativo, el que solo sale en una clasificación, el
+> rival sin partidos con código positivo y el ficticio sin código). Las dos salen en rojo sin el arreglo.
+> **8 mutaciones cazadas y 1 equivalente** (`Tools/Mutate/Catalogs/R5-12.json`). 850 → **853 tests**.
+
 **Enmienda** a la fila `"(No asignado)"` del [Anexo RFFM §F.11].
 
 ---

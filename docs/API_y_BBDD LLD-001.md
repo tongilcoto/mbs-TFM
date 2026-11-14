@@ -525,8 +525,8 @@ pasos: el rival de otra temporada es otra fila aunque lleve el mismo código o l
 nace con esa temporada. La clasificación reconoce a los equipos con el mismo criterio.
 
 **La jornada de descanso** de un grupo impar llega como un partido contra un equipo **ficticio** de la
-federación, sin fecha ([D-105]). El adaptador lo marca como descanso y no le pasa su código (`-1` en la RFFM,
-el mismo en todos los grupos); el ficticio entra como un rival sin código, y el partido se guarda con el
+federación, sin fecha ([D-105]). El adaptador lo marca como descanso y no le pasa su código (en la RFFM, un
+código negativo: `-1` en la mayoría de los grupos, otro en algunos, [D-105] y su enmienda); el ficticio entra como un rival sin código, y el partido se guarda con el
 primer día de su jornada. Un partido normal sin fecha sigue sin guardarse.
 
 Y **el paso 2 no alcanza a los equipos propios sin emparejar**: la ingesta no crea equipos propios ([D-66]) y
