@@ -116,6 +116,10 @@ public enum TenantMigrations {
             // `D-114`: el partido sabe si es un descanso. Al final de lo que
             // altera, que es su único requisito de orden ([D-90]).
             AddRestDayToMatches(),
+            // Enmienda a `D-105` (plan R5, `R5.12`): se borra el ficticio del
+            // descanso que se creó con su código negativo y se quedó sin partidos.
+            // Solo borra filas: al final, que es su único requisito de orden ([D-90]).
+            DropOrphanRestPlaceholders(),
         ]
     }
 }

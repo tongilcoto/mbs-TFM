@@ -251,6 +251,82 @@ struct RFFMCalendarParserTests {
         #expect(rest.home.federationTeamID == "8956086", "el equipo que descansa conserva su código")
     }
 
+    /// **El ficticio no siempre es `-1`** (plan R5, `R5.12`; enmienda a
+    /// `D-105`). En el infantil de 2026/27 la RFFM le da `-27824126`, en sus 26
+    /// descansos, en casa y fuera; y como no se reconocía, la ingesta los
+    /// descartaba por no tener fecha. Los tres partidos, copiados tal cual de la
+    /// RFFM el 2026-11-14 (`temporada=22&competicion=26738324&grupo=26738350`):
+    /// de la jornada 1, el descanso con el ficticio fuera y uno normal; de la 2,
+    /// el descanso con el ficticio en casa.
+    @Test("un ficticio con otro código negativo también es un descanso, y su código no llega (R5.12)")
+    func anyNegativeCodeIsThePlaceholder() throws {
+        let page = #"""
+            <script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"calendar":{"estado":"1","competicion":\#
+            "SEGUNDA INFANTIL ","grupo":"Grupo 26","temporada":"2026-2027",\#
+            "host":"https://appweb.rffm.es/","rounds":[{"codjornada":"1","jornada":"1 (10-10-2026)",\#
+            "equipos":[\#
+            {"codacta":"5655903","codigo_equipo_local_externo":"","codigo_equipo_visitante_externo":"",\#
+            "codigo_equipo_local":"20051623","escudo_equipo_local":"/pnfg/pimg/Clubes/00100_0012181665_CF_UNION_ESCUDO_SIN_FONDO_.png",\#
+            "equipo_local":"CDE UNION VILLANUEVA DEL PARDILLO 'B'","goles_casa":"","codigo_equipo_visitante":"-27824126",\#
+            "escudo_equipo_visitante":"","equipo_visitante":"Equipo Fuera (No asignado)",\#
+            "goles_visitante":"","codigo_campo":"1214","campo":"","fecha":"","hora":""},\#
+            {"codacta":"5655904","codigo_equipo_local_externo":"","codigo_equipo_visitante_externo":"",\#
+            "codigo_equipo_local":"1424","escudo_equipo_local":"/pnfg/pimg/Clubes/00100_0010993722_Fundacion.jpg",\#
+            "equipo_local":"FUNDACION ADF 'D'","goles_casa":"0","codigo_equipo_visitante":"24022623",\#
+            "escudo_equipo_visitante":"/pnfg/pimg/Clubes/00100_0011555991_ESCUDO_CD_MASRIVER_CON_FONDO_BLANCO.PNG",\#
+            "equipo_visitante":"C.D. MASRIVER 'D'","goles_visitante":"2","codigo_campo":"203",\#
+            "campo":"FUNDACION (HA)(HA)","fecha":"10-10-2026","hora":"09:00"}]},\#
+            {"codjornada":"2","jornada":"2 (17-10-2026)","equipos":[\#
+            {"codacta":"5655910","codigo_equipo_local_externo":"","codigo_equipo_visitante_externo":"",\#
+            "codigo_equipo_local":"-27824126","escudo_equipo_local":"","equipo_local":"Equipo Casa (No asignado)",\#
+            "goles_casa":"","codigo_equipo_visitante":"3359414",\#
+            "escudo_equipo_visitante":"/pnfg/pimg/Clubes/00100_0011167148_escudo_Villanueva_de_la_Ca_ada.jpg",\#
+            "equipo_visitante":"C.D. VILLANUEVA DE LA CAÑADA 'C'","goles_visitante":"","codigo_campo":"212",\#
+            "campo":"","fecha":"","hora":""}]}]}}}}
+            </script>
+            """#
+
+        let rounds = try RFFMCalendarParser.parse(page).rounds
+        let awayRest = rounds[0].matches[0]
+        let played = rounds[0].matches[1]
+        let homeRest = rounds[1].matches[0]
+
+        #expect(awayRest.isRestDay)
+        #expect(awayRest.away.federationTeamID == nil, "su código, como el -1, no designa a un equipo")
+        #expect(awayRest.home.federationTeamID == "20051623", "el equipo que descansa conserva su código")
+        #expect(homeRest.isRestDay)
+        #expect(homeRest.home.federationTeamID == nil)
+        #expect(homeRest.away.federationTeamID == "3359414")
+        #expect(played.isRestDay == false)
+    }
+
+    /// **La frontera de la regla**: negativo, no «cero o menos». Un código `0`
+    /// no se ha visto nunca en la RFFM, ni de equipo ni de ficticio; el partido
+    /// es el normal de la prueba de arriba con el código del visitante cambiado,
+    /// y está para que la regla diga lo que dice su comentario (lo pidió la
+    /// mutación de `R5.12`).
+    @Test("un código 0 no es el ficticio: solo los negativos (R5.12)")
+    func zeroIsNotThePlaceholder() throws {
+        let page = #"""
+            <script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"calendar":{"estado":"1","competicion":\#
+            "SEGUNDA INFANTIL ","grupo":"Grupo 26","temporada":"2026-2027",\#
+            "host":"https://appweb.rffm.es/","rounds":[{"codjornada":"1","jornada":"1 (10-10-2026)",\#
+            "equipos":[\#
+            {"codacta":"5655904","codigo_equipo_local":"1424","escudo_equipo_local":"",\#
+            "equipo_local":"FUNDACION ADF 'D'","goles_casa":"0","codigo_equipo_visitante":"0",\#
+            "escudo_equipo_visitante":"","equipo_visitante":"C.D. MASRIVER 'D'","goles_visitante":"2",\#
+            "codigo_campo":"203","campo":"","fecha":"10-10-2026","hora":"09:00"}]}]}}}}
+            </script>
+            """#
+
+        let match = try RFFMCalendarParser.parse(page).rounds[0].matches[0]
+
+        #expect(match.isRestDay == false)
+        #expect(match.away.federationTeamID == "0")
+    }
+
     /// Y el volcado real de una temporada entera no tiene ninguno: el grupo es
     /// par.
     @Test("un grupo par no tiene jornadas de descanso (D-105)")

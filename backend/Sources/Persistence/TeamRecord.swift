@@ -202,3 +202,40 @@ public struct AddSeasonToOpponentTeams: AsyncMigration {
             .update()
     }
 }
+
+/// Enmienda a `D-105` (plan R5, `R5.12`): **el ficticio del descanso que se quedó
+/// con su código**. El adaptador de la RFFM solo reconocía el ficticio por el
+/// `-1`; en un grupo donde la RFFM le da otro código negativo (`-27824126` en el
+/// infantil de 2026/27), la ingesta lo creaba como un rival con ese código y
+/// descartaba sus partidos por no tener fecha. Desde que el adaptador toma por
+/// ficticio cualquier código negativo y lo quita, el ficticio llega sin código, la
+/// cadena no casa con aquella fila (`D-101`) y crea otra: la vieja se quedaría sin
+/// partidos para siempre.
+///
+/// Borra **el rival con código negativo que nada usa**: sin partidos ni fila de
+/// clasificación, que son lo único que referencia a un rival. Un rival con código
+/// negativo que sí juega se queda: no es este caso, y borrarlo perdería datos.
+///
+/// **El revert no hace nada**: las filas borradas no vuelven, y la ingesta no las
+/// volvería a crear.
+public struct DropOrphanRestPlaceholders: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "DropOrphanRestPlaceholders", object: TeamRecord.schema)
+        }
+        try await sql.raw("""
+            DELETE FROM \(ident: TeamRecord.schema) t
+             WHERE t.opponent_club_id IS NOT NULL
+               AND t.federation_team_id LIKE '-%'
+               AND NOT EXISTS (SELECT 1 FROM \(ident: MatchRecord.schema) m
+                                WHERE m.home_team_id = t.id OR m.away_team_id = t.id)
+               AND NOT EXISTS (SELECT 1 FROM \(ident: StandingRowRecord.schema) r
+                                WHERE r.team_id = t.id)
+            """).run()
+    }
+
+    public func revert(on database: any Database) async throws {}
+}

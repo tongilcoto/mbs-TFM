@@ -1,0 +1,70 @@
+{
+  "title": "R5.12 · el ficticio del descanso con cualquier código negativo, y el que se quedó con el suyo (enmienda a D-105)",
+  "filter": "RFFMCalendarParserTests|MigrationIntegrityTests",
+  "mutations": [
+    {
+      "id": "M1-solo-el-menos-uno",
+      "description": "vuelve la regla vieja: solo el -1 es el ficticio",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "        return number < 0",
+      "replace": "        return number == -1"
+    },
+    {
+      "id": "M2-tambien-el-cero",
+      "description": "el cero también sería el ficticio",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "        return number < 0",
+      "replace": "        return number <= 0"
+    },
+    {
+      "id": "M3-cualquier-codigo",
+      "description": "todo código que sea un número es el ficticio",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "        return number < 0",
+      "replace": "        return number != 0 || number == 0"
+    },
+    {
+      "id": "M4-el-codigo-llega",
+      "description": "el código negativo del ficticio llega como código del equipo",
+      "file": "Sources/Federation/RFFMCalendarParser.swift",
+      "find": "            federationTeamID: id.flatMap { $0.isEmpty || isPlaceholder($0) ? nil : $0 },",
+      "replace": "            federationTeamID: id.flatMap { $0.isEmpty ? nil : $0 },"
+    },
+    {
+      "id": "M5-cualquier-codigo-se-borra",
+      "description": "la migración borra también los rivales sin partidos con código positivo",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "               AND t.federation_team_id LIKE '-%'\n",
+      "replace": ""
+    },
+    {
+      "id": "M6-se-borra-aunque-juegue",
+      "description": "la migración borra el de código negativo aunque tenga partidos",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "               AND NOT EXISTS (SELECT 1 FROM \\(ident: MatchRecord.schema) m\n                                WHERE m.home_team_id = t.id OR m.away_team_id = t.id)\n",
+      "replace": ""
+    },
+    {
+      "id": "M7-se-borra-aunque-este-en-la-tabla",
+      "description": "la migración borra el de código negativo aunque salga en una clasificación",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "               AND NOT EXISTS (SELECT 1 FROM \\(ident: StandingRowRecord.schema) r\n                                WHERE r.team_id = t.id)\n",
+      "replace": ""
+    },
+    {
+      "id": "M8-tambien-los-propios",
+      "description": "la migración mira también a los equipos propios",
+      "file": "Sources/Persistence/TeamRecord.swift",
+      "find": "             WHERE t.opponent_club_id IS NOT NULL\n               AND t.federation_team_id LIKE '-%'",
+      "replace": "             WHERE t.federation_team_id LIKE '-%'",
+      "equivalent": "D-101: un equipo propio no puede tener código (CHECK chk_teams_own_without_code), así que el LIKE '-%' ya no alcanza a ninguno. La condición se queda para que la consulta diga lo que busca, como en la migración de D-104"
+    },
+    {
+      "id": "M9-no-se-registra",
+      "description": "la migración no se aplica a los clubs",
+      "file": "Sources/App/TenantMigrations.swift",
+      "find": "            DropOrphanRestPlaceholders(),\n",
+      "replace": ""
+    }
+  ]
+}
