@@ -7,6 +7,8 @@ import {
   goalDifference,
   matchDay,
   nameIn,
+  ownName,
+  ownRestRound,
   playedRounds,
   positionsAfter,
   roundLabel,
@@ -261,6 +263,8 @@ async function formIn(world: ScenarioWorld, name: string) {
       seen: (await box.locator('[aria-hidden="true"]').innerText()).trim(),
       heard: (await box.locator('.visually-hidden').innerText()).trim(),
       title: await box.getAttribute('title'),
+      // El cuadro vacío del descanso (plan R5, D-114).
+      empty: ((await box.getAttribute('class')) ?? '').includes('descanso'),
     })),
   )
 }
@@ -301,6 +305,29 @@ Then('cada partido de la racha dice al lector si fue victoria, empate o derrota,
       if (boxes.some((b) => b.title !== b.heard)) throw new Error('al pasar el ratón no dice lo mismo')
     })
   }
+})
+
+/** El descanso del club en las jornadas que se ven en la racha (plan R5, D-114). */
+function ownRest(world: ScenarioWorld): number {
+  const rest = ownRestRound(theCompetition(world), theRound(world).number)
+  if (!rest) throw new Error('El equipo del club no descansó en ninguna jornada jugada')
+  return rest.number
+}
+
+Then('la racha del equipo de mi club tiene un cuadro vacío en la jornada en la que descansó', async function (this: ScenarioWorld) {
+  const name = ownName(theTeam(this))
+  await this.check('el cuadro vacío', async () => {
+    const empty = (await formIn(this, name)).filter((b) => b.empty).map((b) => b.seen)
+    if (empty.join(' ') !== String(ownRest(this))) throw new Error(`los cuadros vacíos son «${empty.join(' ')}», y se esperaba «${ownRest(this)}»`)
+  })
+})
+
+Then('el cuadro vacío de la racha del equipo de mi club dice al lector {string} y su número', async function (this: ScenarioWorld, text: string) {
+  const name = ownName(theTeam(this))
+  await this.check('lo que oye el lector en el cuadro vacío', async () => {
+    const heard = (await formIn(this, name)).find((b) => b.empty)?.heard
+    if (heard !== `${text} ${ownRest(this)}`) throw new Error(`oye «${heard ?? '(ningún cuadro vacío)'}», y se esperaba «${text} ${ownRest(this)}»`)
+  })
 })
 
 Then('la pantalla de la competición dice {string}', async function (this: ScenarioWorld, text: string) {
