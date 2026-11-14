@@ -39,7 +39,10 @@ onBeforeUnmount(() => watcher?.disconnect())
 </template>
 
 <style scoped>
+/* `relative`, para que los textos ocultos de la tabla (los del lector, en `position: absolute`) se queden dentro de la
+   caja: sin ella se salían y estiraban la página a lo ancho (R5.10, el «Acciones» de la portada). */
 .scroll-box {
+  position: relative;
   max-width: 100%;
   overflow-x: auto;
 }

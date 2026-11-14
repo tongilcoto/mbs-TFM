@@ -1,11 +1,14 @@
 <!-- La tabla de la portada: los equipos de una temporada, con su competición y cómo va su ingesta (plan R1, §3.2), y
      cómo le va en ella: su posición, su racha, su último partido y el próximo (plan R5, §3).
-     Un equipo con dos competiciones ocupa dos líneas, con su nombre y sus acciones una sola vez (rowspan). -->
+     Un equipo con dos competiciones ocupa dos líneas, con su nombre y sus acciones una sola vez (rowspan).
+     En su caja (ScrollBox): con nueve columnas no cabe al 200 %, y es la tabla la que se desplaza, no la página
+     (R5.10). -->
 <script setup lang="ts">
 import HealthStatus from './HealthStatus.vue'
 import IconAction from './IconAction.vue'
 import OutcomeLetter from './OutcomeLetter.vue'
 import PositionBadge from './PositionBadge.vue'
+import ScrollBox from './ScrollBox.vue'
 import SortableHeader from './SortableHeader.vue'
 import StreakBoxes from './StreakBoxes.vue'
 import VenueIcon from './VenueIcon.vue'
@@ -65,197 +68,199 @@ function roundTarget(competition: CompetitionCell): ((round: number) => string) 
 </script>
 
 <template>
-  <table class="teams">
-    <caption class="visually-hidden">
-      {{ caption }}
-    </caption>
-    <thead>
-      <tr>
-        <template
-          v-for="header in columns"
-          :key="header.label"
-        >
-          <SortableHeader
-            v-if="header.column"
-            :label="header.label"
-            :sort="sortOf(header.column)"
-            @sort="$emit('sort', header.column)"
-          />
-          <th
-            v-else
-            scope="col"
+  <ScrollBox :label="caption">
+    <table class="teams">
+      <caption class="visually-hidden">
+        {{ caption }}
+      </caption>
+      <thead>
+        <tr>
+          <template
+            v-for="header in columns"
+            :key="header.label"
           >
-            {{ header.label }}
-          </th>
-        </template>
-        <!-- No se ordena, y no se ve: los iconos dicen lo que hacen. El lector sí la lee (LLD-B §3.7). -->
-        <th scope="col">
-          <span class="visually-hidden">Acciones</span>
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      <template
-        v-for="row in rows"
-        :key="row.id"
-      >
-        <tr v-if="row.competitions.length === 0">
-          <th scope="row">
-            <RouterLink
-              v-if="resultsTarget(row)"
-              :to="resultsTarget(row)!"
-            >
-              {{ row.team }}
-            </RouterLink>
-            <template v-else>
-              {{ row.team }}
-            </template>
-          </th>
-          <td colspan="7">
-            Sin competición
-            <!-- Es el caso que más lo pide: además del icono, el enlace con su texto (LLD-B §3.7). -->
-            <span class="note">
-              <RouterLink :to="syncTarget(row)">Sincronizar con la Federación</RouterLink>
-            </span>
-          </td>
-          <td class="actions">
-            <IconAction
-              :label="syncLabel(row)"
-              :subject="row.team"
-              icon="link"
-              :to="syncTarget(row)"
+            <SortableHeader
+              v-if="header.column"
+              :label="header.label"
+              :sort="sortOf(header.column)"
+              @sort="$emit('sort', header.column)"
             />
-          </td>
+            <th
+              v-else
+              scope="col"
+            >
+              {{ header.label }}
+            </th>
+          </template>
+          <!-- No se ordena, y no se ve: los iconos dicen lo que hacen. El lector sí la lee (LLD-B §3.7). -->
+          <th scope="col">
+            <span class="visually-hidden">Acciones</span>
+          </th>
         </tr>
-        <tr
-          v-for="(competition, index) in row.competitions"
-          :key="`${row.id}-${index}`"
+      </thead>
+      <tbody>
+        <template
+          v-for="row in rows"
+          :key="row.id"
         >
-          <th
-            v-if="index === 0"
-            scope="row"
-            :rowspan="row.competitions.length"
-          >
-            <RouterLink
-              v-if="resultsTarget(row)"
-              :to="resultsTarget(row)!"
-            >
-              {{ row.team }}
-            </RouterLink>
-            <template v-else>
-              {{ row.team }}
-            </template>
-          </th>
-          <td>{{ competition.name }}</td>
-          <td>
-            <PositionBadge
-              v-if="competition.summary.position"
-              :position="competition.summary.position"
-            />
-            <span
-              v-else
-              class="muted"
-            >–</span>
-          </td>
-          <td>
-            <StreakBoxes
-              v-if="competition.summary.streak.length > 0"
-              :boxes="competition.summary.streak"
-              :to="roundTarget(competition)"
-            />
-            <span
-              v-else
-              class="muted"
-            >–</span>
-          </td>
-          <td>
-            <!-- La letra, casa o fuera, el marcador con el local primero y el rival con el puesto con el que llegó
-                 (decisión 5). No lleva a ningún sitio: su jornada es la del cuadro más reciente de la racha. -->
-            <div
-              v-if="competition.summary.last"
-              class="match"
-            >
-              <OutcomeLetter :outcome="competition.summary.last.outcome" />
-              <VenueIcon :at-home="competition.summary.last.atHome" />
-              <span class="score">{{ competition.summary.last.score }}</span>
-              <PositionBadge
-                v-if="competition.summary.last.opponentPosition"
-                :position="competition.summary.last.opponentPosition"
-              />
-              <span>{{ competition.summary.last.opponent }}</span>
-            </div>
-            <span
-              v-else
-              class="muted"
-            >–</span>
-          </td>
-          <td>
-            <component
-              :is="roundTarget(competition) ? 'RouterLink' : 'span'"
-              v-if="competition.summary.next"
-              :to="roundTarget(competition)?.(competition.summary.next.round)"
-              class="next"
-            >
-              <template v-if="competition.summary.next.kind === 'rest'">
-                Descansa · jornada {{ competition.summary.next.round }}
-              </template>
-              <!-- El nombre del enlace es su texto, con un espacio de verdad entre cada pieza (`{{ ' ' }}`): sin él,
-                   el lector lo oiría todo seguido. Uno aparte no valdría: tiene que contener lo que se ve (WCAG 2.5.3). -->
+          <tr v-if="row.competitions.length === 0">
+            <th scope="row">
+              <RouterLink
+                v-if="resultsTarget(row)"
+                :to="resultsTarget(row)!"
+              >
+                {{ row.team }}
+              </RouterLink>
               <template v-else>
-                <span class="when">{{ competition.summary.next.date }}{{ competition.summary.next.time ? ` ${competition.summary.next.time}` : ', hora por fijar' }}</span>{{ ' ' }}
-                <span class="match">
-                  <VenueIcon :at-home="competition.summary.next.atHome" />{{ ' ' }}
-                  <PositionBadge
-                    v-if="competition.summary.next.opponentPosition"
-                    :position="competition.summary.next.opponentPosition"
-                  />{{ ' ' }}
-                  <span>{{ competition.summary.next.opponent }}</span>
-                </span>
+                {{ row.team }}
               </template>
-            </component>
-            <span
-              v-else
-              class="muted"
-            >–</span>
-          </td>
-          <td>
-            <!-- El estado a la izquierda y ↻ a la derecha (plan R4, decisión 7). Bloqueado mientras está «En marcha»:
-                 ya se están trayendo. -->
-            <div class="ingestion">
-              <div>
-                <HealthStatus
-                  :health="competition.health"
-                  :name="competition.healthName"
-                  :previous-failed="competition.previousFailed"
+            </th>
+            <td colspan="7">
+              Sin competición
+              <!-- Es el caso que más lo pide: además del icono, el enlace con su texto (LLD-B §3.7). -->
+              <span class="note">
+                <RouterLink :to="syncTarget(row)">Sincronizar con la Federación</RouterLink>
+              </span>
+            </td>
+            <td class="actions">
+              <IconAction
+                :label="syncLabel(row)"
+                :subject="row.team"
+                icon="link"
+                :to="syncTarget(row)"
+              />
+            </td>
+          </tr>
+          <tr
+            v-for="(competition, index) in row.competitions"
+            :key="`${row.id}-${index}`"
+          >
+            <th
+              v-if="index === 0"
+              scope="row"
+              :rowspan="row.competitions.length"
+            >
+              <RouterLink
+                v-if="resultsTarget(row)"
+                :to="resultsTarget(row)!"
+              >
+                {{ row.team }}
+              </RouterLink>
+              <template v-else>
+                {{ row.team }}
+              </template>
+            </th>
+            <td>{{ competition.name }}</td>
+            <td>
+              <PositionBadge
+                v-if="competition.summary.position"
+                :position="competition.summary.position"
+              />
+              <span
+                v-else
+                class="muted"
+              >–</span>
+            </td>
+            <td>
+              <StreakBoxes
+                v-if="competition.summary.streak.length > 0"
+                :boxes="competition.summary.streak"
+                :to="roundTarget(competition)"
+              />
+              <span
+                v-else
+                class="muted"
+              >–</span>
+            </td>
+            <td>
+              <!-- La letra, casa o fuera, el marcador con el local primero y el rival con el puesto con el que llegó
+                   (decisión 5). No lleva a ningún sitio: su jornada es la del cuadro más reciente de la racha. -->
+              <div
+                v-if="competition.summary.last"
+                class="match"
+              >
+                <OutcomeLetter :outcome="competition.summary.last.outcome" />
+                <VenueIcon :at-home="competition.summary.last.atHome" />
+                <span class="score">{{ competition.summary.last.score }}</span>
+                <PositionBadge
+                  v-if="competition.summary.last.opponentPosition"
+                  :position="competition.summary.last.opponentPosition"
+                />
+                <span>{{ competition.summary.last.opponent }}</span>
+              </div>
+              <span
+                v-else
+                class="muted"
+              >–</span>
+            </td>
+            <td>
+              <component
+                :is="roundTarget(competition) ? 'RouterLink' : 'span'"
+                v-if="competition.summary.next"
+                :to="roundTarget(competition)?.(competition.summary.next.round)"
+                class="next"
+              >
+                <template v-if="competition.summary.next.kind === 'rest'">
+                  Descansa · jornada {{ competition.summary.next.round }}
+                </template>
+                <!-- El nombre del enlace es su texto, con un espacio de verdad entre cada pieza (`{{ ' ' }}`): sin él,
+                     el lector lo oiría todo seguido. Uno aparte no valdría: tiene que contener lo que se ve (WCAG 2.5.3). -->
+                <template v-else>
+                  <span class="when">{{ competition.summary.next.date }}{{ competition.summary.next.time ? ` ${competition.summary.next.time}` : ', hora por fijar' }}</span>{{ ' ' }}
+                  <span class="match">
+                    <VenueIcon :at-home="competition.summary.next.atHome" />{{ ' ' }}
+                    <PositionBadge
+                      v-if="competition.summary.next.opponentPosition"
+                      :position="competition.summary.next.opponentPosition"
+                    />{{ ' ' }}
+                    <span>{{ competition.summary.next.opponent }}</span>
+                  </span>
+                </template>
+              </component>
+              <span
+                v-else
+                class="muted"
+              >–</span>
+            </td>
+            <td>
+              <!-- El estado a la izquierda y ↻ a la derecha (plan R4, decisión 7). Bloqueado mientras está «En marcha»:
+                   ya se están trayendo. -->
+              <div class="ingestion">
+                <div>
+                  <HealthStatus
+                    :health="competition.health"
+                    :name="competition.healthName"
+                    :previous-failed="competition.previousFailed"
+                  />
+                </div>
+                <IconAction
+                  class="relaunch"
+                  label="Volver a traer los datos de la Federación"
+                  :subject="competition.name"
+                  icon="rotate-cw"
+                  :disabled="competition.health === 'pending'"
+                  @press="$emit('relaunch', competition.id)"
                 />
               </div>
+            </td>
+            <td>{{ competition.lastSynced }}</td>
+            <td
+              v-if="index === 0"
+              class="actions"
+              :rowspan="row.competitions.length"
+            >
               <IconAction
-                class="relaunch"
-                label="Volver a traer los datos de la Federación"
-                :subject="competition.name"
-                icon="rotate-cw"
-                :disabled="competition.health === 'pending'"
-                @press="$emit('relaunch', competition.id)"
+                :label="syncLabel(row)"
+                :subject="row.team"
+                icon="link"
+                :to="syncTarget(row)"
               />
-            </div>
-          </td>
-          <td>{{ competition.lastSynced }}</td>
-          <td
-            v-if="index === 0"
-            class="actions"
-            :rowspan="row.competitions.length"
-          >
-            <IconAction
-              :label="syncLabel(row)"
-              :subject="row.team"
-              icon="link"
-              :to="syncTarget(row)"
-            />
-          </td>
-        </tr>
-      </template>
-    </tbody>
-  </table>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </ScrollBox>
 </template>
 
 <style scoped>
