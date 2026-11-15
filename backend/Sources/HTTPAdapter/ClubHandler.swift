@@ -127,6 +127,7 @@ extension Domain.Club {
             // salen de la entidad y no de una columna.
             federationProvidesRoundStandings: federationCapabilities.providesRoundStandings,
             federationProvidesScorers: federationCapabilities.providesScorers,
+            federationProvidesTeamRoster: federationCapabilities.providesTeamRoster,
             settings: .init(),
             createdAt: createdAt,
             updatedAt: updatedAt

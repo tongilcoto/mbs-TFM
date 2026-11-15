@@ -170,7 +170,12 @@ firma y la hora y lee la carpeta; con Supabase, nuestro servidor le pide el enla
 la imagen directamente a Supabase Storage. La web no nota la diferencia.
 
 - **El enlace dura una hora y se hace nuevo en cada lectura.** Cierra el punto 7 de la §9 del LLD.
-- **La ruta que entrega el fichero entra en el catálogo**; si cuenta como la operación 86 o va aparte, en `R6.4`.
+- **La ruta que entrega el fichero entra en el catálogo como la operación 86** (decidido en `R6.4`, 2026-11-15):
+  `getPlayerPhotoFile`, `GET /player-photos/{clave}` con la hora en que caduca y la firma. Va por la clave del
+  fichero y no por el jugador, porque una foto puede ser a la vez de la fila y del perfil (`D-122`). Una firma que
+  no vale o ha caducado contesta 404, igual que una foto que no existe, para no decir qué claves hay. Su
+  descripción dice que solo existe mientras las fotos están en el disco: en la R16, con Supabase, desaparece.
+  Descartado dejarla aparte, sin contar: habría que enseñar al censo a saltársela. Sirve igual para los escudos.
 
 ### Decisión 4 · Los permisos («rol elevado»): sin comprobar hasta la rebanada 16
 
@@ -198,6 +203,10 @@ Pero en la federación el dorsal es de cada partido: el acta de la RFFM lo trae 
 
 - **Tiene que valer para cualquier club**, no para el del desarrollador (lo pidió él).
 - **Lo que no puede pasar es repetir número** en el mismo equipo y temporada (409). Los que no tienen no chocan.
+- **El 409 lleva solo su código, `SHIRT_NUMBER_TAKEN`** (decidido en `R6.4`, 2026-11-15): quién tiene el dorsal lo
+  busca la web en la plantilla que ya pinta. Como el enganche, cuyo 409 solo trae su código y la vista previa dice
+  antes con quién choca (`D-110`). Descartado que el *Problem* lleve el jugador: un campo nuevo en todos los errores,
+  y el nombre de un menor en uno. Si otro usuario cambia la plantilla a la vez, la web dice solo «ya está cogido».
 - **La plantilla, por dorsal**, y después los que no tienen, por nombre.
 - **El dorsal del acta va aparte**: lo manda la federación y no lo controlamos; se guarda con el partido (R7), sin
   comprobarlo contra el de la plantilla.
@@ -372,6 +381,10 @@ corrección y la carga:
 - **En la sincronización, un nombre de la federación que no vale no se añade**, y el resumen lo nombra para que el
   club lo dé de alta a mano (2026-11-15, en R6.3). Los 46 medidos valían todos, pero la federación puede publicar
   cualquier cosa.
+- **Un nombre que no vale, 422 con `INVALID_VALUE`** (decidido en `R6.4`, 2026-11-15), y el detalle
+  `fullName: <motivo>`, para que la web lo enseñe junto al campo. Lo comprueba el dominio, no el catálogo, que solo
+  pide de 1 a 120 caracteres: así vale igual para la sincronización, que no pasa por él. Como el nombre vacío del
+  club. Descartado un 400 con las reglas como patrón en el catálogo: habría que repetirlas en el dominio.
 
 **El alta elige el jugador: uno que ya existe, o uno nuevo, con un buscador mientras se escribe** (2026-11-14,
 propuesto por el desarrollador). Con la tabla del perfil ya creada, la fila nueva tiene que decir de qué perfil es
@@ -392,7 +405,8 @@ en R6.3; enmienda a `D-37`, que dejaba dos filas a la vez). Lo dijo el desarroll
 repetidos entre equipos de una misma temporada. Así:
 
 - **En la base, una sola fila no borrada por perfil y temporada** (un índice único parcial, como el del dorsal).
-- **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está.
+- **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está. El 409 lleva
+  solo su código, `PLAYER_ALREADY_IN_ROSTER` (decidido en `R6.4`): el equipo ya lo ha dicho el buscador.
 - **Cambiarlo de equipo a mitad de temporada son dos pasos**: darle de baja en el viejo y de alta en el nuevo. La
   fila dada de baja solo se esconde (`D-36`): sus goles y tarjetas siguen contando para el equipo con que los hizo,
   que es lo que pedía `D-37`.
@@ -405,6 +419,33 @@ repetidos entre equipos de una misma temporada. Así:
 En el servidor: **una operación nueva, buscar perfiles por nombre** (`GET /player-profiles?q=`), y **el alta acepta
 o un `profileId` o el nombre y el año**; un `profileId` que no existe en el club, 422. Enmienda el punto 6 de
 `D-119`: el perfil tiene ya una operación en esta versión.
+**En el catálogo, dos formas cerradas** (decidido en `R6.4`, 2026-11-15): el alta acepta una de dos, «con perfil»
+(equipo, temporada y `profileId`) o «jugador nuevo» (equipo, temporada, nombre y año), las dos con el dorsal y la
+demarcación si se quieren. Mandar las dos cosas a la vez, o ninguna, es un 400 que da el propio catálogo. Como el
+alta de una competición, por dirección o por campos. Descartada una sola forma con todo opcional y la regla
+comprobada a mano en el servidor: el catálogo no la ve.
+**La búsqueda filtra en el servidor** (decidido en `R6.4`, 2026-11-15): recibe `q` (desde 3 letras; con menos,
+400), `teamId` y `seasonId`, los tres obligatorios, como `listPlayers`. Quita a los de esa plantilla, y cada jugador
+lleva `profileId`, nombre, año, el último dorsal, demarcación y foto, **su última plantilla** (la fila no borrada
+más reciente, con su equipo y temporada, o `null`) y **`otherTeamThisSeason`** (el equipo si ya está en otro esta
+temporada, o `null`). Descartado recibir solo `q` y filtrar en la web: si 4 de los 10 eran de esta plantilla,
+enseñaría 6 aunque hubiera más, y las reglas quedarían repartidas.
+
+**La sincronización contesta al momento** (decidido en `R6.4`, 2026-11-15): un 200 con el resumen cuando ha
+terminado, y mientras, el botón dice «Sincronizando…». Descartado un 202 a la cola, como la ingesta del enganche:
+una operación más, un resumen que guardar y la web preguntando, por una página de unos 25 jugadores. Así:
+
+- **La dirección**: `POST /teams/{teamId}/registrations/{seasonId}/roster-sync`, colgada de la inscripción, que es
+  la que tiene el código de la federación y donde se guarda la fecha.
+- **El resumen**: `syncedAt`; **números** de los añadidos, los que ya estaban, los que no tienen año y los dados de
+  baja; y **listas con nombre** de los de nombre repetido, los de otro equipo (con su equipo) y los de nombre que no
+  vale (como lo escribe la federación). Lo que cuenta cada lista es su largo.
+- **Los errores**: 404 si el equipo no existe; 422 con la temporada archivada, si la federación no publica
+  plantillas o si el equipo no está enganchado; 502 y 504, como el enganche.
+- **La fecha se lee en la inscripción** (decidido en `R6.4`): `TeamRegistrationResponse` gana `rosterSyncedAt`, o
+  `null` si nunca se ha sincronizado. La ficha del equipo ya la pide al abrirse, y tras sincronizar la web toma
+  `syncedAt` del resumen. Descartado devolverla con `listPlayers`: dejaría de ser una lista y cambiaría una
+  operación que ya existe.
 
 **La carga desde la federación crea los perfiles que falten** (2026-11-14): por cada jugador de la RFFM, si el
 club ya tiene su perfil, le crea solo la fila; si no, crea el perfil y la fila. El primer día de un club con el
@@ -451,6 +492,13 @@ sincronización:
 Descartado sacar la fecha de la plantilla de las de los jugadores (la más reciente): si la federación no lista a
 nadie, no se toca ninguna fila y la fecha se queda antigua. Y descartada `ingestion_runs`, que va por competición y
 no sabe de qué equipo propio es cada pasada.
+
+**En el catálogo, sí, no o nulo** (decidido en `R6.4`, 2026-11-15): `PlayerResponse` lleva `federated` (`true`,
+`false`, o `null` mientras la plantilla no se ha sincronizado nunca) y `lastListedAt` (la fecha, o `null`), como
+el resto del catálogo, que usa `null` para «no hay dato». Descartados tres valores con nombre (`federated`,
+`notFederated`, `neverSynced`): una lista cerrada más para un sí o un no. **Un alta a mano después de una
+sincronización sale «No federado»** (`false`): la plantilla ya se ha sincronizado y la federación aún no lo tiene;
+antes de la primera, vacío (`null`). Propuesto al decidir el formato.
 
 **Decidida entera (2026-11-14)** → [`D-120`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md), con la capacidad
 nueva de la federación, `federationProvidesTeamRoster`.
@@ -502,8 +550,8 @@ esté perfectamente al día.
 **El censo y la mutación**, como siempre (plan del backoffice, §2.5). Cada endpoint, a la tabla de §0 del README
 del backend en su paso.
 
-**Al terminar**, el servidor sirve **26** operaciones: las 17 de antes, las 7 de jugadores y las 2 nuevas, que
-suben el catálogo de 85 a 87 (88 si la ruta que entrega la foto cuenta como operación, que se decide en `R6.4`).
+**Al terminar**, el servidor sirve **27** operaciones: las 17 de antes, las 7 de jugadores y las 3 nuevas, que
+suben el catálogo de 85 a 88, con la ruta que entrega la foto (decisión 3, cerrada en `R6.4`).
 
 ---
 
@@ -589,6 +637,7 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 | `R6.1` | 2026-11-14 | Las nueve decisiones, una a una, con lo que hizo falta para verlas: el almacén, los escudos y la configuración del servidor (1); las herramientas de imágenes del Mac y del contenedor (2); un dibujo de los dos caminos de la foto, ahora y con Supabase (3); la R2 (4); el acta de la RFFM (5); `DW-22` (6); una maqueta en HTML de la plantilla, la ficha, el alta y la baja (7); `D-05` y lo que ya apunta a `playerId` en el catálogo (8); y la ficha de equipo de la RFFM de dos equipos del desarrollador, sus nombres medidos sin sacarlos y sus cabeceras (9). La 8 y la 9 salieron al revisar la 6 y la 7. Escritas en la bitácora del backend `D-115` a `D-120`; en el plan del backoffice, la fila de la R11 (el purgado borra los perfiles sin filas) y la de la R15 (técnicos y delegados desde la federación) |
 | `R6.2` | 2026-11-15 | **Los documentos de lo decidido.** En la bitácora del backend, `D-115` a `D-120`, escritos con cada decisión y grabados con `R6.1`. En el LLD-B, el camino de la ficha del jugador (§6.1, decidido; y §6.5, que la ficha del jugador también lleva la temporada); sin entrada nueva en su anexo: aplica `DW-22`. En el plan del backoffice, el camino del mapa y la fila de la R6 con lo que cambia en sus operaciones y las dos nuevas. En `AGENTS.md`, la rebanada empezada, en «Documentación clave» y en el estado. **La enmienda al LLD del backend** (§3 y §5) va con el catálogo (`R6.4`), como en la R5. **No hay que relanzar el servidor**: solo documentos |
 | `R6.3` | 2026-11-15 | **Los escenarios**, 119 en cuatro ficheros, revisados uno a uno con el desarrollador (§6); la pasada en seco da 289: los 170 de antes, intactos, y los 119, sin definir. Salieron **dos decisiones**: un jugador, una plantilla por temporada (`D-121`, dentro de la 9, enmienda a `D-37`) y el perfil guarda el último dorsal, demarcación y foto (10, `D-122`); y **cuatro reglas**: la temporada archivada, de solo lectura entera; la foto se describe con el nombre del jugador, que la web le pone al pintarla; el nombre de la federación que no vale no se añade y el resumen lo nombra; y «el mismo nombre» es sin tildes ni diéresis, pero con la eñe distinta. Aparte, en el plan del backoffice: el jugador de otro equipo que juega en un partido, para la R7. **Queda para la parte D** (`R6.15`): la ficha de equipo de la RFFM en la federación falsa. **No hay que relanzar el servidor**: solo escenarios y documentos |
+| `R6.4` | 2026-11-15 | **El catálogo, con siete decisiones** revisadas una a una: el alta en dos formas cerradas; el nombre que no vale, 422 `INVALID_VALUE`; «federado» como sí, no o nulo; los dos 409 solo con su código; la búsqueda de perfiles filtrada en el servidor; la sincronización al momento, con su resumen; y la fecha en la inscripción. Y la ruta de la foto, la operación 86. **88 operaciones** (tres nuevas: `getPlayerPhotoFile`, `searchPlayerProfiles`, `syncTeamRoster`); el servidor sigue sirviendo 17. La capacidad `federationProvidesTeamRoster` ya sale en `getClub` (RFFM sí; FCF, sin medir, no), con su test; `rosterSyncedAt` viaja ausente hasta `R6.14`, apuntado en el censo. **Salió una enmienda**: la clave de la foto es nueva en cada subida, no sale del `playerId` (`D-115`, punto 3). La enmienda al LLD del backend: §3.1, §3.2, §3.5, §3.6, §3.7, §5.1, §5.2, §5.3 y §5.6. 854 tests y el censo, en verde. **Hay que relanzar el servidor**: `getClub` devuelve un campo nuevo |
 
 ---
 

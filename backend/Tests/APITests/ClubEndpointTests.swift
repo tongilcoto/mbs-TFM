@@ -65,6 +65,7 @@ struct ClubEndpointTests {
                 #expect(club.federation.value1 == .rffm)
                 #expect(club.federationProvidesRoundStandings)
                 #expect(club.federationProvidesScorers)
+                #expect(club.federationProvidesTeamRoster)
 
                 // **`crestUrl` es nulo A PROPÓSITO, y por eso se afirma**
                 // (hueco encontrado el 2026-09-25). El club tiene su `crestKey`
@@ -88,6 +89,8 @@ struct ClubEndpointTests {
                 // Ver la nota de `GetClubTests`: la FCF sí publica goleadores desde
                 // el 2026-08-28 (Anexo FCF §C.10.7).
                 #expect(club.federationProvidesScorers)
+                // Plantillas de la FCF, sin medir (D-120).
+                #expect(!club.federationProvidesTeamRoster)
             }
 
             try await Self.cleanUp(["madrid", "catalan"], on: app)

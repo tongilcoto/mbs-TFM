@@ -1587,6 +1587,76 @@ paths:
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ───────────────────────────── Rounds (§5.1) ─────────────────────────────
+  /teams/{teamId}/registrations/{seasonId}/roster-sync:
+    parameters:
+      - $ref: '#/components/parameters/TeamId'
+      - $ref: '#/components/parameters/SeasonId'
+
+    post:
+      tags: [Players]
+      operationId: syncTeamRoster
+      summary: Sincroniza la plantilla del equipo con la que publica la federación
+      description: |
+        **«Sincronizar con la Federación»** en la pestaña Plantilla (D-120). Lee la plantilla del equipo
+        en la federación (en la RFFM, su ficha de equipo) y **solo añade**: no corrige ni da de baja a
+        nadie, y se puede pulsar siempre.
+
+        - **El que el club no tiene**: perfil nuevo y fila, sin año (la federación no lo da).
+        - **El que casa por nombre con un perfil** del club («el mismo nombre»: en mayúsculas, un espacio
+          entre palabras, sin tildes ni diéresis, y con la eñe distinta): solo la fila, con el dorsal, la
+          demarcación y la foto de su perfil (D-122). Si ese dorsal ya lo tiene otro, llega sin dorsal.
+        - **El que casa con varios**: perfil nuevo, y el resumen lo nombra.
+        - **No añade** al que ya está, al que el club dio de baja, al que tiene en otro equipo de la
+          temporada (D-121), ni al de un nombre que no vale (D-120).
+
+        Cada fila de la plantilla queda `federated: true` si la federación la publica, y `false` si no, con
+        `lastListedAt`; y la inscripción, con `rosterSyncedAt`.
+
+        **Contesta al momento**, con el resumen: es una sola página, de unos 25 jugadores. Mientras, la web
+        dice «Sincronizando…».
+
+        Requiere **rol elevado** (§7.3).
+      responses:
+        '200':
+          description: Sincronizada. El resumen de lo que ha hecho.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterSyncResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: El equipo no existe en este club, o no está inscrito en esa temporada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            Regla de negocio, por el `code` del *Problem*: la temporada está **archivada** (§5.1); la
+            federación del club **no publica plantillas** (`ClubResponse.federationProvidesTeamRoster`); o
+            el equipo **no está enganchado** a la federación en esa temporada, y no hay código con el que
+            pedirla (D-101).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '502':
+          description: |
+            La federación contestó algo que no se entiende, como en el enganche
+            (`FEDERATION_UNEXPECTED_STATUS`, `FEDERATION_MALFORMED_RESPONSE`). La plantilla no cambia.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '504':
+          description: La federación no respondió dentro del *timeout*. La plantilla no cambia.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
   /rounds:
     get:
       tags: [Rounds]
@@ -1841,9 +1911,12 @@ paths:
         sin una de ellas devolvería jugadores de varios años o de varios equipos mezclados, que no es lo
         que muestra ninguna pantalla. Mismo criterio que el `roundId` de la clasificación (D-34).
 
-        **Sin paginación y con orden fijo por `shirtNumber` ascendente** (§5.3): el ámbito acota a los ~25
-        jugadores de un equipo, que es el orden en el que se lee una plantilla. Tampoco hay búsqueda por
-        nombre: la colección entera cabe en una pantalla.
+        **Sin paginación y con orden fijo** (§5.3, D-118): por `shirtNumber` ascendente, y después los que
+        no tienen dorsal, por nombre. El ámbito acota a los ~25 jugadores de un equipo, y es el orden en el
+        que se lee una plantilla. Tampoco hay búsqueda por nombre: la colección entera cabe en una pantalla
+        (la de perfiles, para el alta, es `GET /player-profiles`).
+
+        **Cada fila lleva el nombre y el año de su perfil** (D-119): la fila de la temporada no los guarda.
 
         **Los jugadores borrados no aparecen.** El borrado es lógico (D-36) y sirve a la auditoría, no al
         cliente: no hay parámetro para incluirlos.
@@ -1872,7 +1945,9 @@ paths:
             $ref: '#/components/schemas/PlayerPosition'
       responses:
         '200':
-          description: Plantilla del equipo en esa temporada, ordenada por dorsal ascendente.
+          description: |
+            Plantilla del equipo en esa temporada: por dorsal ascendente, y después los que no tienen, por
+            nombre.
           content:
             application/json:
               schema:
@@ -1896,16 +1971,29 @@ paths:
       operationId: createPlayer
       summary: Da de alta un jugador en la plantilla
       description: |
-        **Primer `POST` de dominio manual del contrato.** A diferencia de `Season` y `Competition` —que
-        tienen `POST` por ser *entrada* de la ingesta (D-22)—, aquí no hay ingesta en absoluto: la
-        federación no publica plantillas de fútbol base, así que el club es el **único** escritor y la
-        regla "el BFF corrige, no crea" (D-21) sencillamente no aplica.
+        **El alta a mano de un jugador en la plantilla.** No es la única vía: si la federación publica
+        plantillas (`ClubResponse.federationProvidesTeamRoster`), la sincronización también añade
+        (`POST /teams/{teamId}/registrations/{seasonId}/roster-sync`, D-120). Las dos solo añaden; corregir
+        y dar de baja son del club.
+
+        **Dos formas, y exactamente una** (D-120): con un **perfil** que ya existe (`profileId`, el jugador
+        que el club tuvo otra temporada, elegido en `GET /player-profiles`), o con un **jugador nuevo**
+        (nombre y año), que crea el perfil y la fila a la vez (D-119). Se deja crear uno nuevo aunque haya
+        otro con el mismo nombre: pueden ser dos chavales.
+
+        **Guardar la fila copia su dorsal y su demarcación al perfil** (D-122), lo vacío también: es la
+        ayuda que trae el diálogo la próxima vez que se elija ese perfil.
+
+        **Un jugador, una plantilla por temporada** (D-121): si el perfil ya tiene fila en otro equipo de la
+        temporada, 409. Cambiarlo de equipo son dos pasos: baja en el viejo y alta en el nuevo.
+
+        **`federated`** sale `false` si la plantilla ya se ha sincronizado alguna vez (la federación aún no
+        lo tiene), y `null` si no (D-120).
 
         **`teamId` y `seasonId` se fijan aquí y no se cambian nunca** (D-37): son la identidad del
-        registro. Un jugador que sube de equipo a mitad de temporada es una **fila nueva** en el equipo
-        nuevo, igual que el que continúa al año siguiente lo es en la temporada nueva (D-05). Cambiarlos
-        por `PATCH` reescribiría el pasado: sus goles y tarjetas ya emitidos pasarían a contar para el
-        equipo al que se le mueve.
+        registro. El jugador que continúa al año siguiente es una **fila nueva** en la temporada nueva
+        (D-05). Cambiarlos por `PATCH` reescribiría el pasado: sus goles y tarjetas ya emitidos pasarían a
+        contar para el equipo al que se le mueve.
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -1921,22 +2009,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PlayerResponse'
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: |
+            Además de lo mal formado: un cuerpo con las dos formas a la vez, o con ninguna (`oneOf`).
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            Ese dorsal ya está ocupado en el mismo equipo y temporada (§3.5). El dorsal de un jugador
-            **borrado** no cuenta: el índice único es parcial (D-36).
+            Dos casos, por el `code` del *Problem*, que **solo lleva su código** (D-118, D-121): con quién
+            choca lo sabe ya la web.
+
+            - `SHIRT_NUMBER_TAKEN`: ese dorsal ya lo tiene otro jugador del mismo equipo y temporada (§3.5).
+              El de un jugador **borrado** no cuenta: el índice único es parcial (D-36). La web busca quién
+              lo tiene en la plantilla que está pintando.
+            - `PLAYER_ALREADY_IN_ROSTER`: el perfil ya tiene fila en esta temporada, en este equipo o en
+              otro (D-121). El buscador ya lo ha dicho («Ya está en Cadete B»).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Regla de negocio (§5.4). Tres casos, distinguibles por el `code` del *Problem*:
-            el equipo o la temporada **no existen** en este club; el equipo **no es propio**
-            (`opponentClubId != null`, §3.7); o la temporada está **archivada** (§5.1).
+            Regla de negocio (§5.4), por el `code` del *Problem*: el equipo, la temporada o el perfil
+            **no existen** en este club; el equipo **no es propio** (`opponentClubId != null`, §3.7); la
+            temporada está **archivada** (§5.1); o un valor no cumple su regla (`INVALID_VALUE`, con el
+            `detail` `<campo>: <motivo>`): el nombre (solo letras, espacio, guion y apóstrofo; al menos dos
+            palabras; D-120) o el año (no posterior al año en curso).
 
             **No es un 404** aunque incluya el caso "no existe": el equipo llega en el **cuerpo**, no en la
             ruta, y `/players` sí existe. Un 404 aquí respondería sobre el recurso equivocado.
@@ -1972,11 +2071,15 @@ paths:
       description: |
         Actualización **parcial**: los campos ausentes no se modifican.
 
-        **No incluye `teamId` ni `seasonId`** (D-37): son identidad, no atributos. Un cambio de equipo o de
-        temporada es una fila nueva, no una edición — igual que `modality` en `Team` (§3.2).
+        **El nombre y el año son del perfil** (D-119): corregirlos aquí los corrige en todas las temporadas
+        del jugador. **El dorsal y la demarcación son de esta fila**, y se copian también al perfil
+        (D-122), lo vacío también.
 
-        **Tampoco incluye la foto**: `photoUrl` es `readOnly` y se deriva de la clave del objeto en Storage
-        (D-35). La subida está **pendiente** (§9).
+        **No incluye `teamId` ni `seasonId`** (D-37): son identidad, no atributos. Un cambio de equipo es
+        una baja y un alta (D-121), no una edición — igual que `modality` en `Team` (§3.2).
+
+        **Tampoco incluye la foto**: `photoUrl` es `readOnly` y se deriva de la clave del fichero (D-35); se
+        pone y se quita con `/players/{playerId}/photo`.
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -1997,7 +2100,17 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: Ese dorsal ya está ocupado en el mismo equipo y temporada (§3.5).
+          description: |
+            `SHIRT_NUMBER_TAKEN`: ese dorsal ya lo tiene otro jugador del mismo equipo y temporada (§3.5). El
+            *Problem* solo lleva su código (D-118).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: |
+            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1); o un valor no
+            cumple su regla (`INVALID_VALUE`, con el `detail` `<campo>: <motivo>`), como en el alta.
           content:
             application/problem+json:
               schema:
@@ -2017,19 +2130,30 @@ paths:
         **Libera el dorsal** para otro jugador del mismo equipo y temporada: el índice único de §3.5 es
         parcial (`WHERE deleted_at IS NULL`).
 
+        **No toca el perfil** (D-119): la fila solo se esconde y se puede recuperar. Y **la sincronización
+        no lo vuelve a añadir** aunque la federación lo siga publicando (D-120).
+
         **No es la vía del "derecho al olvido"**: borrar lógicamente no borra el dato personal de un menor.
-        Para eso está el purgado de temporada (`DELETE /seasons/{id}?cascade=true`, D-24).
+        Para eso está el purgado de temporada (`DELETE /seasons/{id}?cascade=true`, D-24), que borra también
+        los perfiles que se quedan sin filas.
 
         Requiere **rol elevado** (§7.3).
       responses:
         '204':
           description: |
-            Jugador borrado. **La foto no se borra del Storage**: el borrado es lógico y reversible por
-            recuperación, así que el objeto sigue ahí. Quien sí lo elimina es el purgado de temporada
+            Jugador borrado. **La foto no se borra del almacén**: el borrado es lógico y reversible por
+            recuperación, así que el fichero sigue ahí. Quien sí lo elimina es el purgado de temporada
             (D-24).
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   /players/{playerId}/photo:
@@ -2044,15 +2168,20 @@ paths:
         **Única operación del contrato que no es JSON**: el cuerpo es la imagen **en crudo**
         (`image/jpeg`/`image/png`).
 
-        **Es una segunda llamada y no parte del `POST`** (D-35): la clave se deriva del `playerId`, que no
-        existe hasta que el alta responde, y separarlas degrada mejor. El backoffice las encadena tras un
-        único botón de *Guardar*.
+        **Es una segunda llamada y no parte del `POST`** (D-35): el cuerpo es una imagen y no JSON, y
+        separarlas degrada mejor. El backoffice las encadena tras un único botón de *Guardar*.
 
-        **La API sanea el fichero** antes de escribirlo: valida los bytes contra el tipo declarado,
-        recodifica a JPEG, redimensiona y **descarta el EXIF** — que en la foto de un menor lleva
-        **geolocalización** (D-35). Ese último paso es lo que descarta la subida directa a Storage.
+        **La API sanea el fichero** antes de escribirlo (D-116): valida los bytes contra el tipo declarado,
+        lo gira según su orientación, lo reduce, lo vuelve a guardar como JPEG y **descarta el EXIF** — que
+        en la foto de un menor lleva **geolocalización** (D-35). Ese último paso es lo que descarta la
+        subida directa al almacén.
 
-        **Idempotente**. Requiere **rol elevado** (§7.3).
+        **Cada subida es un fichero nuevo, con una clave nueva** (con el club delante, D-115), y **la foto
+        pasa también al perfil** (D-122). Una foto puede ser a la vez de varias filas y de su perfil (la
+        sincronización copia la del perfil a la fila nueva), así que la clave no sale del `playerId`, y el
+        fichero de antes **solo se borra si ya no lo usa nadie**.
+
+        **Idempotente** en su efecto: la fila acaba con esa foto. Requiere **rol elevado** (§7.3).
       requestBody:
         required: true
         description: La imagen, en crudo. Tamaño máximo **5 MB**.
@@ -2085,6 +2214,13 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '413':
           description: La imagen supera el tamaño máximo admitido (5 MB).
           content:
@@ -2106,8 +2242,9 @@ paths:
       operationId: deletePlayerPhoto
       summary: Quita la foto de un jugador
       description: |
-        Borra el objeto de Storage y deja `photo_key` a nulo → `photoUrl` vuelve a ser `null` y la ficha
-        pinta las iniciales.
+        Deja la clave de la foto a nulo **en la fila y en su perfil** (D-122) → `photoUrl` vuelve a ser
+        `null` y la ficha pinta las iniciales. **El fichero solo se borra si ya no lo usa nadie**: otra fila
+        del mismo jugador puede tenerlo.
 
         Existe como operación propia porque el `PATCH` **no lleva la foto** (D-35): un `null` explícito en
         un campo derivado no significaría nada. Es el mismo criterio por el que `/ownership` es
@@ -2121,6 +2258,138 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
+  /player-photos/{photoKey}:
+    get:
+      tags: [Players]
+      operationId: getPlayerPhotoFile
+      summary: Entrega el fichero de una foto, si el enlace firmado vale
+      description: |
+        **Solo existe mientras las fotos se guardan en una carpeta del disco** (D-115, D-117). Es la ruta
+        a la que apunta `photoUrl` con ese almacén; con Supabase Storage (rebanada 16) el enlace lo hace
+        Supabase, y esta operación **desaparece**. La web no distingue los dos: usa `photoUrl` tal cual.
+
+        **Por la clave del fichero, no por el jugador**: una foto puede ser de varias filas y de su perfil
+        (D-122).
+
+        **Sin cabecera de permiso**: la pide el navegador solo, al pintar la imagen, y no puede mandarla.
+        El permiso va en el propio enlace: la hora en que caduca (`expires`) y una firma (`signature`)
+        hecha con una clave secreta de la configuración. El enlace dura **una hora** y se hace nuevo en
+        cada lectura del jugador, de la plantilla o de los perfiles.
+
+        El club sale de la dirección, como en el resto de la API (§6.1).
+      parameters:
+        - name: photoKey
+          in: path
+          required: true
+          description: La clave del fichero en el almacén, tal como la pone `photoUrl`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: expires
+          in: query
+          required: true
+          description: Cuándo caduca el enlace, en segundos desde 1970 (UTC).
+          schema:
+            type: integer
+            format: int64
+        - name: signature
+          in: query
+          required: true
+          description: La firma de la clave y de `expires`.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+      responses:
+        '200':
+          description: La foto, ya saneada (D-116).
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: |
+            **La misma respuesta para todo lo que no vale**: la foto no existe, la firma no es la buena o
+            el enlace ha caducado. Así no dice qué claves hay. La web pinta las iniciales.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
+  /player-profiles:
+    get:
+      tags: [Players]
+      operationId: searchPlayerProfiles
+      summary: Busca jugadores del club por nombre, para el alta en una plantilla
+      description: |
+        **El buscador del diálogo del alta** (D-120): el jugador que el club ya tiene, de esta temporada
+        o de otra, para no crear un perfil repetido (D-119). Es la única operación del perfil en esta
+        versión; sus pantallas llegan con la siguiente.
+
+        **Para una plantilla concreta**: `teamId` y `seasonId` son obligatorios, como en `listPlayers`,
+        porque la búsqueda **quita a los que ya están en esa plantilla** y marca a los que están en otro
+        equipo de la temporada. Si lo hiciera la web, de los 10 que llegan enseñaría menos de los que
+        hay.
+
+        **Cómo busca**: sin distinguir tildes, diéresis ni mayúsculas, y cada palabra por separado
+        («juan fuen» encuentra a JUAN GARCÍA FUENTE). Para buscar, la eñe es una «n» («munoz» encuentra
+        a MUÑOZ): ayuda a encontrar, no compara. **Hasta 10**, por orden de nombre; sin paginación.
+
+        **Devuelve el registro entero del perfil** (D-122): el último dorsal, la última demarcación y la
+        última foto, que el diálogo trae al elegirlo.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Lo que se ha tecleado. **Desde 3 letras**; con menos, 400.
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 120
+        - name: teamId
+          in: query
+          required: true
+          description: El equipo de la plantilla donde se va a dar de alta.
+          schema:
+            type: string
+            format: uuid
+        - name: seasonId
+          in: query
+          required: true
+          description: La temporada de esa plantilla.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Hasta 10 perfiles, por orden de nombre. Ninguno es lista vacía, no error.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 10
+                items:
+                  $ref: '#/components/schemas/PlayerProfileSearchResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: El equipo o la temporada no existen en este club, como en `listPlayers`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ──────────────────────────── Absences (§5.1) ────────────────────────────
@@ -4156,7 +4425,7 @@ components:
       type: object
       required:
         [id, name, shortName, slug, federation, federationProvidesRoundStandings,
-         federationProvidesScorers, settings, createdAt, updatedAt]
+         federationProvidesScorers, federationProvidesTeamRoster, settings, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -4228,6 +4497,15 @@ components:
 
             **Por eso las apps no pueden ignorarlo**: es la diferencia entre ocultar la pantalla de
             goleadores y pintar un vacío que parece un fallo.
+        federationProvidesTeamRoster:
+          type: boolean
+          readOnly: true
+          description: |
+            **Derivado del catálogo de federaciones en código** (D-17), como sus hermanos: `true` si la
+            federación publica la plantilla de cada equipo (**RFFM sí**, en su ficha de equipo, D-120).
+
+            **Condiciona un botón**: con `false`, la pestaña Plantilla no ofrece «Sincronizar con la
+            Federación» y la plantilla es solo a mano; `PlayerResponse.federated` es siempre `null`.
         settings:
           $ref: '#/components/schemas/ClubSettings'
         createdAt:
@@ -5212,6 +5490,13 @@ components:
             la copa (D-12).
           items:
             $ref: '#/components/schemas/TeamRegistrationCompetition'
+        rosterSyncedAt:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: |
+            **La última vez que se sincronizó la plantilla** con la federación (D-120), la fecha junto al
+            botón. `null` si nunca. Columna propia, no `updatedAt`: la inscripción se guarda por más motivos.
 
     TeamRegistrationCompetition:
       type: object
@@ -5957,86 +6242,177 @@ components:
 
     # ─────────────────────────── Player (§5.2) ───────────────────────────
     CreatePlayerRequest:
-      type: object
       description: |
-        Alta de un jugador en la plantilla de un equipo **propio** para una temporada. Es el primer DTO de
-        alta de **dominio manual** del contrato: los tres anteriores (`Season`, `Competition`) existían por
-        ser *entrada* de la ingesta (D-22); este existe porque aquí no hay ingesta.
+        Alta de un jugador en la plantilla de un equipo **propio** para una temporada. Fue el primer DTO de
+        alta de **dominio manual** del contrato; desde D-120 la sincronización también añade, pero esta es
+        la vía a mano.
+
+        **Dos formas y exactamente una** (D-120), por eso son dos esquemas autocontenidos y no campos
+        opcionales de uno solo (como `CreateCompetitionRequest`):
+
+        - **Con perfil** — el jugador que el club ya tiene, elegido en `GET /player-profiles`.
+        - **Jugador nuevo** — crea su perfil (nombre y año) y la fila a la vez (D-119).
+
+        Las dos llevan el dorsal y la demarcación si se quieren (D-118). Las dos cosas a la vez, o ninguna,
+        es un 400.
 
         **`teamId` y `seasonId` van en el alta y solo en el alta** (D-37): identifican la fila y no
         reaparecen en `UpdatePlayerRequest`.
+      oneOf:
+        - $ref: '#/components/schemas/CreatePlayerFromProfileRequest'
+        - $ref: '#/components/schemas/CreatePlayerNewProfileRequest'
+
+    CreatePlayerFromProfileRequest:
+      type: object
+      description: El alta con un perfil que ya existe en el club.
       additionalProperties: false
-      required: [teamId, seasonId, fullName, shirtNumber, position]
+      required: [teamId, seasonId, profileId]
       properties:
         teamId:
-          type: string
-          format: uuid
-          description: |
-            Equipo **propio** (`isOwn == true`). Un equipo rival no tiene plantilla: no hay de dónde
-            sacarla, y el modelo solo cubre el detalle manual del club (§3.7) → **422** si no lo es.
+          $ref: '#/components/schemas/PlayerTeamIdField'
         seasonId:
+          $ref: '#/components/schemas/PlayerSeasonIdField'
+        profileId:
           type: string
           format: uuid
           description: |
-            Temporada del registro. **No se hereda del equipo**: `Team` no tiene temporada (§3.2), es la
-            misma entidad año tras año, así que la plantilla necesita decir de qué año habla (D-05).
-        fullName:
-          type: string
-          minLength: 1
-          maxLength: 120
-          examples: ['Marcos Díaz']
+            El perfil elegido en el buscador. **Uno que no existe en el club, 422**: llega en el cuerpo, no en
+            la ruta. Uno que ya tiene fila en esta temporada, 409 (D-121).
         shirtNumber:
-          type: integer
-          minimum: 1
-          maximum: 99
-          description: |
-            Dorsal. **Único dentro del mismo equipo y temporada** (§3.5) → **409** si está ocupado. Es
-            invariante de dominio además de restricción de tabla: el VO `ShirtNumber` (§4.1) la garantiza
-            también fuera de este contrato.
-          examples: [1]
+          $ref: '#/components/schemas/ShirtNumber'
         position:
-          $ref: '#/components/schemas/PlayerPosition'
+          $ref: '#/components/schemas/NullablePlayerPosition'
+
+    CreatePlayerNewProfileRequest:
+      type: object
+      description: El alta de un jugador nuevo para el club; crea su perfil y su fila.
+      additionalProperties: false
+      required: [teamId, seasonId, fullName, birthYear]
+      properties:
+        teamId:
+          $ref: '#/components/schemas/PlayerTeamIdField'
+        seasonId:
+          $ref: '#/components/schemas/PlayerSeasonIdField'
+        fullName:
+          $ref: '#/components/schemas/PlayerFullName'
+        birthYear:
+          $ref: '#/components/schemas/BirthYear'
+          description: |
+            **Obligatorio en el alta a mano** (D-120); solo la sincronización deja perfiles sin año.
+        shirtNumber:
+          $ref: '#/components/schemas/ShirtNumber'
+        position:
+          $ref: '#/components/schemas/NullablePlayerPosition'
+
+    PlayerTeamIdField:
+      type: string
+      format: uuid
+      description: |
+        Equipo **propio** (`isOwn == true`). Un equipo rival no tiene plantilla: no hay de dónde sacarla, y
+        el modelo solo cubre el detalle manual del club (§3.7) → **422** si no lo es.
+
+    PlayerSeasonIdField:
+      type: string
+      format: uuid
+      description: |
+        Temporada del registro. **No se hereda del equipo**: `Team` no tiene temporada (§3.2), es la misma
+        entidad año tras año, así que la plantilla necesita decir de qué año habla (D-05). Archivada → 422.
+
+    PlayerFullName:
+      type: string
+      minLength: 1
+      maxLength: 120
+      description: |
+        «NOMBRE APELLIDOS». El servidor lo limpia (fuera los espacios del principio y el final, uno solo entre
+        palabras) y lo **guarda en mayúsculas**; la web lo formatea al pintarlo (D-120). **La regla la
+        comprueba el dominio, no este esquema**, para que valga igual en la sincronización: solo letras (con
+        tildes, eñe y diéresis), espacio, guion y apóstrofo, y **al menos dos palabras**. Si no la cumple, 422
+        `INVALID_VALUE` con el `detail` `fullName: <motivo>`.
+      examples: ['MARCOS DÍAZ']
+
+    BirthYear:
+      type: integer
+      minimum: 1900
+      maximum: 2100
+      description: |
+        **Solo el año** de nacimiento (D-119): es un dato de un menor, y en fútbol base la categoría sale del
+        año. No se comprueba contra la categoría del equipo: un chaval puede jugar en una superior. **Un año
+        posterior al año en curso**, 422 `INVALID_VALUE` (`birthYear: <motivo>`).
+      examples: [2010]
+
+    ShirtNumber:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 99
+      description: |
+        Dorsal, **opcional** (D-118): del 1 al 99, o nulo. **Único entre los que lo tienen** dentro del mismo
+        equipo y temporada (§3.5) → **409 `SHIRT_NUMBER_TAKEN`** si está ocupado. Es invariante de dominio
+        además de restricción de tabla: el VO `ShirtNumber` (§4.1) la garantiza también fuera de este
+        contrato.
+      examples: [1]
+
+    NullablePlayerPosition:
+      description: |
+        Demarcación, **opcional** (D-120): la federación no la da. Nula si no se sabe.
+      oneOf:
+        - $ref: '#/components/schemas/PlayerPosition'
+        - type: 'null'
 
     UpdatePlayerRequest:
       type: object
       description: |
         Actualización parcial. **No incluye `teamId` ni `seasonId`** —son identidad, no atributos
-        (D-37)— **ni la foto**, que se deriva de la clave de Storage y no se teclea (D-35).
+        (D-37)— **ni la foto**, que se deriva de la clave del fichero y no se teclea (D-35).
 
-        Lo que queda es exactamente lo corregible de una plantilla tecleada a mano: una errata en el
-        nombre, un cambio de dorsal a mitad de temporada, una demarcación mal elegida.
+        Lo que queda es lo corregible de una plantilla: una errata en el nombre o en el año, que son **del
+        perfil** y cambian en todas sus temporadas (D-119); un cambio de dorsal a mitad de temporada, o una
+        demarcación mal elegida, que son **de esta fila** y se copian al perfil (D-122). **`null` en el
+        dorsal o la demarcación los vacía.**
       additionalProperties: false
       minProperties: 1
       properties:
         fullName:
-          type: string
-          minLength: 1
-          maxLength: 120
+          $ref: '#/components/schemas/PlayerFullName'
+        birthYear:
+          $ref: '#/components/schemas/BirthYear'
+          description: |
+            Se puede poner o cambiar, **no quitar**: un perfil sin año solo lo deja la sincronización.
         shirtNumber:
-          type: integer
-          minimum: 1
-          maximum: 99
+          $ref: '#/components/schemas/ShirtNumber'
         position:
-          $ref: '#/components/schemas/PlayerPosition'
+          $ref: '#/components/schemas/NullablePlayerPosition'
 
     PlayerResponse:
       type: object
       description: |
-        Un jugador **en un equipo y una temporada** (D-05). Es la ficha de la plantilla, no un dosier
+        Un jugador **en un equipo y una temporada** (D-05): la fila de la plantilla, **leída junto con su
+        perfil** (D-119), de donde salen el nombre y el año. Es la ficha de la plantilla, no un dosier
         estadístico: goles, tarjetas, convocatorias y disponibilidad **no viajan aquí**. Salen de `Goal`,
         `Card`, `Appearance` y `Absence`, que son agregaciones sobre entidades que este contrato todavía
         no cubre, y llegarán como **modelo de lectura** propio —igual que `StandingResponse` no es un campo
         gordo de `TeamResponse` (D-34)—, no engordando este esquema.
 
+        **No lleva el dorsal, la demarcación y la foto que guarda el perfil** como ayuda (D-122): los de
+        aquí son los de la fila, que son los que valen.
+
         **Deliberadamente no embebe el equipo** (`TeamRef`, D-32): dentro de una plantilla el equipo es
         **constante** —lo acaba de pedir el cliente como ámbito—, así que repetirlo veinticinco veces no
         distingue una fila de otra. Es el mismo criterio por el que `TeamRef` no lleva `category`.
-      required: [id, teamId, seasonId, fullName, shirtNumber, position, createdAt, updatedAt]
+      required:
+        [id, profileId, teamId, seasonId, fullName, birthYear, shirtNumber, position, federated,
+         lastListedAt, createdAt, updatedAt]
       properties:
         id:
           type: string
           format: uuid
           readOnly: true
+        profileId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            El perfil del jugador, que dura entre temporadas (D-119). El mismo chaval en otra temporada tiene
+            otro `id` y el mismo `profileId`.
         teamId:
           type: string
           format: uuid
@@ -6053,27 +6429,44 @@ components:
             donde la temporada es columna propia y no se alcanza por FK: aquí es **identidad** (D-28).
         fullName:
           type: string
-          examples: ['Marcos Díaz']
+          description: Del perfil, en mayúsculas (D-120). La web lo pinta como «Nombre Apellidos».
+          examples: ['MARCOS DÍAZ']
+        birthYear:
+          type: [integer, 'null']
+          description: Del perfil. **Nulo** si lo creó la sincronización y nadie lo ha rellenado («Sin año»).
+          examples: [2010]
         shirtNumber:
-          type: integer
-          minimum: 1
-          maximum: 99
-          examples: [1]
+          $ref: '#/components/schemas/ShirtNumber'
         position:
-          $ref: '#/components/schemas/PlayerPosition'
+          $ref: '#/components/schemas/NullablePlayerPosition'
+        federated:
+          type: [boolean, 'null']
+          readOnly: true
+          description: |
+            **Si la federación lo publica** en la plantilla del equipo (D-120), según la última
+            sincronización: `true` si lo listó, `false` si no (el club lo pone en el equipo antes de que la
+            federación lo tenga). **`null` mientras la plantilla no se ha sincronizado nunca**, o si la
+            federación no publica plantillas: no se sabe. Un alta a mano tras una sincronización sale
+            `false`.
+        lastListedAt:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: La última vez que la federación lo listó; `null` si nunca.
         photoUrl:
           type: [string, 'null']
           format: uri
           readOnly: true
           description: |
-            **Derivado, no almacenado** (D-35): en BD vive `photo_key`, la clave del objeto en Storage —
+            **Derivado, no almacenado** (D-35): en BD vive `photo_key`, la clave del fichero en el almacén —
             mismo criterio que el escudo del club (D-19), y aquí además obligado, porque la foto de un menor
-            no puede quedar colgada de una URL pública ajena. El servidor devuelve una **URL firmada y de
-            vida corta**; el cliente la usa, no la guarda.
+            no puede quedar colgada de una URL pública ajena. El servidor devuelve un **enlace firmado que
+            dura una hora** (D-117), nuevo en cada lectura; el cliente lo usa, no lo guarda. Con la carpeta
+            del disco apunta a `GET /player-photos/{photoKey}`; con Supabase, al suyo.
 
             **Nulo** mientras no haya foto: se sube aparte, con `PUT /players/{playerId}/photo`, y nunca en
-            el alta ni en el `PATCH`. La ficha sin foto es un estado normal —el mockup pinta las
-            iniciales—, no un alta a medias.
+            el alta ni en el `PATCH`. La ficha sin foto es un estado normal —pinta las iniciales—, no un
+            alta a medias.
         createdAt:
           type: string
           format: date-time
@@ -6082,6 +6475,148 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    PlayerProfileSearchResult:
+      type: object
+      description: |
+        Un perfil del club, como lo enseña el buscador del alta (D-120): «JUAN GARCÍA FUENTE · 2010 ·
+        Cadete B 2024/25». **El registro entero** (D-122): lo de ayuda (el último dorsal, demarcación y
+        foto) es lo que el diálogo trae al elegirlo, y se puede cambiar.
+      required:
+        [profileId, fullName, birthYear, lastShirtNumber, lastPosition, lastPhotoUrl, lastRoster,
+         otherTeamThisSeason]
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          readOnly: true
+        fullName:
+          type: string
+          readOnly: true
+          examples: ['JUAN GARCÍA FUENTE']
+        birthYear:
+          type: [integer, 'null']
+          readOnly: true
+        lastShirtNumber:
+          $ref: '#/components/schemas/ShirtNumber'
+          readOnly: true
+          description: El último dorsal guardado en una de sus filas, como ayuda (D-122).
+        lastPosition:
+          $ref: '#/components/schemas/NullablePlayerPosition'
+          readOnly: true
+          description: La última demarcación guardada en una de sus filas, como ayuda (D-122).
+        lastPhotoUrl:
+          type: [string, 'null']
+          format: uri
+          readOnly: true
+          description: La última foto, con un enlace firmado como `PlayerResponse.photoUrl` (D-117).
+        lastRoster:
+          description: |
+            **Su última plantilla**: la fila no borrada más reciente, con su equipo y su temporada. `null` si
+            no tiene ninguna.
+          oneOf:
+            - $ref: '#/components/schemas/PlayerRosterRef'
+            - type: 'null'
+        otherTeamThisSeason:
+          description: |
+            **El equipo en el que ya está esta temporada**, si es otro (D-121): la web lo enseña sin dejar
+            elegirlo («Ya está en Cadete B»). `null` si no está en ninguno.
+          oneOf:
+            - $ref: '#/components/schemas/TeamRef'
+            - type: 'null'
+
+    PlayerRosterRef:
+      type: object
+      description: Una plantilla en la que estuvo un jugador, recortada a lo que cabe en una línea.
+      required: [team, seasonId, seasonLabel]
+      properties:
+        team:
+          $ref: '#/components/schemas/TeamRef'
+        seasonId:
+          type: string
+          format: uuid
+          readOnly: true
+        seasonLabel:
+          type: string
+          readOnly: true
+          examples: ['2024/25']
+
+    RosterSyncResponse:
+      type: object
+      description: |
+        **El resumen de la sincronización** (D-120): lo que la web enseña al acabar. Cuenta sobre lo que
+        publica la federación; los tres casos que hay que revisar a mano van con nombre, y lo que cuentan es
+        el largo de su lista.
+      required:
+        [syncedAt, added, alreadyInRoster, withoutBirthYear, deletedInClub, duplicateName, inOtherTeam,
+         invalidName]
+      properties:
+        syncedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Cuándo se hizo; es la nueva `TeamRegistrationResponse.rosterSyncedAt`.
+        added:
+          type: integer
+          minimum: 0
+          description: Los que se han añadido a la plantilla, con perfil nuevo o con el que ya tenían.
+        alreadyInRoster:
+          type: integer
+          minimum: 0
+          description: Los que ya estaban en la plantilla.
+        withoutBirthYear:
+          type: integer
+          minimum: 0
+          description: De los añadidos, los que se quedan sin año, para que el club lo rellene.
+        deletedInClub:
+          type: integer
+          minimum: 0
+          description: |
+            Los que el club dio de baja de esta plantilla: no se vuelven a añadir.
+        duplicateName:
+          type: array
+          description: |
+            Los añadidos **con perfil nuevo porque su nombre casa con varios** del club: para revisarlos.
+          items:
+            $ref: '#/components/schemas/RosterSyncPlayerRef'
+        inOtherTeam:
+          type: array
+          description: Los que **no se añaden** porque el club los tiene en otro equipo de la temporada (D-121).
+          items:
+            $ref: '#/components/schemas/RosterSyncOtherTeamRef'
+        invalidName:
+          type: array
+          description: |
+            Los que **no se añaden** porque su nombre no cumple las reglas (D-120): para darlos de alta a
+            mano. Va el nombre **tal como lo escribe la federación**.
+          items:
+            type: string
+
+    RosterSyncPlayerRef:
+      type: object
+      required: [playerId, fullName]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+        fullName:
+          type: string
+          readOnly: true
+
+    RosterSyncOtherTeamRef:
+      type: object
+      required: [profileId, fullName, team]
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          readOnly: true
+        fullName:
+          type: string
+          readOnly: true
+        team:
+          $ref: '#/components/schemas/TeamRef'
 
     # Sin `deletedAt` en PlayerResponse: el borrado lógico (D-36) es asunto de auditoría, no del cliente.
 

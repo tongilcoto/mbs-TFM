@@ -57,6 +57,12 @@ public struct FederationCapabilities: Equatable, Sendable {
     /// rivales, que no se modela (D-09).
     public let providesScorers: Bool
 
+    /// `true` si la federación publica la **plantilla de cada equipo** (D-120).
+    ///
+    /// Condiciona un botón: con `false`, la plantilla es solo a mano y no hay
+    /// «Sincronizar con la Federación».
+    public let providesTeamRoster: Bool
+
     /// Público desde F8, y no por simetría: **la guarda de `D-48` no se puede
     /// probar con el catálogo de verdad**, porque hoy las dos federaciones
     /// publican goleadores. La regla existe para la tercera, así que su test
@@ -66,9 +72,10 @@ public struct FederationCapabilities: Equatable, Sendable {
     /// fuera del catálogo en producción: `Club.federationCapabilities` sigue
     /// derivándolas de `FederationCode`, que es el único sitio donde se declaran
     /// (`D-17`).
-    public init(providesRoundStandings: Bool, providesScorers: Bool) {
+    public init(providesRoundStandings: Bool, providesScorers: Bool, providesTeamRoster: Bool) {
         self.providesRoundStandings = providesRoundStandings
         self.providesScorers = providesScorers
+        self.providesTeamRoster = providesTeamRoster
     }
 }
 
@@ -78,9 +85,11 @@ extension FederationCode {
     public var capabilities: FederationCapabilities {
         switch self {
         case .rffm:
-            // Clasificación por cualquier jornada (Anexo RFFM §F.8) y goleadores
-            // con endpoint JSON propio (Anexo RFFM §F.13).
-            FederationCapabilities(providesRoundStandings: true, providesScorers: true)
+            // Clasificación por cualquier jornada (Anexo RFFM §F.8), goleadores
+            // con endpoint JSON propio (Anexo RFFM §F.13) y la plantilla de cada
+            // equipo en su ficha (`fichaequipo/<código>`, medida en R6.1 con dos
+            // equipos del desarrollador, D-120).
+            FederationCapabilities(providesRoundStandings: true, providesScorers: true, providesTeamRoster: true)
         case .fcf:
             // ⚠️ **Estas capacidades están declaradas y NO ejercitadas**: la FCF
             // no tiene adaptador y está **fuera del alcance** (`D-95`). El
@@ -106,7 +115,11 @@ extension FederationCode {
             // el §C.9 del anexo —"ni endpoint, ni parser"—, que describía el sitio
             // *antiguo*; el nuevo publica `/api/competition/goleadores`. Corregido
             // con el volcado, no de memoria (AGENTS.md).
-            FederationCapabilities(providesRoundStandings: false, providesScorers: true)
+            //
+            // Plantillas: **sin medir**, y por eso `false` (R6.4, D-120). Con
+            // `false` la plantilla es a mano, que funciona siempre; un `true` sin
+            // volcado ofrecería un botón que no sabe hacer nada.
+            FederationCapabilities(providesRoundStandings: false, providesScorers: true, providesTeamRoster: false)
         }
     }
 }

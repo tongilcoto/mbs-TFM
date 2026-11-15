@@ -5361,9 +5361,12 @@ puede mandarla: el navegador la pide solo. La firma hace de permiso dentro del p
    ruta comprueba las dos cosas antes de leer el fichero. Supabase, en la rebanada 16, dará el suyo.
 2. **El enlace dura una hora y se hace nuevo en cada lectura** del jugador o de la plantilla. Cierra el punto 7 de
    la §9 del LLD, también para los escudos ([D-19]).
-3. **La ruta que entrega el fichero entra en el catálogo**, para que el censo la vea como a las demás. Si cuenta
-   como una operación más (la 86) o va aparte, como propia del almacén en disco, se decide en la mini-fase del
-   catálogo (R6.4).
+3. **La ruta que entrega el fichero entra en el catálogo**, para que el censo la vea como a las demás. **Es la
+   operación 86** (cerrado en la R6.4, 2026-11-15): `getPlayerPhotoFile`, `GET /player-photos/{clave}`, con la hora
+   en que caduca y la firma. Por la clave del fichero, no por el jugador: una foto puede ser de la fila y del perfil
+   ([D-122]). Una firma que no vale o caducada, 404, como una foto que no existe: no dice qué claves hay. Su
+   descripción dice que solo existe con el almacén en disco; en la rebanada 16 desaparece. Descartado dejarla
+   aparte, sin contar: el censo tendría que saltársela. La misma forma servirá para los escudos.
 4. **La web no distingue los dos almacenes**: usa `photoUrl` tal cual.
 
 **Lo que se asume a cambio.**
@@ -5392,7 +5395,9 @@ ser universal»), no solo para los que los fijan.
 1. **`shirtNumber` pasa a ser anulable** en el alta, la corrección y la respuesta: del 1 al 99, o nulo.
 2. **Dos jugadores del mismo equipo y temporada no pueden tener el mismo número** (409, como antes). Los que no
    tienen no chocan entre sí: el índice único sigue siendo parcial, solo entre los no borrados, y Postgres no
-   compara nulos.
+   compara nulos. El 409 lleva solo su código, **`SHIRT_NUMBER_TAKEN`** (R6.4): quién tiene el dorsal lo busca la
+   web en la plantilla que ya pinta, como la vista previa del enganche ([D-110]); el *Problem* no cambia ni lleva
+   el nombre de un menor.
 3. **El orden de la plantilla**: por dorsal, y después los que no tienen, por nombre.
 4. **El dorsal del acta no se toca con este**: el de cada partido lo manda la federación y no lo controlamos; se
    guardará con el partido (rebanada 7), sin comprobarlo contra el de la plantilla ni contra los demás.
@@ -5486,11 +5491,15 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
    (`roster_synced_at`), no en `updated_at`, que cambia con cualquier guardado de la inscripción; y en **la fila del jugador**, **federado o
    no**, guardado (calcularlo obligaría a mirar dos tablas), y **la última vez que la federación lo listó**. La baja
    sigue siendo del club. Descartado sacar la fecha de la plantilla de las de sus jugadores: si la federación no
-   lista a nadie, se quedaría antigua.
+   lista a nadie, se quedaría antigua. En el catálogo (R6.4), `PlayerResponse` lleva **`federated`** (`true`, `false` o
+   `null`, que es «nunca sincronizada») y **`lastListedAt`** (fecha o `null`); descartados tres valores con nombre,
+   una lista cerrada más para un sí o un no. **El alta a mano después de una sincronización pone `false`**: la
+   federación aún no lo tiene; antes de la primera, `null`.
 6. **El nombre se guarda siempre en mayúsculas** (también a mano), y la web lo formatea al pintarlo; la carga solo da
    la vuelta por la coma. Valga de donde venga: espacios limpios, solo letras, espacio, guion y apóstrofo, **al menos
    dos palabras**, hasta 120. **Un nombre de la federación que no vale no se añade**, y el resumen lo nombra para que
-   el club lo dé de alta a mano (enmienda del 2026-11-15).
+   el club lo dé de alta a mano (enmienda del 2026-11-15). Lo comprueba el dominio, y en el alta y la corrección un nombre que no vale es
+   un **422 `INVALID_VALUE`** con el detalle `fullName: <motivo>` (R6.4); el catálogo solo pide de 1 a 120.
 7. **La demarcación pasa a ser opcional**, como el dorsal ([D-118]): la federación no la da, y ponerle a todos la
    misma sería un dato inventado que parece verdad.
 8. **El año de nacimiento es obligatorio en el alta a mano y la carga no lo pide** (enmienda al punto 3 de [D-119]):
@@ -5499,6 +5508,22 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
 9. **El alta a mano elige el jugador** con un buscador mientras se escribe (desde 3 letras, hasta 10, sin tildes ni
    mayúsculas, palabra a palabra): uno que ya existe, o uno nuevo. **Una operación nueva para buscar perfiles**, y el
    alta acepta un `profileId` (422 si no existe en el club) o el nombre y el año (enmienda al punto 6 de [D-119]).
+   En el catálogo son **dos esquemas cerrados**, y el alta exige exactamente uno (R6.4): «con perfil» o «jugador
+   nuevo», los dos con el dorsal y la demarcación opcionales; las dos cosas a la vez, o ninguna, 400. Como el alta
+   de una competición (por dirección o por campos). Descartado un esquema con todo opcional: la regla no se vería.
+   **La búsqueda filtra en el servidor** (R6.4): `GET /player-profiles?q=&teamId=&seasonId=`, los tres
+   obligatorios (`q` desde 3 letras; con menos, 400). Quita a los de esa plantilla, y cada uno lleva su perfil
+   entero, su última plantilla (la fila no borrada más reciente, o `null`) y `otherTeamThisSeason` (el equipo, o
+   `null`). Descartado buscar solo por `q` y filtrar en la web: de los 10, enseñaría menos de los que hay.
+10. **La sincronización contesta al momento** (R6.4): `POST /teams/{teamId}/registrations/{seasonId}/roster-sync`,
+   colgada de la inscripción, que tiene el código de la federación y la fecha. Un 200 con el resumen: `syncedAt`;
+   cuántos se añadieron, ya estaban, no tienen año y estaban dados de baja; y, con nombre, los de nombre repetido,
+   los de otro equipo (con su equipo) y los de nombre que no vale (como lo escribe la federación). Errores: 404 sin
+   equipo; 422 con la temporada archivada, si la federación no publica plantillas o si el equipo no está enganchado;
+   502 y 504, como el enganche. Descartado un 202 a la cola, como la ingesta: una operación más y un resumen que
+   guardar, por una página de 25 jugadores. **La fecha se lee en la inscripción**: `TeamRegistrationResponse`
+   gana `rosterSyncedAt` (o `null`), que la ficha del equipo ya pide; descartado devolverla con `listPlayers`, que
+   dejaría de ser una lista.
 
 **Lo que se asume a cambio.**
 
@@ -5523,7 +5548,8 @@ El desarrollador lo corrigió: **en el club, un jugador está en una sola planti
 1. **Una sola fila no borrada por perfil ([D-119]) y temporada**: un índice único parcial, como el del dorsal
    ([D-118]).
 2. **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está. El buscador lo
-   enseña, pero no deja elegirlo.
+   enseña, pero no deja elegirlo. El 409 lleva solo su código, **`PLAYER_ALREADY_IN_ROSTER`** (R6.4): el equipo ya
+   lo ha dicho el buscador, y la web lo saca de ahí.
 3. **Cambiarlo de equipo son dos pasos: baja en el viejo y alta en el nuevo.** La fila dada de baja solo se esconde
    ([D-36]): sus goles y tarjetas siguen contando para el equipo con que los hizo, que es lo que pedía [D-37].
 4. **La sincronización ([D-120]) no añade a quien el club tiene en otro equipo** de la temporada; el resumen lo dice.
