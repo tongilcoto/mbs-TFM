@@ -5297,8 +5297,10 @@ servidor devuelve su enlace vacío a la espera de ese almacén. Subir fotos (`up
    16); nada fuera del adaptador cambia.
 2. **La carpeta se elige en la configuración del servidor**, como la base de datos: la del desarrollador, la de
    los escenarios (`tfm_test`) y la de cada prueba son distintas, y las fotos de una no se mezclan con las de otra.
-3. **La clave lleva el club delante**, como el *schema* ([D-35]: el fichero se borra con el tenant), y sale del
-   `playerId`, que no cambia.
+3. **La clave lleva el club delante**, como el *schema* ([D-35]: el fichero se borra con el tenant), y **es nueva
+   en cada subida** (enmienda de la R6.4: decía que salía del `playerId`). Desde [D-122] una foto puede ser de
+   varias filas y de su perfil, y subir otra a la fila de una temporada pasada cambiaría la de la que está en curso;
+   el fichero viejo se borra cuando ya no lo usa nadie.
 4. **El escudo del club usará el mismo almacén** cuando le toque ([D-19]).
 
 **Lo que se asume a cambio.**

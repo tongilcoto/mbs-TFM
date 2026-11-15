@@ -127,7 +127,9 @@ Supabase al desplegar es cambiar una pieza.
   adaptador en la R16.
 - **La carpeta, en la configuración**: la del desarrollador, la de los escenarios (`tfm_test`) y la de cada
   prueba, distintas.
-- **La clave lleva el club delante** y sale del `playerId`.
+- **La clave lleva el club delante**, y es **nueva en cada subida** (enmendado en `R6.4`): no sale del `playerId`,
+  porque una foto puede ser de varias filas y de su perfil (decisión 10), y subir otra a una fila pasada cambiaría
+  la de la temporada en curso.
 - **El escudo del club usará el mismo almacén** cuando le toque.
 
 ### Decisión 2 · Cómo se limpia la foto en el servidor: con dos librerías escritas en Swift
