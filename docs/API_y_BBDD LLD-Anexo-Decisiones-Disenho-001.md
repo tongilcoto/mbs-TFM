@@ -134,6 +134,8 @@
 | **D-118**              | El dorsal de la plantilla es opcional, y no se repite entre los que lo tienen                                                    | §3.2, §3.5, §5.1, §5.2             |
 | **D-119**              | El jugador tiene un perfil que dura entre temporadas: nombre y año de nacimiento                                                 | §3.1, §3.2, §3.5, §4.6, §5.1, §5.2 |
 | **D-120**              | La plantilla se sincroniza con la federación, si la publica: solo añade, y cada fila dice si está federado                      | §3.2, §3.7, §5.1, §5.2, §5.6       |
+| **D-121**              | Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro                                | §3.2, §5.2                         |
+| **D-122**              | El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila           | §3.2, §5.2, §5.6                   |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5464,13 +5466,16 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
    enganche: una operación nueva. No el navegador (no puede leer la página), y **no la ingesta de cada semana**: la
    plantilla es del club, y la ingesta pisaría lo que corrige.
 3. **Solo añade**: da de alta a quien no esté en la plantilla de ese equipo y temporada; **no corrige ni da de baja a
-   nadie**, y **no vuelve a crear a quien el club dio de baja** ([D-36]) aunque la federación lo siga listando. Se
-   puede pulsar siempre, y al acabar dice qué ha hecho («18 añadidos · 4 ya estaban · 1 dado de baja en el club ·
-   2 sin año · 1 con nombre repetido»).
+   nadie**, y **no vuelve a crear a quien el club dio de baja** ([D-36]) aunque la federación lo siga listando,
+   **ni añade a quien el club tiene en otro equipo de la temporada** (enmienda del 2026-11-15, [D-121]). Se puede
+   pulsar siempre, y al acabar dice qué ha hecho («18 añadidos · 4 ya estaban · 1 dado de baja en el club · 1 en
+   otro equipo · 2 sin año · 1 con nombre repetido · 1 con un nombre que no vale»).
 4. **Casa con los perfiles del club ([D-119]) por el nombre exacto, sin contar tildes**, ya como «NOMBRE
    APELLIDOS»: con uno, ese; con ninguno, perfil nuevo; con varios, perfil nuevo, y lo dice. Nunca por parecido: unir
    a dos chavales distintos es peor que un duplicado, que se une después. El código de la federación no sirve para
-   casar: es informativo ([D-119], punto 9).
+   casar: es informativo ([D-119], punto 9). **«El mismo nombre»**: igual en mayúsculas, con un espacio entre palabras
+   y sin tildes ni diéresis; **la eñe cuenta como letra distinta** (enmienda del 2026-11-15). El buscador del alta sí
+   encuentra «Muñoz» al escribir «munoz»: ayuda a encontrar, no compara.
 5. **Cada fila de la plantilla dice si está federado**: **«Federado»** si la última sincronización lo listó, **«No
    federado»** si no (el caso más probable: el club lo pone en el equipo antes de que la federación lo tenga), y
    vacío mientras esa plantilla no se ha sincronizado nunca o si la federación no publica plantillas. Tres campos,
@@ -5482,7 +5487,8 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
    lista a nadie, se quedaría antigua.
 6. **El nombre se guarda siempre en mayúsculas** (también a mano), y la web lo formatea al pintarlo; la carga solo da
    la vuelta por la coma. Valga de donde venga: espacios limpios, solo letras, espacio, guion y apóstrofo, **al menos
-   dos palabras**, hasta 120.
+   dos palabras**, hasta 120. **Un nombre de la federación que no vale no se añade**, y el resumen lo nombra para que
+   el club lo dé de alta a mano (enmienda del 2026-11-15).
 7. **La demarcación pasa a ser opcional**, como el dorsal ([D-118]): la federación no la da, y ponerle a todos la
    misma sería un dato inventado que parece verdad.
 8. **El año de nacimiento es obligatorio en el alta a mano y la carga no lo pide** (enmienda al punto 3 de [D-119]):
@@ -5502,6 +5508,66 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
 **Enmienda** a [D-21] en lo que dice de plantillas, a [D-119] (puntos 3 y 6), a la descripción de `PlayerPosition`,
 `CreatePlayerRequest`, `UpdatePlayerRequest` y `PlayerResponse` en el catálogo (R6.4), al anexo de la RFFM (la ficha
 de equipo) y a §3.2, §3.7, §5.1, §5.2 y §5.6 del LLD.
+
+### D-121 · Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro
+
+**Lo que lo obligó a decidirse** (2026-11-15, rebanada 6, al revisar los escenarios del alta). [D-37] daba por bueno
+que un jugador que sube de equipo a mitad de temporada tuviera una fila nueva en el equipo nuevo, sin decir qué
+pasaba con la vieja; y el buscador del alta ([D-120], punto 9) ofrecía a los de otros equipos de la misma temporada.
+El desarrollador lo corrigió: **en el club, un jugador está en una sola plantilla por temporada**.
+
+**Decisión.**
+
+1. **Una sola fila no borrada por perfil ([D-119]) y temporada**: un índice único parcial, como el del dorsal
+   ([D-118]).
+2. **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está. El buscador lo
+   enseña, pero no deja elegirlo.
+3. **Cambiarlo de equipo son dos pasos: baja en el viejo y alta en el nuevo.** La fila dada de baja solo se esconde
+   ([D-36]): sus goles y tarjetas siguen contando para el equipo con que los hizo, que es lo que pedía [D-37].
+4. **La sincronización ([D-120]) no añade a quien el club tiene en otro equipo** de la temporada; el resumen lo dice.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Dos filas activas a la vez ([D-37] tal cual) | En el club no pasa; y un jugador saldría en dos plantillas |
+| Nunca dos filas, ni dada de baja | Obligaría a mover la fila de equipo, y sus goles pasados contarían para el otro ([D-37]) |
+
+**Lo que no cambia.** En un partido puede jugar uno de otro equipo del club (de una categoría o una división
+inferior): eso es del acta (rebanada 7), no de la plantilla; apuntado en el plan del backoffice.
+
+**Enmienda** a [D-37] (el traslado) y a [D-120] (punto 9, el buscador); y a §3.2 y §5.2 del LLD (R6.4).
+
+### D-122 · El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila
+
+**Lo que lo obligó a decidirse** (2026-11-15, rebanada 6, al revisar los escenarios del alta; lo propuso el
+desarrollador). Con el perfil de [D-119], elegir un jugador que ya existe obligaba a teclear otra vez su dorsal y
+su demarcación cada temporada, y a subir otra vez su foto.
+
+**Decisión.**
+
+1. **El perfil guarda, además del nombre y el año, el último dorsal, la última demarcación y la última foto.** Son
+   una ayuda, **no mandan**: lo que vale es la fila de la plantilla, y no importa que el perfil esté perfectamente
+   al día.
+2. **Al elegir un perfil en el alta, el diálogo trae los tres**, y se pueden cambiar.
+3. **Guardar una fila los copia al perfil**: el alta, corregir y poner o quitar la foto, en cualquier temporada. Lo
+   vacío también se copia.
+4. **La sincronización ([D-120]) los copia del perfil a la fila** del jugador que casa; **si el dorsal ya lo tiene
+   otro de la plantilla ([D-118]), se deja vacío**, y el entrenador lo cambia después.
+5. **La búsqueda de perfiles devuelve el registro entero**: nombre, año, dorsal, demarcación y foto.
+6. **La foto también va en el perfil**, aunque es lo más delicado de un menor: cada club la usará a su manera, y el
+   sistema es para todos. Sigue saneada ([D-35]) y firmada ([D-117]); se borra con el perfil, en el purgado (R11),
+   cuando se queda sin filas.
+
+| Opción para qué pone al día el perfil | Por qué se descarta |
+|--------|---------------------|
+| Solo si la fila es la de la temporada más reciente | Una regla más, para un dato que no tiene que ser exacto |
+| Solo el alta | El perfil se quedaría con lo de antes de corregir |
+
+**Lo que se asume a cambio.** La foto de un menor dura lo que dure su perfil, no solo su temporada; y una foto puede
+estar a la vez en la fila y en el perfil, así que el fichero solo se borra cuando ya no lo usa ninguno de los dos
+(se concreta en `R6.6`).
+
+**Enmienda** a [D-119] (lo que guarda el perfil) y a [D-120] (lo que trae la sincronización); y a §3.2, §5.2 y §5.6
+del LLD (R6.4).
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5660,6 +5726,8 @@ de equipo) y a §3.2, §3.7, §5.1, §5.2 y §5.6 del LLD.
 [D-118]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-119]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-120]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-121]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-122]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

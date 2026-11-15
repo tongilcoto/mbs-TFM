@@ -21,6 +21,8 @@
 > con una maqueta en HTML para la 7 y lo medido en la RFFM para la 9. La revisión añadió dos decisiones que no
 > estaban: **el jugador que dura entre temporadas** (8, `D-119`, enmienda a `D-05`) y **sincronizar la plantilla con
 > la federación** (9, `D-120`), que la RFFM publica.
+> Al revisar los escenarios (`R6.3`, 2026-11-15) salieron dos más: **un jugador, una plantilla por temporada**
+> (`D-121`, dentro de la 9) y **el perfil guarda el último dorsal, demarcación y foto** (10, `D-122`).
 > **Dos ramas**, como en la R5: el servidor en `feature/plantilla-backend` (partes A y B) y la web en otra.
 
 ---
@@ -84,10 +86,13 @@ Sus datos, su foto, y las acciones de corregir, subir o quitar la foto y dar de 
 - **Un equipo sin jugadores**: no es un error; un mensaje que lo dice y lleva a dar de alta el primero
   (LLD-B §4).
 - **Un jugador sin foto**: sus iniciales; es lo normal, no un alta a medias.
+- **La foto se describe con el nombre del jugador**: la web le pone como texto alternativo el nombre formateado,
+  al pintarla; no se guarda en ningún sitio, ni en la base ni dentro del fichero (R6.3, 2026-11-15).
 - **Un jugador sin dorsal** (decisión 5): sin número, y al final de la lista, por nombre.
 - **Un dorsal repetido** en el mismo equipo y temporada: el servidor lo rechaza (409), y el formulario lo dice
   junto al dorsal.
-- **Una temporada archivada**: se ve, pero no se puede dar de alta a nadie (422).
+- **Una temporada archivada**: se ve, pero no se cambia: ni dar de alta, ni sincronizar, ni corregir, ni dar de baja
+  (422). La web no enseña esos botones ni las acciones de las filas (R6.3, 2026-11-15).
 - **Un equipo rival**: no tiene plantilla; la pestaña no se ofrece.
 - **Una foto que no vale** (no es imagen, pesa más de 5 MB, o es un formato que no es JPEG ni PNG): un aviso
   que dice cuál de las tres.
@@ -278,7 +283,7 @@ es una pieza nueva, **`PlayerProfile`**.
 
 | Opción | Veredicto |
 |---|---|
-| (a) Como los equipos: `Player` pasa a ser el que dura, y la fila, `PlayerRegistration` | Descartada: cambian las 7 operaciones y lo que `playerId` significa en ausencias, convocatorias, tarjetas y goles; y un jugador puede tener dos filas en una temporada (`D-37`), así que la ruta de los equipos no le sirve |
+| (a) Como los equipos: `Player` pasa a ser el que dura, y la fila, `PlayerRegistration` | Descartada: cambian las 7 operaciones y lo que `playerId` significa en ausencias, convocatorias, tarjetas y goles; y un jugador que cambia de equipo a mitad de temporada tiene dos filas en ella, una dada de baja (`D-37`), así que la ruta de los equipos no le sirve |
 | **(c) `Player` se queda; el que dura, `PlayerProfile`** | **Elegida** |
 
 - **Las 7 operaciones y sus rutas no cambian.** `PlayerResponse` suma `profileId` y el año de nacimiento; el
@@ -362,6 +367,9 @@ corrección y la carga:
 - **Se limpian los espacios**: fuera los del principio y el final, y uno solo entre palabras.
 - **Solo letras** (con tildes, eñe y diéresis), espacios, guion y apóstrofo; hasta 120 caracteres.
 - **Al menos dos palabras**, nombre y un apellido (lo eligió el desarrollador, frente a una sola).
+- **En la sincronización, un nombre de la federación que no vale no se añade**, y el resumen lo nombra para que el
+  club lo dé de alta a mano (2026-11-15, en R6.3). Los 46 medidos valían todos, pero la federación puede publicar
+  cualquier cosa.
 
 **El alta elige el jugador: uno que ya existe, o uno nuevo, con un buscador mientras se escribe** (2026-11-14,
 propuesto por el desarrollador). Con la tabla del perfil ya creada, la fila nueva tiene que decir de qué perfil es
@@ -374,7 +382,23 @@ pantallas del perfil, el diálogo del alta lo resuelve:
 3. **La última opción, «Dar de alta a "…" como jugador nuevo»**, crea el perfil y la fila. Se deja hacer aunque haya
    otro con el mismo nombre: pueden ser dos chavales, y la lista ya lo ha enseñado.
 4. **La búsqueda no distingue tildes ni mayúsculas**, y busca cada palabra por separado («juan fuen»).
-5. **No salen los que ya están en esta plantilla**; sí los de otros equipos de la misma temporada (`D-37`).
+5. **No salen los que ya están en esta plantilla.** Los que están en otro equipo de la misma temporada salen, pero
+   no se pueden elegir: dicen dónde están («Ya está en Cadete B»). Enmendado el 2026-11-15 (punto siguiente).
+
+**Un jugador, una plantilla por temporada; para cambiarlo de equipo, baja en uno y alta en el otro** (2026-11-15, `D-121`,
+en R6.3; enmienda a `D-37`, que dejaba dos filas a la vez). Lo dijo el desarrollador: en el club no hay jugadores
+repetidos entre equipos de una misma temporada. Así:
+
+- **En la base, una sola fila no borrada por perfil y temporada** (un índice único parcial, como el del dorsal).
+- **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está.
+- **Cambiarlo de equipo a mitad de temporada son dos pasos**: darle de baja en el viejo y de alta en el nuevo. La
+  fila dada de baja solo se esconde (`D-36`): sus goles y tarjetas siguen contando para el equipo con que los hizo,
+  que es lo que pedía `D-37`.
+- **La sincronización no añade a quien el club tiene en otro equipo** de la temporada; el resumen lo dice.
+- Descartado no dejar ni una fila dada de baja (nunca dos filas): obligaría a mover la fila de equipo, y sus goles
+  pasados contarían para el otro.
+- **Lo que no cambia**: en un partido puede jugar uno de otro equipo del club (de categoría o división inferior);
+  eso es del acta (rebanada 7), no de la plantilla, y está apuntado en el plan del backoffice.
 
 En el servidor: **una operación nueva, buscar perfiles por nombre** (`GET /player-profiles?q=`), y **el alta acepta
 o un `profileId` o el nombre y el año**; un `profileId` que no existe en el club, 422. Enmienda el punto 6 de
@@ -389,6 +413,10 @@ RFFM, ya como «NOMBRE APELLIDOS» y en mayúsculas, contra los perfiles del clu
 con **ninguno**, perfil nuevo; con **varios**, perfil nuevo, y el resultado de la carga lo dice. Descartados casar
 por parecido (puede unir a dos chavales distintos, peor que un duplicado) y preguntar los dudosos (una pantalla más,
 de la versión siguiente). Un duplicado se une después, con las pantallas del perfil.
+**Qué es «el mismo nombre»** (2026-11-15, en R6.3): igual una vez en mayúsculas, con un solo espacio entre palabras
+y sin tildes ni diéresis («GARCIA» es «GARCÍA»); **la eñe cuenta como letra distinta** («MUNOZ» no es «MUÑOZ»), lo
+eligió el desarrollador. El buscador del alta, que no compara sino que ayuda a encontrar, sí encuentra «Muñoz» al
+escribir «munoz».
 
 **El año de nacimiento: obligatorio en el alta a mano; la carga no lo pide** (2026-11-14, enmienda al punto 3 de la
 decisión 8, que lo dejaba opcional siempre). Se miró pedir en la carga un año para todos, que en la cantera acierta
@@ -402,7 +430,8 @@ todos parece comprobado. Así:
 
 **Se llama «Sincronizar con la Federación», como con las competiciones, y se puede pulsar siempre: solo añade**
 (2026-11-14). Da de alta a quien no esté en la plantilla; no corrige ni da de baja a nadie, y **no vuelve a crear a
-quien el club dio de baja** aunque la federación lo siga listando. Al acabar dice qué ha hecho. Sale en la barra de
+quien el club dio de baja** aunque la federación lo siga listando, **ni añade a quien el club tiene en otro
+equipo de la temporada** (enmienda del 2026-11-15, `D-121`). Al acabar dice qué ha hecho. Sale en la barra de
 la plantilla y en la plantilla vacía.
 
 **Cada fila dice si está federado** (2026-11-14): **«Federado»** si la última sincronización lo listó, **«No
@@ -424,6 +453,32 @@ no sabe de qué equipo propio es cada pasada.
 **Decidida entera (2026-11-14)** → [`D-120`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md), con la capacidad
 nueva de la federación, `federationProvidesTeamRoster`.
 
+### Decisión 10 · El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda
+
+Abierta al revisar los escenarios del alta (`R6.3`, 2026-11-15), propuesta por el desarrollador. Además del nombre y
+el año, **el perfil guarda el último dorsal, la última demarcación y la última foto** del jugador. **No mandan**: lo
+que vale es lo de la fila de la plantilla; lo del perfil es una ayuda para no teclear dos veces, y no importa que
+esté perfectamente al día.
+
+- **Al elegir un jugador en el buscador del alta**, el diálogo trae esos tres datos del perfil, y se pueden cambiar.
+  Si se dejan, son clics que se ahorran.
+- **Cada vez que se guardan en una fila** (alta, corregir, poner o quitar la foto), **se copian también al perfil**,
+  sea de la temporada que sea. Lo vacío también se copia: el perfil dice lo último que se guardó.
+- **La sincronización con la federación los copia del perfil a la fila** del jugador que casa, y el entrenador los
+  cambia después si quiere. **Si el dorsal ya lo tiene otro de la plantilla, se deja vacío.**
+- **La búsqueda de perfiles devuelve el registro entero**: nombre, año, dorsal, demarcación y foto.
+- **La foto, en el perfil también**, aunque es lo más delicado de un menor: cada club la usará a su manera, y el
+  sistema es para todos. Se borra con el perfil, en el purgado de la R11, cuando se queda sin filas.
+
+| Opción para qué pone al día el perfil | Veredicto |
+|---|---|
+| **(a) El alta y corregir, en cualquier temporada** | **Elegida**: es una ayuda, no un dato que mande |
+| (b) Solo si la fila es la de la temporada más reciente del jugador | Descartada: una regla más, para un dato que no tiene que ser exacto |
+| (c) Solo el alta | Descartada: el perfil se quedaría con lo de antes de corregir |
+
+**Decidida entera (2026-11-15)** → [`D-122`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md), enmienda a `D-119`
+(lo que guarda el perfil) y a `D-120` (lo que trae la sincronización).
+
 ---
 
 ## 5. Lo que le falta al servidor
@@ -433,14 +488,14 @@ nueva de la federación, `federationProvidesTeamRoster`.
 | Qué | Capas | ¿Mini-fase? | Decisión |
 |---|---|---|---|
 | **Lo que haya que cambiar en el catálogo** por las decisiones | Catálogo | Si hace falta | 3, 5 |
-| **Las tablas de jugadores**, con su migración (la 22ª): el perfil que dura (nombre y año de nacimiento) y el jugador en una temporada, con su clave al perfil y el dorsal opcional y único solo entre los no borrados | Persistencia | No | 5, 8 |
+| **Las tablas de jugadores**, con su migración (la 22ª): el perfil que dura (nombre, año de nacimiento, y el último dorsal, demarcación y foto, decisión 10) y el jugador en una temporada, con su clave al perfil, el dorsal opcional y único solo entre los no borrados, y una sola fila no borrada por perfil y temporada | Persistencia | No | 5, 8, 10 |
 | **El jugador en el dominio**, con sus reglas (equipo propio, temporada sin archivar, dorsal) | Dominio y Aplicación | No | 5 |
 | **`listPlayers`, `getPlayer`, `createPlayer`, `updatePlayer` y `deletePlayer`** | Aplicación, Persistencia y HTTP | No | 4 |
 | **El sitio de las fotos**, detrás de un puerto, para cambiarlo por Supabase al desplegar | Aplicación e infraestructura | No | 1 |
 | **El saneado de la foto** | Infraestructura | No | 2 |
 | **`uploadPlayerPhoto` y `deletePlayerPhoto`**, y la `photoUrl` en las respuestas | Aplicación y HTTP | No | 1 a 3 |
-| **🆕 Buscar perfiles por nombre**, y el alta con un perfil que ya existe o uno nuevo | Todas | Con la del catálogo | 8, 9 |
-| **🆕 Sincronizar la plantilla con la federación**: la capacidad nueva, la lectura de la ficha de equipo de la RFFM, el casado por nombre y los dos campos de «federado» | Todas | Con la del catálogo | 9 |
+| **🆕 Buscar perfiles por nombre**, con el registro entero, y el alta con un perfil que ya existe o uno nuevo; guardar una fila copia su dorsal, demarcación y foto al perfil | Todas | Con la del catálogo | 8, 9, 10 |
+| **🆕 Sincronizar la plantilla con la federación**: la capacidad nueva, la lectura de la ficha de equipo de la RFFM, el casado por nombre, lo que se copia del perfil y los dos campos de «federado» | Todas | Con la del catálogo | 9, 10 |
 
 **El censo y la mutación**, como siempre (plan del backoffice, §2.5). Cada endpoint, a la tabla de §0 del README
 del backend en su paso.
@@ -452,8 +507,25 @@ suben el catálogo de 85 a 87 (88 si la ruta que entrega la foto cuenta como ope
 
 ## 6. Los escenarios
 
-*Se escriben y se revisan con el desarrollador en `R6.3`*, con la *skill* de escenarios, sin definir, con las
-etiquetas `@e2e` y `@ui` y axe en los dos modos.
+Escritos y revisados con el desarrollador en `R6.3` (2026-11-15), con la *skill* de escenarios, sin definir, con
+las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas), en
+cuatro ficheros de `backoffice/e2e/features/`:
+
+| Fichero | Escenarios | `@e2e` | `@ui` | Qué cubre |
+|---|---|---|---|---|
+| `plantilla.feature` | 14 | 2 | 12 | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
+| `alta-jugador.feature` | 37 | 16 | 21 | El diálogo; el buscador (3 letras, sin tildes, palabra a palabra, no ofrece a los de esta plantilla, enseña desactivados a los de otro equipo); elegir uno que existe, que trae lo de su perfil; guardar, un campo opcional cada vez, ninguno o todos, mirando la fila y el perfil; otro con el mismo nombre; lo que no deja guardar; la foto que no vale |
+| `jugador.feature` | 22 | 12 | 10 | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
+| `plantilla-federacion.feature` | 46 | 17 | 29 | La plantilla entera (la fecha, nunca sincronizada, la federación que falla o tarda); cada caso de jugador, según cómo está en el club y en la federación; el resumen, que cuenta, estado a estado y con el mismo cambio dos veces; la ficha del federado |
+
+**Cómo se ordenan y se escriben**, lo que se aprendió al revisarlos:
+
+- **Cada dato dice de dónde sale**: de la plantilla (dorsal, demarcación, foto) o de su perfil (nombre y año).
+- **Sin escenarios generales que no son verdad** («sincronizar añade a todos»): uno por caso.
+- **Sin condiciones que no aplican** (una plantilla vacía, ya sincronizada): solo cuando cambian el resultado.
+- **Lo que cuenta (el resumen) se prueba por estados**, cada uno saliendo del anterior, y con el mismo cambio dos
+  veces para ver que acumula.
+- **Un «Then» comprueba un estado, no hace una acción**: «se puede cambiar» no; «bloqueado» o «desactivado», sí.
 
 ---
 
@@ -507,6 +579,7 @@ Los pasos pueden cambiar tras `R6.1`.
 |---|---|---|
 | `R6.1` | 2026-11-14 | Las nueve decisiones, una a una, con lo que hizo falta para verlas: el almacén, los escudos y la configuración del servidor (1); las herramientas de imágenes del Mac y del contenedor (2); un dibujo de los dos caminos de la foto, ahora y con Supabase (3); la R2 (4); el acta de la RFFM (5); `DW-22` (6); una maqueta en HTML de la plantilla, la ficha, el alta y la baja (7); `D-05` y lo que ya apunta a `playerId` en el catálogo (8); y la ficha de equipo de la RFFM de dos equipos del desarrollador, sus nombres medidos sin sacarlos y sus cabeceras (9). La 8 y la 9 salieron al revisar la 6 y la 7. Escritas en la bitácora del backend `D-115` a `D-120`; en el plan del backoffice, la fila de la R11 (el purgado borra los perfiles sin filas) y la de la R15 (técnicos y delegados desde la federación) |
 | `R6.2` | 2026-11-15 | **Los documentos de lo decidido.** En la bitácora del backend, `D-115` a `D-120`, escritos con cada decisión y grabados con `R6.1`. En el LLD-B, el camino de la ficha del jugador (§6.1, decidido; y §6.5, que la ficha del jugador también lleva la temporada); sin entrada nueva en su anexo: aplica `DW-22`. En el plan del backoffice, el camino del mapa y la fila de la R6 con lo que cambia en sus operaciones y las dos nuevas. En `AGENTS.md`, la rebanada empezada, en «Documentación clave» y en el estado. **La enmienda al LLD del backend** (§3 y §5) va con el catálogo (`R6.4`), como en la R5. **No hay que relanzar el servidor**: solo documentos |
+| `R6.3` | 2026-11-15 | **Los escenarios**, 119 en cuatro ficheros, revisados uno a uno con el desarrollador (§6); la pasada en seco da 289: los 170 de antes, intactos, y los 119, sin definir. Salieron **dos decisiones**: un jugador, una plantilla por temporada (`D-121`, dentro de la 9, enmienda a `D-37`) y el perfil guarda el último dorsal, demarcación y foto (10, `D-122`); y **cuatro reglas**: la temporada archivada, de solo lectura entera; la foto se describe con el nombre del jugador, que la web le pone al pintarla; el nombre de la federación que no vale no se añade y el resumen lo nombra; y «el mismo nombre» es sin tildes ni diéresis, pero con la eñe distinta. Aparte, en el plan del backoffice: el jugador de otro equipo que juega en un partido, para la R7. **Queda para la parte E**: la ficha de equipo de la RFFM en la federación falsa. **No hay que relanzar el servidor**: solo escenarios y documentos |
 
 ---
 
