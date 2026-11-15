@@ -927,7 +927,7 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   (`schema(...).id().field(...).unique(on:).create()`) y `revert(on:)` simétrico.
 - **Orden = orden de dependencia de FK**, y es el orden de **registro** en `configure.swift`
   (`app.migrations.add(...)`), no el nombre de fichero:
-  `Club → Season → OpponentClub → Team → TeamRegistration → Competition → Round → Match → StandingRow → Player → Absence →
+  `Club → Season → OpponentClub → Team → TeamRegistration → Competition → Round → Match → StandingRow → PlayerProfile → Player → Absence →
   Appearance → Card → Goal → LeagueScorer → CompetitionSanctionBracket →
   StaffMember → StaffPosition → PositionPermission → StaffAssignment → IngestionRun`.
 - **Las cuatro de *staff* (§7.3) van al final** porque `StaffAssignment` depende de `StaffMember`,
@@ -965,6 +965,14 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   season_id, shirt_number) WHERE deleted_at IS NULL")` ([D-36]). Un `.unique(on:)` normal dejaría el dorsal
   de un jugador borrado ocupado para siempre. El listado de plantilla (§5.1) se apoya en un índice por
   (`team_id`, `season_id`), y el orden por dorsal cabe en el mismo.
+- **Con el perfil ([D-119]) los parciales de `Player` son dos, y las dos tablas nacen en una migración**
+  (`CreatePlayers`, la 22ª, R6.5): el perfil y la fila no tienen sentido la una sin la otra. El segundo
+  índice es `uq_players_profile_season` (`profile_id`, `season_id`) `WHERE deleted_at IS NULL` ([D-121]):
+  un jugador, una plantilla por temporada, y cambiar de equipo es baja y alta. Va por el ayudante
+  `partialUniqueIndex`. **La FK al perfil es `RESTRICT`**: un perfil con filas no se borra; el purgado
+  ([D-24]) borra antes las filas, por la cascada desde la temporada, y luego los perfiles que se quedan sin
+  ninguna. Los `CHECK`, cinco: el dorsal y la demarcación de la fila, y el año (1900 a 2100: que no sea
+  posterior al año en curso lo dice el dominio), el último dorsal y la última demarcación del perfil.
 - **En `Appearance`, la unicidad *(jugador, partido)* es parcial como la del dorsal** —hay `deleted_at`
   (§3.2)— así que va también por `.sql(raw: "CREATE UNIQUE INDEX uq_appearances ON appearances (player_id,
   match_id) WHERE deleted_at IS NULL")`. Índices por `match_id` (la convocatoria) y por `player_id` (el

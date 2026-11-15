@@ -273,3 +273,31 @@ extension Database {
         ).run()
     }
 }
+
+// ── R6.5 · el índice único **parcial**, el de la plantilla ───────────────────
+extension Database {
+    /// Crea un índice único **con una condición**, en SQL crudo.
+    ///
+    /// Fluent no expresa la cláusula `WHERE` (§4.6), y la plantilla la necesita
+    /// dos veces: el dorsal y la fila por perfil y temporada solo cuentan **entre
+    /// los no borrados** ([D-36], [D-121]). Sin la condición, un jugador dado de
+    /// baja ocuparía su dorsal para siempre y no se le podría dar de alta en otro
+    /// equipo.
+    ///
+    /// La condición es SQL de quien llama, **no del usuario**: la escribe una
+    /// migración.
+    func partialUniqueIndex(
+        table: String, name: String, columns: [String], where condition: String
+    ) async throws {
+        guard let sql = self as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "partialUniqueIndex", object: name)
+        }
+        let columnList = columns.map { "\"\($0)\"" }.joined(separator: ", ")
+        try await sql.raw(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS \(ident: name) ON \(ident: table) \
+            (\(unsafeRaw: columnList)) WHERE \(unsafeRaw: condition)
+            """
+        ).run()
+    }
+}

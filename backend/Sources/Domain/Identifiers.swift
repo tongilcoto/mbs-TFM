@@ -67,6 +67,20 @@ public struct TeamID: TypedIdentifier {
     public init(raw: UUID) { self.raw = raw }
 }
 
+/// Jugador **en un equipo y una temporada**: la fila de la plantilla (`D-05`).
+/// Es el `playerId` del catálogo, al que apuntan ausencias, convocatorias,
+/// tarjetas y goles.
+public struct PlayerID: TypedIdentifier {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
+/// El perfil del jugador, que dura entre temporadas (`D-119`).
+public struct PlayerProfileID: TypedIdentifier {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}
+
 /// Inscripción de un equipo en una temporada (§3.2, `D-68`).
 ///
 /// **Existe porque toda tabla tiene PK**, igual que `StandingRowID`, y no porque

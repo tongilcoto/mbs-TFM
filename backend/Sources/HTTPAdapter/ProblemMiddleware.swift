@@ -91,6 +91,22 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Valor no válido", detail: "\(field): \(reason)",
                                base: typeBaseURI, slug: "invalid-value")
 
+            case .teamNotOwn(let team):
+                // **422 y no 404** (§5.1): el equipo llega en el cuerpo del alta, no
+                // en la ruta, y `/players` sí existe.
+                return Problem(status: .unprocessableEntity, code: "TEAM_NOT_OWN",
+                               title: "El equipo no es del club",
+                               detail: "el equipo \(team) es rival: no tiene plantilla",
+                               base: typeBaseURI, slug: "team-not-own")
+
+            case .seasonArchived(let label):
+                // **422** (§5.1): la temporada archivada es de solo lectura entera
+                // (R6.3). No es un 409: no hay otra escritura con la que choque.
+                return Problem(status: .unprocessableEntity, code: "SEASON_ARCHIVED",
+                               title: "La temporada está archivada",
+                               detail: "la temporada \(label) está archivada: solo se puede leer",
+                               base: typeBaseURI, slug: "season-archived")
+
             case .notEditableAfterSync(let field):
                 // **409 y no 422** (§5.4, D-22): el valor puede ser
                 // perfectamente válido — lo que no lo es, es el *momento*. La

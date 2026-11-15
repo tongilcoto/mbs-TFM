@@ -5,7 +5,9 @@
     "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
     "INVALID_LIMIT": "GET /ingestion-runs con un limit fuera de rango (§5.5); ningún test nombra el código. Ya en la lista de H-72",
     "NOT_EDITABLE_AFTER_SYNC": "traducido en ProblemMiddleware, pero inalcanzable por HTTP hoy: Competition.applying no tiene llamante en producción hasta que el filter incluya updateCompetition",
-    "RUN_NOT_RECORDED": "500 de ApplicationError.runNotRecorded (ProblemMiddleware): la pasada no pudo escribir su fila; provocarlo por HTTP exige romper la escritura a mitad. Ya en la lista de H-46"
+    "RUN_NOT_RECORDED": "500 de ApplicationError.runNotRecorded (ProblemMiddleware): la pasada no pudo escribir su fila; provocarlo por HTTP exige romper la escritura a mitad. Ya en la lista de H-46",
+    "SEASON_ARCHIVED": "traducido en ProblemMiddleware desde R6.5 (RosterRules), pero ninguna operación servida lo lanza todavía: llega con las de jugadores en R6.6, que lo prueban por HTTP",
+    "TEAM_NOT_OWN": "traducido en ProblemMiddleware desde R6.5 (RosterRules.requireCanAdd), pero ninguna operación servida lo lanza todavía: llega con createPlayer en R6.6, que lo prueba por HTTP"
   },
   "fields": {
     "ClubResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); su valor no lo afirma ningún test",

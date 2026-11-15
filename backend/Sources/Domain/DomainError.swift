@@ -11,6 +11,15 @@ public enum DomainError: Error, Equatable, Sendable {
     /// algo que el dominio no admite.
     case invalidValue(field: String, reason: String)
 
+    /// El equipo **no es propio**, y un rival no tiene plantilla (§3.7): no hay de
+    /// dónde sacarla. **422**: el equipo llega en el cuerpo, no en la ruta.
+    case teamNotOwn(team: String)
+
+    /// La temporada está **archivada**, y es de solo lectura entera (R6.3): no se
+    /// da de alta, se corrige, se da de baja, se cambia la foto ni se sincroniza.
+    /// **422**, como una regla que el valor no cumple en este momento.
+    case seasonArchived(label: String)
+
     /// El campo dejó de ser editable porque la entidad ya se sincronizó (`D-22`).
     ///
     /// **No es lo mismo que `invalidValue`, y por eso es un caso aparte**: el

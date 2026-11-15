@@ -100,6 +100,15 @@ public enum Modality: String, CaseIterable, Sendable {
     case futbolPlaya = "futbol_playa"
 }
 
+/// Demarcación del jugador (§3.3), **opcional** donde se use (`D-120`): la
+/// federación no la da. Cuatro valores gruesos, no un catálogo táctico.
+public enum PlayerPosition: String, CaseIterable, Sendable {
+    case portero
+    case defensa
+    case centrocampista
+    case delantero
+}
+
 /// Categoría de edad (§3.3).
 ///
 /// La usan `Team.category` y `Competition.ageCategory` —el mismo enumerado—, que
