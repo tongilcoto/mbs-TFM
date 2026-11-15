@@ -1,4 +1,4 @@
-# «Sincronizar con la Federación» en la plantilla (plan R6, decisión 9 y parte E; D-120, D-121 y D-122).
+# «Sincronizar con la Federación» en la plantilla (plan R6, decisión 9 y parte D; D-120, D-121 y D-122).
 # La federación falsa publica la ficha de equipo de la RFFM (fichaequipo/<código>): por cada jugador, su código y su
 # nombre como «APELLIDOS, NOMBRE»; ni dorsal, ni demarcación, ni año. Los jugadores se inventan al azar. Sincronizar
 # solo añade: casa con los perfiles del club por el nombre exacto, sin tildes; no corrige ni da de baja a nadie, y

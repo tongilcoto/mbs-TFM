@@ -146,7 +146,7 @@ ninguna herramienta de imágenes. Lo que solo hay en Mac (`sips`, las librerías
 
 - **Primero se gira** según la nota de orientación del móvil, y después se guarda sin ella: si no, la foto sale
   tumbada.
-- **Se comprueba al empezar `R6.6`** con una foto de verdad del móvil del desarrollador: cuánto tarda, que sale
+- **Se comprueba al empezar `R6.8`** con una foto de verdad del móvil del desarrollador: cuánto tarda, que sale
   derecha y que no le queda nada dentro. Si falla, se vuelve aquí y se elige A.
 - **La licencia se mira en el repositorio** antes de añadirlas (un registro dice Apache 2.0 y otro MPL 2.0).
 
@@ -323,7 +323,7 @@ nombre), y datos de contacto del club. **La RFFM no deja que otra web lea la pá
 la cabecera `Access-Control-Allow-Origin`.
 
 **Entra en la R6, como una parte aparte al final** (2026-11-14), como la `R5.12`: primero las 7 operaciones y la
-foto, y después la carga (§7, parte E). **Los técnicos y los delegados**, para la R15 (Personal): apuntado en su
+foto, y después la carga (§7, parte D). **Los técnicos y los delegados**, para la R15 (Personal): apuntado en su
 fila del plan del backoffice.
 
 **La hace el servidor, no el navegador**: lo decide lo medido (la RFFM no deja leer la página desde otra web), la
@@ -539,37 +539,44 @@ cuatro ficheros de `backoffice/e2e/features/`:
 | `R6.2` | Los documentos de lo decidido: la bitácora del backend (`D-nn`), el LLD-B y su anexo si hace falta (`DW-nn`), y esta ficha al día |
 | `R6.3` | Los escenarios escritos y revisados, sin definir |
 
+*Puestos al día al empezar `R6.4` (2026-11-15), con lo que salió en `R6.3`: dos tablas en vez de una, buscar
+perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
+
 ### B · El servidor (esta rama)
 
 | Paso | Qué |
 |---|---|
-| `R6.4` | La mini-fase del catálogo, si las decisiones la piden |
-| `R6.5` | La tabla de jugadores y las cinco operaciones de los datos, en ciclos TDD |
-| `R6.6` | El sitio de las fotos y su saneado, en ciclos TDD |
-| `R6.7` | Las dos operaciones de la foto y la `photoUrl`, en ciclos TDD |
-| `R6.8` | El cierre del servidor: tests, mutación, censo; y su renglón en el README del backend |
+| `R6.4` | **La mini-fase del catálogo**: `PlayerProfile`; lo que cambia en `PlayerResponse`, `CreatePlayerRequest` y `UpdatePlayerRequest` (`profileId`, año, demarcación opcional, los campos de «federado»); los 409 (dorsal cogido, jugador en otra plantilla) y el 422 de la temporada archivada; las dos operaciones nuevas (buscar perfiles y sincronizar); la capacidad `federationProvidesTeamRoster`; si la ruta que entrega la foto es la operación 86; y la enmienda al LLD del backend (§3 y §5) |
+| `R6.5` | **Las dos tablas y sus reglas**, en ciclos TDD: la migración 22ª (el perfil y la plantilla, con el índice del dorsal y el de una fila por perfil y temporada, `D-118` y `D-121`); en el dominio, el nombre (mayúsculas, limpieza, validación) y las reglas de la plantilla (equipo propio, temporada sin archivar) |
+| `R6.6` | **Las cinco operaciones de los datos** (`listPlayers`, `getPlayer`, `createPlayer`, `updatePlayer`, `deletePlayer`), en ciclos TDD: el alta con un perfil o con nombre y año; guardar copia el dorsal y la demarcación al perfil (`D-122`); cada una, a la tabla del README del backend |
+| `R6.7` | **Buscar perfiles**, en ciclos TDD: desde 3 letras, hasta 10, sin tildes ni mayúsculas, palabra a palabra; sin los de esta plantilla, y con los de otro equipo marcados; al README |
+| `R6.8` | **El sitio de las fotos y su saneado**, en ciclos TDD. Empieza con la prueba de las dos librerías con una foto de verdad del móvil del desarrollador, y sus licencias (`D-116`) |
+| `R6.9` | **Las dos operaciones de la foto**, en ciclos TDD: la `photoUrl` firmada y la ruta que entrega el fichero (`D-117`); la foto copiada al perfil, y el fichero borrado solo cuando no lo usa nadie (`D-122`); al README |
+| `R6.10` | **El cierre del servidor sin la sincronización**: tests, mutación, censo |
 
 ### C · La web (otra rama)
 
 | Paso | Qué |
 |---|---|
-| `R6.9` | La pestaña Plantilla |
-| `R6.10` | El alta, la corrección y la baja |
-| `R6.11` | La ficha del jugador y su foto |
+| `R6.11` | La pestaña Plantilla |
+| `R6.12` | El alta con su buscador, la corrección y la baja |
+| `R6.13` | La ficha del jugador y su foto |
 
-### D · Los escenarios en verde y el cierre
+### D · Sincronizar la plantilla con la federación (decisión 9, `D-120`)
 
 | Paso | Qué |
 |---|---|
-| `R6.12` | Los escenarios de la rebanada en verde, con axe en los dos modos |
-| `R6.13` | La revisión a mano: el teclado y el zoom al 200 % |
-| `R6.14` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
+| `R6.14` | **El servidor, en su propia rama**, en ciclos TDD: la migración 23ª (`roster_synced_at` en la inscripción; «federado» y la última vez listado en la plantilla); la capacidad; el adaptador de la RFFM lee la ficha de equipo (con una grabación de verdad); el casado por nombre y lo que se copia del perfil; la operación y su resumen; al README |
+| `R6.15` | **La federación falsa** de los escenarios publica la ficha de equipo, con lo que piden: los jugadores de cada caso, el error y la petición retenida |
+| `R6.16` | **La web**, en su rama: el botón, el resumen, la fecha y «Federado» o «No federado» |
 
-### E · Cargar la plantilla desde la federación (decisión 9)
+### E · Los escenarios en verde y el cierre
 
-*Los pasos, al cerrar la decisión 9.* El servidor, en su propia rama; la web, con su botón en la plantilla vacía.
-
-Los pasos pueden cambiar tras `R6.1`.
+| Paso | Qué |
+|---|---|
+| `R6.17` | Los 119 escenarios de la rebanada en verde, con axe en los dos modos |
+| `R6.18` | La revisión a mano: el teclado y el zoom al 200 % |
+| `R6.19` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
 
 ---
 
@@ -579,7 +586,7 @@ Los pasos pueden cambiar tras `R6.1`.
 |---|---|---|
 | `R6.1` | 2026-11-14 | Las nueve decisiones, una a una, con lo que hizo falta para verlas: el almacén, los escudos y la configuración del servidor (1); las herramientas de imágenes del Mac y del contenedor (2); un dibujo de los dos caminos de la foto, ahora y con Supabase (3); la R2 (4); el acta de la RFFM (5); `DW-22` (6); una maqueta en HTML de la plantilla, la ficha, el alta y la baja (7); `D-05` y lo que ya apunta a `playerId` en el catálogo (8); y la ficha de equipo de la RFFM de dos equipos del desarrollador, sus nombres medidos sin sacarlos y sus cabeceras (9). La 8 y la 9 salieron al revisar la 6 y la 7. Escritas en la bitácora del backend `D-115` a `D-120`; en el plan del backoffice, la fila de la R11 (el purgado borra los perfiles sin filas) y la de la R15 (técnicos y delegados desde la federación) |
 | `R6.2` | 2026-11-15 | **Los documentos de lo decidido.** En la bitácora del backend, `D-115` a `D-120`, escritos con cada decisión y grabados con `R6.1`. En el LLD-B, el camino de la ficha del jugador (§6.1, decidido; y §6.5, que la ficha del jugador también lleva la temporada); sin entrada nueva en su anexo: aplica `DW-22`. En el plan del backoffice, el camino del mapa y la fila de la R6 con lo que cambia en sus operaciones y las dos nuevas. En `AGENTS.md`, la rebanada empezada, en «Documentación clave» y en el estado. **La enmienda al LLD del backend** (§3 y §5) va con el catálogo (`R6.4`), como en la R5. **No hay que relanzar el servidor**: solo documentos |
-| `R6.3` | 2026-11-15 | **Los escenarios**, 119 en cuatro ficheros, revisados uno a uno con el desarrollador (§6); la pasada en seco da 289: los 170 de antes, intactos, y los 119, sin definir. Salieron **dos decisiones**: un jugador, una plantilla por temporada (`D-121`, dentro de la 9, enmienda a `D-37`) y el perfil guarda el último dorsal, demarcación y foto (10, `D-122`); y **cuatro reglas**: la temporada archivada, de solo lectura entera; la foto se describe con el nombre del jugador, que la web le pone al pintarla; el nombre de la federación que no vale no se añade y el resumen lo nombra; y «el mismo nombre» es sin tildes ni diéresis, pero con la eñe distinta. Aparte, en el plan del backoffice: el jugador de otro equipo que juega en un partido, para la R7. **Queda para la parte E**: la ficha de equipo de la RFFM en la federación falsa. **No hay que relanzar el servidor**: solo escenarios y documentos |
+| `R6.3` | 2026-11-15 | **Los escenarios**, 119 en cuatro ficheros, revisados uno a uno con el desarrollador (§6); la pasada en seco da 289: los 170 de antes, intactos, y los 119, sin definir. Salieron **dos decisiones**: un jugador, una plantilla por temporada (`D-121`, dentro de la 9, enmienda a `D-37`) y el perfil guarda el último dorsal, demarcación y foto (10, `D-122`); y **cuatro reglas**: la temporada archivada, de solo lectura entera; la foto se describe con el nombre del jugador, que la web le pone al pintarla; el nombre de la federación que no vale no se añade y el resumen lo nombra; y «el mismo nombre» es sin tildes ni diéresis, pero con la eñe distinta. Aparte, en el plan del backoffice: el jugador de otro equipo que juega en un partido, para la R7. **Queda para la parte D** (`R6.15`): la ficha de equipo de la RFFM en la federación falsa. **No hay que relanzar el servidor**: solo escenarios y documentos |
 
 ---
 
