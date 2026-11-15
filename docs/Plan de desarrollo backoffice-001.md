@@ -313,6 +313,12 @@ del club (aplazado, suspendido) sale de su acta, pero la ingesta todavía no la 
 «programado», según tenga marcador. La pestaña Resultados ya sabe pintar los otros dos estados. Leerla es del
 servidor (una ruta más de la RFFM y su parser); el acta del club con goles y tarjetas es la rebanada 7.
 
+**Para la rebanada 7: en el acta puede salir un jugador de otro equipo del club** (lo dijo el desarrollador el
+2026-11-15, en R6.3). Un equipo puede llevar a un partido a un jugador de una categoría inferior o, en la misma
+categoría, de una división inferior. Ese jugador sigue en la plantilla de su equipo (un jugador, una plantilla
+por temporada), así que lo que se apunta del partido (convocatoria, goles, tarjetas) tiene que poder apuntar a la
+fila de otro equipo. La plantilla (R6) no lo ve: lee la ficha del equipo, no las actas.
+
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
 bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que
