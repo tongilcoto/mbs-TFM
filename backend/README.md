@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. **853 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores. **920 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -46,7 +46,9 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/rounds?competitionId=` · `GET /v1/rounds/{id}`                               | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/standings?roundId=`                                                          | Backoffice R4 — [§4.7](#jornadas) |
 | `GET /v1/matches?…`                                                                   | Backoffice R4 — [§4.8](#partidos) |
-| Las otras 68 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/players?teamId=&seasonId=` · `GET /v1/players/{id}`                          | Backoffice R6.6 |
+| `POST /v1/players` · `PUT /v1/players/{id}` · `DELETE /v1/players/{id}`               | Backoffice R6.6 |
+| Las otras 66 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -1091,7 +1093,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **7.069 líneas, 85 operaciones en 46 rutas y las 21 entidades de §3.2**.
+`Sources/APIContract/openapi.yaml` — **8.018 líneas, 88 operaciones en 49 rutas y las 21 entidades de §3.2**, más el perfil del jugador (`D-119`).
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh

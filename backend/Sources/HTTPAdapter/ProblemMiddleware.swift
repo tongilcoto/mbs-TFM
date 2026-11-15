@@ -321,6 +321,42 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Jornada desconocida", detail: id,
                                base: typeBaseURI, slug: "round-not-found")
 
+            case .playerNotFound(let id):
+                // 404 con su código (R6.6): el id lo puso quien llama.
+                return Problem(status: .notFound, code: "PLAYER_NOT_FOUND",
+                               title: "Jugador desconocido", detail: id,
+                               base: typeBaseURI, slug: "player-not-found")
+
+            case .playerProfileMissing(let player):
+                // 500, como `seasonNotFound`: la FK no lo deja pasar, así que es la
+                // base rota y no un dato que falte.
+                return Problem(status: .internalServerError, code: "PLAYER_PROFILE_MISSING",
+                               title: "Jugador sin perfil", detail: player,
+                               base: typeBaseURI, slug: "player-profile-missing")
+
+            case .referenceNotFound(let field, let id):
+                // **422 y no 404** (§5.1): lo que no existe llega en el cuerpo. El
+                // `detail` lleva la forma `<campo>: <motivo>` de `INVALID_VALUE`,
+                // para que el cliente sepa cuál.
+                return Problem(status: .unprocessableEntity, code: "REFERENCE_NOT_FOUND",
+                               title: "No existe en el club",
+                               detail: "\(field): no existe en el club (\(id))",
+                               base: typeBaseURI, slug: "reference-not-found")
+
+            case .shirtNumberTaken(let number):
+                // 409 **solo con su código** (R6.4): quién lo tiene lo sabe la web.
+                return Problem(status: .conflict, code: "SHIRT_NUMBER_TAKEN",
+                               title: "Dorsal ocupado",
+                               detail: "el dorsal \(number) ya lo tiene otro jugador del equipo",
+                               base: typeBaseURI, slug: "shirt-number-taken")
+
+            case .playerAlreadyInRoster(let profile, let season):
+                // 409, solo con su código (R6.4, `D-121`): el buscador ya dijo dónde está.
+                return Problem(status: .conflict, code: "PLAYER_ALREADY_IN_ROSTER",
+                               title: "Ya está en una plantilla",
+                               detail: "el perfil \(profile) ya tiene fila en la temporada \(season)",
+                               base: typeBaseURI, slug: "player-already-in-roster")
+
             case .seasonLabelUnavailable(let federationSeasonID):
                 // **400, y el criterio es el de `unreadableFederationURL`**: el
                 // 422 es para el cuerpo que se decodificó y dice algo que la

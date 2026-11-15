@@ -44,6 +44,11 @@ filter:
     - getRound                # R4 — una jornada, para la pantalla de jornada y clasificación
     - getStanding             # R4 — la clasificación de una jornada, con la racha calculada
     - listMatches             # R4 — los partidos de una jornada, una competición o un equipo, con su fila de clasificación (D-112)
+    - listPlayers             # R6.6 — la plantilla de un equipo en una temporada (D-118: por dorsal, luego por nombre)
+    - getPlayer               # R6.6 — un jugador en una temporada, con el nombre y el año de su perfil (D-119)
+    - createPlayer            # R6.6 — el alta, con perfil o jugador nuevo (D-120); copia lo suyo al perfil (D-122)
+    - updatePlayer            # R6.6 — corregir con la ficha entera (PUT); nombre y año al perfil, el resto a la fila
+    - deletePlayer            # R6.6 — la baja, borrado lógico (D-36)
 
   # D-109: las listas cerradas que llevan nombres en el catálogo (`x-enum-names`), se usen ya o no. El generador
   # solo fabrica los tipos de las operaciones de arriba, y `EnumNamesTool` escribe el nombre de cada valor como

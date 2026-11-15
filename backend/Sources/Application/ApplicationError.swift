@@ -58,6 +58,26 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// lo puso quien llama, como `teamNotFound`.
     case roundNotFound(id: String)
 
+    /// El jugador que designa la ruta no existe, o está dado de baja (R6.6). 404:
+    /// el id lo puso quien llama, como `teamNotFound`.
+    case playerNotFound(id: String)
+
+    /// Una fila sin su perfil (R6.6). **500**: la FK es `RESTRICT` y no deja borrar
+    /// un perfil con filas, así que es la base rota, como `seasonNotFound`.
+    case playerProfileMissing(player: String)
+
+    /// Algo que el **cuerpo** nombra no existe en el club: el equipo, la temporada
+    /// o el perfil del alta (R6.6). **422 y no 404**: la ruta sí existe; lo que no
+    /// existe es un dato del cuerpo (§5.1).
+    case referenceNotFound(field: String, id: String)
+
+    /// Ese dorsal ya lo tiene otro jugador del mismo equipo y temporada (`D-118`).
+    /// 409, **solo con su código**: quién lo tiene lo sabe la web (R6.4).
+    case shirtNumberTaken(number: Int)
+
+    /// El perfil ya tiene fila en esa temporada (`D-121`). 409, solo con su código.
+    case playerAlreadyInRoster(profile: String, season: String)
+
     /// **La fuente no publicó etiqueta de temporada y hay que crear una**
     /// (F10, `C-C.8` → **400**).
     ///

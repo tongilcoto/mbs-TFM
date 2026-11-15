@@ -30,6 +30,11 @@ actor IngestionStore {
     var leagueScorers: [LeagueScorer] = []
     /// `D-68`, F10. La escribe el club y la **completa** el enganche.
     var teamRegistrations: [TeamRegistration] = []
+    /// R6.6: la plantilla y los perfiles (`D-119`). `deletedPlayers` guarda las
+    /// filas dadas de baja, que el puerto ya no ve (`D-36`).
+    var players: [Player] = []
+    var deletedPlayers: [Player] = []
+    var playerProfiles: [PlayerProfile] = []
 
     /// **Cuántas escrituras ha recibido el almacén**, sea cual sea la tabla.
     ///
@@ -76,6 +81,13 @@ actor IngestionStore {
     func save(_ value: OpponentClub) { upsert(&opponentClubs, value) { $0.id == value.id } }
     func save(_ value: Team) { upsert(&teams, value) { $0.id == value.id } }
     func save(_ value: Match) { upsert(&matches, value) { $0.id == value.id } }
+    func save(_ value: Player) { upsert(&players, value) { $0.id == value.id } }
+    func save(_ value: PlayerProfile) { upsert(&playerProfiles, value) { $0.id == value.id } }
+    func deletePlayer(_ id: PlayerID) {
+        guard let index = players.firstIndex(where: { $0.id == id }) else { return }
+        writes += 1
+        deletedPlayers.append(players.remove(at: index))
+    }
     func save(_ value: TeamRegistration) {
         upsert(&teamRegistrations, value) { $0.id == value.id }
     }
@@ -221,6 +233,31 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
     }
 }
 
+/// R6.6. Como el adaptador: **solo ve las no borradas**, y sin orden.
+struct FakePlayerRepository: PlayerRepository {
+    let store: IngestionStore
+    func find(_ id: PlayerID) async throws -> Player? { await store.players.first { $0.id == id } }
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Player] {
+        await store.players.filter { $0.teamID == teamID && $0.seasonID == seasonID }
+    }
+    func list(profileID: PlayerProfileID, seasonID: SeasonID) async throws -> [Player] {
+        await store.players.filter { $0.profileID == profileID && $0.seasonID == seasonID }
+    }
+    func save(_ player: Player) async throws { await store.save(player) }
+    func delete(_ id: PlayerID) async throws { await store.deletePlayer(id) }
+}
+
+struct FakePlayerProfileRepository: PlayerProfileRepository {
+    let store: IngestionStore
+    func find(_ id: PlayerProfileID) async throws -> PlayerProfile? {
+        await store.playerProfiles.first { $0.id == id }
+    }
+    func list(ids: [PlayerProfileID]) async throws -> [PlayerProfile] {
+        await store.playerProfiles.filter { ids.contains($0.id) }
+    }
+    func save(_ profile: PlayerProfile) async throws { await store.save(profile) }
+}
+
 struct FakeMatchRepository: MatchRepository {
     let store: IngestionStore
     func list(roundID: RoundID) async throws -> [Match] { await store.matches.filter { $0.roundID == roundID } }
@@ -341,6 +378,8 @@ struct FakeRepositories: Repositories {
     var leagueScorers: any LeagueScorerRepository {
         FakeLeagueScorerRepository(store: store)
     }
+    var players: any PlayerRepository { FakePlayerRepository(store: store) }
+    var playerProfiles: any PlayerProfileRepository { FakePlayerProfileRepository(store: store) }
 }
 
 /// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de

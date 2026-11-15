@@ -1,0 +1,177 @@
+public import APIContract
+import Application
+import Domain
+import Foundation
+
+// Las cinco operaciones de datos de la plantilla (R6.6). Los errores de dominio y
+// de aplicación —404, 409, 422— los traduce el middleware (`A-14`·H-63); aquí solo
+// se devuelven los 400 de un id que no es un UUID.
+extension APIHandler {
+    public func listPlayers(_ input: Operations.listPlayers.Input) async throws
+        -> Operations.listPlayers.Output
+    {
+        let actor = try actors.currentActor()
+        let (teamID, seasonID): (TeamID, SeasonID)
+        do {
+            teamID = TeamID(raw: try Self.uuid(input.query.teamId, field: "teamId"))
+            seasonID = SeasonID(raw: try Self.uuid(input.query.seasonId, field: "seasonId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        let position = input.query.position?.toDomain()
+        let roster = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await ListPlayers(teams: r.teams, seasons: r.seasons, players: r.players,
+                                  profiles: r.playerProfiles)
+                .execute(teamID: teamID, seasonID: seasonID, position: position)
+        }
+        return .ok(.init(body: .json(roster.map { $0.toResponse() })))
+    }
+
+    public func getPlayer(_ input: Operations.getPlayer.Input) async throws
+        -> Operations.getPlayer.Output
+    {
+        let actor = try actors.currentActor()
+        let id: PlayerID
+        do {
+            id = PlayerID(raw: try Self.uuid(input.path.playerId, field: "playerId"))
+        } catch let error as InvalidUUID {
+            // El contrato no declara 400 aquí: un id que no es UUID no es de
+            // ningún jugador, así que es el 404 de la ruta.
+            return .notFound(.init(body: .application_problem_plus_json(
+                Self.problem(status: 404, code: .PLAYER_NOT_FOUND,
+                             title: "Jugador desconocido", detail: error.value))))
+        }
+        let entry = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await GetPlayer(players: r.players, profiles: r.playerProfiles).execute(id)
+        }
+        return .ok(.init(body: .json(entry.toResponse())))
+    }
+
+    public func createPlayer(_ input: Operations.createPlayer.Input) async throws
+        -> Operations.createPlayer.Output
+    {
+        let actor = try actors.currentActor()
+        let payload: Components.Schemas.CreatePlayerRequest
+        switch input.body {
+        case .json(let json): payload = json
+        }
+        let command: CreatePlayer.Command
+        do {
+            switch payload {
+            case .CreatePlayerFromProfileRequest(let body):
+                command = .init(
+                    teamID: TeamID(raw: try Self.uuid(body.teamId, field: "teamId")),
+                    seasonID: SeasonID(raw: try Self.uuid(body.seasonId, field: "seasonId")),
+                    who: .profile(PlayerProfileID(raw: try Self.uuid(body.profileId, field: "profileId"))),
+                    shirtNumber: body.shirtNumber, position: body.position?.value1?.toDomain())
+            case .CreatePlayerNewProfileRequest(let body):
+                command = .init(
+                    teamID: TeamID(raw: try Self.uuid(body.teamId, field: "teamId")),
+                    seasonID: SeasonID(raw: try Self.uuid(body.seasonId, field: "seasonId")),
+                    who: .newPlayer(fullName: body.fullName, birthYear: body.birthYear),
+                    shirtNumber: body.shirtNumber, position: body.position?.value1?.toDomain())
+            }
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        let (clock, ids) = (self.clock, self.ids)
+        let entry = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await CreatePlayer(teams: r.teams, seasons: r.seasons, players: r.players,
+                                   profiles: r.playerProfiles, clock: clock, ids: ids)
+                .execute(command)
+        }
+        return .created(.init(body: .json(entry.toResponse())))
+    }
+
+    public func updatePlayer(_ input: Operations.updatePlayer.Input) async throws
+        -> Operations.updatePlayer.Output
+    {
+        let actor = try actors.currentActor()
+        let id: PlayerID
+        do {
+            id = PlayerID(raw: try Self.uuid(input.path.playerId, field: "playerId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        let body: Components.Schemas.UpdatePlayerRequest
+        switch input.body {
+        case .json(let json): body = json
+        }
+        // **La ficha entera** (R6.6): lo que no llega cuenta como vacío.
+        let command = UpdatePlayer.Command(
+            fullName: body.fullName, birthYear: body.birthYear, shirtNumber: body.shirtNumber,
+            position: body.position?.value1?.toDomain())
+        let clock = self.clock
+        let entry = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await UpdatePlayer(seasons: r.seasons, players: r.players, profiles: r.playerProfiles,
+                                   clock: clock).execute(id, command)
+        }
+        return .ok(.init(body: .json(entry.toResponse())))
+    }
+
+    public func deletePlayer(_ input: Operations.deletePlayer.Input) async throws
+        -> Operations.deletePlayer.Output
+    {
+        let actor = try actors.currentActor()
+        let id: PlayerID
+        do {
+            id = PlayerID(raw: try Self.uuid(input.path.playerId, field: "playerId"))
+        } catch let error as InvalidUUID {
+            return .notFound(.init(body: .application_problem_plus_json(
+                Self.problem(status: 404, code: .PLAYER_NOT_FOUND,
+                             title: "Jugador desconocido", detail: error.value))))
+        }
+        try await unitOfWork.withRepositories(actor: actor) { r in
+            try await DeletePlayer(seasons: r.seasons, players: r.players).execute(id)
+        }
+        return .noContent(.init())
+    }
+}
+
+extension RosterEntry {
+    /// Mapeo `Entidad → DTO` (§2.2): la fila, con el nombre y el año de su perfil
+    /// (`D-119`).
+    func toResponse() -> Components.Schemas.PlayerResponse {
+        .init(
+            id: "\(player.id)",
+            profileId: "\(profile.id)",
+            teamId: "\(player.teamID)",
+            seasonId: "\(player.seasonID)",
+            fullName: profile.fullName.value,
+            birthYear: profile.birthYear?.value,
+            shirtNumber: player.shirtNumber?.value,
+            position: player.position.map { .init(value1: $0.toContract()) },
+            // **Nulos a propósito hasta su rebanada**: «federado» y la última vez
+            // listado llegan con la sincronización (R6.14), y la foto, con el
+            // almacén (R6.9). Se afirman nulos en los tests, como `crestUrl`.
+            federated: nil,
+            lastListedAt: nil,
+            photoUrl: nil,
+            createdAt: player.createdAt,
+            updatedAt: player.updatedAt)
+    }
+}
+
+extension Domain.PlayerPosition {
+    /// El compilador obliga a escribir cada línea; `ContractEnumTests` comprueba
+    /// que el viaje redondo es fiel (`C-E.9`).
+    func toContract() -> Components.Schemas.PlayerPosition {
+        switch self {
+        case .portero: .portero
+        case .defensa: .defensa
+        case .centrocampista: .centrocampista
+        case .delantero: .delantero
+        }
+    }
+}
+
+extension Components.Schemas.PlayerPosition {
+    func toDomain() -> Domain.PlayerPosition {
+        switch self {
+        case .portero: .portero
+        case .defensa: .defensa
+        case .centrocampista: .centrocampista
+        case .delantero: .delantero
+        }
+    }
+}

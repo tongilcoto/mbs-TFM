@@ -105,4 +105,8 @@ struct FluentRepositories: Repositories {
     var leagueScorers: any LeagueScorerRepository {
         FluentLeagueScorerRepository(database: database)
     }
+    var players: any PlayerRepository { FluentPlayerRepository(database: database) }
+    var playerProfiles: any PlayerProfileRepository {
+        FluentPlayerProfileRepository(database: database)
+    }
 }

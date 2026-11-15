@@ -1,4 +1,5 @@
-import Domain
+public import Domain
+public import Application
 public import Fluent
 import Foundation
 
@@ -151,5 +152,145 @@ public struct CreatePlayers: AsyncMigration {
         // índices y sus `CHECK`.
         try await database.schema(PlayerRecord.schema).delete()
         try await database.schema(PlayerProfileRecord.schema).delete()
+    }
+}
+
+// ── El mapeo (R6.6) ──────────────────────────────────────────────────────────
+
+extension PlayerProfileRecord {
+    func toDomain() throws -> PlayerProfile {
+        let id = try requireID()
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(table: Self.schema, id: id.uuidString)
+        }
+        return PlayerProfile(
+            id: PlayerProfileID(raw: id),
+            // **Se vuelve a pasar por `PlayerName`**, como `SeasonLabel`: lo que se
+            // guardó ya cumplía la regla, y una fila que no la cumpla es la base
+            // tocada a mano, que es mejor ver que arrastrar.
+            fullName: try PlayerName(fullName),
+            birthYear: birthYear.map(BirthYear.init(stored:)),
+            lastShirtNumber: try lastShirtNumber.map(ShirtNumber.init),
+            lastPosition: try lastPosition.map {
+                try position($0, column: "last_position")
+            },
+            lastPhotoKey: lastPhotoKey, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    fileprivate func apply(_ profile: PlayerProfile) {
+        fullName = profile.fullName.value
+        birthYear = profile.birthYear?.value
+        lastShirtNumber = profile.lastShirtNumber?.value
+        lastPosition = profile.lastPosition?.rawValue
+        lastPhotoKey = profile.lastPhotoKey
+    }
+}
+
+extension PlayerRecord {
+    func toDomain() throws -> Player {
+        let id = try requireID()
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(table: Self.schema, id: id.uuidString)
+        }
+        return Player(
+            id: PlayerID(raw: id), profileID: PlayerProfileID(raw: $profile.id),
+            teamID: TeamID(raw: $team.id), seasonID: SeasonID(raw: $season.id),
+            shirtNumber: try shirtNumber.map(ShirtNumber.init),
+            position: try position.map { try Persistence.position($0, column: "position") },
+            photoKey: photoKey, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    fileprivate func apply(_ player: Player) {
+        $profile.id = player.profileID.raw
+        $team.id = player.teamID.raw
+        $season.id = player.seasonID.raw
+        shirtNumber = player.shirtNumber?.value
+        position = player.position?.rawValue
+        photoKey = player.photoKey
+    }
+}
+
+/// Una demarcación guardada fuera de su lista, pese al `CHECK`: corrupción.
+func position(_ raw: String, column: String) throws -> PlayerPosition {
+    guard let value = PlayerPosition(rawValue: raw) else {
+        throw PersistenceError.corruptEnumeration(table: "players", column: column, value: raw)
+    }
+    return value
+}
+
+// ── Los repositorios (R6.6) ──────────────────────────────────────────────────
+
+public struct FluentPlayerRepository: PlayerRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    // Las consultas de Fluent ya dejan fuera las filas con `deleted_at` (el
+    // `@Timestamp(on: .delete)`): el puerto solo ve las no borradas.
+
+    public func find(_ id: PlayerID) async throws -> Player? {
+        try await PlayerRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    public func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Player] {
+        try await PlayerRecord.query(on: database)
+            .filter(\.$team.$id == teamID.raw)
+            .filter(\.$season.$id == seasonID.raw)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(profileID: PlayerProfileID, seasonID: SeasonID) async throws -> [Player] {
+        try await PlayerRecord.query(on: database)
+            .filter(\.$profile.$id == profileID.raw)
+            .filter(\.$season.$id == seasonID.raw)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func save(_ player: Player) async throws {
+        if let existing = try await PlayerRecord.find(player.id.raw, on: database) {
+            existing.apply(player)
+            try await existing.update(on: database)
+        } else {
+            let record = PlayerRecord()
+            record.id = player.id.raw
+            record.apply(player)
+            try await record.create(on: database)
+        }
+    }
+
+    public func delete(_ id: PlayerID) async throws {
+        // `delete` de Fluent con `@Timestamp(on: .delete)` es **lógico**: pone
+        // `deleted_at` y deja la fila ([D-36]).
+        try await PlayerRecord.find(id.raw, on: database)?.delete(on: database)
+    }
+}
+
+public struct FluentPlayerProfileRepository: PlayerProfileRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func find(_ id: PlayerProfileID) async throws -> PlayerProfile? {
+        try await PlayerProfileRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    public func list(ids: [PlayerProfileID]) async throws -> [PlayerProfile] {
+        guard !ids.isEmpty else { return [] }
+        return try await PlayerProfileRecord.query(on: database)
+            .filter(\.$id ~~ Set(ids.map(\.raw)))
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func save(_ profile: PlayerProfile) async throws {
+        if let existing = try await PlayerProfileRecord.find(profile.id.raw, on: database) {
+            existing.apply(profile)
+            try await existing.update(on: database)
+        } else {
+            let record = PlayerProfileRecord()
+            record.id = profile.id.raw
+            record.apply(profile)
+            try await record.create(on: database)
+        }
     }
 }

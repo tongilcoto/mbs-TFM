@@ -162,6 +162,18 @@ struct ContractEnumTests {
         }
     }
 
+    /// La demarcación va y viene (R6.6): el filtro de `listPlayers` y el cuerpo del
+    /// alta y la corrección la traen del cliente, y la respuesta la devuelve.
+    @Test("PlayerPosition → contrato, ← contrato, y el viaje redondo (R6.6)")
+    func playerPosition() {
+        Self.check(PlayerPosition.allCases, { $0.toContract() }, "PlayerPosition")
+        Self.check(
+            Components.Schemas.PlayerPosition.allCases, { $0.toDomain() }, "PlayerPosition (de vuelta)")
+        for value in PlayerPosition.allCases {
+            #expect(value.toContract().toDomain() == value)
+        }
+    }
+
     @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
     func teamCategoryBack() {
         Self.check(
