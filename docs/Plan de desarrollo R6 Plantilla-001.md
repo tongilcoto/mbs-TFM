@@ -424,6 +424,13 @@ o un `profileId` o el nombre y el año**; un `profileId` que no existe en el clu
 demarcación si se quieren. Mandar las dos cosas a la vez, o ninguna, es un 400 que da el propio catálogo. Como el
 alta de una competición, por dirección o por campos. Descartada una sola forma con todo opcional y la regla
 comprobada a mano en el servidor: el catálogo no la ve.
+**Corregir manda la ficha entera** (decidido en `R6.6`, 2026-11-15): `PUT /players/{id}` con el nombre, el
+año, el dorsal y la demarcación. Salió al generar el código: con una corrección parcial no se distinguía «no lo
+cambio» de «déjalo vacío», porque el generador lee igual un campo que no llega y uno con `null`. Lo que no llega
+o llega vacío queda vacío; el nombre tiene que llegar, y el año solo se queda vacío si el perfil no lo tenía.
+Descartado marcar aparte qué se vacía (`"clear": [...]`): dos formas de decir algo del mismo campo. Y en el mismo
+arreglo, **la demarcación «o nula» se escribe como `takenBy`**, porque el generador descartaba en silencio la
+forma con `oneOf` y un `null`.
 **La búsqueda filtra en el servidor** (decidido en `R6.4`, 2026-11-15): recibe `q` (desde 3 letras; con menos,
 400), `teamId` y `seasonId`, los tres obligatorios, como `listPlayers`. Quita a los de esa plantilla, y cada jugador
 lleva `profileId`, nombre, año, el último dorsal, demarcación y foto, **su última plantilla** (la fila no borrada

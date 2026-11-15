@@ -5435,7 +5435,10 @@ competición**; su nombre y su nacimiento son datos de una persona que sigue de 
    goles) sigue apuntando a la fila: cuenta para el equipo con el que se hizo. Descartado copiar a `Team` y su
    inscripción ([D-102]): cambiaría las 7 operaciones y el significado de `playerId`, y un jugador puede tener dos
    filas en la misma temporada ([D-37]).
-5. **Corregir el nombre desde una fila corrige el del perfil**, en todas sus temporadas.
+5. **Corregir el nombre desde una fila corrige el del perfil**, en todas sus temporadas. **La corrección manda la
+   ficha entera** (`PUT`, R6.6, elegido por el desarrollador): con una parcial, el código generado no distinguía
+   «no lo cambio» de «déjalo vacío». Lo que no llega o llega vacío queda vacío; el año solo, si el perfil no tenía.
+   Descartado marcar aparte qué se vacía: dos formas de decir algo del mismo campo.
 6. **El perfil no tiene operaciones propias en esta versión.** Elegir un perfil que ya existe al dar de alta (para
    seguir al año siguiente) llega con la versión siguiente, con su pantalla (`/jugadores/:id`, con el código del
    perfil) o con el alta en bloque (LLD §9, punto 8).

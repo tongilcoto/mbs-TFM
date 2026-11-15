@@ -1440,7 +1440,7 @@ Tres lecturas que no son evidentes en la tabla:
 | **POST** | `/v1/players` | `CreatePlayer` | **201** + `PlayerResponse` | 400 (también las dos formas a la vez, o ninguna), **403** (rol), **409** (`SHIRT_NUMBER_TAKEN`, `PLAYER_ALREADY_IN_ROSTER`), **422** (equipo, temporada o perfil inexistente, equipo no propio, temporada archivada, `INVALID_VALUE`) |
 | **GET** | `/v1/players?teamId=&seasonId=` | `ListPlayers` | **200** + `[PlayerResponse]` | 400 (falta ámbito), 404 (equipo o temporada inexistentes) |
 | **GET** | `/v1/players/{id}` | `GetPlayer` | **200** + `PlayerResponse` | 404 |
-| **PATCH** | `/v1/players/{id}` | `UpdatePlayer` | **200** + `PlayerResponse` | 400, **403** (rol), 404, **409** (`SHIRT_NUMBER_TAKEN`), **422** (temporada archivada, `INVALID_VALUE`) |
+| **PUT** | `/v1/players/{id}` | `UpdatePlayer` (la ficha entera) | **200** + `PlayerResponse` | 400, **403** (rol), 404, **409** (`SHIRT_NUMBER_TAKEN`), **422** (temporada archivada, `INVALID_VALUE`) |
 | **DELETE** | `/v1/players/{id}` | `DeletePlayer` | **204** (borrado lógico) | **403** (rol), 404, **422** (temporada archivada) |
 | **PUT** | `/v1/players/{id}/photo` | `UploadPlayerPhoto` | **200** + `PlayerResponse` | 400 (no es imagen), **403** (rol), 404, **413** (>5 MB), **415** (tipo no admitido), **422** (temporada archivada) |
 | **DELETE** | `/v1/players/{id}/photo` | `DeletePlayerPhoto` | **204** (idempotente) | **403** (rol), 404, **422** (temporada archivada) |
@@ -1463,11 +1463,17 @@ Tres lecturas que no son evidentes en la tabla:
   Los dos 409 **solo llevan su código**: con quién chocan lo sabe ya la web (la plantilla que pinta, el
   buscador), como en el enganche ([D-110]).
 - **La temporada archivada es de solo lectura entera**: toda la escritura de este recurso, **422**.
+- **Corregir es un `PUT` con la ficha entera, no un `PATCH`** (R6.6): el código generado no distingue un
+  campo que no llega de uno que llega con `null`, así que una corrección parcial no podía vaciar el dorsal o
+  la demarcación sin vaciarlos también al no mandarlos. Con la ficha entera no hay «no lo cambio»: lo que no
+  llega, o llega con `null`, queda vacío; el nombre tiene que llegar, y el año solo se queda vacío si el
+  perfil no lo tenía. **Ojo para la R8**: `Absence` usa el `null` explícito del `PATCH` para reabrir, y
+  tropezará con lo mismo.
 - **`teamId` y `seasonId` son obligatorios en la lista**, no filtros: esas dos coordenadas **son** la
   identidad de la fila ([D-05]). Techo de ~25 filas → sin paginación, orden fijo por dorsal y después los
   que no tienen, por nombre ([D-118]), y sin `?q=` (§5.3). Filtro opcional: `?position=`. **El buscador
   de perfiles** pide los mismos dos, porque quita a los de esa plantilla.
-- **Y son inmutables en la escritura** ([D-37]): van en el `POST`, no en el `PATCH`. Cambiarlos reescribiría
+- **Y son inmutables en la escritura** ([D-37]): van en el `POST`, no en la corrección. Cambiarlos reescribiría
   el pasado —los goles y tarjetas ya emitidos pasarían a contar para otro equipo—. Ámbito obligatorio en la
   lectura e inmutabilidad en la escritura son **la misma decisión** por los dos lados.
 - **La plantilla solo existe para equipos propios** (§3.7) → **422** si el `teamId` del cuerpo apunta a un
@@ -1854,11 +1860,11 @@ struct SeasonResponse: Content {
   lista de jugadores y cruza por `playerId` la llamada de ausencias activas ([D-38]). El criterio de
   proyecciones sigue siendo el de [D-32] —**embeber lo que varía dentro de la página**—, y aquí lo que
   varía es la ausencia, no el jugador.
-- **`Player` completa el juego de tres DTOs, y es el primero en dejar campos fuera del `PATCH` por
+- **`Player` completa el juego de tres DTOs, y es el primero en dejar campos fuera de la corrección por
   *identidad* y no por *propiedad*.** En `Team`, `modality` y `gender` quedaron fuera del `PATCH` por las dos
   razones a la vez ([D-58]) y hoy, con el alta del club ([D-66]), **solo** por identidad: se escriben al
-  crear y se congelan. En `Player`, `teamId` y `seasonId` los escribe el mismo administrador que hace el
-  `PATCH` —nadie discute la propiedad— y aun así no están: cambiarlos no sería corregir un dato, sería
+  crear y se congelan. En `Player`, `teamId` y `seasonId` los escribe el mismo administrador que hace la
+  corrección —nadie discute la propiedad— y aun así no están: cambiarlos no sería corregir un dato, sería
   reasignar el historial a otro equipo ([D-37]). Que el DTO no los lleve es lo que hace la regla verificable
   por el generador.
 - **`CreatePlayerRequest` es un `oneOf` de dos esquemas cerrados** ([D-120]) —con perfil o jugador
