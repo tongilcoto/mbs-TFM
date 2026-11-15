@@ -175,3 +175,56 @@ extension Components.Schemas.PlayerPosition {
         }
     }
 }
+
+// ── El buscador del alta (R6.7) ───────────────────────────────────────────────
+
+extension APIHandler {
+    public func searchPlayerProfiles(_ input: Operations.searchPlayerProfiles.Input) async throws
+        -> Operations.searchPlayerProfiles.Output
+    {
+        let actor = try actors.currentActor()
+        let (teamID, seasonID): (TeamID, SeasonID)
+        do {
+            teamID = TeamID(raw: try Self.uuid(input.query.teamId, field: "teamId"))
+            seasonID = SeasonID(raw: try Self.uuid(input.query.seasonId, field: "seasonId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        // **Desde 3 letras** (`D-120`). El `minLength` del catálogo cuenta
+        // caracteres y el generador no lo comprueba; las letras las cuenta
+        // `PlayerSearch`, y con menos es un 400, como dice el contrato.
+        guard let search = PlayerSearch(input.query.q) else {
+            return .badRequest(.init(body: .application_problem_plus_json(
+                Self.problem(status: 400, code: .BAD_REQUEST,
+                             title: "Hacen falta tres letras",
+                             detail: "q: desde \(PlayerSearch.minimumLetters) letras"))))
+        }
+        let matches = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await SearchPlayerProfiles(
+                clubs: r.clubs, teams: r.teams, opponentClubs: r.opponentClubs, seasons: r.seasons,
+                players: r.players, profiles: r.playerProfiles
+            ).execute(search, teamID: teamID, seasonID: seasonID, actor: actor)
+        }
+        return .ok(.init(body: .json(matches.map { $0.toResponse() })))
+    }
+}
+
+extension SearchPlayerProfiles.Match {
+    /// Mapeo `Entidad → DTO` (§2.2): el perfil entero (`D-122`), con su última
+    /// plantilla y el otro equipo, si lo hay (`D-121`).
+    func toResponse() -> Components.Schemas.PlayerProfileSearchResult {
+        .init(
+            profileId: "\(profile.id)",
+            fullName: profile.fullName.value,
+            birthYear: profile.birthYear?.value,
+            lastShirtNumber: profile.lastShirtNumber?.value,
+            lastPosition: profile.lastPosition.map { .init(value1: $0.toContract()) },
+            // La foto llega con el almacén (R6.9).
+            lastPhotoUrl: nil,
+            lastRoster: lastRoster.map {
+                .init(value1: .init(team: $0.team.toTeamRef(), seasonId: "\($0.season.id)",
+                                    seasonLabel: $0.season.label.value))
+            },
+            otherTeamThisSeason: otherTeamThisSeason.map { .init(value1: $0.toTeamRef()) })
+    }
+}

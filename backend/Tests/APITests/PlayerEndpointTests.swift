@@ -341,3 +341,67 @@ struct PlayerEndpointTests {
         }
     }
 }
+
+// ── El buscador del alta (R6.7) ──────────────────────────────────────────────
+
+extension PlayerEndpointTests {
+    static func profiles(_ response: TestingHTTPResponse) throws
+        -> [Components.Schemas.PlayerProfileSearchResult]
+    {
+        try JSONDecoder().decode([Components.Schemas.PlayerProfileSearchResult].self,
+                                 from: Data(response.body.readableBytesView))
+    }
+
+    @Test("el buscador trae el perfil entero, su última plantilla y el otro equipo (D-120, D-121, D-122)")
+    func searching() async throws {
+        try await Self.withSeededClub { app, s in
+            // Juan, en el Cadete B esta temporada: sale marcado para el Cadete A.
+            let juan = try await Self.create(
+                app, Self.newPlayerJSON(s, team: s.cadeteB, name: "Juan García", shirt: 7, position: "defensa"))
+            try await Self.send(app, .GET,
+                                "/v1/player-profiles?q=juan%20gar&teamId=\(s.cadeteA)&seasonId=\(s.vigente)") {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+                let found = try Self.profiles(r)
+                #expect(found.count == 1)
+                let p = try #require(found.first)
+                #expect(p.profileId == juan.profileId)
+                #expect(p.fullName == "JUAN GARCÍA")
+                #expect(p.birthYear == 2011)
+                #expect(p.lastShirtNumber == 7)
+                #expect(p.lastPosition?.value1 == .defensa)
+                #expect(p.lastPhotoUrl == nil, "la foto llega con el almacén (R6.9)")
+                let roster = try #require(p.lastRoster?.value1)
+                #expect(roster.team.teamId == "\(s.cadeteB)")
+                #expect(roster.seasonId == "\(s.vigente)")
+                #expect(roster.seasonLabel == "2025/26")
+                #expect(p.otherTeamThisSeason?.value1?.teamId == "\(s.cadeteB)")
+            }
+            // Para su propio equipo no sale: ya está en esa plantilla.
+            try await Self.send(app, .GET,
+                                "/v1/player-profiles?q=juan&teamId=\(s.cadeteB)&seasonId=\(s.vigente)") {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+                #expect(try Self.profiles(r).isEmpty)
+            }
+        }
+    }
+
+    @Test("con menos de tres letras, 400; con un equipo que no existe, 404 (D-120)")
+    func searchingErrors() async throws {
+        try await Self.withSeededClub { app, s in
+            try await Self.send(app, .GET,
+                                "/v1/player-profiles?q=ju&teamId=\(s.cadeteA)&seasonId=\(s.vigente)") {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .badRequest)
+                #expect(try Self.decodeProblem(r).code == .BAD_REQUEST)
+            }
+            try await Self.send(app, .GET,
+                                "/v1/player-profiles?q=juan&teamId=\(UUID())&seasonId=\(s.vigente)") {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .notFound)
+                #expect(try Self.decodeProblem(r).code == .TEAM_NOT_FOUND)
+            }
+        }
+    }
+}

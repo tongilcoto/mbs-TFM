@@ -308,3 +308,83 @@ public struct DeletePlayer: Sendable {
         try await players.delete(id)
     }
 }
+
+// ── El buscador del alta (R6.7) ───────────────────────────────────────────────
+
+/// Los perfiles del club que encajan con lo escrito, para el alta en una
+/// plantilla (`GET /player-profiles`, `D-120`).
+public struct SearchPlayerProfiles: Sendable {
+    private let clubs: any ClubRepository
+    private let teams: any TeamRepository
+    private let opponentClubs: any OpponentClubRepository
+    private let seasons: any SeasonRepository
+    private let players: any PlayerRepository
+    private let profiles: any PlayerProfileRepository
+
+    public init(clubs: any ClubRepository, teams: any TeamRepository,
+                opponentClubs: any OpponentClubRepository, seasons: any SeasonRepository,
+                players: any PlayerRepository, profiles: any PlayerProfileRepository) {
+        self.clubs = clubs
+        self.teams = teams
+        self.opponentClubs = opponentClubs
+        self.seasons = seasons
+        self.players = players
+        self.profiles = profiles
+    }
+
+    /// Hasta diez (`D-120`): los que caben en la lista del buscador.
+    public static let limit = 10
+
+    /// Una plantilla en la que estuvo: su equipo, con sus rótulos, y la temporada.
+    public struct Roster: Equatable, Sendable {
+        public let team: LabeledTeam
+        public let season: Season
+    }
+
+    public struct Match: Equatable, Sendable {
+        public let profile: PlayerProfile
+        /// La fila no borrada más reciente, o `nil` si no tiene ninguna.
+        public let lastRoster: Roster?
+        /// El equipo en el que ya está esta temporada, si es otro (`D-121`).
+        public let otherTeamThisSeason: LabeledTeam?
+    }
+
+    public func execute(_ search: PlayerSearch, teamID: TeamID, seasonID: SeasonID,
+                        actor: ActorContext) async throws -> [Match] {
+        // El 404 del ámbito, como `listPlayers`.
+        guard try await teams.find(teamID) != nil else {
+            throw ApplicationError.teamNotFound(id: "\(teamID)")
+        }
+        guard try await seasons.find(seasonID) != nil else {
+            throw ApplicationError.unknownSeason(id: "\(seasonID)")
+        }
+        let found = try await profiles.search(
+            search, excludingRosterOf: teamID, seasonID: seasonID, limit: Self.limit)
+        guard !found.isEmpty else { return [] }
+
+        guard let club = try await clubs.current() else {
+            throw ApplicationError.tenantNotProvisioned(slug: actor.clubSlug.value)
+        }
+        let rows = try await players.list(profileIDs: found.map(\.id))
+        let seasonsByID = Dictionary(
+            uniqueKeysWithValues: try await seasons.list(includingArchived: true).map { ($0.id, $0) })
+        let labels = try await TeamLabels.resolve(
+            rows.map(\.teamID), club: club, teams: teams, opponentClubs: opponentClubs)
+
+        return found.map { profile in
+            let theirs = rows.filter { $0.profileID == profile.id }
+            // **La más reciente, por la temporada**: no por la fecha de alta, que
+            // puede ser de una temporada pasada escrita tarde.
+            let last = theirs
+                .compactMap { row in seasonsByID[row.seasonID].map { (row, $0) } }
+                .max { $0.1.label.startYear < $1.1.label.startYear }
+            let other = theirs.first { $0.seasonID == seasonID && $0.teamID != teamID }
+            return Match(
+                profile: profile,
+                lastRoster: last.flatMap { row, season in
+                    labels[row.teamID].map { Roster(team: $0, season: season) }
+                },
+                otherTeamThisSeason: other.flatMap { labels[$0.teamID] })
+        }
+    }
+}

@@ -161,3 +161,66 @@ struct PlayerRepositoryTests {
         }
     }
 }
+
+// ── El buscador del alta (R6.7) ──────────────────────────────────────────────
+
+extension PlayerRepositoryTests {
+    static func search(_ tenant: TenantFixture, _ query: String, team: Team, season: Season,
+                       limit: Int = 10) async throws -> [String] {
+        let search = try #require(PlayerSearch(query))
+        return try await tenant.scope {
+            try await $0.playerProfiles.search(search, excludingRosterOf: team.id, seasonID: season.id,
+                                               limit: limit)
+        }.map(\.fullName.value)
+    }
+
+    /// La base pliega con `translate` y la misma tabla que `PlayerSearch`: lo que
+    /// prueba este test es que las dos encuentran lo mismo, con tildes, diéresis,
+    /// eñe, guion y apóstrofo de por medio.
+    @Test("la base encuentra sin tildes, palabra a palabra y con la eñe como «n» (D-120)")
+    func searchFolds() async throws {
+        try await Self.withFixture("search") { tenant, a, _, vigente, _ in
+            try await tenant.scope {
+                for name in ["José Muñoz", "Lucía Güell", "Ana Pérez-Gil", "Liam O'Brien",
+                             "Juan García Fuente", "João Silva"] {
+                    try await $0.playerProfiles.save(try Self.profile(name, full: false))
+                }
+            }
+            #expect(try await Self.search(tenant, "jose munoz", team: a, season: vigente) == ["JOSÉ MUÑOZ"])
+            #expect(try await Self.search(tenant, "guell", team: a, season: vigente) == ["LUCÍA GÜELL"])
+            #expect(try await Self.search(tenant, "gil", team: a, season: vigente) == ["ANA PÉREZ-GIL"])
+            #expect(try await Self.search(tenant, "brien", team: a, season: vigente) == ["LIAM O'BRIEN"])
+            #expect(try await Self.search(tenant, "fuen juan", team: a, season: vigente) == ["JUAN GARCÍA FUENTE"])
+            #expect(try await Self.search(tenant, "joao", team: a, season: vigente) == ["JOÃO SILVA"])
+            #expect(try await Self.search(tenant, "arcia", team: a, season: vigente).isEmpty,
+                    "el comienzo de una palabra, no un trozo de en medio")
+        }
+    }
+
+    @Test("sin los de esa plantilla, con los dados de baja, por nombre y hasta el límite (D-120)")
+    func searchScope() async throws {
+        try await Self.withFixture("searchscope") { tenant, a, b, vigente, anterior in
+            let enA = try Self.profile("Juan Ruiz")
+            let deBaja = try Self.profile("Juan Sanz")
+            let enB = try Self.profile("Juan Pérez")
+            let pasado = try Self.profile("Juan Gil")
+            let filaBaja = try Self.row(deBaja, a, vigente, full: false)
+            try await tenant.scope {
+                for p in [enA, deBaja, enB, pasado] { try await $0.playerProfiles.save(p) }
+                try await $0.players.save(try Self.row(enA, a, vigente, full: false))
+                try await $0.players.save(filaBaja)
+                try await $0.players.save(try Self.row(enB, b, vigente, full: false))
+                try await $0.players.save(try Self.row(pasado, a, anterior, full: false))
+            }
+            try await tenant.scope { try await $0.players.delete(filaBaja.id) }
+
+            #expect(try await Self.search(tenant, "juan", team: a, season: vigente)
+                    == ["JUAN GIL", "JUAN PÉREZ", "JUAN SANZ"])
+            #expect(try await Self.search(tenant, "juan", team: a, season: vigente, limit: 2)
+                    == ["JUAN GIL", "JUAN PÉREZ"])
+
+            let filas = try await tenant.scope { try await $0.players.list(profileIDs: [pasado.id, deBaja.id]) }
+            #expect(filas.map(\.seasonID) == [anterior.id], "las no borradas, de cualquier temporada")
+        }
+    }
+}

@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores. **920 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores y el buscador de perfiles. **937 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -48,7 +48,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/matches?…`                                                                   | Backoffice R4 — [§4.8](#partidos) |
 | `GET /v1/players?teamId=&seasonId=` · `GET /v1/players/{id}`                          | Backoffice R6.6 |
 | `POST /v1/players` · `PUT /v1/players/{id}` · `DELETE /v1/players/{id}`               | Backoffice R6.6 |
-| Las otras 66 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/player-profiles?q=&teamId=&seasonId=`                                        | Backoffice R6.7 |
+| Las otras 65 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).

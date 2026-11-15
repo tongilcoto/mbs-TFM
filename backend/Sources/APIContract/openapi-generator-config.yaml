@@ -49,6 +49,7 @@ filter:
     - createPlayer            # R6.6 — el alta, con perfil o jugador nuevo (D-120); copia lo suyo al perfil (D-122)
     - updatePlayer            # R6.6 — corregir con la ficha entera (PUT); nombre y año al perfil, el resto a la fila
     - deletePlayer            # R6.6 — la baja, borrado lógico (D-36)
+    - searchPlayerProfiles    # R6.7 — el buscador del alta: sin tildes, palabra a palabra, sin los de esa plantilla (D-120)
 
   # D-109: las listas cerradas que llevan nombres en el catálogo (`x-enum-names`), se usen ya o no. El generador
   # solo fabrica los tipos de las operaciones de arriba, y `EnumNamesTool` escribe el nombre de cada valor como

@@ -2,6 +2,7 @@ public import Domain
 public import Application
 public import Fluent
 import Foundation
+import SQLKit
 
 /// Modelo de persistencia del perfil del jugador (§4.4, [D-119]): el que dura
 /// entre temporadas.
@@ -264,6 +265,14 @@ public struct FluentPlayerRepository: PlayerRepository {
         // `deleted_at` y deja la fila ([D-36]).
         try await PlayerRecord.find(id.raw, on: database)?.delete(on: database)
     }
+
+    public func list(profileIDs: [PlayerProfileID]) async throws -> [Player] {
+        guard !profileIDs.isEmpty else { return [] }
+        return try await PlayerRecord.query(on: database)
+            .filter(\.$profile.$id ~~ Set(profileIDs.map(\.raw)))
+            .all()
+            .map { try $0.toDomain() }
+    }
 }
 
 public struct FluentPlayerProfileRepository: PlayerProfileRepository {
@@ -292,5 +301,47 @@ public struct FluentPlayerProfileRepository: PlayerProfileRepository {
             record.apply(profile)
             try await record.create(on: database)
         }
+    }
+
+    /// **En la base, con `translate`** y la tabla de `PlayerSearch`: el nombre ya
+    /// está en mayúsculas (`PlayerName`), así que plegarlo es cambiar letra por
+    /// letra. Delante va un espacio para que «empieza una palabra» sea `LIKE '% W%'`.
+    ///
+    /// Las palabras solo llevan letras (`PlayerSearch` quita lo demás), así que ni
+    /// `%` ni `_` llegan al `LIKE`; y van **ligadas**, no pegadas al SQL.
+    ///
+    /// Sin índice: un club tiene unos cientos de perfiles, y la consulta los
+    /// recorre en milisegundos. Si un día no basta, un índice de trigramas sobre
+    /// el nombre plegado.
+    public func search(_ search: PlayerSearch, excludingRosterOf teamID: TeamID, seasonID: SeasonID,
+                       limit: Int) async throws -> [PlayerProfile] {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "search", object: PlayerProfileRecord.schema)
+        }
+        let from = String(PlayerSearch.foldFrom)
+        let to = String(PlayerSearch.foldTo)
+        var query = SQLQueryString("""
+            SELECT p.id FROM player_profiles p WHERE p.id NOT IN (
+              SELECT r.profile_id FROM players r
+              WHERE r.team_id = \(bind: teamID.raw) AND r.season_id = \(bind: seasonID.raw)
+                AND r.deleted_at IS NULL)
+            """)
+        for word in search.words {
+            query.appendInterpolation(unsafeRaw: " AND (' ' || translate(p.full_name, ")
+            query.appendInterpolation(bind: from)
+            query.appendInterpolation(unsafeRaw: ", ")
+            query.appendInterpolation(bind: to)
+            query.appendInterpolation(unsafeRaw: ")) LIKE ")
+            query.appendInterpolation(bind: "% \(word)%")
+        }
+        query.appendInterpolation(unsafeRaw: " ORDER BY p.full_name LIMIT ")
+        query.appendInterpolation(bind: limit)
+
+        let ids = try await sql.raw(query).all(decodingColumn: "id", as: UUID.self)
+        guard !ids.isEmpty else { return [] }
+        let records = try await PlayerProfileRecord.query(on: database).filter(\.$id ~~ Set(ids)).all()
+        let byID = Dictionary(uniqueKeysWithValues: try records.map { (try $0.requireID(), $0) })
+        // En el orden de la consulta: el de los nombres.
+        return try ids.compactMap { byID[$0] }.map { try $0.toDomain() }
     }
 }

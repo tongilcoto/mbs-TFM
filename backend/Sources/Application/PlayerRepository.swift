@@ -17,6 +17,11 @@ public protocol PlayerRepository: Sendable {
 
     /// Borrado **lógico** (`D-36`): la fila deja de verse y su dorsal queda libre.
     func delete(_ id: PlayerID) async throws
+
+    /// Todas las filas no borradas de esos perfiles, de cualquier temporada: el
+    /// buscador del alta saca de ellas la última plantilla y el otro equipo
+    /// (R6.7). Sin orden.
+    func list(profileIDs: [PlayerProfileID]) async throws -> [Player]
 }
 
 /// El perfil del jugador, que dura entre temporadas (`D-119`).
@@ -25,6 +30,14 @@ public protocol PlayerProfileRepository: Sendable {
     func list(ids: [PlayerProfileID]) async throws -> [PlayerProfile]
     /// *Upsert* por `id`.
     func save(_ profile: PlayerProfile) async throws
+
+    /// **El buscador del alta** (R6.7, `D-120`): los perfiles cuyo nombre encaja
+    /// con lo escrito, como lo pliega `PlayerSearch`, **sin los que ya están en la
+    /// plantilla de ese equipo y temporada**, por orden de nombre y hasta `limit`.
+    /// Quitarlos aquí y no después es lo que hace que los `limit` que llegan sean
+    /// todos enseñables.
+    func search(_ search: PlayerSearch, excludingRosterOf teamID: TeamID, seasonID: SeasonID,
+                limit: Int) async throws -> [PlayerProfile]
 }
 
 /// Un jugador **como lo enseña la plantilla**: su fila y su perfil, de donde

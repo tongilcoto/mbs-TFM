@@ -394,3 +394,92 @@ struct PlayerUseCaseTests {
         }
     }
 }
+
+// ── El buscador del alta (R6.7) ──────────────────────────────────────────────
+
+extension PlayerUseCaseTests {
+    static func search(_ s: Seeded, _ query: String, team: Team? = nil) async throws
+        -> [SearchPlayerProfiles.Match]
+    {
+        try await SearchPlayerProfiles(
+            clubs: FakeClubRepository(store: s.store), teams: FakeTeamRepository(store: s.store),
+            opponentClubs: FakeOpponentClubRepository(store: s.store),
+            seasons: FakeSeasonRepository(store: s.store), players: FakePlayerRepository(store: s.store),
+            profiles: FakePlayerProfileRepository(store: s.store)
+        ).execute(try #require(PlayerSearch(query)), teamID: (team ?? s.cadeteA).id,
+                  seasonID: s.vigente.id, actor: ActorContext(clubSlug: try Slug("ejemplo")))
+    }
+
+    static func withClub(_ s: Seeded) async throws -> Seeded {
+        await s.store.seed(club: try Club(
+            id: ClubID(raw: UUID()), name: "C.D. Ejemplo", shortName: "Ejemplo",
+            slug: try Slug("ejemplo"), federation: .rffm, createdAt: now, updatedAt: now))
+        return s
+    }
+
+    @Test("trae el perfil entero y su última plantilla, la de la temporada más reciente (D-120, D-122)")
+    func searchBringsTheProfile() async throws {
+        let s = try await Self.withClub(try await Self.seed())
+        let pasado = try await Self.newPlayer(s, shirt: 7, position: .defensa, team: s.cadeteB,
+                                              season: s.anterior)
+
+        let found = try await Self.search(s, "juan gar")
+        let match = try #require(found.first)
+        #expect(found.count == 1)
+        #expect(match.profile.id == pasado.profile.id)
+        #expect(match.profile.lastShirtNumber?.value == 7)
+        #expect(match.profile.lastPosition == .defensa)
+        #expect(match.lastRoster?.team.team.id == s.cadeteB.id)
+        #expect(match.lastRoster?.season.label.value == "2025/26")
+        #expect(match.lastRoster?.team.clubShortName == "Ejemplo")
+        #expect(match.otherTeamThisSeason == nil)
+    }
+
+    /// Con dos filas, la más reciente es la de la temporada más reciente, aunque
+    /// se escribiera antes.
+    @Test("con dos temporadas, la última plantilla es la de la más reciente")
+    func lastRosterIsTheLatestSeason() async throws {
+        let s = try await Self.withClub(try await Self.seed())
+        let ahora = try await Self.newPlayer(s, team: s.cadeteB)
+        _ = try await Self.create(s.store).execute(.init(
+            teamID: s.cadeteA.id, seasonID: s.anterior.id, who: .profile(ahora.profile.id)))
+
+        let match = try #require(try await Self.search(s, "juan").first)
+        #expect(match.lastRoster?.season.id == s.vigente.id)
+        #expect(match.lastRoster?.team.team.id == s.cadeteB.id)
+    }
+
+    @Test("marca al que ya está en otro equipo esta temporada, y no ofrece al de esta plantilla (D-121)")
+    func otherTeamAndThisRoster() async throws {
+        let s = try await Self.withClub(try await Self.seed())
+        try await Self.newPlayer(s, name: "Juan García")
+        try await Self.newPlayer(s, name: "Juan López", team: s.cadeteB)
+
+        let found = try await Self.search(s, "juan")
+        #expect(found.map(\.profile.fullName.value) == ["JUAN LÓPEZ"])
+        #expect(found.first?.otherTeamThisSeason?.team.id == s.cadeteB.id)
+    }
+
+    @Test("un perfil sin filas sale sin última plantilla; sin coincidencias, lista vacía")
+    func profileWithoutRows() async throws {
+        let s = try await Self.withClub(try await Self.seed())
+        await s.store.save(PlayerProfile(
+            id: PlayerProfileID(raw: UUID()), fullName: try PlayerName("Ana Gil"), birthYear: nil,
+            createdAt: Self.now, updatedAt: Self.now))
+        let match = try #require(try await Self.search(s, "ana").first)
+        #expect(match.lastRoster == nil)
+        #expect(try await Self.search(s, "zzz").isEmpty)
+    }
+
+    @Test("hasta diez, por orden de nombre (D-120)")
+    func upToTen() async throws {
+        let s = try await Self.withClub(try await Self.seed())
+        for n in ["Ana", "Bea", "Carla", "Dora", "Eva", "Fany", "Gema", "Hilda", "Inés", "Julia", "Kira"] {
+            try await Self.newPlayer(s, name: "\(n) Ruiz", team: s.cadeteB)
+        }
+        let names = try await Self.search(s, "ruiz").map(\.profile.fullName.value)
+        #expect(names.count == 10)
+        #expect(names.first == "ANA RUIZ")
+        #expect(!names.contains("KIRA RUIZ"))
+    }
+}
