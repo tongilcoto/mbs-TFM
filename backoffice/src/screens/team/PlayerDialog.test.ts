@@ -112,7 +112,7 @@ describe('abrir el diálogo', () => {
     expect(screen.getByRole('textbox', { name: /Año de nacimiento \(obligatorio\)/ })).toBeEnabled()
     expect(screen.getByRole('textbox', { name: 'Dorsal' })).toHaveAccessibleDescription('Del 1 al 99')
     expect(screen.getByRole('combobox', { name: /Demarcación/ })).toBeInTheDocument()
-    expect(screen.getByLabelText('Foto')).toHaveAccessibleDescription('JPEG o PNG, hasta 5 MB')
+    expect(screen.getByRole('button', { name: 'Elegir foto' })).toHaveAccessibleDescription('JPEG o PNG, hasta 5 MB')
     expect(screen.queryByRole('button', { name: 'Elegir otro jugador' })).not.toBeInTheDocument()
   })
 })

@@ -25,6 +25,7 @@ import type { components } from '../../api/schema'
 import FormErrorList, { type FormError } from '../../components/FormErrorList.vue'
 import FormField from '../../components/FormField.vue'
 import LoadError from '../../components/LoadError.vue'
+import PhotoPicker from '../../components/PhotoPicker.vue'
 import PlayerPhoto from '../../components/PlayerPhoto.vue'
 import { initialsOf, shownName } from '../../components/playerName'
 import { optionsOf } from '../../theme/names'
@@ -186,11 +187,7 @@ async function chooseAgain() {
   await focusName()
 }
 
-function pickPhoto(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
+function pickPhoto(file: File) {
   dropPreview()
   photo.value = { kind: 'file', file, preview: URL.createObjectURL(file) }
 }
@@ -511,13 +508,13 @@ async function showSaveError(error: ShownError) {
                 :name="shownChosenName || 'Jugador'"
                 :initials="initialsOf(shownChosenName)"
               />
-              <input
-                id="player-photo"
-                type="file"
+              <PhotoPicker
+                input-id="player-photo"
+                :label="photoShown ? 'Cambiar foto' : 'Elegir foto'"
                 :accept="PHOTO_TYPES"
-                :aria-describedby="describedBy"
-                @change="pickPhoto"
-              >
+                :described-by="describedBy"
+                @pick="pickPhoto"
+              />
               <Button
                 v-if="photoShown"
                 type="button"

@@ -29,6 +29,11 @@ export function tabPath(tab: TeamTab, seasonLabel: string, teamId: string): stri
   return `/temporadas/${toAddress(seasonLabel)}/equipos/${teamId}/${tab}`
 }
 
+// La ficha de un jugador en una temporada (plan R6, decisión 6): `:id` es su fila de esa temporada.
+export function playerPath(seasonLabel: string, playerId: string): string {
+  return `/temporadas/${toAddress(seasonLabel)}/jugadores/${playerId}`
+}
+
 export function competitionPath(seasonLabel: string, competitionId: string): string {
   return `/temporadas/${toAddress(seasonLabel)}/competiciones/${competitionId}`
 }

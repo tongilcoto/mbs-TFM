@@ -3,6 +3,7 @@ import CompetitionScreen from './screens/competition/CompetitionScreen.vue'
 import HomeScreen from './screens/home/HomeScreen.vue'
 import NewTeamScreen from './screens/new-team/NewTeamScreen.vue'
 import NotFoundScreen from './screens/not-found/NotFoundScreen.vue'
+import PlayerScreen from './screens/player/PlayerScreen.vue'
 import SyncTeamScreen from './screens/sync-team/SyncTeamScreen.vue'
 import TeamScreen from './screens/team/TeamScreen.vue'
 
@@ -34,6 +35,8 @@ export const router = createRouter({
     { path: '/equipos/:id', component: TeamScreen, meta: { title: 'Resultados', tab: 'resultados' } },
     // Jornada y clasificación de una competición, con la jornada detrás de `?` (plan R4, decisión 3).
     { path: '/temporadas/:temporada/competiciones/:id', component: CompetitionScreen, meta: { title: 'Jornada y clasificación' } },
+    // La ficha de un jugador en una temporada (plan R6, decisión 6).
+    { path: '/temporadas/:temporada/jugadores/:id', component: PlayerScreen, meta: { title: 'Jugador' } },
     // Cualquier otro camino (LLD-B §6.7).
     { path: '/:anything(.*)*', component: NotFoundScreen, meta: { title: 'Esta página no existe' } },
   ],

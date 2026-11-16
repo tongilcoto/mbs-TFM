@@ -590,6 +590,13 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
     expect(rows[1]).toHaveTextContent('—')
   })
 
+  test('el nombre lleva a su ficha, en la misma temporada', async () => {
+    fakeServer()
+    await openTeam(plantilla)
+
+    expect(within(await rosterTable()).getByRole('link', { name: 'Marcos Díaz' })).toHaveAttribute('href', '/temporadas/2026-27/jugadores/a')
+  })
+
   test('la foto, con el nombre del jugador; sin foto, sus iniciales', async () => {
     fakeServer({ players: [player('a', 'MARCOS DÍAZ', 1, '/api/v1/player-photos/a.jpg'), player('b', 'ANA RUIZ', 2)] })
     await openTeam(plantilla)

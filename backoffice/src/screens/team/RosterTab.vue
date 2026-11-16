@@ -2,8 +2,8 @@
      uno por fila, con su foto o sus iniciales, su dorsal, su nombre, su demarcación y su año. Los pide ella, al
      abrirse: la pestaña Resultados no los necesita. Si fallan, el error va aquí y la cabecera se queda.
      Dar de alta y corregir (✎ en cada fila), en un diálogo encima (`PlayerDialog`, R6.12), y dar de baja (🗑), con su
-     confirmación (`RemovePlayerDialog`); la ficha del jugador y sincronizar llegan con el paso que los hace funcionar
-     (decisión 1 de R6.11). Una temporada archivada se ve, pero
+     confirmación (`RemovePlayerDialog`). El nombre lleva a su ficha (R6.13). Sincronizar llega con su paso (decisión 1
+     de R6.11). Una temporada archivada se ve, pero
      no se cambia: sin botones (R6.3). -->
 <script setup lang="ts">
 import Button from 'primevue/button'
@@ -20,6 +20,7 @@ import { announce } from '../../notice'
 import type { Season } from '../home/seasons'
 import PlayerDialog from './PlayerDialog.vue'
 import RemovePlayerDialog from './RemovePlayerDialog.vue'
+import { playerPath } from './header'
 import { rosterRows } from './roster'
 
 type Player = components['schemas']['PlayerResponse']
@@ -171,7 +172,9 @@ onBeforeUnmount(() => pending?.abort())
                 {{ row.shirtNumber }}
               </td>
               <td class="name">
-                {{ row.name }}
+                <RouterLink :to="playerPath(season.label, row.id)">
+                  {{ row.name }}
+                </RouterLink>
               </td>
               <td>{{ row.position }}</td>
               <td class="number">
