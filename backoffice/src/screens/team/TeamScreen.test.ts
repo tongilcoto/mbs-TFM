@@ -113,6 +113,10 @@ function fakeServer(fields: Partial<typeof defaults> = {}) {
       const data = server.matches.slice((page - 1) * perPage, page * perPage)
       return Response.json({ page, perPage, total: server.matches.length, data })
     }
+    if (path === '/players') {
+      if (server.playersFail) return problem(503, 'DATABASE_UNAVAILABLE')
+      return Response.json(server.players)
+    }
     if (path === '/ingestion-runs' && request.method === 'POST') return new Promise<Response>((resolve) => (server.finish = resolve))
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
@@ -128,6 +132,27 @@ const defaults = {
   tables: { 'liga-j5': table(16, 13), 'liga-j4': table(16, 11) } as Record<string, unknown[]>,
   matches: [match('liga', 5, 2, 1), match('liga', 6)] as unknown[],
   matchesFail: false,
+  players: [player('a', 'MARCOS DÍAZ', 1), player('b', 'JUAN CARLOS GARCÍA DE LA FUENTE', null)] as unknown[],
+  playersFail: false,
+}
+
+// Un jugador de la plantilla, con su dorsal o sin él; sin foto, salvo que se le dé.
+function player(id: string, fullName: string, shirtNumber: number | null, photoUrl: string | null = null) {
+  return {
+    id,
+    profileId: `perfil-${id}`,
+    teamId: TEAM,
+    seasonId: 'id-2026',
+    fullName,
+    birthYear: 2011,
+    shirtNumber,
+    position: shirtNumber === 1 ? 'portero' : null,
+    federated: null,
+    lastListedAt: null,
+    photoUrl,
+    createdAt: '2026-11-16T00:00:00Z',
+    updatedAt: '2026-11-16T00:00:00Z',
+  }
 }
 
 // Un partido del equipo en casa contra un rival; con marcador, jugado.
@@ -173,6 +198,7 @@ async function openTeam(address = `/temporadas/2026-27/equipos/${TEAM}/resultado
       { path: '/', component: landing('Equipos') },
       { path: '/equipos/:id/federacion', component: landing('Sincronizar con la Federación') },
       { path: '/temporadas/:temporada/equipos/:id/resultados', component: TeamScreen },
+      { path: '/temporadas/:temporada/equipos/:id/plantilla', component: TeamScreen, meta: { title: 'Plantilla', tab: 'plantilla' } },
       { path: '/equipos/:id', component: TeamScreen },
     ],
   })
@@ -524,5 +550,111 @@ describe('la pestaña Resultados (§3.3)', () => {
       `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=1&perPage=100`,
       `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=2&perPage=100`,
     ])
+  })
+})
+
+describe('la pestaña Plantilla (plan R6, §3)', () => {
+  const rosterTable = (season = '2026/27') => screen.findByRole('table', { name: `Plantilla de Cadete A en la temporada ${season}` })
+  const plantilla = `/temporadas/2026-27/equipos/${TEAM}/plantilla`
+
+  test('la pestaña, sin la etiqueta «Federación», y un jugador por fila, como llegan', async () => {
+    fakeServer()
+    await openTeam(plantilla)
+
+    const table = await rosterTable()
+    expect(screen.getByRole('link', { name: 'Plantilla' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Resultados' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByText('Federación')).not.toBeInTheDocument()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('1')
+    expect(rows[0]).toHaveTextContent('Marcos Díaz')
+    expect(rows[0]).toHaveTextContent('Portero')
+    expect(rows[0]).toHaveTextContent('2011')
+    expect(rows[1]).toHaveTextContent('Juan Carlos García de la Fuente')
+    expect(rows[1]).toHaveTextContent('—')
+  })
+
+  test('la foto, con el nombre del jugador; sin foto, sus iniciales', async () => {
+    fakeServer({ players: [player('a', 'MARCOS DÍAZ', 1, '/api/v1/player-photos/a.jpg'), player('b', 'ANA RUIZ', 2)] })
+    await openTeam(plantilla)
+
+    const rows = within(await rosterTable()).getAllByRole('row').slice(1)
+    expect(within(rows[0]!).getByRole('img', { name: 'Marcos Díaz' })).toHaveAttribute('src', '/api/v1/player-photos/a.jpg')
+    expect(within(rows[1]!).getByText('AR')).toBeInTheDocument()
+  })
+
+  test('pide la plantilla de ese equipo y esa temporada, y no los partidos', async () => {
+    const server = fakeServer()
+    await openTeam(plantilla)
+    await rosterTable()
+
+    expect(server.asked).toContain(`GET /players?teamId=${TEAM}&seasonId=id-2026`)
+    expect(server.asked.some((a) => a.startsWith('GET /matches'))).toBe(false)
+  })
+
+  test('la pestaña Resultados no pide la plantilla', async () => {
+    const server = fakeServer()
+    await openTeam()
+    await screen.findByRole('table', { name: 'Partidos de Cadete A en la temporada 2026/27' })
+
+    expect(server.asked.some((a) => a.startsWith('GET /players'))).toBe(false)
+  })
+
+  test('de Resultados a Plantilla, la cabecera no se vuelve a pedir', async () => {
+    const server = fakeServer()
+    const router = await openTeam()
+    await positionShown()
+
+    await fireEvent.click(screen.getByRole('link', { name: 'Plantilla' }))
+
+    await rosterTable()
+    expect(router.currentRoute.value.path).toBe(plantilla)
+    expect(server.asked.filter((a) => a === `GET /teams/${TEAM}`)).toHaveLength(1)
+    expect(screen.queryByText('Cargando equipo…')).not.toBeInTheDocument()
+  })
+
+  test('al cambiar de temporada, se sigue en Plantilla', async () => {
+    fakeServer({ playsIn: ['id-2026', 'id-2025'] })
+    const router = await openTeam(plantilla)
+    await rosterTable()
+
+    await fireEvent.click(screen.getByRole('combobox', { name: 'Temporada' }))
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: '2025/26' }))
+
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/temporadas/2025-26/equipos/${TEAM}/plantilla`))
+    expect(await rosterTable('2025/26')).toBeInTheDocument()
+  })
+
+  test('sin jugadores, lo dice con la temporada', async () => {
+    fakeServer({ players: [] })
+    await openTeam(plantilla)
+
+    expect(await screen.findByText('Este equipo aún no tiene jugadores en 2026/27.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  test('mientras llegan, «Cargando jugadores…»; la cabecera ya está', async () => {
+    fakeServer()
+    const real = globalThis.fetch
+    vi.stubGlobal('fetch', (request: Request) =>
+      new URL(request.url).pathname === '/api/v1/players' ? new Promise(() => {}) : real(request),
+    )
+    await openTeam(plantilla)
+
+    expect(await screen.findByText('Cargando jugadores…')).toBeInTheDocument()
+    expect(box('Posición')).toHaveTextContent('13º')
+  })
+
+  test('si fallan, el error con «Reintentar», y la cabecera se queda', async () => {
+    const server = fakeServer({ playersFail: true })
+    await openTeam(plantilla)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se ha podido conectar con el servidor')
+    expect(box('Posición')).toHaveTextContent('13º')
+
+    server.playersFail = false
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await rosterTable()).toBeInTheDocument()
   })
 })

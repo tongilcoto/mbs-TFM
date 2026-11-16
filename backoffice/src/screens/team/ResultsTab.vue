@@ -90,7 +90,7 @@ async function load(quiet = false) {
 
 // Al abrir, y si cambia el equipo o la temporada. Con otra competición del mismo equipo no hace falta: ya están
 // los de todas.
-watch(() => [props.teamId, props.season.id, props.competitionId === undefined], () => load(), { immediate: true })
+watch([() => props.teamId, () => props.season.id, () => props.competitionId === undefined], () => load(), { immediate: true })
 watch(() => props.refreshCount, () => load(true))
 onBeforeUnmount(() => pending?.abort())
 </script>

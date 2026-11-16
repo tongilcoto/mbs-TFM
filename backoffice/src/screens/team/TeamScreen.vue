@@ -3,7 +3,8 @@
      pide el equipo y las temporadas a la vez; con la temporada, la inscripción del equipo en ella; con su
      competición, el estado de su ingesta (las competiciones de la temporada), sus jornadas y la clasificación de la
      jornada en curso, o de la anterior si esa aún no tiene tabla. Debajo, las pestañas, cada una en su fichero y
-     con sus propias peticiones (plan R6, decisión 4 de R6.11): Resultados, `ResultsTab.vue`. `/equipos/:id`, sin
+     con sus propias peticiones (plan R6, decisión 4 de R6.11): Resultados, `ResultsTab.vue`, y Plantilla,
+     `RosterTab.vue`. Cambiar de pestaña no vuelve a pedir la cabecera. `/equipos/:id`, sin
      temporada, lleva a la en curso (LLD-B §6.4). Mientras la ingesta está «En marcha», se refresca sola, como la
      portada. -->
 <script setup lang="ts">
@@ -24,8 +25,9 @@ import { shownHealth, useRelaunch } from '../../relaunch'
 import { competitionLabel } from '../../theme/names'
 import { chooseSeason, newestFirst, type Season, todayHere, toAddress } from '../home/seasons'
 import { isTeamCode, teamNotFound } from '../sync-team/link'
-import { competitionPath, notPlayingText, positionIn, resultsPath, roundsToLookIn, teamHeading } from './header'
+import { competitionPath, notPlayingText, positionIn, roundsToLookIn, tabPath, type TeamTab, teamHeading } from './header'
 import ResultsTab from './ResultsTab.vue'
+import RosterTab from './RosterTab.vue'
 
 type Team = components['schemas']['TeamResponse']
 type Competition = components['schemas']['CompetitionResponse']
@@ -67,6 +69,14 @@ let refreshing: AbortController | undefined
 const { running: relaunched, failure: relaunchFailure, relaunch } = useRelaunch(refresh)
 
 const teamId = computed(() => String(route.params.id))
+// La pestaña que se ve; sin ella en el camino (`/equipos/:id`), Resultados.
+const tab = computed<TeamTab>(() => route.meta.tab ?? 'resultados')
+// Las pestañas, en su orden. A la derecha de la barra, de dónde vienen los datos, si son de la Federación: los de
+// la plantilla los teclea el club (decisión 2 de R6.11).
+const tabs: { tab: TeamTab; label: string }[] = [
+  { tab: 'resultados', label: 'Resultados' },
+  { tab: 'plantilla', label: 'Plantilla' },
+]
 const team = computed(() => (state.value.kind === 'loading' || state.value.kind === 'error' ? undefined : state.value.team))
 const season = computed(() => (state.value.kind === 'ready' || state.value.kind === 'notPlaying' ? state.value.season : undefined))
 const heading = computed(() => team.value && teamHeading(team.value))
@@ -138,7 +148,7 @@ async function load() {
     }
     // Sin temporada en la dirección, la que toca, en la dirección: así se puede compartir y recargar.
     if (asked === undefined) {
-      await router.replace(resultsPath(choice.season.label, id))
+      await router.replace(tabPath(tab.value, choice.season.label, id))
       return
     }
     const season = choice.season
@@ -204,8 +214,10 @@ async function findPosition(competitionId: string, signal: AbortSignal): Promise
   return ok({ kind: 'none', table: [] })
 }
 
-// Al abrir, y cada vez que cambia el equipo o la temporada de la dirección (el selector, o «Atrás»).
-watch(() => [route.params.id, route.params.temporada], load, { immediate: true })
+// Al abrir, y cada vez que cambia el equipo o la temporada de la dirección (el selector, o «Atrás»). Cada uno por
+// separado: una función que devuelve los dos en una lista nueva cuenta como cambio en cada navegación, y cambiar
+// de pestaña volvía a pedir la cabecera.
+watch([() => route.params.id, () => route.params.temporada], load, { immediate: true })
 
 // Otra competición del equipo: solo cambia la posición. Si falla, el error de la ficha, con *Reintentar*.
 async function chooseCompetition(id: string) {
@@ -258,9 +270,10 @@ onBeforeUnmount(() => {
   refreshing?.abort()
 })
 
-// El selector cambia la dirección: «Atrás» vuelve a la anterior, y el enlace se puede compartir.
+// El selector cambia la dirección, en la misma pestaña: «Atrás» vuelve a la anterior, y el enlace se puede
+// compartir.
 function pickSeason(label: string) {
-  router.push(resultsPath(label, teamId.value))
+  router.push(tabPath(tab.value, label, teamId.value))
 }
 </script>
 
@@ -424,22 +437,33 @@ function pickSeason(label: string) {
       </template>
     </div>
 
-    <!-- Las pestañas, cada una con su camino (LLD-B §6.4). Por ahora, Resultados: las demás llegan con sus
-         rebanadas. A la derecha, de dónde vienen sus datos. -->
+    <!-- Las pestañas, cada una con su camino (LLD-B §6.4). Estadísticas llega con la R10. -->
     <template v-if="state.kind === 'ready'">
       <div class="tabs">
         <nav aria-label="Secciones del equipo">
           <RouterLink
-            :to="resultsPath(state.season.label, teamId)"
+            v-for="item in tabs"
+            :key="item.tab"
+            :to="tabPath(item.tab, state.season.label, teamId)"
             class="tab"
           >
-            Resultados
+            {{ item.label }}
           </RouterLink>
         </nav>
-        <span class="source">Federación</span>
+        <span
+          v-if="tab === 'resultados'"
+          class="source"
+        >Federación</span>
       </div>
 
+      <RosterTab
+        v-if="tab === 'plantilla'"
+        :team-id="teamId"
+        :team-title="heading?.title ?? ''"
+        :season="state.season"
+      />
       <ResultsTab
+        v-else
         :team-id="teamId"
         :team-title="heading?.title ?? ''"
         :season="state.season"
@@ -530,13 +554,17 @@ h1 {
 .detail {
   color: var(--p-text-muted-color);
 }
-/* La barra de pestañas, con una sola; y a la derecha, de dónde vienen los datos. */
+/* La barra de pestañas; y a la derecha, de dónde vienen los datos. */
 .tabs {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--p-content-border-color);
+}
+.tabs nav {
+  display: flex;
+  gap: 1.25rem;
 }
 .tab {
   display: inline-block;

@@ -21,9 +21,12 @@ export function notPlayingText(team: Team, seasonLabel: string): string {
   return `${team.clubName} ${teamName(team.category, team.letter)} no jugó la temporada ${seasonLabel}.`
 }
 
-// Los caminos de la ficha (LLD-B §6.5): la temporada va en ellos con guion, «2025-26».
-export function resultsPath(seasonLabel: string, teamId: string): string {
-  return `/temporadas/${toAddress(seasonLabel)}/equipos/${teamId}/resultados`
+// Los caminos de la ficha (LLD-B §6.5): la temporada va en ellos con guion, «2025-26». Cada pestaña, con el suyo
+// (LLD-B §6.4).
+export type TeamTab = 'resultados' | 'plantilla'
+
+export function tabPath(tab: TeamTab, seasonLabel: string, teamId: string): string {
+  return `/temporadas/${toAddress(seasonLabel)}/equipos/${teamId}/${tab}`
 }
 
 export function competitionPath(seasonLabel: string, competitionId: string): string {
