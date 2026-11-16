@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { notice } from '../../notice'
 import { primeVueOptions } from '../../theme/primevue'
 import TeamScreen from './TeamScreen.vue'
 
@@ -10,7 +11,7 @@ import TeamScreen from './TeamScreen.vue'
 
 const TEAM = '11111111-1111-4111-8111-111111111111'
 
-function season(label: string, isCurrent = false) {
+function season(label: string, isCurrent = false): Record<string, unknown> {
   const year = Number(label.slice(0, 4))
   return {
     id: `id-${year}`,
@@ -113,10 +114,17 @@ function fakeServer(fields: Partial<typeof defaults> = {}) {
       const data = server.matches.slice((page - 1) * perPage, page * perPage)
       return Response.json({ page, perPage, total: server.matches.length, data })
     }
+    if (path === '/players' && request.method === 'POST') {
+      const body = await request.json()
+      const created = player('nuevo', body.fullName, body.shirtNumber)
+      server.players = [...server.players, created]
+      return Response.json(created, { status: 201 })
+    }
     if (path === '/players') {
       if (server.playersFail) return problem(503, 'DATABASE_UNAVAILABLE')
       return Response.json(server.players)
     }
+    if (path === '/player-profiles') return Response.json([])
     if (path === '/ingestion-runs' && request.method === 'POST') return new Promise<Response>((resolve) => (server.finish = resolve))
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
@@ -656,5 +664,50 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
     server.playersFail = false
     await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await rosterTable()).toBeInTheDocument()
+  })
+
+  describe('dar de alta un jugador (R6.12)', () => {
+    test('«Dar de alta un jugador» abre el diálogo encima de la plantilla', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de alta un jugador' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Dar de alta un jugador en Cadete A, 2026/27' })).toBeInTheDocument()
+    })
+
+    test('sin jugadores, también se ofrece', async () => {
+      fakeServer({ players: [] })
+      await openTeam(plantilla)
+
+      await screen.findByText('Este equipo aún no tiene jugadores en 2026/27.')
+      expect(screen.getByRole('button', { name: 'Dar de alta un jugador' })).toBeInTheDocument()
+    })
+
+    test('en una temporada archivada, no', async () => {
+      fakeServer({ seasons: [season('2026/27', true), { ...season('2025/26'), archivedAt: '2026-08-01T00:00:00Z' }], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
+    })
+
+    test('al guardar, el diálogo se cierra, la plantilla trae al nuevo y el aviso dice «Guardado»', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de alta un jugador' }))
+      const box = await screen.findByRole('combobox', { name: /Nombre y apellidos/ })
+      await fireEvent.update(box, 'Ana Ruiz')
+      await fireEvent.input(box)
+      await fireEvent.click(await screen.findByRole('option', { name: /como jugador nuevo/ }, { timeout: 2000 }))
+      await fireEvent.update(screen.getByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+      await fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(async () => expect(within(await rosterTable()).getAllByRole('row').slice(1)).toHaveLength(3))
+      expect(notice.value).toBe('Guardado')
+    })
   })
 })

@@ -1,9 +1,11 @@
 <!-- La pestaña Plantilla de la ficha del equipo (plan R6, §3 y decisión 7): los jugadores del equipo en la temporada,
      uno por fila, con su foto o sus iniciales, su dorsal, su nombre, su demarcación y su año. Los pide ella, al
      abrirse: la pestaña Resultados no los necesita. Si fallan, el error va aquí y la cabecera se queda.
-     Por ahora solo se ve: dar de alta, corregir, dar de baja, la ficha del jugador y sincronizar llegan con el paso
-     que los hace funcionar (decisión 1 de R6.11). -->
+     Dar de alta, en un diálogo encima (`PlayerDialog`, R6.12); corregir, dar de baja, la ficha del jugador y
+     sincronizar llegan con el paso que los hace funcionar (decisión 1 de R6.11). Una temporada archivada se ve, pero
+     no se cambia: sin botones (R6.3). -->
 <script setup lang="ts">
+import Button from 'primevue/button'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
@@ -12,7 +14,9 @@ import type { components } from '../../api/schema'
 import LoadError from '../../components/LoadError.vue'
 import PlayerPhoto from '../../components/PlayerPhoto.vue'
 import ScrollBox from '../../components/ScrollBox.vue'
+import { announce } from '../../notice'
 import type { Season } from '../home/seasons'
+import PlayerDialog from './PlayerDialog.vue'
 import { rosterRows } from './roster'
 
 type Player = components['schemas']['PlayerResponse']
@@ -29,20 +33,25 @@ type Players = { kind: 'loading' } | { kind: 'error'; error: ShownError } | { ki
 const players = ref<Players>({ kind: 'loading' })
 const rows = computed(() => (players.value.kind === 'list' ? rosterRows(players.value.players) : []))
 const caption = computed(() => `Plantilla de ${props.teamTitle} en la temporada ${props.season.label}`)
+const listed = computed(() => (players.value.kind === 'list' ? players.value.players : []))
+const editable = computed(() => props.season.archivedAt == null)
+const adding = ref(false)
 
 // Cada petición cancela la anterior, y salir cancela la que quede (LLD-B §3.2).
 let pending: AbortController | undefined
 
-async function load() {
+// `quiet`, tras un alta: la tabla se queda mientras llega la nueva, sin «Cargando…».
+async function load(quiet = false) {
   pending?.abort()
   const leaving = new AbortController()
   pending = leaving
-  players.value = { kind: 'loading' }
+  if (!quiet) players.value = { kind: 'loading' }
   try {
     const listed = await asResult(
       api.GET('/players', { params: { query: { teamId: props.teamId, seasonId: props.season.id } }, signal: leaving.signal }),
     )
-    players.value = listed.ok ? { kind: 'list', players: listed.data } : { kind: 'error', error: listed.error }
+    if (listed.ok) players.value = { kind: 'list', players: listed.data }
+    else if (!quiet) players.value = { kind: 'error', error: listed.error }
   } catch (error) {
     if (leaving.signal.aborted) return
     throw error
@@ -50,7 +59,16 @@ async function load() {
 }
 
 // Al abrir, y si cambia el equipo o la temporada.
-watch([() => props.teamId, () => props.season.id], load, { immediate: true })
+watch([() => props.teamId, () => props.season.id], () => load(), { immediate: true })
+
+// Tras un alta: la plantilla otra vez y el aviso, que se ve también con el diálogo cerrado (LLD-B §5.4).
+function saved(notice: string, again: boolean) {
+  if (!again) {
+    adding.value = false
+    announce(notice)
+  }
+  load(true)
+}
 onBeforeUnmount(() => pending?.abort())
 </script>
 
@@ -68,79 +86,104 @@ onBeforeUnmount(() => pending?.abort())
       :message="players.error.message"
       :code="players.error.code"
       :retry="players.error.retry"
-      @retry="load"
+      @retry="load()"
     />
-    <p
-      v-else-if="rows.length === 0"
-      class="empty"
-    >
-      Este equipo aún no tiene jugadores en {{ season.label }}.
-    </p>
-    <ScrollBox
-      v-else
-      :label="caption"
-    >
-      <table class="roster">
-        <caption class="visually-hidden">
-          {{ caption }}
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">
-              <span class="visually-hidden">Foto</span>
-            </th>
-            <th
-              scope="col"
-              class="number"
+    <template v-else>
+      <p
+        v-if="editable"
+        class="actions"
+      >
+        <Button
+          label="Dar de alta un jugador"
+          @click="adding = true"
+        />
+      </p>
+      <p
+        v-if="rows.length === 0"
+        class="empty"
+      >
+        Este equipo aún no tiene jugadores en {{ season.label }}.
+      </p>
+      <ScrollBox
+        v-else
+        :label="caption"
+      >
+        <table class="roster">
+          <caption class="visually-hidden">
+            {{ caption }}
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">
+                <span class="visually-hidden">Foto</span>
+              </th>
+              <th
+                scope="col"
+                class="number"
+              >
+                Dorsal
+              </th>
+              <th scope="col">
+                Nombre
+              </th>
+              <th scope="col">
+                Demarcación
+              </th>
+              <th
+                scope="col"
+                class="number"
+              >
+                Año de nacimiento
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in rows"
+              :key="row.id"
             >
-              Dorsal
-            </th>
-            <th scope="col">
-              Nombre
-            </th>
-            <th scope="col">
-              Demarcación
-            </th>
-            <th
-              scope="col"
-              class="number"
-            >
-              Año de nacimiento
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in rows"
-            :key="row.id"
-          >
-            <td class="photo">
-              <PlayerPhoto
-                :url="row.photoUrl"
-                :name="row.name"
-                :initials="row.initials"
-              />
-            </td>
-            <td class="number strong">
-              {{ row.shirtNumber }}
-            </td>
-            <td class="name">
-              {{ row.name }}
-            </td>
-            <td>{{ row.position }}</td>
-            <td class="number">
-              {{ row.birthYear }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </ScrollBox>
+              <td class="photo">
+                <PlayerPhoto
+                  :url="row.photoUrl"
+                  :name="row.name"
+                  :initials="row.initials"
+                />
+              </td>
+              <td class="number strong">
+                {{ row.shirtNumber }}
+              </td>
+              <td class="name">
+                {{ row.name }}
+              </td>
+              <td>{{ row.position }}</td>
+              <td class="number">
+                {{ row.birthYear }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </ScrollBox>
+    </template>
+    <PlayerDialog
+      v-if="adding"
+      :team-id="teamId"
+      :team-title="teamTitle"
+      :season="season"
+      :players="listed"
+      @close="adding = false"
+      @saved="saved"
+    />
   </section>
 </template>
 
 <style scoped>
 .empty {
   margin: 0 0 0.375rem;
+}
+.actions {
+  margin: 0 0 0.75rem;
+  display: flex;
+  justify-content: flex-end;
 }
 .roster {
   width: 100%;
