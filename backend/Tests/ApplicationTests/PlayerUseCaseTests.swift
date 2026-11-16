@@ -138,6 +138,32 @@ struct PlayerUseCaseTests {
         #expect(entry.profile.lastShirtNumber?.value == 10, "y el perfil recuerda la última (D-122)")
     }
 
+    /// Encontrado en la R6.9: el alta no lleva foto (se sube aparte), y copiar al
+    /// perfil «lo vacío» le borraba la que tenía. La fila empieza con la del perfil,
+    /// como en la sincronización (`D-120`).
+    @Test("con un perfil que ya existe, la fila empieza con su foto y el perfil no la pierde (D-122)")
+    func existingProfileBringsItsPhoto() async throws {
+        let s = try await Self.seed()
+        let pasado = try await Self.newPlayer(s, season: s.anterior)
+        let p = pasado.profile
+        try await FakePlayerProfileRepository(store: s.store).save(PlayerProfile(
+            id: p.id, fullName: p.fullName, birthYear: p.birthYear, lastShirtNumber: p.lastShirtNumber,
+            lastPosition: p.lastPosition, lastPhotoKey: "club/foto.jpg", createdAt: p.createdAt,
+            updatedAt: p.updatedAt))
+
+        let entry = try await Self.create(s.store).execute(.init(
+            teamID: s.cadeteA.id, seasonID: s.vigente.id, who: .profile(p.id), shirtNumber: nil, position: nil))
+
+        #expect(entry.player.photoKey == "club/foto.jpg")
+        #expect(entry.profile.lastPhotoKey == "club/foto.jpg")
+    }
+
+    @Test("un jugador nuevo empieza sin foto (D-35: se sube aparte)")
+    func newPlayerHasNoPhoto() async throws {
+        let entry = try await Self.newPlayer(try await Self.seed())
+        #expect(entry.player.photoKey == nil && entry.profile.lastPhotoKey == nil)
+    }
+
     @Test("un perfil que no existe en el club, 422 con el campo (§5.1)")
     func unknownProfile() async throws {
         let s = try await Self.seed()

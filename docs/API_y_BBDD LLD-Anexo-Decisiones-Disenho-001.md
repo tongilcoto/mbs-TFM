@@ -5611,6 +5611,11 @@ su demarcación cada temporada, y a subir otra vez su foto.
 estar a la vez en la fila y en el perfil, así que el fichero solo se borra cuando ya no lo usa ninguno de los dos
 (se concreta en `R6.6`).
 
+**Corregido en la R6.9** (2026-11-16): **dar de alta con un perfil que ya existe empieza la fila con la foto del
+perfil**, como hace la sincronización (punto 4). El alta no lleva foto, que se sube aparte ([D-35]), y copiar al
+perfil la de una fila vacía (punto 3) le borraba la que tenía: desde la R6.6, sin notarse mientras no había fotos.
+Si en el diálogo se quita o se cambia, la web llama después a quitar o subir la foto. Un jugador nuevo empieza sin.
+
 **Enmienda** a [D-119] (lo que guarda el perfil) y a [D-120] (lo que trae la sincronización); y a §3.2, §5.2 y §5.6
 del LLD (R6.4).
 

@@ -182,10 +182,13 @@ public struct CreatePlayer: Sendable {
         try await requireShirtFree(shirt, team: team.id, season: season.id, except: nil,
                                    players: players)
 
+        // **La fila empieza con la foto del perfil** (`D-122`, R6.9): el alta no lleva
+        // foto, que se sube aparte (`D-35`), y copiar al perfil la de una fila vacía
+        // le borraba la suya. Como la sincronización (`D-120`). Un jugador nuevo no tiene.
         let player = Player(
             id: PlayerID(raw: ids.next()), profileID: profile.id, teamID: team.id,
             seasonID: season.id, shirtNumber: shirt, position: command.position,
-            createdAt: now, updatedAt: now)
+            photoKey: profile.lastPhotoKey, createdAt: now, updatedAt: now)
         if isNewProfile { try await profiles.save(profile) }
         try await players.save(player)
         // Lo que guarda la fila, al perfil, como ayuda para la próxima alta (`D-122`).
