@@ -6,6 +6,7 @@ import Fluent
 import FluentPostgresDriver
 import Persistence
 import SQLKit
+import Storage
 import Tenancy
 public import Vapor
 
@@ -181,7 +182,11 @@ public enum TestEnvironment {
                 federationClients: federationClients ?? CatalogFederationClientProvider(),
                 background: background ?? DetachedBackgroundWork(),
                 clock: clock ?? SystemClock(),
-                actors: actors ?? AmbientTenantActorResolver())
+                actors: actors ?? AmbientTenantActorResolver(),
+                // `D-115`, punto 2: las fotos de cada test, en una carpeta temporal suya.
+                photos: PhotosConfig(folder: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("tfm-fotos-\(UUID().uuidString)", isDirectory: true),
+                    signingKey: "secreto-de-los-tests").store())
             // Sin `autoMigrate()`: el plano de control ya lo migró `bootstrap()`,
             // una sola vez. Llamarlo aquí es lo que producía la carrera.
             try await body(app)

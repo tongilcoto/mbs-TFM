@@ -91,6 +91,22 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Valor no válido", detail: "\(field): \(reason)",
                                base: typeBaseURI, slug: "invalid-value")
 
+            case .teamNotOwn(let team):
+                // **422 y no 404** (§5.1): el equipo llega en el cuerpo del alta, no
+                // en la ruta, y `/players` sí existe.
+                return Problem(status: .unprocessableEntity, code: "TEAM_NOT_OWN",
+                               title: "El equipo no es del club",
+                               detail: "el equipo \(team) es rival: no tiene plantilla",
+                               base: typeBaseURI, slug: "team-not-own")
+
+            case .seasonArchived(let label):
+                // **422** (§5.1): la temporada archivada es de solo lectura entera
+                // (R6.3). No es un 409: no hay otra escritura con la que choque.
+                return Problem(status: .unprocessableEntity, code: "SEASON_ARCHIVED",
+                               title: "La temporada está archivada",
+                               detail: "la temporada \(label) está archivada: solo se puede leer",
+                               base: typeBaseURI, slug: "season-archived")
+
             case .notEditableAfterSync(let field):
                 // **409 y no 422** (§5.4, D-22): el valor puede ser
                 // perfectamente válido — lo que no lo es, es el *momento*. La
@@ -304,6 +320,42 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return Problem(status: .notFound, code: "ROUND_NOT_FOUND",
                                title: "Jornada desconocida", detail: id,
                                base: typeBaseURI, slug: "round-not-found")
+
+            case .playerNotFound(let id):
+                // 404 con su código (R6.6): el id lo puso quien llama.
+                return Problem(status: .notFound, code: "PLAYER_NOT_FOUND",
+                               title: "Jugador desconocido", detail: id,
+                               base: typeBaseURI, slug: "player-not-found")
+
+            case .playerProfileMissing(let player):
+                // 500, como `seasonNotFound`: la FK no lo deja pasar, así que es la
+                // base rota y no un dato que falte.
+                return Problem(status: .internalServerError, code: "PLAYER_PROFILE_MISSING",
+                               title: "Jugador sin perfil", detail: player,
+                               base: typeBaseURI, slug: "player-profile-missing")
+
+            case .referenceNotFound(let field, let id):
+                // **422 y no 404** (§5.1): lo que no existe llega en el cuerpo. El
+                // `detail` lleva la forma `<campo>: <motivo>` de `INVALID_VALUE`,
+                // para que el cliente sepa cuál.
+                return Problem(status: .unprocessableEntity, code: "REFERENCE_NOT_FOUND",
+                               title: "No existe en el club",
+                               detail: "\(field): no existe en el club (\(id))",
+                               base: typeBaseURI, slug: "reference-not-found")
+
+            case .shirtNumberTaken(let number):
+                // 409 **solo con su código** (R6.4): quién lo tiene lo sabe la web.
+                return Problem(status: .conflict, code: "SHIRT_NUMBER_TAKEN",
+                               title: "Dorsal ocupado",
+                               detail: "el dorsal \(number) ya lo tiene otro jugador del equipo",
+                               base: typeBaseURI, slug: "shirt-number-taken")
+
+            case .playerAlreadyInRoster(let profile, let season):
+                // 409, solo con su código (R6.4, `D-121`): el buscador ya dijo dónde está.
+                return Problem(status: .conflict, code: "PLAYER_ALREADY_IN_ROSTER",
+                               title: "Ya está en una plantilla",
+                               detail: "el perfil \(profile) ya tiene fila en la temporada \(season)",
+                               base: typeBaseURI, slug: "player-already-in-roster")
 
             case .seasonLabelUnavailable(let federationSeasonID):
                 // **400, y el criterio es el de `unreadableFederationURL`**: el
@@ -549,6 +601,14 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return translate(inner)
             }
             let status = HTTPStatus(statusCode: Int(server.httpStatus.code))
+            // R6.9: la única operación que no es JSON. Un tipo que no es `image/jpeg` ni
+            // `image/png` lo rechaza el código generado (415) antes de llegar al handler.
+            if status == .unsupportedMediaType, server.operationID == "uploadPlayerPhoto" {
+                return Problem(status: status, code: "UNSUPPORTED_IMAGE_TYPE",
+                               title: "Tipo de imagen no admitido",
+                               detail: "solo image/jpeg o image/png",
+                               base: typeBaseURI, slug: "unsupported-image-type")
+            }
             return Problem(status: status,
                            code: status.code >= 500 ? "INTERNAL" : "BAD_REQUEST",
                            title: status.code >= 500

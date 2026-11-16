@@ -327,10 +327,10 @@ struct MigrationIntegrityTests {
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 21, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 22, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 21,
+        #expect(nombres.count == 22,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -474,7 +474,11 @@ struct MigrationIntegrityTests {
             //
             // **22 con `D-104`**: `chk_teams_season_only_opponents`, la pareja
             // club rival ⇔ temporada.
-            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 22,
+            //
+            // **27 con la plantilla** (R6.5, `D-118`, `D-119`): el dorsal y la
+            // demarcación de la fila, y el año, el último dorsal y la última
+            // demarcación del perfil.
+            #expect(before.filter { $0.hasPrefix("c chk_") }.count == 27,
                     "faltan CHECK: \(before.filter { $0.hasPrefix("c chk_") })")
             #expect(before.contains { $0.contains("uq_teams_identity") && $0.contains("NULLS NOT DISTINCT") },
                     "la clave de Team perdió el NULLS NOT DISTINCT: acepta dos «Cadete A» propios (§3.5)")

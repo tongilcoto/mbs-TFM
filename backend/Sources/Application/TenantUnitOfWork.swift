@@ -40,4 +40,6 @@ public protocol Repositories: Sendable {
     var ingestionRuns: any IngestionRunRepository { get }
     var standingRows: any StandingRowRepository { get }
     var leagueScorers: any LeagueScorerRepository { get }
+    var players: any PlayerRepository { get }
+    var playerProfiles: any PlayerProfileRepository { get }
 }

@@ -11,6 +11,8 @@ import PackageDescription
 //               │                └─► Application
 //               ├─► Persistence ────► Application
 //               ├─► Federation ─────► Application   (adaptadores RFFM / FCF)
+//               ├─► Storage ────────► Application   (el almacén de fotos, D-115)
+//               ├─► Imaging ────────► Application   (el saneado de la foto, D-116)
 //               ├─► Tenancy
 //               └─► Application ────► Domain
 //
@@ -85,6 +87,13 @@ let package = Package(
         // D-109: la herramienta que escribe en Swift los nombres de cada lista lee el catálogo, que es YAML. Ya
         // estaba en el grafo —lo usa `swift-openapi-generator`— y se declara, como todo lo que se importa.
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.0"),
+        // D-116: el saneado de la foto, escrito en Swift y sin nada que instalar en el Mac ni en el contenedor.
+        // Apache 2.0 las dos, como las dos pequeñas que traen (mirado en la R6.8). **Solo las ve `Imaging`.**
+        .package(url: "https://github.com/tayloraswift/swift-jpeg.git", from: "2.1.0"),
+        .package(url: "https://github.com/tayloraswift/swift-png.git", from: "4.5.2"),
+        // D-117: la firma del enlace de la foto (HMAC-SHA256). **Ya estaba en el grafo** —Vapor depende de
+        // ella— y se declara, como todo lo que se importa. Solo la ve `Storage`.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.5.1"),
     ],
     targets: [
         // ── Núcleo ────────────────────────────────────────────────────────────
@@ -183,6 +192,27 @@ let package = Package(
             swiftSettings: commonSwiftSettings
         ),
 
+        // Secundario (driven): el puerto `PhotoStore` (D-115). Hoy, una carpeta del
+        // disco; en la R16, Supabase Storage, en esta misma pieza. Aparte del
+        // saneado porque cambian por motivos distintos (R6.8).
+        .target(
+            name: "Storage",
+            dependencies: ["Application", .product(name: "Crypto", package: "swift-crypto")],
+            swiftSettings: commonSwiftSettings
+        ),
+
+        // Secundario (driven): el puerto `PhotoSanitizer` (D-116). **La única pieza
+        // que ve las dos librerías de imágenes**: cambiarlas es cambiar esta.
+        .target(
+            name: "Imaging",
+            dependencies: [
+                "Application",
+                .product(name: "JPEG", package: "swift-jpeg"),
+                .product(name: "PNG", package: "swift-png"),
+            ],
+            swiftSettings: commonSwiftSettings
+        ),
+
         // ── Infraestructura ───────────────────────────────────────────────────
         // Plano de control de tenancy (§6). No es dominio: `public.tenants` es
         // infraestructura y no debe confundirse con la entidad `Club` (§4.7).
@@ -210,7 +240,9 @@ let package = Package(
                 // donde el puerto y su implementación se conocen.
                 "Federation",
                 "HTTPAdapter",
+                "Imaging",
                 "Persistence",
+                "Storage",
                 "Tenancy",
                 .product(name: "Vapor", package: "vapor"),
                 .product(name: "Fluent", package: "fluent"),
@@ -246,7 +278,7 @@ let package = Package(
         // los targets de test, así que no viaja al binario de producción.
         .target(
             name: "TestSupport",
-            dependencies: ["App", "Application", "Domain", "HTTPAdapter", "Persistence", "Tenancy"],
+            dependencies: ["App", "Application", "Domain", "HTTPAdapter", "Persistence", "Storage", "Tenancy"],
             swiftSettings: commonSwiftSettings
         ),
 
@@ -257,6 +289,23 @@ let package = Package(
             name: "FederationTests",
             dependencies: ["Federation", "Application", "Domain"],
             resources: [.copy("Fixtures")],
+            swiftSettings: commonSwiftSettings
+        ),
+
+        // Las dos piezas de la foto (R6.8), **sin Docker**: el saneado trabaja con
+        // bytes en memoria, y el almacén, con una carpeta temporal de cada test.
+        .testTarget(
+            name: "ImagingTests",
+            dependencies: [
+                "Imaging", "Application",
+                .product(name: "JPEG", package: "swift-jpeg"),
+                .product(name: "PNG", package: "swift-png"),
+            ],
+            swiftSettings: commonSwiftSettings
+        ),
+        .testTarget(
+            name: "StorageTests",
+            dependencies: ["Storage", "Application", "Domain"],
             swiftSettings: commonSwiftSettings
         ),
 

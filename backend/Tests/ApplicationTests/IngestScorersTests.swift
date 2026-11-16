@@ -424,7 +424,7 @@ struct IngestScorersTests {
             clock: FixedClock(instant: Self.now),
             ids: SequentialUUIDProvider(),
             capabilities: { _ in
-                FederationCapabilities(providesRoundStandings: true, providesScorers: false)
+                FederationCapabilities(providesRoundStandings: true, providesScorers: false, providesTeamRoster: false)
             })
             .execute(competitionID: fixture.competition, actor: Self.actor)
 
@@ -451,7 +451,7 @@ struct IngestScorersTests {
             clock: FixedClock(instant: Self.now),
             ids: SequentialUUIDProvider(),
             capabilities: { _ in
-                FederationCapabilities(providesRoundStandings: true, providesScorers: false)
+                FederationCapabilities(providesRoundStandings: true, providesScorers: false, providesTeamRoster: false)
             })
             .execute(competitionID: fixture.competition, actor: Self.actor)
 

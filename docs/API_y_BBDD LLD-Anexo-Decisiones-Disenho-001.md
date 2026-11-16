@@ -128,6 +128,14 @@
 | **D-103**              | La temporada en curso es la que contiene el día de hoy, no la de fin más próximo                                              | §3.2, §5.1                         |
 | **D-113**              | Cada competición del equipo en una temporada trae su resumen: posición, racha, último y próximo partido                        | §5.1, §5.2                         |
 | **D-114**              | La racha cuenta jornadas, no partidos: el descanso entra en ella                                                               | §4.5, §5.1                         |
+| **D-115**              | Las fotos se guardan, mientras no haya Supabase, en una carpeta del disco detrás de un puerto                                  | §3.7, §9                           |
+| **D-116**              | La foto se sanea con dos librerías escritas en Swift: se abre, se gira, se reduce y se vuelve a guardar                         | §5.1, §9                           |
+| **D-117**              | La foto llega a la web por un enlace firmado de una hora; con la carpeta del disco, lo firma y lo sirve nuestro servidor        | §5.1, §5.2, §9                     |
+| **D-118**              | El dorsal de la plantilla es opcional, y no se repite entre los que lo tienen                                                    | §3.2, §3.5, §5.1, §5.2             |
+| **D-119**              | El jugador tiene un perfil que dura entre temporadas: nombre y año de nacimiento                                                 | §3.1, §3.2, §3.5, §4.6, §5.1, §5.2 |
+| **D-120**              | La plantilla se sincroniza con la federación, si la publica: solo añade, y cada fila dice si está federado                      | §3.2, §3.7, §5.1, §5.2, §5.6       |
+| **D-121**              | Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro                                | §3.2, §5.2                         |
+| **D-122**              | El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila           | §3.2, §5.2, §5.6                   |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5268,6 +5276,359 @@ hueco lo estropea.
 **Enmienda** a [D-34] (la racha), a la descripción de `MatchOutcome` y de `form` en el catálogo (R5.4), y a §4.5 y
 §5.1 del LLD.
 
+### D-115 · Las fotos se guardan, mientras no haya Supabase, en una carpeta del disco detrás de un puerto
+
+**Lo que lo obligó a decidirse** (2026-11-14, al abrir la rebanada 6, Plantilla, con el desarrollador). La foto
+del jugador es una clave del almacén de ficheros, no una URL ([D-35]), y el almacén decidido para producción es
+**Supabase Storage** (ADR del backend, punto 2). Pero en desarrollo no hay nada de Supabase: el servidor corre en
+el Mac (`swift run` y `launchd`) y Docker solo levanta Postgres. Ni los escudos se guardan todavía ([D-19]): el
+servidor devuelve su enlace vacío a la espera de ese almacén. Subir fotos (`uploadPlayerPhoto`) necesita uno ya.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Una carpeta del disco**, elegida en la configuración | Nada que instalar; cada base con su carpeta | **Elegida** |
+| (b) Supabase Storage de verdad, ya | Cuenta y claves ya; los escenarios dependen de internet; fotos de menores en la nube antes de desplegar | Descartada |
+| (c) MinIO en Docker, que habla S3 como Supabase Storage | La pieza valdría casi tal cual para Supabase; un contenedor y una librería de S3 más | Descartada: más piezas para un ahorro que llega en la rebanada 16 |
+
+**Decisión: (a).**
+
+1. **El almacén es un puerto de la capa de Aplicación** (guardar, leer y borrar un fichero por su clave), y la
+   carpeta del disco es su adaptador. Supabase Storage será otro adaptador del mismo puerto, al desplegar (rebanada
+   16); nada fuera del adaptador cambia.
+   **En el Mac, `backend/fotos/`** sin grabar, o la de `PHOTOS_DIR` (R6.8, 2026-11-16; sin fotos de verdad).
+   **El adaptador vive en una pieza propia del servidor, `Storage`** (R6.8, 2026-11-16), aparte de la del saneado
+   ([D-116]): cambian por motivos distintos.
+2. **La carpeta se elige en la configuración del servidor**, como la base de datos: la del desarrollador, la de
+   los escenarios (`tfm_test`) y la de cada prueba son distintas, y las fotos de una no se mezclan con las de otra.
+3. **La clave lleva el club delante**, como el *schema* ([D-35]: el fichero se borra con el tenant), y **es nueva
+   en cada subida** (enmienda de la R6.4: decía que salía del `playerId`). Desde [D-122] una foto puede ser de
+   varias filas y de su perfil, y subir otra a la fila de una temporada pasada cambiaría la de la que está en curso;
+   el fichero viejo se borra cuando ya no lo usa nadie.
+4. **El escudo del club usará el mismo almacén** cuando le toque ([D-19]).
+
+**Lo que se asume a cambio.**
+
+- **La pieza de Supabase se escribe y se prueba en la rebanada 16**, no ahora.
+- **Las fotos de la carpeta no van en las copias de la base**: quien copie la base para probar se lleva las claves
+  sin los ficheros, y la ficha enseñará las iniciales.
+
+### D-116 · La foto se sanea con dos librerías escritas en Swift: se abre, se gira, se reduce y se vuelve a guardar
+
+**Lo que lo obligó a decidirse** (2026-11-14, rebanada 6). La API sanea la foto antes de guardarla ([D-35]):
+comprueba que es de verdad un JPEG o un PNG, la guarda como JPEG, la reduce y le quita lo que lleva dentro (la
+ubicación, en la foto de un menor). Tiene que hacerlo igual en el Mac del desarrollador y en el contenedor Ubuntu
+de producción, que hoy no instala ninguna herramienta de imágenes; lo que solo hay en Mac (`sips`, las librerías de
+Apple) no vale.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Llamar a ImageMagick | Un programa aparte en el Mac y en el contenedor; su historial con ficheros preparados a mala fe obliga a limitarlo por reglas, que alguna vez se han saltado | Descartada |
+| (b) libvips | Instalarla en los dos sitios, y sin una forma cuidada de usarla desde Swift | Descartada |
+| **(c) `swift-jpeg` y `swift-png`**, escritas en Swift | Dentro del servidor, sin instalar nada; solo entienden JPEG y PNG | **Elegida** |
+
+**Decisión: (c).**
+
+1. **La foto se abre hasta sus puntos de color y se vuelve a guardar como JPEG**: lo que llevaba dentro (la
+   ubicación, el modelo del móvil) no pasa, porque no se copia nada más que los puntos.
+2. **Antes se gira** según la nota de orientación del móvil (la etiqueta *Orientation* de EXIF), que el servidor
+   lee él mismo: si se quitara sin girar, la foto saldría tumbada.
+3. **Se reduce** a un tamaño máximo, con un código propio de pocas líneas: **800 puntos en el lado largo**
+   (decidido en la R6.8, 2026-11-16; la ficha la enseña a 240 × 320, y una pantalla de Mac pide el doble). Un solo
+   tamaño, que también usa la fila de la plantilla; la foto más pequeña no se agranda.
+   **Se guarda con calidad 75** (misma fecha), en la escala de 0 a 100 de los programas de fotos: unos 43 KB.
+   **Y antes de abrirla, un tope de 30 millones de puntos** (misma fecha), leídos en su cabecera: el tope de 5 MB
+   mide el fichero, no la imagen, y un PNG de 1,2 MB con 20.000 × 20.000 puntos costó 35 s y 1,9 GB al abrirlo. Se
+   responde **413**, como al pasar de 5 MB.
+4. **Se comprueba al empezar `R6.8`**, con una foto de verdad del móvil del desarrollador: cuánto tarda, que sale
+   derecha y que no le queda nada dentro. Si es lenta o falla, se vuelve a esta decisión y se elige (a).
+   **Comprobado (2026-11-16)** con una foto HEIC de un iPhone (5712 × 4284, orientación 6, con ubicación), pasada
+   a JPEG sin quitarle nada: sale derecha en las ocho orientaciones, como la gira Apple, y sin ubicación ni datos
+   del móvil. **Un hallazgo**: el paso de la librería que junta los colores a tamaño completo tardaba 11 s en
+   12 megapíxeles; **lo hace código nuestro** a la vez que reduce, y la foto entera queda en unos 2 s.
+5. **Antes de añadirlas se mira su licencia** en el repositorio: un registro da Apache 2.0 y otro MPL 2.0.
+   **Mirada en la R6.8**: Apache 2.0 las dos (`swift-jpeg` 2.1.0, `swift-png` 4.5.2) y las dos que traen consigo.
+
+**Lo que se asume a cambio.**
+
+- **Dos dependencias de un único autor**, poco usadas. Quedan detrás del puerto de saneado, así que cambiarlas es
+  cambiar una pieza: **`Imaging`**, la única del servidor que las ve (R6.8, 2026-11-16).
+- **El giro y la reducción son código nuestro**, con sus pruebas.
+
+### D-117 · La foto llega a la web por un enlace firmado de una hora; con la carpeta del disco, lo firma y lo sirve nuestro servidor
+
+**Lo que lo obligó a decidirse** (2026-11-14, rebanada 6). `PlayerResponse.photoUrl` es un enlace firmado y de vida
+corta ([D-35]), y su plazo estaba abierto (LLD §9, punto 7). Con Supabase Storage, el enlace lo hace Supabase; con
+la carpeta del disco ([D-115]) no hay nadie que lo haga. Y la forma importa: con el inicio de sesión (rebanada 16)
+la web manda su permiso en una cabecera (el JWT de Supabase Auth, LLD §2.3), y una imagen puesta en la página no
+puede mandarla: el navegador la pide solo. La firma hace de permiso dentro del propio enlace.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| **(a) Un enlace firmado que caduca, hecho por nuestro servidor**, y una ruta que entrega el fichero si la firma vale | Igual que Supabase: la web pone la imagen y ya está; una clave secreta para firmar | **Elegida** |
+| (b) Una ruta sin firma, `GET /players/{id}/photo` | Lo más simple hoy; en la R16, o queda abierta a cualquiera o la web pide cada foto con su permiso y la monta ella | Descartada |
+| (c) La foto dentro de la respuesta, como texto | Cerca de 2 MB por plantilla de 25 | Descartada |
+
+**Decisión: (a).**
+
+1. **El puerto del almacén ([D-115]) también da el enlace de una clave.** La carpeta del disco da uno a una ruta de
+   nuestro servidor, con la hora en que caduca y una firma hecha con una clave secreta de la configuración; la
+   ruta comprueba las dos cosas antes de leer el fichero. Supabase, en la rebanada 16, dará el suyo.
+2. **El enlace dura una hora y se hace nuevo en cada lectura** del jugador o de la plantilla. Cierra el punto 7 de
+   la §9 del LLD, también para los escudos ([D-19]).
+3. **La ruta que entrega el fichero entra en el catálogo**, para que el censo la vea como a las demás. **Es la
+   operación 86** (cerrado en la R6.4, 2026-11-15): `getPlayerPhotoFile`, `GET /player-photos/{clave}`, con la hora
+   en que caduca y la firma. Por la clave del fichero, no por el jugador: una foto puede ser de la fila y del perfil
+   ([D-122]). Una firma que no vale o caducada, 404, como una foto que no existe: no dice qué claves hay. Su
+   descripción dice que solo existe con el almacén en disco; en la rebanada 16 desaparece. Descartado dejarla
+   aparte, sin contar: el censo tendría que saltársela. La misma forma servirá para los escudos.
+4. **La web no distingue los dos almacenes**: usa `photoUrl` tal cual.
+5. **El enlace empieza por un prefijo de la configuración** (`PHOTOS_URL_PREFIX`, por defecto `/api`; R6.9,
+   2026-11-16): la web pide al servidor por su recepcionista, que pasa lo que empieza por `/api` y deja el club en
+   la dirección. Así la web lo usa tal cual (punto 4) sin que el servidor sepa su puerto.
+6. **La ruta lleva solo el fichero** (`<código>.jpg`) **y el club sale de la dirección** (R6.9, misma fecha): la
+   clave entera lleva una barra, que en un trozo de ruta habría que escribir `%2F`. La firma es de la clave entera,
+   con su club, así que el enlace de un club en la dirección de otro da 404.
+7. **La clave secreta es `PHOTOS_SIGNING_KEY` si está, y si no, una al azar al arrancar** (R6.9, misma fecha),
+   sin guardarla: al relanzar, los enlaces de antes caducan como al pasar la hora. La firma, HMAC-SHA256.
+8. **Los fallos de la subida llevan códigos de imagen** (R6.9, misma fecha): `NOT_AN_IMAGE` (400), `IMAGE_TOO_LARGE`
+   (413, por peso o por puntos) y `UNSUPPORTED_IMAGE_TYPE` (415), para que el escudo los use tal cual.
+
+**Lo que se asume a cambio.**
+
+- **Una clave secreta más** en la configuración del servidor.
+- **Una página abierta más de una hora** deja de cargar la foto si la vuelve a pedir, y enseña las iniciales hasta
+  recargar.
+- **El navegador no guarda la foto entre lecturas**: cada enlace nuevo es otra dirección. Con fotos reducidas
+  ([D-116]) y unos 25 jugadores, se acepta.
+
+### D-118 · El dorsal de la plantilla es opcional, y no se repite entre los que lo tienen
+
+**Lo que lo obligó a decidirse** (2026-11-14, rebanada 6). El catálogo pedía a todo jugador un dorsal del 1 al 99,
+sin repetir en su equipo y temporada (§3.5, [D-36]). Pero en la federación **el dorsal es de cada partido**: el acta
+de la RFFM lo trae junto a cada jugador de ese partido ([Anexo RFFM §F.10]), y nada obliga a un club a
+llevar dorsales fijos toda la temporada. El producto es para cualquier club (lo pidió el desarrollador: «tiene que
+ser universal»), no solo para los que los fijan.
+
+| Opción | Qué implica | Veredicto |
+|--------|-------------|-----------|
+| (a) Obligatorio y sin repetir, como estaba | Un equipo sin dorsales fijos tendría que inventárselos | Descartada |
+| **(b) Opcional, y sin repetir entre los que lo tienen** | Un cambio en el catálogo; decir dónde van en la lista los que no tienen | **Elegida** |
+
+**Decisión: (b).**
+
+1. **`shirtNumber` pasa a ser anulable** en el alta, la corrección y la respuesta: del 1 al 99, o nulo.
+2. **Dos jugadores del mismo equipo y temporada no pueden tener el mismo número** (409, como antes). Los que no
+   tienen no chocan entre sí: el índice único sigue siendo parcial, solo entre los no borrados, y Postgres no
+   compara nulos. El 409 lleva solo su código, **`SHIRT_NUMBER_TAKEN`** (R6.4): quién tiene el dorsal lo busca la
+   web en la plantilla que ya pinta, como la vista previa del enganche ([D-110]); el *Problem* no cambia ni lleva
+   el nombre de un menor.
+3. **El orden de la plantilla**: por dorsal, y después los que no tienen, por nombre.
+4. **El dorsal del acta no se toca con este**: el de cada partido lo manda la federación y no lo controlamos; se
+   guardará con el partido (rebanada 7), sin comprobarlo contra el de la plantilla ni contra los demás.
+
+**Lo que se asume a cambio.**
+
+- **El dorsal de la plantilla es «el que suele llevar»**, no el de cada partido.
+- **La pantalla tiene que pintar un jugador sin número**, donde el boceto pone siempre uno.
+
+**Enmienda** a [D-36] (el índice parcial sigue, ahora sobre una columna que admite nulos), a la descripción de
+`shirtNumber` y del orden de `listPlayers` en el catálogo (R6.4), y a §3.2, §3.5, §5.1 y §5.2 del LLD.
+
+### D-119 · El jugador tiene un perfil que dura entre temporadas: nombre y año de nacimiento
+
+**Lo que lo obligó a decidirse** (2026-11-14, rebanada 6, al revisar el camino de la ficha del jugador). [D-05]
+eligió una fila por jugador, equipo y temporada, **sin nada que una las filas** del mismo chaval, y asumió que «no hay
+identidad "persona" estable entre filas». El desarrollador lo reabrió: **un jugador no es efímero como una
+competición**; su nombre y su nacimiento son datos de una persona que sigue de un año a otro.
+
+**Decisión** (cada punto, revisado con el desarrollador uno a uno):
+
+1. **Dos tablas, y las dos se crean ya**: el **perfil** del jugador, que dura, y el **jugador en una temporada** (la
+   fila de [D-05]), con una clave ajena al perfil. El alta en la plantilla escribe en las dos a la vez. Descartado
+   crear solo la fila con una columna de «código de jugador» que aún no apunta a nada: habría un código por fila, y
+   el año siguiente tocaría mover datos.
+2. **El reparto**: en el perfil, el **nombre** y el **año de nacimiento**; en la fila de la temporada, el equipo, la
+   temporada, el dorsal ([D-118]), la demarcación y la foto ([D-35]), que cambian cada año.
+3. **Del nacimiento, solo el año, opcional.** Es un dato de un menor, y se guarda solo lo que hace falta (ADR,
+   requisito 7, RGPD): en fútbol base la categoría sale del año. No se comprueba contra la categoría del equipo: un
+   chaval puede jugar en una superior. Descartadas la fecha completa (lo que más identifica a un menor, para nada
+   que el sistema use) y no guardar nada.
+4. **Los nombres en el catálogo: `Player` sigue siendo la fila de la temporada**, y el perfil es una pieza nueva,
+   `PlayerProfile`. Las 7 operaciones y sus rutas no cambian; `PlayerResponse` suma `profileId` y el año de
+   nacimiento, y el nombre se lee del perfil. Lo que ya apunta a `playerId` (ausencias, convocatorias, tarjetas y
+   goles) sigue apuntando a la fila: cuenta para el equipo con el que se hizo. Descartado copiar a `Team` y su
+   inscripción ([D-102]): cambiaría las 7 operaciones y el significado de `playerId`, y un jugador puede tener dos
+   filas en la misma temporada ([D-37]).
+5. **Corregir el nombre desde una fila corrige el del perfil**, en todas sus temporadas. **La corrección manda la
+   ficha entera** (`PUT`, R6.6, elegido por el desarrollador): con una parcial, el código generado no distinguía
+   «no lo cambio» de «déjalo vacío». Lo que no llega o llega vacío queda vacío; el año solo, si el perfil no tenía.
+   Descartado marcar aparte qué se vacía: dos formas de decir algo del mismo campo.
+6. **El perfil no tiene operaciones propias en esta versión.** Elegir un perfil que ya existe al dar de alta (para
+   seguir al año siguiente) llega con la versión siguiente, con su pantalla (`/jugadores/:id`, con el código del
+   perfil) o con el alta en bloque (LLD §9, punto 8).
+7. **Dar de baja una fila no toca el perfil**: la fila solo se esconde ([D-36]) y se puede recuperar, así que su
+   perfil tiene que seguir ahí. Quedan perfiles sin ninguna fila visible, que esta versión no enseña. Descartado
+   esconder el perfil con su última fila: más reglas, y esconder no es borrar.
+8. **El purgado de una temporada ([D-24], rebanada 11) borra también los perfiles que se queden sin ninguna fila**
+   en ninguna temporada: si no, el nombre y el año de nacimiento de un menor seguirían en la base.
+9. **El código del jugador en la federación** (`codjugador` del acta, [Anexo RFFM §F.10]) **es informativo**: nunca
+   sirve para que el sistema funcione, tampoco para casar jugadores.
+
+**Lo que se asume a cambio.**
+
+- **Una tabla más**, y un alta que escribe en dos.
+- **Perfiles sin filas visibles** hasta el purgado. La versión siguiente puede avisar de ellos y ofrecer borrarlos
+  (lo apuntó el desarrollador, sin desarrollarlo).
+
+**Enmienda** a [D-05], a la descripción de `PlayerResponse`, `CreatePlayerRequest` y `UpdatePlayerRequest` en el
+catálogo (R6.4), y a §3.1, §3.2, §3.5, §4.6, §5.1 y §5.2 del LLD.
+
+### D-120 · La plantilla se sincroniza con la federación, si la publica: solo añade, y cada fila dice si está federado
+
+**Lo que lo obligó a decidirse** (2026-11-14, rebanada 6, al revisar la maqueta de la plantilla vacía). El catálogo
+daba por hecho que «la federación no publica plantillas de fútbol base» (`createPlayer`, [D-21]). **La RFFM sí**: su
+ficha de equipo (`https://www.rffm.es/fichaequipo/<código del equipo>`) lleva, en el mismo `__NEXT_DATA__` que ya lee
+el adaptador, por cada jugador **solo su código y su nombre**, como «APELLIDOS, NOMBRE» en mayúsculas; ni dorsal, ni
+demarcación, ni nacimiento (medido con dos equipos del desarrollador, 46 jugadores). Trae también técnicos y
+delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web** (sin `Access-Control-Allow-Origin`).
+
+**Decisión** (cada punto, revisado con el desarrollador uno a uno):
+
+1. **Una capacidad nueva de la federación**, `federationProvidesTeamRoster`, en el catálogo de federaciones del
+   Dominio, como `federationProvidesScorers` ([D-48]): si es `false`, la web no ofrece el botón. La RFFM, `true`.
+2. **La hace el servidor, al pulsar «Sincronizar con la Federación»** en la plantilla, como el `/preview` del
+   enganche: una operación nueva. No el navegador (no puede leer la página), y **no la ingesta de cada semana**: la
+   plantilla es del club, y la ingesta pisaría lo que corrige.
+3. **Solo añade**: da de alta a quien no esté en la plantilla de ese equipo y temporada; **no corrige ni da de baja a
+   nadie**, y **no vuelve a crear a quien el club dio de baja** ([D-36]) aunque la federación lo siga listando,
+   **ni añade a quien el club tiene en otro equipo de la temporada** (enmienda del 2026-11-15, [D-121]). Se puede
+   pulsar siempre, y al acabar dice qué ha hecho («18 añadidos · 4 ya estaban · 1 dado de baja en el club · 1 en
+   otro equipo · 2 sin año · 1 con nombre repetido · 1 con un nombre que no vale»).
+4. **Casa con los perfiles del club ([D-119]) por el nombre exacto, sin contar tildes**, ya como «NOMBRE
+   APELLIDOS»: con uno, ese; con ninguno, perfil nuevo; con varios, perfil nuevo, y lo dice. Nunca por parecido: unir
+   a dos chavales distintos es peor que un duplicado, que se une después. El código de la federación no sirve para
+   casar: es informativo ([D-119], punto 9). **«El mismo nombre»**: igual en mayúsculas, con un espacio entre palabras
+   y sin tildes ni diéresis; **la eñe cuenta como letra distinta** (enmienda del 2026-11-15). El buscador del alta sí
+   encuentra «Muñoz» al escribir «munoz»: ayuda a encontrar, no compara.
+5. **Cada fila de la plantilla dice si está federado**: **«Federado»** si la última sincronización lo listó, **«No
+   federado»** si no (el caso más probable: el club lo pone en el equipo antes de que la federación lo tenga), y
+   vacío mientras esa plantilla no se ha sincronizado nunca o si la federación no publica plantillas. Tres campos,
+   que escribe cada sincronización: en la **inscripción del equipo** (`team_registrations`, la que tiene el código de
+   la federación que se usó), **la última sincronización de la plantilla**, en una columna propia
+   (`roster_synced_at`), no en `updated_at`, que cambia con cualquier guardado de la inscripción; y en **la fila del jugador**, **federado o
+   no**, guardado (calcularlo obligaría a mirar dos tablas), y **la última vez que la federación lo listó**. La baja
+   sigue siendo del club. Descartado sacar la fecha de la plantilla de las de sus jugadores: si la federación no
+   lista a nadie, se quedaría antigua. En el catálogo (R6.4), `PlayerResponse` lleva **`federated`** (`true`, `false` o
+   `null`, que es «nunca sincronizada») y **`lastListedAt`** (fecha o `null`); descartados tres valores con nombre,
+   una lista cerrada más para un sí o un no. **El alta a mano después de una sincronización pone `false`**: la
+   federación aún no lo tiene; antes de la primera, `null`.
+6. **El nombre se guarda siempre en mayúsculas** (también a mano), y la web lo formatea al pintarlo; la carga solo da
+   la vuelta por la coma. Valga de donde venga: espacios limpios, solo letras, espacio, guion y apóstrofo, **al menos
+   dos palabras**, hasta 120. **Un nombre de la federación que no vale no se añade**, y el resumen lo nombra para que
+   el club lo dé de alta a mano (enmienda del 2026-11-15). Lo comprueba el dominio, y en el alta y la corrección un nombre que no vale es
+   un **422 `INVALID_VALUE`** con el detalle `fullName: <motivo>` (R6.4); el catálogo solo pide de 1 a 120.
+7. **La demarcación pasa a ser opcional**, como el dorsal ([D-118]): la federación no la da, y ponerle a todos la
+   misma sería un dato inventado que parece verdad.
+8. **El año de nacimiento es obligatorio en el alta a mano y la carga no lo pide** (enmienda al punto 3 de [D-119]):
+   el perfil casado ya lo tiene, y el nuevo queda sin él, a la vista, para que el club lo rellene. Descartado pedir un
+   año para todos: acierta en la cantera, pero no en juvenil ni en senior.
+9. **El alta a mano elige el jugador** con un buscador mientras se escribe (desde 3 letras, hasta 10, sin tildes ni
+   mayúsculas, palabra a palabra): uno que ya existe, o uno nuevo. **Una operación nueva para buscar perfiles**, y el
+   alta acepta un `profileId` (422 si no existe en el club) o el nombre y el año (enmienda al punto 6 de [D-119]).
+   En el catálogo son **dos esquemas cerrados**, y el alta exige exactamente uno (R6.4): «con perfil» o «jugador
+   nuevo», los dos con el dorsal y la demarcación opcionales; las dos cosas a la vez, o ninguna, 400. Como el alta
+   de una competición (por dirección o por campos). Descartado un esquema con todo opcional: la regla no se vería.
+   **La búsqueda filtra en el servidor** (R6.4): `GET /player-profiles?q=&teamId=&seasonId=`, los tres
+   obligatorios (`q` desde 3 letras; con menos, 400). Quita a los de esa plantilla, y cada uno lleva su perfil
+   entero, su última plantilla (la fila no borrada más reciente, o `null`) y `otherTeamThisSeason` (el equipo, o
+   `null`). Descartado buscar solo por `q` y filtrar en la web: de los 10, enseñaría menos de los que hay.
+10. **La sincronización contesta al momento** (R6.4): `POST /teams/{teamId}/registrations/{seasonId}/roster-sync`,
+   colgada de la inscripción, que tiene el código de la federación y la fecha. Un 200 con el resumen: `syncedAt`;
+   cuántos se añadieron, ya estaban, no tienen año y estaban dados de baja; y, con nombre, los de nombre repetido,
+   los de otro equipo (con su equipo) y los de nombre que no vale (como lo escribe la federación). Errores: 404 sin
+   equipo; 422 con la temporada archivada, si la federación no publica plantillas o si el equipo no está enganchado;
+   502 y 504, como el enganche. Descartado un 202 a la cola, como la ingesta: una operación más y un resumen que
+   guardar, por una página de 25 jugadores. **La fecha se lee en la inscripción**: `TeamRegistrationResponse`
+   gana `rosterSyncedAt` (o `null`), que la ficha del equipo ya pide; descartado devolverla con `listPlayers`, que
+   dejaría de ser una lista.
+
+**Lo que se asume a cambio.**
+
+- **Duplicados cuando un nombre tecleado no casa** con el de la federación: se ven y se dan de baja; unirlos, con las
+  pantallas del perfil.
+- **Dos operaciones más** que las 7 de la rebanada: buscar perfiles y sincronizar la plantilla.
+- **Perfiles sin año y filas sin demarcación** tras la primera sincronización.
+
+**Enmienda** a [D-21] en lo que dice de plantillas, a [D-119] (puntos 3 y 6), a la descripción de `PlayerPosition`,
+`CreatePlayerRequest`, `UpdatePlayerRequest` y `PlayerResponse` en el catálogo (R6.4), al anexo de la RFFM (la ficha
+de equipo) y a §3.2, §3.7, §5.1, §5.2 y §5.6 del LLD.
+
+### D-121 · Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro
+
+**Lo que lo obligó a decidirse** (2026-11-15, rebanada 6, al revisar los escenarios del alta). [D-37] daba por bueno
+que un jugador que sube de equipo a mitad de temporada tuviera una fila nueva en el equipo nuevo, sin decir qué
+pasaba con la vieja; y el buscador del alta ([D-120], punto 9) ofrecía a los de otros equipos de la misma temporada.
+El desarrollador lo corrigió: **en el club, un jugador está en una sola plantilla por temporada**.
+
+**Decisión.**
+
+1. **Una sola fila no borrada por perfil ([D-119]) y temporada**: un índice único parcial, como el del dorsal
+   ([D-118]).
+2. **El alta de quien ya tiene fila en otro equipo de la temporada, 409**, y dice en qué equipo está. El buscador lo
+   enseña, pero no deja elegirlo. El 409 lleva solo su código, **`PLAYER_ALREADY_IN_ROSTER`** (R6.4): el equipo ya
+   lo ha dicho el buscador, y la web lo saca de ahí.
+3. **Cambiarlo de equipo son dos pasos: baja en el viejo y alta en el nuevo.** La fila dada de baja solo se esconde
+   ([D-36]): sus goles y tarjetas siguen contando para el equipo con que los hizo, que es lo que pedía [D-37].
+4. **La sincronización ([D-120]) no añade a quien el club tiene en otro equipo** de la temporada; el resumen lo dice.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Dos filas activas a la vez ([D-37] tal cual) | En el club no pasa; y un jugador saldría en dos plantillas |
+| Nunca dos filas, ni dada de baja | Obligaría a mover la fila de equipo, y sus goles pasados contarían para el otro ([D-37]) |
+
+**Lo que no cambia.** En un partido puede jugar uno de otro equipo del club (de una categoría o una división
+inferior): eso es del acta (rebanada 7), no de la plantilla; apuntado en el plan del backoffice.
+
+**Enmienda** a [D-37] (el traslado) y a [D-120] (punto 9, el buscador); y a §3.2 y §5.2 del LLD (R6.4).
+
+### D-122 · El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila
+
+**Lo que lo obligó a decidirse** (2026-11-15, rebanada 6, al revisar los escenarios del alta; lo propuso el
+desarrollador). Con el perfil de [D-119], elegir un jugador que ya existe obligaba a teclear otra vez su dorsal y
+su demarcación cada temporada, y a subir otra vez su foto.
+
+**Decisión.**
+
+1. **El perfil guarda, además del nombre y el año, el último dorsal, la última demarcación y la última foto.** Son
+   una ayuda, **no mandan**: lo que vale es la fila de la plantilla, y no importa que el perfil esté perfectamente
+   al día.
+2. **Al elegir un perfil en el alta, el diálogo trae los tres**, y se pueden cambiar.
+3. **Guardar una fila los copia al perfil**: el alta, corregir y poner o quitar la foto, en cualquier temporada. Lo
+   vacío también se copia.
+4. **La sincronización ([D-120]) los copia del perfil a la fila** del jugador que casa; **si el dorsal ya lo tiene
+   otro de la plantilla ([D-118]), se deja vacío**, y el entrenador lo cambia después.
+5. **La búsqueda de perfiles devuelve el registro entero**: nombre, año, dorsal, demarcación y foto.
+6. **La foto también va en el perfil**, aunque es lo más delicado de un menor: cada club la usará a su manera, y el
+   sistema es para todos. Sigue saneada ([D-35]) y firmada ([D-117]); se borra con el perfil, en el purgado (R11),
+   cuando se queda sin filas.
+
+| Opción para qué pone al día el perfil | Por qué se descarta |
+|--------|---------------------|
+| Solo si la fila es la de la temporada más reciente | Una regla más, para un dato que no tiene que ser exacto |
+| Solo el alta | El perfil se quedaría con lo de antes de corregir |
+
+**Lo que se asume a cambio.** La foto de un menor dura lo que dure su perfil, no solo su temporada; y una foto puede
+estar a la vez en la fila y en el perfil, así que el fichero solo se borra cuando ya no lo usa ninguno de los dos
+(se concreta en `R6.6`).
+
+**Corregido en la R6.9** (2026-11-16): **dar de alta con un perfil que ya existe empieza la fila con la foto del
+perfil**, como hace la sincronización (punto 4). El alta no lleva foto, que se sube aparte ([D-35]), y copiar al
+perfil la de una fila vacía (punto 3) le borraba la que tenía: desde la R6.6, sin notarse mientras no había fotos.
+Si en el diálogo se quita o se cambia, la web llama después a quitar o subir la foto. Un jugador nuevo empieza sin.
+
+**Enmienda** a [D-119] (lo que guarda el perfil) y a [D-120] (lo que trae la sincronización); y a §3.2, §5.2 y §5.6
+del LLD (R6.4).
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5419,6 +5780,14 @@ hueco lo estropea.
 [D-112]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-113]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-114]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-115]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-116]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-117]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-118]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-119]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-120]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-121]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-122]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md

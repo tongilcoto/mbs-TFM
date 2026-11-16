@@ -130,7 +130,7 @@ cada pantalla se revisa al escribir su ficha (§2.2).
 **Al cerrar cada rebanada, lo que construye pasa a la clase `hecha`**; lo que esté en marcha, a `enCurso`.
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph MENU["Menú lateral · cada entrada llega con su rebanada (LLD-B §6.6)"]
         direction TB
         mEq["Equipos · R1"]
@@ -159,7 +159,7 @@ flowchart LR
 
     J["<b>Jornada + clasificación</b> · R4<br/>/temporadas/:temporada/competiciones/:id<br/>?jornada=22<br/><i>boceto 3</i>"]
     ACTA["<b>Acta del partido</b> · R7<br/>/partidos/:id"]
-    JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
+    JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/temporadas/:temporada/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
 
     subgraph GESTION["Gestión"]
         direction TB
@@ -187,11 +187,12 @@ flowchart LR
     P -->|"icono de la fila, o «Sincronizar con la Federación»"| F
     P -->|"clic en un equipo"| R
     R <--> E
-    E <--> PL
+    R <--> PL
     R --> AX
     R -->|"clic en un partido"| ACTA
     R -->|"☰ de cada partido, o la competición de la cabecera"| J
     PL --> JUG
+    E --> JUG
     NF --> P
 
     classDef hecha fill:#1f6f43,stroke:#5bd38a,color:#fff
@@ -226,16 +227,16 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | `listSeasonRegistrations` ● ⚠️ y `getTeamRegistration` ● ⚠️ — cada competición del equipo trae su resumen (`D-113`, Plan R5, decisión 1) |
-| **6** · Plantilla | Plantilla: lista y gestión, sin cifras · Ficha del jugador: datos y foto | `listPlayers` · `getPlayer` · `createPlayer` · `updatePlayer` · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` |
+| **6** · Plantilla | Plantilla: lista y gestión, sin cifras, y «Sincronizar con la Federación» · Ficha del jugador: datos y foto | `listPlayers` ⚠️ · `getPlayer` ⚠️ · `createPlayer` ⚠️ · `updatePlayer` ⚠️ — el perfil del jugador que dura entre temporadas, el dorsal y la demarcación opcionales y si está federado (`D-118` a `D-120`) · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` — la foto en una carpeta del disco, saneada y con enlace firmado (`D-115` a `D-117`) · 🆕 **buscar perfiles de jugador** por nombre, para el alta (`D-120`) · 🆕 **sincronizar la plantilla** con la federación, si la publica (`D-120`) |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |
-| **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` |
+| **11** · Temporadas | Gestión: Temporadas | `getSeason` · `createSeason` ● desde la 2 · `updateSeason` · `deleteSeason` · `previewSeasonPurge` · `archiveSeason` · `restoreSeason` · `registerTeamInSeason` · `unregisterTeamFromSeason` · el purgado borra también los perfiles de jugador que se queden sin ninguna fila (`D-119`, Plan R6, decisión 8) |
 | **12** · Rivales | Gestión: Rivales | `listOpponentClubs` · `getOpponentClub` · `updateOpponentClub` · `listTeams` — los equipos de un rival (`?opponentClubId=`); llegó aquí desde la 1, que ya no la usa (`D-102`) |
 | **13** · Acciones sobre el equipo | Ficha del equipo: menú ⋮ · Portada: las que tengan sentido en la fila, como iconos (`DW-19`) | `updateTeam` · `deleteTeam` · `claimTeam` · `releaseTeam` · 🆕 **dejar de sincronizar**: deshacer un enganche (R3, decisión 1) · 🆕 **el segundo equipo del club en un grupo ya sincronizado**, que la primera ingesta dejó como rival: unirlo al propio (la fusión del LLD §9.5) o que la ingesta no escriba como rivales los del club (`D-110`) · **sincronizar un rival** hoy da 422 `INVALID_VALUE`, que la ruta no declara: decidir su respuesta (R3.4) · 🆕 **la competición de la dirección no se comprueba**: la RFFM saca el calendario del grupo y solo pone el nombre de la competición, así que una que no existe pasa con el nombre vacío y una ajena con el suyo (anexo RFFM §F.20, R3.10). Dos arreglos: el nombre vacío como coordenada mala, y comprobar que el grupo es de la competición (pista: `RFFM-groups.txt`) |
 | **14** · Ingesta y club | Gestión: Ingesta · Gestión: Club | `listIngestionRuns` ● · `updateClub` ● — solo web · *(relanzar la ingesta, con `triggerIngestion`, pasó a la 4)* |
-| **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` |
+| **15** · Personal | Gestión: Personal | `listStaffMembers` · `getStaffMember` · `createStaffMember` · `updateStaffMember` · `deleteStaffMember` · `listStaffPositions` · `createStaffPosition` · `updateStaffPosition` · `deleteStaffPosition` · `setPositionPermissions` · `listVerbs` · `listStaffAssignments` · `createStaffAssignment` · `deleteStaffAssignment` · la ficha de equipo de la RFFM trae los técnicos y los delegados de cada equipo (código y nombre): cargarlos desde la federación, como la plantilla (Plan R6, decisión 9) |
 | **16** · Inicio de sesión y despliegue | Todas: acceso con usuario · Personal: invitar | `getMe` · `inviteStaffMember` |
 | — · Sin pantalla, a propósito | — | `createCompetition` · `previewCompetition`: solo para semillas, *scripts* y pruebas (`D-67`) |
 
@@ -311,6 +312,12 @@ competición; el título de la ficha lleva el género y la modalidad.
 del club (aplazado, suspendido) sale de su acta, pero la ingesta todavía no la pide: hoy todo partido es «finalizado» o
 «programado», según tenga marcador. La pestaña Resultados ya sabe pintar los otros dos estados. Leerla es del
 servidor (una ruta más de la RFFM y su parser); el acta del club con goles y tarjetas es la rebanada 7.
+
+**Para la rebanada 7: en el acta puede salir un jugador de otro equipo del club** (lo dijo el desarrollador el
+2026-11-15, en R6.3). Un equipo puede llevar a un partido a un jugador de una categoría inferior o, en la misma
+categoría, de una división inferior. Ese jugador sigue en la plantilla de su equipo (un jugador, una plantilla
+por temporada), así que lo que se apunta del partido (convocatoria, goles, tarjetas) tiene que poder apuntar a la
+fila de otro equipo. La plantilla (R6) no lo ve: lee la ficha del equipo, no las actas.
 
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que

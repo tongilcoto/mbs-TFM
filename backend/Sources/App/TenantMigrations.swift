@@ -120,6 +120,7 @@ public enum TenantMigrations {
             // descanso que se creó con su código negativo y se quedó sin partidos.
             // Solo borra filas: al final, que es su único requisito de orden ([D-90]).
             DropOrphanRestPlaceholders(),
+            CreatePlayers(),
         ]
     }
 }

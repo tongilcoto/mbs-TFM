@@ -1,0 +1,350 @@
+{
+  "title": "R6.10 · el cierre del servidor de la plantilla: R6.5 a R6.9 (el jugador, el buscador, la foto)",
+  "filter": "Player|Photo",
+  "mutations": [
+    {
+      "id": "D1-una-palabra",
+      "description": "el nombre vale con una sola palabra",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "guard words.count >= 2 else {",
+      "replace": "guard words.count >= 1 else {",
+      "filter": "PlayerNameTests"
+    },
+    {
+      "id": "D2-largo",
+      "description": "el nombre admite un carácter de más",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "guard cleaned.count <= Self.maxLength else {",
+      "replace": "guard cleaned.count <= Self.maxLength + 1 else {",
+      "filter": "PlayerNameTests"
+    },
+    {
+      "id": "D3-mayusculas",
+      "description": "el nombre no se pasa a mayúsculas",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "self.value = cleaned.uppercased(with: Locale(identifier: \"es_ES\"))",
+      "replace": "self.value = cleaned",
+      "filter": "PlayerNameTests"
+    },
+    {
+      "id": "D4-anio-futuro",
+      "description": "se admite el año siguiente al en curso",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard value <= currentYear else {",
+      "replace": "guard value <= currentYear + 1 else {",
+      "filter": "PlayerTests|PlayerUseCaseTests"
+    },
+    {
+      "id": "D5-dorsal-cero",
+      "description": "el dorsal 0 vale",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard (1...99).contains(value) else {",
+      "replace": "guard (0...99).contains(value) else {",
+      "filter": "PlayerTests|PlayerUseCaseTests"
+    },
+    {
+      "id": "D6-rival",
+      "description": "un rival admite altas",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard team.isOwn else {",
+      "replace": "guard team.isOwn || true else {",
+      "filter": "PlayerTests|PlayerUseCaseTests"
+    },
+    {
+      "id": "D7-archivada",
+      "description": "una temporada archivada se puede escribir",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard !season.isArchived else {",
+      "replace": "guard !season.isArchived || true else {",
+      "filter": "PlayerTests|PlayerUseCaseTests|PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "D8-dos-letras",
+      "description": "se busca con dos letras",
+      "file": "Sources/Domain/PlayerSearch.swift",
+      "find": "guard words.joined().count >= Self.minimumLetters else { return nil }",
+      "replace": "guard words.joined().count >= Self.minimumLetters - 1 else { return nil }",
+      "filter": "PlayerSearchTests"
+    },
+    {
+      "id": "D9-trozo",
+      "description": "la búsqueda encaja un trozo de en medio",
+      "file": "Sources/Domain/PlayerSearch.swift",
+      "find": "nameWords.contains { $0.hasPrefix(word) }",
+      "replace": "nameWords.contains { $0.contains(word) }",
+      "filter": "PlayerSearchTests"
+    },
+    {
+      "id": "D10-perfil-foto",
+      "description": "guardar una fila no copia la foto al perfil",
+      "file": "Sources/Domain/Player.swift",
+      "find": "lastPhotoKey: row.photoKey,",
+      "replace": "lastPhotoKey: lastPhotoKey,",
+      "filter": "PlayerTests|PlayerUseCaseTests|PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "A1-dos-plantillas",
+      "description": "un perfil puede estar en dos plantillas de la temporada",
+      "file": "Sources/Application/Players.swift",
+      "find": "guard try await players.list(profileID: id, seasonID: season.id).isEmpty else {",
+      "replace": "guard try await players.list(profileID: id, seasonID: season.id).count < 2 else {",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A2-dorsal-propio",
+      "description": "corregir con su propio dorsal choca",
+      "file": "Sources/Application/Players.swift",
+      "find": ".contains { $0.shirtNumber == shirt && $0.id != except }",
+      "replace": ".contains { $0.shirtNumber == shirt }",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A3-alta-sin-foto",
+      "description": "el alta con perfil no trae su foto (el fallo de la R6.6)",
+      "file": "Sources/Application/Players.swift",
+      "find": "photoKey: profile.lastPhotoKey, createdAt: now, updatedAt: now)",
+      "replace": "photoKey: nil, createdAt: now, updatedAt: now)",
+      "filter": "PlayerUseCaseTests|PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "A4-quitar-anio",
+      "description": "el año se puede quitar",
+      "file": "Sources/Application/Players.swift",
+      "find": "case .none where profile.birthYear != nil:",
+      "replace": "case .none where false:",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A5-sin-dorsal-primero",
+      "description": "los que no tienen dorsal van delante",
+      "file": "Sources/Application/Players.swift",
+      "find": "case (.some, nil): return true",
+      "replace": "case (.some, nil): return false",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A6-once",
+      "description": "el buscador trae once",
+      "file": "Sources/Application/Players.swift",
+      "find": "public static let limit = 10",
+      "replace": "public static let limit = 11",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A7-la-mas-antigua",
+      "description": "la última plantilla es la más antigua",
+      "file": "Sources/Application/Players.swift",
+      "find": ".max { $0.1.label.startYear < $1.1.label.startYear }",
+      "replace": ".min { $0.1.label.startYear < $1.1.label.startYear }",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "A8-quitar-sin-foto",
+      "description": "quitar la foto a quien no tiene borra la del perfil",
+      "file": "Sources/Application/PlayerPhotos.swift",
+      "find": "            guard row.photoKey != nil else { return [] }\n",
+      "replace": "",
+      "filter": "PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "A9-borra-en-uso",
+      "description": "se borra el fichero aunque lo use alguien",
+      "file": "Sources/Application/PlayerPhotos.swift",
+      "find": "if !inUse { try await store.delete(key) }",
+      "replace": "try await store.delete(key)",
+      "filter": "PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "A10-fichero-huerfano",
+      "description": "si falla apuntar la clave, el fichero nuevo se queda",
+      "file": "Sources/Application/PlayerPhotos.swift",
+      "find": "            try? await store.delete(key)\n            throw error",
+      "replace": "            throw error",
+      "filter": "PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "A11-clave-mayusculas",
+      "description": "la clave admite el código en mayúsculas",
+      "file": "Sources/Application/Photos.swift",
+      "find": "guard let id = UUID(uuidString: code), id.uuidString.lowercased() == code else { return nil }",
+      "replace": "guard let id = UUID(uuidString: code) else { return nil }",
+      "filter": "PhotoKeyTests"
+    },
+    {
+      "id": "A12-clave-con-carpetas",
+      "description": "la clave admite más de una barra",
+      "file": "Sources/Application/Photos.swift",
+      "find": "guard parts.count == 2,",
+      "replace": "guard parts.count >= 2,",
+      "filter": "PhotoKeyTests"
+    },
+    {
+      "id": "A13-otro-club",
+      "description": "el fichero se busca sin el club de la dirección",
+      "file": "Sources/Application/PlayerPhotos.swift",
+      "find": "guard let key = PhotoKey(\"\\(actor.clubSlug.value)/\\(file)\") else { return nil }",
+      "replace": "guard let key = PhotoKey(\"celtic-castilla/\\(file)\") else { return nil }",
+      "filter": "PlayerPhotoUseCaseTests"
+    },
+    {
+      "id": "P1-baja-no-cuenta",
+      "description": "una fila dada de baja no cuenta como uso",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "let rows = try await PlayerRecord.query(on: database).withDeleted()",
+      "replace": "let rows = try await PlayerRecord.query(on: database)",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "P2-perfil-no-cuenta",
+      "description": "un perfil no cuenta como uso",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": ".filter(\\.$lastPhotoKey == key).count() > 0",
+      "replace": ".filter(\\.$lastPhotoKey == key).count() > 1",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "P3-bajas-fuera",
+      "description": "el buscador quita también a los dados de baja",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "                AND r.deleted_at IS NULL)",
+      "replace": "                )",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "I1-justo-el-tope",
+      "description": "30 millones justos no se abren",
+      "file": "Sources/Imaging/LibraryPhotoSanitizer.swift",
+      "find": "guard size.width * size.height <= PhotoRules.maxPoints else {",
+      "replace": "guard size.width * size.height < PhotoRules.maxPoints else {",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I2-giro-al-reves",
+      "description": "la nota 6 gira al otro lado",
+      "file": "Sources/Imaging/Points.swift",
+      "find": "case 6: (y, height - 1 - x)",
+      "replace": "case 6: (width - 1 - y, x)",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I3-calidad",
+      "description": "la calidad se escala mal",
+      "file": "Sources/Imaging/LibraryPhotoSanitizer.swift",
+      "find": "let scale = q < 50 ? 5000 / q : 200 - 2 * q",
+      "replace": "let scale = q < 50 ? 5000 / q : 200 - q",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I4-transparente",
+      "description": "lo transparente no se pone en blanco",
+      "file": "Sources/Imaging/LibraryPhotoSanitizer.swift",
+      "find": "rgb[3 * i + 1] = UInt8((Int(c.g) * a + 255 * (255 - a)) / 255)",
+      "replace": "rgb[3 * i + 1] = c.g",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I5-tablas-marco",
+      "description": "las tablas (FF C4) se toman por el marco",
+      "file": "Sources/Imaging/PhotoHeader.swift",
+      "find": "if (0xC0 ... 0xCF).contains(marker), ![0xC4, 0xC8, 0xCC].contains(marker) {",
+      "replace": "if (0xC0 ... 0xCF).contains(marker) {",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I6-agranda",
+      "description": "la pequeña también se ajusta a 800",
+      "file": "Sources/Imaging/Points.swift",
+      "find": "guard side > maxSide else { return (width, height) }",
+      "replace": "guard side > 0 else { return (width, height) }",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "I7-sin-giro",
+      "description": "no se mira la nota de orientación",
+      "file": "Sources/Imaging/LibraryPhotoSanitizer.swift",
+      "find": "let turn = orientation(in: spectral.metadata)",
+      "replace": "let turn = 1",
+      "filter": "PhotoSanitizerTests"
+    },
+    {
+      "id": "S1-un-segundo-mas",
+      "description": "el enlace vale un segundo después de caducar",
+      "file": "Sources/Storage/PhotoLinkSigner.swift",
+      "find": "guard Int64(now.timeIntervalSince1970) <= expires,",
+      "replace": "guard Int64(now.timeIntervalSince1970) <= expires + 1,",
+      "filter": "PhotoLinkSignerTests|DiskPhotoStoreTests"
+    },
+    {
+      "id": "S2-firma-sin-club",
+      "description": "la firma no lleva el club",
+      "file": "Sources/Storage/PhotoLinkSigner.swift",
+      "find": "Data(\"\\(key.value)\\n\\(expires)\".utf8)",
+      "replace": "Data(\"\\(key.id)\\n\\(expires)\".utf8)",
+      "filter": "PhotoLinkSignerTests|DiskPhotoStoreTests"
+    },
+    {
+      "id": "S3-barra-doble",
+      "description": "el prefijo con barra final deja «//v1»",
+      "file": "Sources/Storage/PhotoLinkSigner.swift",
+      "find": "self.prefix = prefix.hasSuffix(\"/\") ? String(prefix.dropLast()) : prefix",
+      "replace": "self.prefix = prefix",
+      "filter": "PhotoLinkSignerTests|DiskPhotoStoreTests"
+    },
+    {
+      "id": "S4-clave-fija",
+      "description": "sin clave, una fija en vez de al azar",
+      "file": "Sources/Storage/PhotoLinkSigner.swift",
+      "find": "self.secret = SymmetricKey(size: .bits256)",
+      "replace": "self.secret = SymmetricKey(data: Data(\"fija\".utf8))",
+      "filter": "PhotoLinkSignerTests|DiskPhotoStoreTests"
+    },
+    {
+      "id": "S5-sin-firma",
+      "description": "el almacén entrega sin mirar la firma",
+      "file": "Sources/Storage/DiskPhotoStore.swift",
+      "find": "guard signer.isValid(key, expires: expires, signature: signature, now: now) else { return nil }",
+      "replace": "",
+      "filter": "PhotoLinkSignerTests|DiskPhotoStoreTests"
+    },
+    {
+      "id": "H1-cuatro-megas",
+      "description": "el tope de peso baja a 4 MB",
+      "file": "Sources/HTTPAdapter/PhotoHandler.swift",
+      "find": "static let maxPhotoBytes = 5 * 1024 * 1024",
+      "replace": "static let maxPhotoBytes = 4 * 1024 * 1024",
+      "filter": "PlayerEndpointTests"
+    },
+    {
+      "id": "H2-415-generico",
+      "description": "el 415 sale con BAD_REQUEST",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "if status == .unsupportedMediaType, server.operationID == \"uploadPlayerPhoto\" {",
+      "replace": "if false {",
+      "filter": "PlayerEndpointTests"
+    },
+    {
+      "id": "H3-sin-enlace",
+      "description": "la ficha no trae el enlace",
+      "file": "Sources/HTTPAdapter/PlayerHandler.swift",
+      "find": "photoUrl: photoURL(player.photoKey),",
+      "replace": "photoUrl: nil,",
+      "filter": "PlayerEndpointTests"
+    },
+    {
+      "id": "H4-buscador-sin-enlace",
+      "description": "el buscador no trae la foto del perfil",
+      "file": "Sources/HTTPAdapter/PlayerHandler.swift",
+      "find": "lastPhotoUrl: photoURL(profile.lastPhotoKey),",
+      "replace": "lastPhotoUrl: nil,",
+      "filter": "PlayerEndpointTests"
+    },
+    {
+      "id": "C1-prefijo",
+      "description": "sin ajuste, el enlace no empieza por /api",
+      "file": "Sources/App/PhotosConfig.swift",
+      "find": "urlPrefix: urlPrefix ?? defaultURLPrefix,",
+      "replace": "urlPrefix: urlPrefix ?? \"\",",
+      "filter": "PhotosConfigTests"
+    }
+  ]
+}

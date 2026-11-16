@@ -28,6 +28,15 @@ struct FederationCatalogTests {
         #expect(FederationCode.fcf.capabilities.providesScorers)
     }
 
+    /// D-120: la RFFM publica la plantilla de cada equipo en su ficha
+    /// (`fichaequipo/<código>`); la de la FCF no se ha medido, y sin volcado no
+    /// se ofrece un botón que no sabe hacer nada.
+    @Test("solo la RFFM publica plantillas; la FCF, sin medir (D-120)")
+    func teamRoster() {
+        #expect(FederationCode.rffm.capabilities.providesTeamRoster)
+        #expect(!FederationCode.fcf.capabilities.providesTeamRoster)
+    }
+
     /// Si alguien añade una federación al enum, este test la obliga a declarar
     /// sus capacidades en el mismo commit — el `switch` es exhaustivo, pero un
     /// caso nuevo copiado del vecino compilaría con datos mentira.

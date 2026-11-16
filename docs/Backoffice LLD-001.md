@@ -530,10 +530,10 @@ la competición arriba.
 | `/equipos/:id/federacion` | **Sincronizar con la Federación** (el enganche): dos pasos, la dirección y el equipo, en el mismo camino | Decidido en la rebanada 3 |
 | `/temporadas/:temporada/competiciones/:id` | **Jornada y clasificación** de una competición (boceto 3). La jornada va detrás de `?` (`?jornada=22`): es lo que se mira de la competición, no otra pantalla | Decidido en la rebanada 4 |
 | `/partidos/:id` | El acta del partido: goles, tarjetas, minutos | Borrador |
-| `/jugadores/:id` | Ficha del jugador | Borrador |
+| `/temporadas/:temporada/jugadores/:id` | **Ficha del jugador**: sus datos, su foto y, desde la fila de la plantilla o desde aquí, corregir y dar de baja. `:id` es el jugador en esa temporada (su fila de la plantilla, `D-05`); si la temporada del camino no casa, «no se ha encontrado». `/jugadores/:id`, con el código del jugador que dura entre temporadas (`D-119`), queda para una versión siguiente, con la pantalla de todas sus temporadas | Decidido en la rebanada 6 (plan R6, decisión 6) |
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
-**Solo están decididas las tres primeras, la del enganche y las de la rebanada 4** (el alta de equipo, con la rebanada 2; el enganche, con la 3; la pestaña Resultados y la de jornada y clasificación, con la 4). El resto es un borrador: cada camino se confirma, o se cambia,
+**Solo están decididas las tres primeras, la del enganche, las de la rebanada 4 y la ficha del jugador** (el alta de equipo, con la rebanada 2; el enganche, con la 3; la pestaña Resultados y la de jornada y clasificación, con la 4; la ficha del jugador, con la 6). El resto es un borrador: cada camino se confirma, o se cambia,
 al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español
@@ -559,7 +559,8 @@ lleva a Resultados, y `/equipos/:id`, sin temporada, a la ficha en la temporada 
 `/temporadas/2025-26/competiciones/:id` (jornada y clasificación). La temporada **es parte de lo que se mira**, no un
 filtro: la ficha es el equipo en esa temporada (su inscripción, `D-102`), y una competición es de una sola. Lo que
 se elige dentro de la pantalla sí va detrás de `?`: la jornada, el orden. *(Decidido en la rebanada 4, [DW-22];
-hasta entonces la temporada iba siempre detrás de `?`.)*
+hasta entonces la temporada iba siempre detrás de `?`.)* La ficha del jugador también la lleva
+(`/temporadas/2025-26/jugadores/:id`, rebanada 6): el jugador de la plantilla es el de una temporada.
 
 **La portada es la excepción**: `/?temporada=2025-26`. Es la entrada de la web, y `/` a secas tiene que llevar a
 algún sitio. **Lo que no es de una temporada no la lleva**: el enganche, `/equipos/:id/federacion`, puede
