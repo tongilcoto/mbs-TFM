@@ -87,6 +87,13 @@ extension PlayerEndpointTests {
                 try await E.send(app, .GET, "/v1/players?teamId=\(s.cadeteA)&seasonId=\(s.vigente)") { (r: TestingHTTPResponse) async throws in
                     #expect(try E.roster(r).first?.photoUrl != nil)
                 }
+                // El buscador del alta, desde otro equipo, trae la foto del perfil (`D-122`, punto 5).
+                try await E.send(app, .GET, "/v1/player-profiles?q=juan&teamId=\(s.cadeteB)&seasonId=\(s.vigente)") {
+                    (r: TestingHTTPResponse) async throws in
+                    let found = try JSONDecoder().decode([Components.Schemas.PlayerProfileSearchResult].self,
+                                                         from: Data(r.body.readableBytesView))
+                    #expect(found.first?.lastPhotoUrl?.hasPrefix("/api/v1/player-photos/") == true)
+                }
             }
         }
 
@@ -121,10 +128,10 @@ extension PlayerEndpointTests {
                     #expect(r.status == .badRequest, "un PNG que dice ser JPEG")
                 }
                 // Una foto de móvil pesa unos MB: el cuerpo tiene que llegar entero al saneado (Vapor corta en 16 KB
-                // si no se le dice otra cosa). Si llega, el saneado dice que no es una imagen; si no, sería un 413.
-                try await Self.put(app, id, [UInt8](repeating: 0, count: 4 * 1024 * 1024), type: "image/jpeg") {
+                // si no se le dice otra cosa). Con 5 MB justos, el tope, llega: el saneado dice que no es una imagen.
+                try await Self.put(app, id, [UInt8](repeating: 0, count: 5 * 1024 * 1024), type: "image/jpeg") {
                     (r: TestingHTTPResponse) async throws in
-                    #expect(r.status == .badRequest, "4 MB llegan enteros")
+                    #expect(r.status == .badRequest, "5 MB justos llegan enteros")
                     #expect(Self.code(r) == "NOT_AN_IMAGE")
                 }
             }

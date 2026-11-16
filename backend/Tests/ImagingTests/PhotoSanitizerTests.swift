@@ -126,6 +126,10 @@ struct PhotoSanitizerTests {
         #expect(throws: PhotoRejection.tooManyPoints(width: 8_000, height: 4_000)) {
             try sanitizer.sanitize(F.jpegHeader(width: 8_000, height: 4_000), declared: .jpeg)
         }
+        #expect(throws: PhotoRejection.tooManyPoints(width: 8_000, height: 4_000),
+                "con unas tablas delante del marco, que no son el marco") {
+            try sanitizer.sanitize(F.jpegHeader(width: 8_000, height: 4_000, tablesFirst: true), declared: .jpeg)
+        }
     }
 
     @Test("con 30 millones justos sí se intenta abrir (R6.8)")

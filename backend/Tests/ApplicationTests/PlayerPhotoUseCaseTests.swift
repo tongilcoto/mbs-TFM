@@ -118,6 +118,22 @@ struct PlayerPhotoUseCaseTests {
         #expect(await s.store.players.first?.photoKey == nil)
     }
 
+    @Test("si falla apuntar la clave, el fichero nuevo se borra: no lo usaría nadie (R6.9)")
+    func failedRecordDeletesTheNewFile() async throws {
+        let s = try await PlayerUseCaseTests.seed()
+        let store = MemoryStore()
+        let juan = try await PlayerUseCaseTests.newPlayer(s)
+        // La primera transacción mira la fila; la segunda, la que apunta la clave, falla.
+        let upload = UploadPlayerPhoto(
+            unitOfWork: FailOnNthScope(wrapping: FakeUnitOfWork(store: s.store), failOn: 2), store: store,
+            sanitizer: FakeSanitizer(), clock: FixedClock(instant: Self.now), ids: SequentialUUIDProvider())
+
+        await #expect(throws: FakeOutage.self) {
+            try await upload.execute(juan.player.id, bytes: [1], declared: .jpeg, actor: Self.actor)
+        }
+        #expect(await store.files.isEmpty)
+    }
+
     @Test("un jugador que no existe, 404; una temporada archivada, 422; sin guardar fichero (§5.1)")
     func notFoundAndArchived() async throws {
         let s = try await PlayerUseCaseTests.seed()
@@ -160,14 +176,18 @@ struct PlayerPhotoUseCaseTests {
     func removeWithoutPhotoIsNoOp() async throws {
         let s = try await PlayerUseCaseTests.seed()
         let store = MemoryStore()
+        // El mismo jugador en dos temporadas: la fila de esta, sin foto; la pasada, con una, que tiene el perfil.
         let pasado = try await PlayerUseCaseTests.newPlayer(s, season: s.anterior)
+        let actual = try await PlayerUseCaseTests.create(s.store).execute(.init(
+            teamID: s.cadeteA.id, seasonID: s.vigente.id, who: .profile(pasado.profile.id),
+            shirtNumber: nil, position: nil))
         let key = try #require(try await Self.upload(s, store).execute(
             pasado.player.id, bytes: [1], declared: .jpeg, actor: Self.actor).player.photoKey)
-        let otro = try await PlayerUseCaseTests.newPlayer(s, name: "Pedro López")
+        #expect(actual.player.photoKey == nil)
 
-        try await Self.remove(s, store).execute(otro.player.id, actor: Self.actor)
+        try await Self.remove(s, store).execute(actual.player.id, actor: Self.actor)
 
-        #expect(await Self.profile(s, pasado)?.lastPhotoKey == key)
+        #expect(await Self.profile(s, pasado)?.lastPhotoKey == key, "el perfil conserva la suya")
         #expect(await store.files[key] != nil)
     }
 

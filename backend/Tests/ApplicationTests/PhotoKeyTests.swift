@@ -19,7 +19,8 @@ struct PhotoKeyTests {
           arguments: ["../etc/passwd", "celtic-castilla/../../x.jpg", "celtic-castilla/abc.jpg",
                       "celtic-castilla/6F9619FF-8B86-D011-B42D-00C04FC964FF.jpg",
                       "celtic-castilla/6f9619ff-8b86-d011-b42d-00c04fc964ff.png",
-                      "a/b/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg", "/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg",
+                      "a/b/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg",
+                      "celtic-castilla/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg/otra.jpg", "/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg",
                       "Celtic/6f9619ff-8b86-d011-b42d-00c04fc964ff.jpg", ""])
     func rejectsOtherShapes(_ raw: String) {
         #expect(PhotoKey(raw) == nil)

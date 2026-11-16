@@ -20,4 +20,13 @@ struct PhotosConfigTests {
         #expect(PhotosConfig.fromEnvironment("../otra", workingDirectory: "/tmp/backend").folder.path
                 == "/tmp/otra")
     }
+
+    @Test("el prefijo del enlace es /api si no se pone; la clave, ninguna si está vacía (D-117, puntos 5 y 7)")
+    func linkSettings() {
+        let byDefault = PhotosConfig.fromEnvironment(nil, workingDirectory: "/tmp", urlPrefix: nil, signingKey: "")
+        #expect(byDefault.urlPrefix == "/api")
+        #expect(byDefault.signingKey == nil)
+        let set = PhotosConfig.fromEnvironment(nil, workingDirectory: "/tmp", urlPrefix: "/otra", signingKey: "k")
+        #expect(set.urlPrefix == "/otra" && set.signingKey == "k")
+    }
 }

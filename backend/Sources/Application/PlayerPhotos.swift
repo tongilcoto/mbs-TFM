@@ -43,10 +43,11 @@ func storePhoto(_ key: String?, on id: PlayerID, now: Date, in r: any Repositori
 
 /// **Borra los ficheros que ya no usa nadie** (`D-122`). Lo que falle aquí no se
 /// devuelve: la foto ya está puesta o quitada, y un fichero de más no estorba.
-func deleteUnused(_ keys: [String], keeping kept: String?, store: any PhotoStore,
+func deleteUnused(_ keys: [String], store: any PhotoStore,
                   unitOfWork: any TenantUnitOfWork, actor: ActorContext) async
 {
-    for raw in Set(keys) where raw != kept {
+    // Son las claves de **antes** de cambiar la fila: la nueva nunca está entre ellas.
+    for raw in Set(keys) {
         guard let key = PhotoKey(raw) else { continue }
         do {
             let inUse = try await rosterScope(unitOfWork, actor) { try await $0.players.isPhotoInUse(raw) }
@@ -97,7 +98,7 @@ public struct UploadPlayerPhoto: Sendable {
             try? await store.delete(key)
             throw error
         }
-        await deleteUnused(stored.before, keeping: key.value, store: store, unitOfWork: unitOfWork, actor: actor)
+        await deleteUnused(stored.before, store: store, unitOfWork: unitOfWork, actor: actor)
         return stored.entry
     }
 }
@@ -122,7 +123,7 @@ public struct DeletePlayerPhoto: Sendable {
             guard row.photoKey != nil else { return [] }
             return try await storePhoto(nil, on: id, now: now, in: r).before
         }
-        await deleteUnused(before, keeping: nil, store: store, unitOfWork: unitOfWork, actor: actor)
+        await deleteUnused(before, store: store, unitOfWork: unitOfWork, actor: actor)
     }
 }
 

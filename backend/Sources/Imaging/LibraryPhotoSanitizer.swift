@@ -72,13 +72,14 @@ public struct LibraryPhotoSanitizer: PhotoSanitizer {
         return Points(width: image.size.x, height: image.size.y, rgb: rgb).shrunk(maxSide: PhotoRules.maxSide)
     }
 
-    /// La nota de orientación (la etiqueta 0x0112 del EXIF), de 1 a 8. Si no está o no se entiende, 1: tal cual.
+    /// La nota de orientación (la etiqueta 0x0112 del EXIF). Si no está, 1: tal cual; un valor fuera de 1 a 8 lo
+    /// deja tal cual `Points.upright`.
     static func orientation(in metadata: [JPEG.Metadata]) -> Int {
         for record in metadata {
             guard case .exif(let exif) = record, let field = exif[tag: 0x0112] else { continue }
             let c = field.box.contents
             let value = exif.endianness == .bigEndian ? Int(c.0) << 8 | Int(c.1) : Int(c.1) << 8 | Int(c.0)
-            return (1 ... 8).contains(value) ? value : 1
+            return value
         }
         return 1
     }

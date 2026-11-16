@@ -105,8 +105,10 @@ enum PhotoFixtures {
     }
 
     /// Solo el comienzo de un JPEG cuyo marco dice medir `width` × `height`.
-    static func jpegHeader(width: Int, height: Int) -> [UInt8] {
-        [0xFF, 0xD8, 0xFF, 0xC0] + be16(17) + [8] + be16(height) + be16(width) + [3]
+    static func jpegHeader(width: Int, height: Int, tablesFirst: Bool = false) -> [UInt8] {
+        // Unas tablas (DHT, `FF C4`) delante del marco: su código está entre los de los marcos y no es uno.
+        let tables: [UInt8] = tablesFirst ? [0xFF, 0xC4] + be16(6) + [0x00, 0x01, 0x02, 0x03] : []
+        return [0xFF, 0xD8] + tables + [0xFF, 0xC0] + be16(17) + [8] + be16(height) + be16(width) + [3]
             + [1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]
     }
 
