@@ -1,4 +1,5 @@
 public import struct Foundation.UUID
+public import struct Foundation.Date
 public import struct Domain.Slug
 
 // ── La clave de una foto (D-115) ─────────────────────────────────────────────
@@ -48,10 +49,20 @@ public struct PhotoKey: Hashable, Sendable, CustomStringConvertible {
 ///    nuevo), pero así repetir una subida que falló a medias no da error.
 /// 2. **Leer o borrar una clave que no está no es un error**: leer da `nil`, borrar no hace nada. El fichero de
 ///    antes se borra «si ya no lo usa nadie», y puede que otro ya lo hubiera borrado.
+/// 3. **El enlace dura una hora y es nuevo en cada lectura** (`D-117`): es lo que va en `photoUrl`, y la web lo
+///    usa tal cual, venga de la carpeta o de Supabase.
 public protocol PhotoStore: Sendable {
     func save(_ bytes: [UInt8], at key: PhotoKey) async throws
     func read(_ key: PhotoKey) async throws -> [UInt8]?
     func delete(_ key: PhotoKey) async throws
+
+    /// El enlace firmado de una foto, que caduca una hora después de `now` (`D-117`).
+    func link(to key: PhotoKey, now: Date) -> String
+
+    /// **Solo para el almacén en disco**: el fichero, si el enlace que lo pide vale (la firma es la buena y no
+    /// ha caducado). Es lo que hace la ruta a la que apunta su enlace (`getPlayerPhotoFile`). `nil` para todo lo
+    /// que no vale, sin decir por qué: así no se sabe qué claves hay. Con Supabase, la ruta desaparece.
+    func readSigned(_ key: PhotoKey, expires: Int64, signature: String, now: Date) async throws -> [UInt8]?
 }
 
 // ── El saneado (D-35, D-116) ─────────────────────────────────────────────────

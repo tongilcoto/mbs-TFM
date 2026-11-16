@@ -5,6 +5,7 @@ import FluentPostgresDriver
 import HTTPAdapter
 import OpenAPIVapor
 import Persistence
+import Imaging
 import Storage
 import Tenancy
 public import Vapor
@@ -84,7 +85,7 @@ public func configure(
     // saltar la guarda de §6.1 sin esperar a JWKS.
     actors: any ActorResolver = AmbientTenantActorResolver(),
     // R6.8: el almacén de las fotos (`D-115`). Por defecto, la carpeta de `PhotosConfig`; cada test pone la suya.
-    photos: any PhotoStore = DiskPhotoStore(folder: PhotosConfig.fromEnvironment().folder)
+    photos: any PhotoStore = PhotosConfig.fromEnvironment().store()
 ) async throws {
     // ── Puerto ───────────────────────────────────────────────────────────────
     // El **por defecto** de `serve`: `--port` sigue ganando. Sale de `API_PORT`
@@ -141,7 +142,9 @@ public func configure(
         federationClients: federationClients,
         clock: clock,
         background: background,
-        actors: actors
+        actors: actors,
+        photos: photos,
+        sanitizer: LibraryPhotoSanitizer()
     )
 
     // El transporte se registra sobre un `RoutesBuilder` ya decorado, que es lo

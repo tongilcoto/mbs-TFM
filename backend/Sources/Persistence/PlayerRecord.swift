@@ -273,6 +273,15 @@ public struct FluentPlayerRepository: PlayerRepository {
             .all()
             .map { try $0.toDomain() }
     }
+
+    public func isPhotoInUse(_ key: String) async throws -> Bool {
+        // `withDeleted`: las dadas de baja también cuentan (`D-35`).
+        let rows = try await PlayerRecord.query(on: database).withDeleted()
+            .filter(\.$photoKey == key).count()
+        if rows > 0 { return true }
+        return try await PlayerProfileRecord.query(on: database)
+            .filter(\.$lastPhotoKey == key).count() > 0
+    }
 }
 
 public struct FluentPlayerProfileRepository: PlayerProfileRepository {

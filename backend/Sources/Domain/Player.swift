@@ -123,6 +123,12 @@ public struct Player: Identifiable, Equatable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
+
+    /// La misma fila con otra foto, o sin ella (R6.9).
+    public func with(photoKey: String?, updatedAt: Date) -> Player {
+        Player(id: id, profileID: profileID, teamID: teamID, seasonID: seasonID, shirtNumber: shirtNumber,
+               position: position, photoKey: photoKey, createdAt: createdAt, updatedAt: updatedAt)
+    }
 }
 
 /// Las dos reglas que deciden si se puede escribir en una plantilla.

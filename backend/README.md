@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y el almacén de fotos y su saneado. **955 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y la foto: su almacén, su saneado y sus tres operaciones. **979 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -49,7 +49,9 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/players?teamId=&seasonId=` · `GET /v1/players/{id}`                          | Backoffice R6.6 |
 | `POST /v1/players` · `PUT /v1/players/{id}` · `DELETE /v1/players/{id}`               | Backoffice R6.6 |
 | `GET /v1/player-profiles?q=&teamId=&seasonId=`                                        | Backoffice R6.7 |
-| Las otras 65 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `PUT /v1/players/{id}/photo` · `DELETE /v1/players/{id}/photo`                        | Backoffice R6.9 |
+| `GET /v1/player-photos/{fichero}?expires=&signature=`                                 | Backoffice R6.9: la foto, por su enlace firmado (`D-117`) |
+| Las otras 62 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -121,6 +123,8 @@ base de datos.**
 | `DOMAIN_SUFFIX` | `localhost` | El sufijo que se recorta del `Host` (§6.1) |
 | `API_PORT` | `8080` | Puerto por defecto de `serve` (`--port` gana) y el de los `curl` que imprimen los comandos. **Mejor en `backend/.env.development`** que en el perfil del shell: Vapor lo lee solo al arrancar desde `backend/`, vale únicamente para este proyecto, y la web lo lee también para saber adónde mandar sus peticiones ([README de la web](../backoffice/README.md#para-ver-datos-el-servidor-tiene-que-estar-en-marcha)) |
 | `PHOTOS_DIR` | `fotos/`, en la carpeta desde la que se lanza | La carpeta de las fotos de los jugadores (`D-115`): con `swift run Run serve` desde `backend/`, `backend/fotos/`, que no se graba en el repositorio. **No uses fotos de verdad en el Mac.** Cada test usa una temporal suya |
+| `PHOTOS_URL_PREFIX` | `/api` | Por dónde empieza el enlace de la foto (`photoUrl`, `D-117`): `/api` es el del recepcionista de la web, que se lo quita al pasar la petición al servidor. Para un `curl` directo, quítalo a mano |
+| `PHOTOS_SIGNING_KEY` | una al azar en cada arranque | La clave que firma los enlaces de las fotos (`D-117`). Sin ella, al relanzar el servidor los enlaces de antes dejan de valer y la web enseña las iniciales hasta recargar |
 | `LOG_LEVEL` | `info` | `debug` muestra cada petición y cada SQL. Vale también en `swift test` |
 | `HTTP_TRACE` | apagado | `1` vuelca los **cuerpos** HTTP. Solo en `.development` / `.testing` |
 | `RFFM_BASE_URL` | `https://www.rffm.es` | Dónde pide la ingesta los datos de la RFFM. Solo para pruebas: los escenarios del backoffice ponen aquí una federación falsa. **La URL que se pega en el enganche sigue siendo la de la RFFM de verdad** |

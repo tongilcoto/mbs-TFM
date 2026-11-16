@@ -91,6 +91,9 @@ let package = Package(
         // Apache 2.0 las dos, como las dos pequeñas que traen (mirado en la R6.8). **Solo las ve `Imaging`.**
         .package(url: "https://github.com/tayloraswift/swift-jpeg.git", from: "2.1.0"),
         .package(url: "https://github.com/tayloraswift/swift-png.git", from: "4.5.2"),
+        // D-117: la firma del enlace de la foto (HMAC-SHA256). **Ya estaba en el grafo** —Vapor depende de
+        // ella— y se declara, como todo lo que se importa. Solo la ve `Storage`.
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.5.1"),
     ],
     targets: [
         // ── Núcleo ────────────────────────────────────────────────────────────
@@ -194,7 +197,7 @@ let package = Package(
         // saneado porque cambian por motivos distintos (R6.8).
         .target(
             name: "Storage",
-            dependencies: ["Application"],
+            dependencies: ["Application", .product(name: "Crypto", package: "swift-crypto")],
             swiftSettings: commonSwiftSettings
         ),
 

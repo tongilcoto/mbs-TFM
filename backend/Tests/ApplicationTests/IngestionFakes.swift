@@ -245,6 +245,11 @@ struct FakePlayerRepository: PlayerRepository {
     }
     func save(_ player: Player) async throws { await store.save(player) }
     func delete(_ id: PlayerID) async throws { await store.deletePlayer(id) }
+    func isPhotoInUse(_ key: String) async throws -> Bool {
+        let rows = await store.players + store.deletedPlayers
+        let profiles = await store.playerProfiles
+        return rows.contains { $0.photoKey == key } || profiles.contains { $0.lastPhotoKey == key }
+    }
     func list(profileIDs: [PlayerProfileID]) async throws -> [Player] {
         await store.players.filter { profileIDs.contains($0.profileID) }
     }

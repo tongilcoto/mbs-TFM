@@ -24,7 +24,7 @@ extension APIHandler {
                                   profiles: r.playerProfiles)
                 .execute(teamID: teamID, seasonID: seasonID, position: position)
         }
-        return .ok(.init(body: .json(roster.map { $0.toResponse() })))
+        return .ok(.init(body: .json(roster.map { $0.toResponse(photoURL) })))
     }
 
     public func getPlayer(_ input: Operations.getPlayer.Input) async throws
@@ -44,7 +44,7 @@ extension APIHandler {
         let entry = try await unitOfWork.withRepositories(actor: actor) { r in
             try await GetPlayer(players: r.players, profiles: r.playerProfiles).execute(id)
         }
-        return .ok(.init(body: .json(entry.toResponse())))
+        return .ok(.init(body: .json(entry.toResponse(photoURL))))
     }
 
     public func createPlayer(_ input: Operations.createPlayer.Input) async throws
@@ -80,7 +80,7 @@ extension APIHandler {
                                    profiles: r.playerProfiles, clock: clock, ids: ids)
                 .execute(command)
         }
-        return .created(.init(body: .json(entry.toResponse())))
+        return .created(.init(body: .json(entry.toResponse(photoURL))))
     }
 
     public func updatePlayer(_ input: Operations.updatePlayer.Input) async throws
@@ -106,7 +106,7 @@ extension APIHandler {
             try await UpdatePlayer(seasons: r.seasons, players: r.players, profiles: r.playerProfiles,
                                    clock: clock).execute(id, command)
         }
-        return .ok(.init(body: .json(entry.toResponse())))
+        return .ok(.init(body: .json(entry.toResponse(photoURL))))
     }
 
     public func deletePlayer(_ input: Operations.deletePlayer.Input) async throws
@@ -131,7 +131,7 @@ extension APIHandler {
 extension RosterEntry {
     /// Mapeo `Entidad → DTO` (§2.2): la fila, con el nombre y el año de su perfil
     /// (`D-119`).
-    func toResponse() -> Components.Schemas.PlayerResponse {
+    func toResponse(_ photoURL: (String?) -> String?) -> Components.Schemas.PlayerResponse {
         .init(
             id: "\(player.id)",
             profileId: "\(profile.id)",
@@ -142,11 +142,12 @@ extension RosterEntry {
             shirtNumber: player.shirtNumber?.value,
             position: player.position.map { .init(value1: $0.toContract()) },
             // **Nulos a propósito hasta su rebanada**: «federado» y la última vez
-            // listado llegan con la sincronización (R6.14), y la foto, con el
-            // almacén (R6.9). Se afirman nulos en los tests, como `crestUrl`.
+            // listado llegan con la sincronización (R6.14). Se afirman nulos en los
+            // tests, como `crestUrl`.
             federated: nil,
             lastListedAt: nil,
-            photoUrl: nil,
+            // El enlace firmado, nuevo en cada lectura (`D-117`).
+            photoUrl: photoURL(player.photoKey),
             createdAt: player.createdAt,
             updatedAt: player.updatedAt)
     }
@@ -205,22 +206,21 @@ extension APIHandler {
                 players: r.players, profiles: r.playerProfiles
             ).execute(search, teamID: teamID, seasonID: seasonID, actor: actor)
         }
-        return .ok(.init(body: .json(matches.map { $0.toResponse() })))
+        return .ok(.init(body: .json(matches.map { $0.toResponse(photoURL) })))
     }
 }
 
 extension SearchPlayerProfiles.Match {
     /// Mapeo `Entidad → DTO` (§2.2): el perfil entero (`D-122`), con su última
     /// plantilla y el otro equipo, si lo hay (`D-121`).
-    func toResponse() -> Components.Schemas.PlayerProfileSearchResult {
+    func toResponse(_ photoURL: (String?) -> String?) -> Components.Schemas.PlayerProfileSearchResult {
         .init(
             profileId: "\(profile.id)",
             fullName: profile.fullName.value,
             birthYear: profile.birthYear?.value,
             lastShirtNumber: profile.lastShirtNumber?.value,
             lastPosition: profile.lastPosition.map { .init(value1: $0.toContract()) },
-            // La foto llega con el almacén (R6.9).
-            lastPhotoUrl: nil,
+            lastPhotoUrl: photoURL(profile.lastPhotoKey),
             lastRoster: lastRoster.map {
                 .init(value1: .init(team: $0.team.toTeamRef(), seasonId: "\($0.season.id)",
                                     seasonLabel: $0.season.label.value))

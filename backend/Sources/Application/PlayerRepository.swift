@@ -22,6 +22,11 @@ public protocol PlayerRepository: Sendable {
     /// buscador del alta saca de ellas la última plantilla y el otro equipo
     /// (R6.7). Sin orden.
     func list(profileIDs: [PlayerProfileID]) async throws -> [Player]
+
+    /// **Si alguien usa todavía esa foto** (R6.9, `D-122`): una fila de cualquier
+    /// temporada, **también las dadas de baja** (la baja no borra la foto, `D-35`,
+    /// para que se pueda deshacer), o un perfil. Un fichero se borra solo si no.
+    func isPhotoInUse(_ key: String) async throws -> Bool
 }
 
 /// El perfil del jugador, que dura entre temporadas (`D-119`).

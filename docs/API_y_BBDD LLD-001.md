@@ -1442,9 +1442,9 @@ Tres lecturas que no son evidentes en la tabla:
 | **GET** | `/v1/players/{id}` | `GetPlayer` | **200** + `PlayerResponse` | 404 |
 | **PUT** | `/v1/players/{id}` | `UpdatePlayer` (la ficha entera) | **200** + `PlayerResponse` | 400, **403** (rol), 404, **409** (`SHIRT_NUMBER_TAKEN`), **422** (temporada archivada, `INVALID_VALUE`) |
 | **DELETE** | `/v1/players/{id}` | `DeletePlayer` | **204** (borrado lógico) | **403** (rol), 404, **422** (temporada archivada) |
-| **PUT** | `/v1/players/{id}/photo` | `UploadPlayerPhoto` | **200** + `PlayerResponse` | 400 (no es imagen), **403** (rol), 404, **413** (>5 MB), **415** (tipo no admitido), **422** (temporada archivada) |
+| **PUT** | `/v1/players/{id}/photo` | `UploadPlayerPhoto` | **200** + `PlayerResponse` | 400 `NOT_AN_IMAGE`, **403** (rol), 404, **413** `IMAGE_TOO_LARGE` (>5 MB o >30 millones de puntos, R6.8), **415** `UNSUPPORTED_IMAGE_TYPE`, **422** (temporada archivada) |
 | **DELETE** | `/v1/players/{id}/photo` | `DeletePlayerPhoto` | **204** (idempotente) | **403** (rol), 404, **422** (temporada archivada) |
-| **GET** | `/v1/player-photos/{photoKey}?expires=&signature=` | `GetPlayerPhotoFile` | **200** + la imagen | 404 (no existe, firma mala o caducada: lo mismo) |
+| **GET** | `/v1/player-photos/{fichero}?expires=&signature=` | `GetPlayerPhotoFile` | **200** + la imagen | 404 (no existe, firma mala o caducada, o de otro club: lo mismo). La ruta lleva solo `<código>.jpg`; el club, de la dirección ([D-117]) |
 | **GET** | `/v1/player-profiles?q=&teamId=&seasonId=` | `SearchPlayerProfiles` | **200** + hasta 10 `PlayerProfileSearchResult` | 400 (menos de 3 letras, falta ámbito), 404 (equipo o temporada inexistentes) |
 | **POST** | `/v1/teams/{teamId}/registrations/{seasonId}/roster-sync` | `SyncTeamRoster` | **200** + `RosterSyncResponse` | **403** (rol), 404, **422** (temporada archivada, la federación no publica plantillas, equipo sin enganchar), **502**, **504** |
 

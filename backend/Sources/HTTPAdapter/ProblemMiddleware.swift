@@ -601,6 +601,14 @@ public struct ProblemMiddleware: AsyncMiddleware {
                 return translate(inner)
             }
             let status = HTTPStatus(statusCode: Int(server.httpStatus.code))
+            // R6.9: la única operación que no es JSON. Un tipo que no es `image/jpeg` ni
+            // `image/png` lo rechaza el código generado (415) antes de llegar al handler.
+            if status == .unsupportedMediaType, server.operationID == "uploadPlayerPhoto" {
+                return Problem(status: status, code: "UNSUPPORTED_IMAGE_TYPE",
+                               title: "Tipo de imagen no admitido",
+                               detail: "solo image/jpeg o image/png",
+                               base: typeBaseURI, slug: "unsupported-image-type")
+            }
             return Problem(status: status,
                            code: status.code >= 500 ? "INTERNAL" : "BAD_REQUEST",
                            title: status.code >= 500

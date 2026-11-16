@@ -212,6 +212,33 @@ la imagen directamente a Supabase Storage. La web no nota la diferencia.
   descripción dice que solo existe mientras las fotos están en el disco: en la R16, con Supabase, desaparece.
   Descartado dejarla aparte, sin contar: habría que enseñar al censo a saltársela. Sirve igual para los escudos.
 
+**Decidido al empezar `R6.9`** (2026-11-16), una a una:
+
+- **A dónde apunta el enlace: un prefijo en la configuración**, `PHOTOS_URL_PREFIX`, por defecto `/api`. La web
+  no habla con el servidor directamente: su recepcionista pasa lo que empieza por `/api`, quitándolo y dejando el
+  club en la dirección. Con el prefijo, `photoUrl` es `/api/v1/player-photos/…` y la web lo usa tal cual, como
+  hará con el de Supabase. Descartados que la web le añada el `/api` (tendría que distinguir los dos enlaces) y
+  una dirección completa con el puerto de la web (que hoy solo sabe la web). En la R16 el ajuste desaparece con
+  la ruta.
+- **Qué lleva la ruta: solo el fichero** (`<código>.jpg`); **el club sale de la dirección**, como en el resto de
+  la API. La clave lleva una barra (`<club>/<código>.jpg`), que dentro de un trozo de ruta habría que escribir
+  `%2F`, y no todos los programas del camino lo entienden igual. La firma cubre la clave entera, con su club: el
+  enlace de un club no vale en la dirección de otro, y da 404. Descartados la clave entera con `%2F` y el club y
+  el fichero en dos trozos (el club iría dos veces). En el catálogo cambia solo la descripción del trozo.
+- **La clave secreta: `PHOTOS_SIGNING_KEY` si está; si no, una al azar al arrancar**, que no se guarda. Firma
+  con HMAC-SHA256, de una librería que el servidor ya tiene. Al relanzar, los enlaces de antes dejan de valer y la
+  página enseña las iniciales hasta recargar, como al pasar la hora. Descartados hacerla obligatoria (un ajuste
+  más en el Mac, los escenarios y cada test, para que el enlace sobreviva a un relanzamiento) y una clave fija en
+  el código (cualquiera que lea el repositorio fabricaría enlaces).
+- **Los códigos de error de la subida, con nombre de imagen**: `NOT_AN_IMAGE` (400), `IMAGE_TOO_LARGE` (413, por
+  peso o por puntos, y el detalle dice cuál) y `UNSUPPORTED_IMAGE_TYPE` (415). Valen tal cual para el escudo, que
+  pasará por el mismo saneado (`D-19`). Descartados los de foto (el escudo necesitaría otros casi iguales) y los
+  generales (el 400 se confundiría con cualquier petición mal hecha).
+- **Un fallo de la R6.6, encontrado al conectar la foto: el alta con un perfil le borraba la foto al perfil**
+  (copiaba la de una fila vacía). **Decidido: la fila empieza con la foto del perfil**, como en la sincronización
+  y como enseña el diálogo (`D-122`, corregido). Descartado que empiece sin foto: habría que volver a subirla.
+  Grabado aparte, antes que la R6.9.
+
 ### Decisión 4 · Los permisos («rol elevado»): sin comprobar hasta la rebanada 16
 
 El catálogo pide rol elevado (LLD §7.3) para dar de alta, corregir y dar de baja a un jugador, y para subir o
@@ -684,6 +711,7 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 | `R6.6` | 2026-11-15 | **Las cinco operaciones de datos**, en ciclos TDD: `listPlayers`, `getPlayer`, `createPlayer`, `updatePlayer` y `deletePlayer`, con sus repositorios (el perfil y la fila), sus casos de uso y sus *handlers*. **Salieron dos fallos del catálogo de la R6.4**, arreglados en su commit (`453f4a1`): la demarcación «o nula» con `oneOf` y un `null` desaparecía del código generado, y una corrección parcial no distinguía «no lo cambio» de «déjalo vacío»; **corregir pasa a `PUT` con la ficha entera**, elegido por el desarrollador. Los 409 (`SHIRT_NUMBER_TAKEN`, `PLAYER_ALREADY_IN_ROSTER`) se miran antes de escribir, como el alta de temporada; lo que el cuerpo nombra y no existe es **422 `REFERENCE_NOT_FOUND`**, con el campo en el `detail`; el jugador que no existe, **404 `PLAYER_NOT_FOUND`**. «Federado», la última vez listado y la foto viajan nulos hasta la R6.14 y la R6.9, y los tests lo afirman. **920 tests** (38 nuevos), censo en `0`; el servidor sirve **22** operaciones. **Hay que relanzar el servidor** y migrar los clubes (`swift run Run migrate-tenants`): sin la migración 22ª, las cinco fallan |
 | `R6.7` | 2026-11-15 | **Buscar perfiles**, en ciclos TDD: `searchPlayerProfiles`. **Cómo busca** (`PlayerSearch`, en el dominio): desde 3 letras, contando todas las palabras (con menos, 400); sin tildes, diéresis ni mayúsculas, y la eñe como «n»; cada palabra escrita, el comienzo de una palabra del nombre, y tras un guion o un apóstrofo empieza otra. **La base busca con la misma tabla de letras** (`translate`), para que los dos pliegues sean el mismo; probado contra Postgres con eñe, diéresis, «ã», guion y apóstrofo. Quita en la consulta a los de esa plantilla (los dados de baja sí salen), por orden de nombre y hasta 10; cada uno con su perfil entero, su última plantilla (la de la temporada más reciente) y el otro equipo de esta temporada, si lo hay. La foto del perfil viaja nula hasta la R6.9. Sin índice: un club tiene unos cientos de perfiles. **937 tests** (17 nuevos), censo en `0`; el servidor sirve **23** operaciones. **Hay que relanzar el servidor** |
 | `R6.8` | 2026-11-16 | **El almacén de fotos y su saneado**, en ciclos TDD. **La prueba del arranque**, con una foto HEIC del iPhone del desarrollador (orientación 6 y ubicación): licencias Apache 2.0; sale derecha en las ocho orientaciones, como la gira Apple, y sin ubicación ni datos del móvil; **un hallazgo**: el paso de la librería que junta los colores tardaba 11 s en 12 megapíxeles, y lo hace código nuestro a la vez que reduce (unos 2 s la foto entera). **Cuatro decisiones**, una a una: 800 px en el lado largo, calidad 75, no abrir más de 30 millones de puntos (un PNG de 1,2 MB pedía 1,9 GB) y dos piezas nuevas del servidor, `Storage` e `Imaging`; y la carpeta, `backend/fotos/` sin grabar (`PHOTOS_DIR`), porque en el Mac no se usan fotos de verdad. Los puertos `PhotoStore` y `PhotoSanitizer` y la clave `PhotoKey` (`<club>/<código>.jpg`, que no acepta otra forma), en `Application`. Lo transparente de un PNG, en blanco. **955 tests** (18 nuevos), sin Docker los de las dos piezas; censo en `0`, sin operaciones nuevas. **No hace falta relanzar el servidor**: nada lo usa hasta la R6.9 |
+| `R6.9` | 2026-11-16 | **Las tres operaciones de la foto**, en ciclos TDD. **Cinco decisiones**, una a una: el enlace empieza por `PHOTOS_URL_PREFIX` (`/api`, el del recepcionista de la web); la ruta lleva solo el fichero y el club sale de la dirección; la clave secreta, `PHOTOS_SIGNING_KEY` o una al azar al arrancar; los códigos `NOT_AN_IMAGE`, `IMAGE_TOO_LARGE` y `UNSUPPORTED_IMAGE_TYPE`; y la foto del perfil en el alta. **Subir** sanea fuera de la transacción (el acceso a los datos es de una conexión, `D-100`), guarda con clave nueva y la pone en la fila y en el perfil; **quitar** la deja vacía en los dos; **el fichero de antes se borra solo si ya no lo usa nadie**, contando las filas dadas de baja. `photoUrl` y `lastPhotoUrl`, firmados en cada lectura. **Un fallo de la R6.6, grabado aparte**: el alta con un perfil le borraba la foto. **979 tests** (22 nuevos, más los 2 del arreglo), censo en `0`; el servidor sirve **26** operaciones. **Hay que relanzar el servidor** |
 
 ---
 

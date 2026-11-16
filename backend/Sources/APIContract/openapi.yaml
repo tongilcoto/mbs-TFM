@@ -2190,7 +2190,9 @@ paths:
         **Idempotente** en su efecto: la fila acaba con esa foto. Requiere **rol elevado** (§7.3).
       requestBody:
         required: true
-        description: La imagen, en crudo. Tamaño máximo **5 MB**.
+        description: |
+          La imagen, en crudo. Tamaño máximo **5 MB**, y **30 millones de puntos** como mucho (leídos en su
+          cabecera antes de abrirla: un fichero pequeño puede guardar una imagen enorme; R6.8).
         content:
           image/jpeg:
             schema:
@@ -2211,8 +2213,9 @@ paths:
                 $ref: '#/components/schemas/PlayerResponse'
         '400':
           description: |
-            Los bytes no son una imagen válida del tipo declarado en el `Content-Type` — un `.heic` o un
-            `.pdf` renombrado. La comprobación es sobre el contenido, no sobre la cabecera.
+            `NOT_AN_IMAGE`: los bytes no son una imagen válida del tipo declarado en el `Content-Type` — un
+            `.heic` o un `.pdf` renombrado, un fichero cortado. La comprobación es sobre el contenido, no
+            sobre la cabecera.
           content:
             application/problem+json:
               schema:
@@ -2228,15 +2231,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '413':
-          description: La imagen supera el tamaño máximo admitido (5 MB).
+          description: |
+            `IMAGE_TOO_LARGE`: la imagen pesa más de 5 MB o tiene más de 30 millones de puntos. Para quien la
+            sube es lo mismo, «demasiado grande»; el `detail` dice cuál de los dos.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '415':
           description: |
-            Tipo de contenido no admitido. Solo `image/jpeg` e `image/png`: son los dos formatos que
-            produce cualquier portátil, y bastan para una ficha de plantilla.
+            `UNSUPPORTED_IMAGE_TYPE`: tipo de contenido no admitido. Solo `image/jpeg` e `image/png`: son los
+            dos formatos que produce cualquier portátil, y en los que el navegador del iPhone convierte sus
+            fotos al subirlas.
           content:
             application/problem+json:
               schema:
@@ -2291,16 +2297,21 @@ paths:
         hecha con una clave secreta de la configuración. El enlace dura **una hora** y se hace nuevo en
         cada lectura del jugador, de la plantilla o de los perfiles.
 
-        El club sale de la dirección, como en el resto de la API (§6.1).
+        **El club sale de la dirección**, como en el resto de la API (§6.1), y la ruta lleva solo el
+        nombre del fichero (D-117, punto 6): la clave entera, `<club>/<código>.jpg`, lleva una barra. La
+        firma es de la clave entera, así que el enlace de un club en la dirección de otro da 404.
+
+        `photoUrl` empieza por un prefijo de la configuración (`PHOTOS_URL_PREFIX`, por defecto `/api`, el
+        del recepcionista de la web; D-117, punto 5).
       parameters:
         - name: photoKey
           in: path
           required: true
-          description: La clave del fichero en el almacén, tal como la pone `photoUrl`.
+          description: El nombre del fichero, `<código>.jpg`, tal como lo pone `photoUrl`.
           schema:
             type: string
-            minLength: 1
-            maxLength: 200
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$'
+            maxLength: 40
         - name: expires
           in: query
           required: true
@@ -4389,12 +4400,14 @@ components:
         - FEDERATION_TEAM_ID_TAKEN
         - FEDERATION_UNEXPECTED_STATUS
         - FEDERATION_UNREACHABLE
+        - IMAGE_TOO_LARGE
         - INGESTION_FAILED
         - INTERNAL
         - INVALID_LIMIT
         - INVALID_UUID
         - INVALID_VALUE
         - MISSING_SCOPE
+        - NOT_AN_IMAGE
         - NOT_EDITABLE_AFTER_SYNC
         - NOT_FOUND
         - OWN_TEAM_NOT_IN_CALENDAR
@@ -4418,6 +4431,7 @@ components:
         - TENANT_NOT_PROVISIONED
         - TENANT_NOT_RESOLVED
         - UNKNOWN_TENANT
+        - UNSUPPORTED_IMAGE_TYPE
         - UNREADABLE_FEDERATION_URL
       examples: ['SEASON_NOT_FOUND']
 

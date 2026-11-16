@@ -53,6 +53,11 @@ public struct APIHandler: APIProtocol {
     /// —que es justo lo que un test necesita para imitar un reinicio—.
     let inFlight = IngestionsInFlight()
 
+    /// R6.9: el almacén de las fotos (`D-115`) y su saneado (`D-116`). Por omisión, uno
+    /// que falla si se usa: lo construyen así los tests que no tocan fotos.
+    let photos: any PhotoStore
+    let sanitizer: any PhotoSanitizer
+
     public init(
         unitOfWork: any TenantUnitOfWork,
         federationClients: any FederationClientProvider,
@@ -63,7 +68,9 @@ public struct APIHandler: APIProtocol {
         // declarada de F0: hoy los dos coinciden siempre. Cuando llegue JWKS se
         // cambia **este valor**, no los *handlers*.
         actors: any ActorResolver = AmbientTenantActorResolver(),
-        logger: Logger = Logger(label: "ingestion")
+        logger: Logger = Logger(label: "ingestion"),
+        photos: any PhotoStore = NoPhotoStore(),
+        sanitizer: any PhotoSanitizer = NoPhotoStore()
     ) {
         self.unitOfWork = unitOfWork
         self.federationClients = federationClients
@@ -72,6 +79,8 @@ public struct APIHandler: APIProtocol {
         self.background = background
         self.actors = actors
         self.logger = logger
+        self.photos = photos
+        self.sanitizer = sanitizer
     }
 
     public func getClub(_ input: Operations.getClub.Input) async throws

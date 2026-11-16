@@ -224,3 +224,37 @@ extension PlayerRepositoryTests {
         }
     }
 }
+
+// ── La foto en uso (R6.9) ────────────────────────────────────────────────────
+
+extension PlayerRepositoryTests {
+    @Test("una foto está en uso si la tiene una fila, también dada de baja, o un perfil (D-35, D-122)")
+    func photoInUse() async throws {
+        try await Self.withFixture("photouse") { tenant, a, _, vigente, _ in
+            let juan = try Self.profile(full: false)
+            let fila = try Self.row(juan, a, vigente, full: false)
+            try await tenant.scope {
+                try await $0.playerProfiles.save(juan)
+                try await $0.players.save(fila)
+            }
+            func inUse(_ key: String) async throws -> Bool {
+                try await tenant.scope { try await $0.players.isPhotoInUse(key) }
+            }
+            #expect(try await inUse("club/nadie.jpg") == false)
+
+            try await tenant.scope {
+                try await $0.players.save(fila.with(photoKey: "club/fila.jpg", updatedAt: Self.now))
+            }
+            #expect(try await inUse("club/fila.jpg"))
+            try await tenant.scope { try await $0.players.delete(fila.id) }
+            #expect(try await inUse("club/fila.jpg"), "la baja no la suelta: se puede deshacer")
+
+            try await tenant.scope {
+                try await $0.playerProfiles.save(PlayerProfile(
+                    id: juan.id, fullName: juan.fullName, birthYear: nil, lastPhotoKey: "club/perfil.jpg",
+                    createdAt: Self.now, updatedAt: Self.now))
+            }
+            #expect(try await inUse("club/perfil.jpg"))
+        }
+    }
+}

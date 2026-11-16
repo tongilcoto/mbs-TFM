@@ -5382,6 +5382,16 @@ puede mandarla: el navegador la pide solo. La firma hace de permiso dentro del p
    descripción dice que solo existe con el almacén en disco; en la rebanada 16 desaparece. Descartado dejarla
    aparte, sin contar: el censo tendría que saltársela. La misma forma servirá para los escudos.
 4. **La web no distingue los dos almacenes**: usa `photoUrl` tal cual.
+5. **El enlace empieza por un prefijo de la configuración** (`PHOTOS_URL_PREFIX`, por defecto `/api`; R6.9,
+   2026-11-16): la web pide al servidor por su recepcionista, que pasa lo que empieza por `/api` y deja el club en
+   la dirección. Así la web lo usa tal cual (punto 4) sin que el servidor sepa su puerto.
+6. **La ruta lleva solo el fichero** (`<código>.jpg`) **y el club sale de la dirección** (R6.9, misma fecha): la
+   clave entera lleva una barra, que en un trozo de ruta habría que escribir `%2F`. La firma es de la clave entera,
+   con su club, así que el enlace de un club en la dirección de otro da 404.
+7. **La clave secreta es `PHOTOS_SIGNING_KEY` si está, y si no, una al azar al arrancar** (R6.9, misma fecha),
+   sin guardarla: al relanzar, los enlaces de antes caducan como al pasar la hora. La firma, HMAC-SHA256.
+8. **Los fallos de la subida llevan códigos de imagen** (R6.9, misma fecha): `NOT_AN_IMAGE` (400), `IMAGE_TOO_LARGE`
+   (413, por peso o por puntos) y `UNSUPPORTED_IMAGE_TYPE` (415), para que el escudo los use tal cual.
 
 **Lo que se asume a cambio.**
 

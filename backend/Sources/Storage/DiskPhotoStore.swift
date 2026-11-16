@@ -1,5 +1,6 @@
 public import Application
 public import struct Foundation.URL
+public import struct Foundation.Date
 import Foundation
 
 /// El almacén de las fotos en **una carpeta del disco** (`D-115`): el adaptador del puerto `PhotoStore` mientras no
@@ -14,9 +15,11 @@ import Foundation
 public struct DiskPhotoStore: PhotoStore {
 
     public let folder: URL
+    public let signer: PhotoLinkSigner
 
-    public init(folder: URL) {
+    public init(folder: URL, signer: PhotoLinkSigner) {
         self.folder = folder
+        self.signer = signer
     }
 
     func file(_ key: PhotoKey) -> URL {
@@ -45,5 +48,14 @@ public struct DiskPhotoStore: PhotoStore {
         } catch CocoaError.fileNoSuchFile {
             // Ya no estaba: no es un error (`PhotoStore`, promesa 2).
         }
+    }
+
+    public func link(to key: PhotoKey, now: Date) -> String {
+        signer.link(to: key, now: now)
+    }
+
+    public func readSigned(_ key: PhotoKey, expires: Int64, signature: String, now: Date) async throws -> [UInt8]? {
+        guard signer.isValid(key, expires: expires, signature: signature, now: now) else { return nil }
+        return try await read(key)
     }
 }
