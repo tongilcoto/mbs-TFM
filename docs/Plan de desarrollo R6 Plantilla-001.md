@@ -681,6 +681,20 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 | `R6.12` | El alta con su buscador, la corrección y la baja. **El buscador se queda solo con la respuesta de lo último escrito** (apuntado en `R6.7`): busca al dejar de teclear unos 300 ms, pero si salen dos búsquedas seguidas la primera puede llegar después, y no debe pintar lo de «jua» cuando ya pone «juan g» |
 | `R6.13` | La ficha del jugador y su foto |
 
+**Cuatro decisiones al empezar `R6.11`** (2026-11-16), una a una con el desarrollador, en la rama
+`feature/r6-plantilla-backoffice`:
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Los botones que aún no hacen nada** («Dar de alta un jugador», «Sincronizar con la Federación», ✎, 🗑 y el nombre como enlace) | Cada paso pone los suyos, o ponerlos ya desactivados | **Cada paso pone los suyos**: `R6.11` deja la tabla de solo lectura y el mensaje de «sin jugadores». Sus escenarios siguen sin definir hasta el paso que los hace funcionar |
+| **2 · El rótulo «Federación»** a la derecha de las pestañas | Sin rótulo en Plantilla, que diga «Club», o dejarlo | **Sin rótulo en Plantilla**: sus datos se teclean y se corrigen aquí. Quién viene de la federación lo dice cada fila desde `R6.16` |
+| **3 · El equipo que no juega esa temporada** | Sin inscripción, sin pestañas, como hoy; o enseñar Plantilla también ahí | **Como hoy**, y además **el servidor rechaza el alta de un jugador si el equipo no está inscrito en esa temporada**: hoy solo mira que el equipo sea propio y la temporada no esté archivada. Va al final de la rebanada (`R6.17`) |
+| **4 · Dónde va el código** | La plantilla en ficheros propios, todo dentro de la ficha, o cada pestaña en su fichero | **Cada pestaña en su fichero**, también Resultados: falta la tercera, Estadísticas (R10). La ficha se queda con la cabecera, las cajas y la barra de pestañas |
+
+**Cómo se hace `R6.11`, en dos commits**: primero sacar Resultados a su fichero, sin cambiar nada de lo que se ve
+(las pruebas y los 170 escenarios de antes, en verde); después, la pestaña Plantilla. Los jugadores se piden solo
+al abrir su pestaña.
+
 ### D · Sincronizar la plantilla con la federación (decisión 9, `D-120`)
 
 | Paso | Qué |
@@ -693,9 +707,10 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 
 | Paso | Qué |
 |---|---|
-| `R6.17` | Los 119 escenarios de la rebanada en verde, con axe en los dos modos |
-| `R6.18` | La revisión a mano: el teclado y el zoom al 200 % |
-| `R6.19` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
+| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también |
+| `R6.18` | Los 119 escenarios de la rebanada en verde, con axe en los dos modos |
+| `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
+| `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
 
 ---
 
