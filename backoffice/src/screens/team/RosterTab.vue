@@ -1,8 +1,9 @@
 <!-- La pestaña Plantilla de la ficha del equipo (plan R6, §3 y decisión 7): los jugadores del equipo en la temporada,
      uno por fila, con su foto o sus iniciales, su dorsal, su nombre, su demarcación y su año. Los pide ella, al
      abrirse: la pestaña Resultados no los necesita. Si fallan, el error va aquí y la cabecera se queda.
-     Dar de alta y corregir (✎ en cada fila), en un diálogo encima (`PlayerDialog`, R6.12); dar de baja, la ficha del
-     jugador y sincronizar llegan con el paso que los hace funcionar (decisión 1 de R6.11). Una temporada archivada se ve, pero
+     Dar de alta y corregir (✎ en cada fila), en un diálogo encima (`PlayerDialog`, R6.12), y dar de baja (🗑), con su
+     confirmación (`RemovePlayerDialog`); la ficha del jugador y sincronizar llegan con el paso que los hace funcionar
+     (decisión 1 de R6.11). Una temporada archivada se ve, pero
      no se cambia: sin botones (R6.3). -->
 <script setup lang="ts">
 import Button from 'primevue/button'
@@ -18,6 +19,7 @@ import ScrollBox from '../../components/ScrollBox.vue'
 import { announce } from '../../notice'
 import type { Season } from '../home/seasons'
 import PlayerDialog from './PlayerDialog.vue'
+import RemovePlayerDialog from './RemovePlayerDialog.vue'
 import { rosterRows } from './roster'
 
 type Player = components['schemas']['PlayerResponse']
@@ -36,8 +38,8 @@ const rows = computed(() => (players.value.kind === 'list' ? rosterRows(players.
 const caption = computed(() => `Plantilla de ${props.teamTitle} en la temporada ${props.season.label}`)
 const listed = computed(() => (players.value.kind === 'list' ? players.value.players : []))
 const editable = computed(() => props.season.archivedAt == null)
-// El diálogo abierto: el alta, o corregir a un jugador.
-const dialog = ref<{ kind: 'add' } | { kind: 'edit'; player: Player }>()
+// El diálogo abierto: el alta, corregir a un jugador, o su baja.
+const dialog = ref<{ kind: 'add' } | { kind: 'edit'; player: Player } | { kind: 'remove'; id: string; name: string }>()
 const playerOf = (id: string) => listed.value.find((player) => player.id === id)
 
 // Cada petición cancela la anterior, y salir cancela la que quede (LLD-B §3.2).
@@ -70,6 +72,13 @@ function saved(notice: string, again: boolean) {
     dialog.value = undefined
     announce(notice)
   }
+  load(true)
+}
+
+// Tras la baja: la plantilla sin él, y el aviso.
+function removed() {
+  dialog.value = undefined
+  announce('Dado de baja')
   load(true)
 }
 onBeforeUnmount(() => pending?.abort())
@@ -179,14 +188,28 @@ onBeforeUnmount(() => pending?.abort())
                   icon="pencil"
                   @press="dialog = { kind: 'edit', player: playerOf(row.id)! }"
                 />
+                <IconAction
+                  label="Dar de baja"
+                  :subject="row.name"
+                  icon="trash-2"
+                  @press="dialog = { kind: 'remove', id: row.id, name: row.name }"
+                />
               </td>
             </tr>
           </tbody>
         </table>
       </ScrollBox>
     </template>
+    <RemovePlayerDialog
+      v-if="dialog?.kind === 'remove'"
+      :player-id="dialog.id"
+      :player-name="dialog.name"
+      :team-title="teamTitle"
+      @close="dialog = undefined"
+      @removed="removed"
+    />
     <PlayerDialog
-      v-if="dialog"
+      v-else-if="dialog"
       :key="dialog.kind === 'edit' ? dialog.player.id : 'alta'"
       :team-id="teamId"
       :team-title="teamTitle"
