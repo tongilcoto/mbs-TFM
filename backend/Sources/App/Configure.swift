@@ -5,6 +5,7 @@ import FluentPostgresDriver
 import HTTPAdapter
 import OpenAPIVapor
 import Persistence
+import Storage
 import Tenancy
 public import Vapor
 
@@ -44,6 +45,19 @@ extension Application {
         }
         set { storage[TenantUnitOfWorkKey.self] = newValue }
     }
+
+    private struct PhotoStoreKey: StorageKey { typealias Value = any PhotoStore }
+
+    /// El almacén de las fotos (`D-115`): la carpeta del disco hoy, Supabase al desplegar.
+    var photoStore: any PhotoStore {
+        get {
+            guard let store = storage[PhotoStoreKey.self] else {
+                fatalError("El almacén de fotos no está configurado; llama antes a configure(_:).")
+            }
+            return store
+        }
+        set { storage[PhotoStoreKey.self] = newValue }
+    }
 }
 
 /// **Raíz de composición**: el único sitio del backend donde se cablean las
@@ -68,7 +82,9 @@ public func configure(
     // `C-E.2`: de dónde sale el actor. En producción, del tenant ambiental —la
     // deuda declarada de F0—; un test puede poner uno que **discrepe** y hacer
     // saltar la guarda de §6.1 sin esperar a JWKS.
-    actors: any ActorResolver = AmbientTenantActorResolver()
+    actors: any ActorResolver = AmbientTenantActorResolver(),
+    // R6.8: el almacén de las fotos (`D-115`). Por defecto, la carpeta de `PhotosConfig`; cada test pone la suya.
+    photos: any PhotoStore = DiskPhotoStore(folder: PhotosConfig.fromEnvironment().folder)
 ) async throws {
     // ── Puerto ───────────────────────────────────────────────────────────────
     // El **por defecto** de `serve`: `--port` sigue ganando. Sale de `API_PORT`
@@ -97,6 +113,8 @@ public func configure(
         config.sqlConfiguration(searchPath: searchPath)
     }
     app.tenantUnitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+    // Lo usan las operaciones de la foto, desde la R6.9.
+    app.photoStore = photos
 
     // La migración del plano de control se aplica **contra `public`** y NO forma
     // parte del juego que recorre los tenants (§4.7).

@@ -45,6 +45,8 @@ backend/DerivedData/
 # Base de datos local / docker-compose de desarrollo
 backend/*.sqlite
 backend/db.sqlite
+# R6.8: la carpeta de las fotos del servidor en el Mac (`PhotosConfig`). Nunca al repositorio.
+backend/fotos/
 
 # ───────────────────────── ios/ (Swift · Xcode) ─────────────────────────
 ios/**/DerivedData/

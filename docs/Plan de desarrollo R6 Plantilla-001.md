@@ -152,6 +152,41 @@ ninguna herramienta de imágenes. Lo que solo hay en Mac (`sips`, las librerías
   derecha y que no le queda nada dentro. Si falla, se vuelve aquí y se elige A.
 - **La licencia se mira en el repositorio** antes de añadirlas (un registro dice Apache 2.0 y otro MPL 2.0).
 
+**Comprobado al empezar `R6.8`** (2026-11-16), con una foto HEIC del iPhone del desarrollador (5712 × 4284, con
+la nota de orientación 6 y la ubicación), pasada a JPEG sin quitarle nada:
+
+- **Las licencias**: Apache 2.0 las dos (`swift-jpeg` 2.1.0 y `swift-png` 4.5.2) y las dos pequeñas que traen.
+- **La velocidad**: el paso de la librería que junta los colores a tamaño completo tardaba 11 s en una foto de
+  12 megapíxeles. **Se hace con código nuestro**, que junta los colores a la vez que reduce: la foto entera queda
+  en **unos 2 s**.
+- **Sale derecha**: las ocho orientaciones posibles salen como las gira Apple.
+- **No le queda nada dentro**: ni la ubicación, ni la marca y el modelo del móvil.
+
+**El tamaño, decidido (2026-11-16): 800 puntos en el lado largo**, comparado con la foto a 400, 640, 800, 1024 y
+1600, como se ve en la fila y en la ficha. La ficha la enseña a 240 × 320 y una pantalla de Mac necesita el doble;
+con 800 sobra también en el móvil. Unos 33 KB por foto. **Un solo tamaño**: la fila usa la misma, y la que es más
+pequeña no se agranda.
+
+**La calidad, decidida (2026-11-16): 75**, en la escala de 0 a 100 de los programas de fotos, comparada con 50, 75,
+85, 90 y 95 en la ficha y con lupa sobre la cara. Bien en la ficha, con algo de ruido solo mirando de cerca: unos
+43 KB por foto y 1 MB la plantilla de 25. La librería usa otra escala; la traducción, código nuestro.
+
+**Un tope de puntos, decidido (2026-11-16): 30 millones**, leídos en la cabecera **antes de abrir la foto**. Salió
+al probar: un PNG de 1,2 MB y 20.000 × 20.000 puntos pasa el tope de 5 MB y costó 35 s y 1,9 GB de memoria, lo
+bastante para tumbar el contenedor. La foto normal de un móvil (la del desarrollador, 24,5 millones) entra con
+margen y pide unos 250 MB; una de 48 megapíxeles casi nunca baja de 5 MB. Responde **413**, como el tope de peso:
+para quien la sube es lo mismo, «demasiado grande». Se escribe en el catálogo con la operación, en `R6.9`.
+
+**Dónde va el código, decidido (2026-11-16): dos piezas nuevas del servidor.** Las dos reglas («guardar, leer y
+borrar una foto por su clave» y «sanear una foto») van en `Application`, como los demás puertos; lo que hace el
+trabajo, en `Storage` (la carpeta, y Supabase en la R16) y en `Imaging` (el saneado, la única que ve las dos
+librerías). Cambian por motivos distintos y así cada cambio toca una sola; sus tests corren sin Docker, como los
+de `Federation`. Se descartaron una sola pieza para las dos cosas y meterlas en `Persistence`, que es la de Postgres.
+
+**La carpeta en el Mac, decidida (2026-11-16): `backend/fotos/`, sin grabar** (en `.gitignore`), o la de
+`PHOTOS_DIR`. A mano junto al proyecto; el desarrollador no usa fotos de verdad, así que no importa que Obsidian
+la vea. Se descartaron una carpeta fuera del repositorio y no tener ninguna por defecto.
+
 ### Decisión 3 · Cómo llega la foto a la web: un enlace firmado de una hora
 
 **El problema.** `photoUrl` es un enlace firmado que caduca (`D-35`), pero con la carpeta del disco nadie lo hace.
@@ -648,6 +683,7 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 | `R6.5` | 2026-11-15 | **Las dos tablas y sus reglas**, en ciclos TDD. En el dominio: el nombre (`PlayerName`: limpio, en mayúsculas, la tilde en dos piezas guardada como una, solo letras, espacio, guion y apóstrofo, cada palabra con letras, al menos dos y hasta 120), el año (1900 al año en curso, que pone quien llama), el dorsal (1 a 99), la demarcación, el perfil y la fila, lo que el perfil recuerda de una fila (`D-122`, lo vacío también) y las dos reglas de la plantilla (`RosterRules`: equipo propio y temporada sin archivar), con sus dos códigos nuevos, `TEAM_NOT_OWN` y `SEASON_ARCHIVED` (422), apuntados en el censo hasta que los lance la R6.6. En la base, **la migración 22ª** (`CreatePlayers`): las dos tablas a la vez, la FK al perfil `RESTRICT`, la cascada desde el equipo y la temporada, cinco `CHECK` y los dos índices únicos parciales, el del dorsal y el de una fila por perfil y temporada (`D-118`, `D-121`), con 11 pruebas contra Postgres. **882 tests** (28 nuevos) y el censo, en verde. **No hace falta relanzar el servidor**: ninguna operación servida cambia. La migración llega a los clubes con `swift run Run migrate-tenants` |
 | `R6.6` | 2026-11-15 | **Las cinco operaciones de datos**, en ciclos TDD: `listPlayers`, `getPlayer`, `createPlayer`, `updatePlayer` y `deletePlayer`, con sus repositorios (el perfil y la fila), sus casos de uso y sus *handlers*. **Salieron dos fallos del catálogo de la R6.4**, arreglados en su commit (`453f4a1`): la demarcación «o nula» con `oneOf` y un `null` desaparecía del código generado, y una corrección parcial no distinguía «no lo cambio» de «déjalo vacío»; **corregir pasa a `PUT` con la ficha entera**, elegido por el desarrollador. Los 409 (`SHIRT_NUMBER_TAKEN`, `PLAYER_ALREADY_IN_ROSTER`) se miran antes de escribir, como el alta de temporada; lo que el cuerpo nombra y no existe es **422 `REFERENCE_NOT_FOUND`**, con el campo en el `detail`; el jugador que no existe, **404 `PLAYER_NOT_FOUND`**. «Federado», la última vez listado y la foto viajan nulos hasta la R6.14 y la R6.9, y los tests lo afirman. **920 tests** (38 nuevos), censo en `0`; el servidor sirve **22** operaciones. **Hay que relanzar el servidor** y migrar los clubes (`swift run Run migrate-tenants`): sin la migración 22ª, las cinco fallan |
 | `R6.7` | 2026-11-15 | **Buscar perfiles**, en ciclos TDD: `searchPlayerProfiles`. **Cómo busca** (`PlayerSearch`, en el dominio): desde 3 letras, contando todas las palabras (con menos, 400); sin tildes, diéresis ni mayúsculas, y la eñe como «n»; cada palabra escrita, el comienzo de una palabra del nombre, y tras un guion o un apóstrofo empieza otra. **La base busca con la misma tabla de letras** (`translate`), para que los dos pliegues sean el mismo; probado contra Postgres con eñe, diéresis, «ã», guion y apóstrofo. Quita en la consulta a los de esa plantilla (los dados de baja sí salen), por orden de nombre y hasta 10; cada uno con su perfil entero, su última plantilla (la de la temporada más reciente) y el otro equipo de esta temporada, si lo hay. La foto del perfil viaja nula hasta la R6.9. Sin índice: un club tiene unos cientos de perfiles. **937 tests** (17 nuevos), censo en `0`; el servidor sirve **23** operaciones. **Hay que relanzar el servidor** |
+| `R6.8` | 2026-11-16 | **El almacén de fotos y su saneado**, en ciclos TDD. **La prueba del arranque**, con una foto HEIC del iPhone del desarrollador (orientación 6 y ubicación): licencias Apache 2.0; sale derecha en las ocho orientaciones, como la gira Apple, y sin ubicación ni datos del móvil; **un hallazgo**: el paso de la librería que junta los colores tardaba 11 s en 12 megapíxeles, y lo hace código nuestro a la vez que reduce (unos 2 s la foto entera). **Cuatro decisiones**, una a una: 800 px en el lado largo, calidad 75, no abrir más de 30 millones de puntos (un PNG de 1,2 MB pedía 1,9 GB) y dos piezas nuevas del servidor, `Storage` e `Imaging`; y la carpeta, `backend/fotos/` sin grabar (`PHOTOS_DIR`), porque en el Mac no se usan fotos de verdad. Los puertos `PhotoStore` y `PhotoSanitizer` y la clave `PhotoKey` (`<club>/<código>.jpg`, que no acepta otra forma), en `Application`. Lo transparente de un PNG, en blanco. **955 tests** (18 nuevos), sin Docker los de las dos piezas; censo en `0`, sin operaciones nuevas. **No hace falta relanzar el servidor**: nada lo usa hasta la R6.9 |
 
 ---
 

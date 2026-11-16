@@ -5295,6 +5295,9 @@ servidor devuelve su enlace vacío a la espera de ese almacén. Subir fotos (`up
 1. **El almacén es un puerto de la capa de Aplicación** (guardar, leer y borrar un fichero por su clave), y la
    carpeta del disco es su adaptador. Supabase Storage será otro adaptador del mismo puerto, al desplegar (rebanada
    16); nada fuera del adaptador cambia.
+   **En el Mac, `backend/fotos/`** sin grabar, o la de `PHOTOS_DIR` (R6.8, 2026-11-16; sin fotos de verdad).
+   **El adaptador vive en una pieza propia del servidor, `Storage`** (R6.8, 2026-11-16), aparte de la del saneado
+   ([D-116]): cambian por motivos distintos.
 2. **La carpeta se elige en la configuración del servidor**, como la base de datos: la del desarrollador, la de
    los escenarios (`tfm_test`) y la de cada prueba son distintas, y las fotos de una no se mezclan con las de otra.
 3. **La clave lleva el club delante**, como el *schema* ([D-35]: el fichero se borra con el tenant), y **es nueva
@@ -5329,15 +5332,26 @@ Apple) no vale.
    ubicación, el modelo del móvil) no pasa, porque no se copia nada más que los puntos.
 2. **Antes se gira** según la nota de orientación del móvil (la etiqueta *Orientation* de EXIF), que el servidor
    lee él mismo: si se quitara sin girar, la foto saldría tumbada.
-3. **Se reduce** a un tamaño máximo, con un código propio de pocas líneas.
-4. **Se comprueba al empezar `R6.6`**, con una foto de verdad del móvil del desarrollador: cuánto tarda, que sale
+3. **Se reduce** a un tamaño máximo, con un código propio de pocas líneas: **800 puntos en el lado largo**
+   (decidido en la R6.8, 2026-11-16; la ficha la enseña a 240 × 320, y una pantalla de Mac pide el doble). Un solo
+   tamaño, que también usa la fila de la plantilla; la foto más pequeña no se agranda.
+   **Se guarda con calidad 75** (misma fecha), en la escala de 0 a 100 de los programas de fotos: unos 43 KB.
+   **Y antes de abrirla, un tope de 30 millones de puntos** (misma fecha), leídos en su cabecera: el tope de 5 MB
+   mide el fichero, no la imagen, y un PNG de 1,2 MB con 20.000 × 20.000 puntos costó 35 s y 1,9 GB al abrirlo. Se
+   responde **413**, como al pasar de 5 MB.
+4. **Se comprueba al empezar `R6.8`**, con una foto de verdad del móvil del desarrollador: cuánto tarda, que sale
    derecha y que no le queda nada dentro. Si es lenta o falla, se vuelve a esta decisión y se elige (a).
+   **Comprobado (2026-11-16)** con una foto HEIC de un iPhone (5712 × 4284, orientación 6, con ubicación), pasada
+   a JPEG sin quitarle nada: sale derecha en las ocho orientaciones, como la gira Apple, y sin ubicación ni datos
+   del móvil. **Un hallazgo**: el paso de la librería que junta los colores a tamaño completo tardaba 11 s en
+   12 megapíxeles; **lo hace código nuestro** a la vez que reduce, y la foto entera queda en unos 2 s.
 5. **Antes de añadirlas se mira su licencia** en el repositorio: un registro da Apache 2.0 y otro MPL 2.0.
+   **Mirada en la R6.8**: Apache 2.0 las dos (`swift-jpeg` 2.1.0, `swift-png` 4.5.2) y las dos que traen consigo.
 
 **Lo que se asume a cambio.**
 
 - **Dos dependencias de un único autor**, poco usadas. Quedan detrás del puerto de saneado, así que cambiarlas es
-  cambiar una pieza.
+  cambiar una pieza: **`Imaging`**, la única del servidor que las ve (R6.8, 2026-11-16).
 - **El giro y la reducción son código nuestro**, con sus pruebas.
 
 ### D-117 · La foto llega a la web por un enlace firmado de una hora; con la carpeta del disco, lo firma y lo sirve nuestro servidor
