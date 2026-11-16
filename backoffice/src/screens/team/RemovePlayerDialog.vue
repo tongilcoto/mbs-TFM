@@ -22,10 +22,12 @@ const emit = defineEmits<{ close: []; removed: [] }>()
 const removing = ref(false)
 const failure = ref<ShownError>()
 
-onMounted(async () => {
+// Al montarse y otra vez al acabar de aparecer: la ventana lleva el foco a su ✕ al terminar de mostrarse.
+async function focusCancel() {
   await nextTick()
   document.getElementById('remove-player-cancel')?.focus()
-})
+}
+onMounted(focusCancel)
 
 async function remove() {
   removing.value = true
@@ -48,6 +50,7 @@ async function remove() {
     :style="{ width: '30rem' }"
     :breakpoints="{ '640px': '95vw' }"
     @update:visible="emit('close')"
+    @show="focusCancel"
   >
     <div class="remove">
       <LoadError

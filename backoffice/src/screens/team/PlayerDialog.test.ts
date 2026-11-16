@@ -103,6 +103,18 @@ describe('abrir el diálogo', () => {
     expect(box).toHaveValue('')
     await waitFor(() => expect(box).toHaveFocus())
   })
+
+  test('los cinco campos, a la vista desde el principio (decisión 2 de R6.12)', async () => {
+    fakeServer()
+    openDialog()
+
+    expect(await searchBox()).toHaveAccessibleDescription('Desde 3 letras, busca entre los jugadores del club')
+    expect(screen.getByRole('textbox', { name: /Año de nacimiento \(obligatorio\)/ })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Dorsal' })).toHaveAccessibleDescription('Del 1 al 99')
+    expect(screen.getByRole('combobox', { name: /Demarcación/ })).toBeInTheDocument()
+    expect(screen.getByLabelText('Foto')).toHaveAccessibleDescription('JPEG o PNG, hasta 5 MB')
+    expect(screen.queryByRole('button', { name: 'Elegir otro jugador' })).not.toBeInTheDocument()
+  })
 })
 
 describe('el buscador', () => {
@@ -177,22 +189,31 @@ describe('un jugador nuevo', () => {
     await chooseOption(/como jugador nuevo/)
   }
 
-  test('pide el nombre, con lo escrito, y el año; el dorsal, la demarcación y la foto, opcionales', async () => {
+  test('elegirlo deja lo escrito en el nombre, y el foco pasa al año', async () => {
     fakeServer()
     openDialog()
     await chooseNew()
 
-    expect(screen.getByRole('textbox', { name: /Nombre y apellidos \(obligatorio\)/ })).toHaveValue('Ana Ruiz')
-    expect(screen.getByRole('textbox', { name: /Año de nacimiento \(obligatorio\)/ })).toHaveValue('')
-    expect(screen.getByRole('textbox', { name: 'Dorsal' })).toHaveAccessibleDescription('Del 1 al 99')
-    expect(screen.getByLabelText('Foto')).toHaveAccessibleDescription('JPEG o PNG, hasta 5 MB')
+    expect(screen.getByRole('combobox', { name: /Nombre y apellidos \(obligatorio\)/ })).toHaveValue('Ana Ruiz')
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /Año de nacimiento \(obligatorio\)/ })).toHaveFocus())
+  })
+
+  test('sin elegir nada en la lista, también es un jugador nuevo', async () => {
+    const server = fakeServer()
+    const { emitted } = openDialog()
+    await fireEvent.update(await searchBox(), 'Ana Ruiz')
+    await fireEvent.update(screen.getByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+    await press('Guardar')
+
+    await waitFor(() => expect(emitted().saved).toEqual([['Guardado', false]]))
+    expect(server.bodies).toEqual([{ teamId: TEAM, seasonId: 'id-2026', fullName: 'Ana Ruiz', birthYear: 2012, shirtNumber: null, position: null }])
   })
 
   test('sin nombre ni año, dice qué falta, sin enviar nada', async () => {
     const server = fakeServer()
     openDialog()
     await chooseNew()
-    await fireEvent.update(screen.getByRole('textbox', { name: /Nombre y apellidos/ }), '')
+    await fireEvent.update(screen.getByRole('combobox', { name: /Nombre y apellidos/ }), '')
     await press('Guardar')
 
     expect(await screen.findAllByText('Escribe el nombre y al menos un apellido')).not.toHaveLength(0)
@@ -249,18 +270,6 @@ describe('un jugador nuevo', () => {
     const box = await searchBox()
     expect(box).toHaveValue('')
     await waitFor(() => expect(box).toHaveFocus())
-  })
-})
-
-describe('sin elegir a nadie', () => {
-  test('guardar lo dice en el buscador', async () => {
-    const server = fakeServer()
-    openDialog()
-    await searchBox()
-    await press('Guardar')
-
-    expect(await screen.findAllByText('Elige un jugador de la lista, o da de alta uno nuevo')).not.toHaveLength(0)
-    expect(server.bodies).toEqual([])
   })
 })
 

@@ -1,9 +1,10 @@
 <!-- El diálogo de un jugador, encima de la plantilla (plan R6, decisiones 7 a 10): el alta y la corrección, con los
      mismos campos en dos bloques, lo del jugador en todas sus temporadas (su perfil, D-119) y lo de esta plantilla.
 
-     El alta: primero se elige quién. El buscador ofrece a los jugadores del club que ya existen y, al final, dar de
-     alta lo escrito como jugador nuevo. Elegir uno que existe trae su nombre y su año, bloqueados, y de su perfil el
-     último dorsal, la última demarcación y la última foto (D-122), que se pueden cambiar. Uno nuevo pide nombre y año.
+     El alta: los cinco campos a la vista desde el principio (decisión 2 de R6.12). El del nombre es también el
+     buscador: ofrece a los jugadores del club que ya existen y, al final, dar de alta lo escrito como jugador nuevo.
+     Elegir uno que existe trae su nombre y su año, bloqueados, y de su perfil el último dorsal, la última demarcación
+     y la última foto (D-122), que se pueden cambiar. Sin elegir a nadie, es un jugador nuevo: pide nombre y año.
 
      Corregir (`player`): el nombre se corrige; el año, solo si está vacío, con una confirmación al guardar; y los dos
      a la vez, no, para que un perfil no pase a ser otra persona (decisión 1 de R6.12).
@@ -53,12 +54,12 @@ const emit = defineEmits<{
   saved: [notice: string, again: boolean]
 }>()
 
-// Quién: todavía nadie, uno del club o uno nuevo; o, al corregir, el de la fila.
-type Choice = { kind: 'none' } | { kind: 'profile'; profile: Profile } | { kind: 'new' } | { kind: 'edit'; player: Player }
+// Quién: uno nuevo (lo escrito en el buscador), uno del club elegido en él, o, al corregir, el de la fila.
+type Choice = { kind: 'new' } | { kind: 'profile'; profile: Profile } | { kind: 'edit'; player: Player }
 // La foto: la que ya tenía (la de la fila, o la del perfil en el alta), una elegida en el ordenador, o ninguna.
 type Photo = { kind: 'current'; url: string } | { kind: 'file'; file: File; preview: string } | { kind: 'none' }
 
-const choice = ref<Choice>({ kind: 'none' })
+const choice = ref<Choice>({ kind: 'new' })
 const query = ref<string | ProfileOption>('')
 const suggestions = ref<ProfileOption[]>([])
 const name = ref('')
@@ -66,7 +67,7 @@ const year = ref('')
 const shirt = ref('')
 const position = ref<Position | null>(null)
 const photo = ref<Photo>({ kind: 'none' })
-const errors = ref<Partial<Record<'query' | 'name' | 'year' | 'shirt', string>>>({})
+const errors = ref<Partial<Record<'name' | 'year' | 'shirt', string>>>({})
 const banner = ref<ShownError>()
 const savedNow = ref<string>()
 const saving = ref(false)
@@ -92,10 +93,12 @@ const lockedYear = computed(() => {
   if (chosen.kind === 'profile') return known == null ? 'Sin año' : String(known)
   return known == null ? undefined : String(known)
 })
-const shownChosenName = computed(() => lockedName.value ?? name.value)
+// El nombre que se está dando de alta o corrigiendo: el elegido, o lo escrito (en el buscador, en el alta).
+const typedName = computed(() => (editing.value ? name.value : typedText()))
+const shownChosenName = computed(() => lockedName.value ?? typedName.value)
 
-const labels = { query: 'Nombre y apellidos', name: 'Nombre y apellidos', year: 'Año de nacimiento', shirt: 'Dorsal' }
-const ids = { query: 'player-search', name: 'player-name', year: 'player-year', shirt: 'player-shirt' }
+const labels = { name: 'Nombre y apellidos', year: 'Año de nacimiento', shirt: 'Dorsal' }
+const ids = { name: 'player-name', year: 'player-year', shirt: 'player-shirt' }
 const listedErrors = computed<FormError[]>(() =>
   (Object.keys(errors.value) as (keyof typeof labels)[])
     .filter((field) => errors.value[field] !== undefined)
@@ -120,8 +123,9 @@ function typedText(): string {
   return typeof query.value === 'string' ? query.value : query.value.name
 }
 
-// Al abrirse (la pestaña lo monta al pulsar el botón): al corregir, con los datos del jugador y el foco en el
-// nombre; en el alta, el foco en el buscador.
+// Al abrirse (la pestaña lo monta al pulsar el botón): al corregir, con los datos del jugador. El foco, en el nombre
+// (en el alta, el buscador), al montarse y otra vez al acabar de aparecer: la ventana lo lleva a la ✕ al terminar
+// de mostrarse, y lo pone la web, como en LeaveDialog.
 onMounted(async () => {
   const player = props.player
   if (player) {
@@ -130,17 +134,14 @@ onMounted(async () => {
     shirt.value = player.shirtNumber == null ? '' : String(player.shirtNumber)
     position.value = (player.position ?? null) as Position | null
     photo.value = player.photoUrl ? { kind: 'current', url: player.photoUrl } : { kind: 'none' }
-    await nextTick()
-    document.getElementById(ids.name)?.focus()
-    return
   }
-  await focusSearch()
+  await focusName()
 })
 
 function reset() {
   search.stop()
   dropPreview()
-  choice.value = { kind: 'none' }
+  choice.value = { kind: 'new' }
   query.value = ''
   suggestions.value = []
   name.value = ''
@@ -152,18 +153,23 @@ function reset() {
   banner.value = undefined
 }
 
-async function focusSearch() {
+async function focusName() {
   await nextTick()
-  document.getElementById(ids.query)?.focus()
+  document.getElementById(ids.name)?.focus()
 }
 
 function choose(event: AutoCompleteOptionSelectEvent) {
   const option = event.value as ProfileOption
   search.stop()
   errors.value = {}
+  // «Como jugador nuevo» solo cierra la lista: lo escrito se queda, y se sigue por el año.
+  // La lista pone en el campo la opción entera; después, lo escrito.
   if (option.kind === 'new') {
     choice.value = { kind: 'new' }
-    name.value = option.name
+    void nextTick(() => {
+      query.value = option.name
+      document.getElementById(ids.year)?.focus()
+    })
     return
   }
   // Lo que el perfil guarda como ayuda (D-122): se puede cambiar.
@@ -174,11 +180,10 @@ function choose(event: AutoCompleteOptionSelectEvent) {
   photo.value = profile.lastPhotoUrl ? { kind: 'current', url: profile.lastPhotoUrl } : { kind: 'none' }
 }
 
+// Deshacer la elección: otra vez un jugador nuevo, con todo vacío.
 async function chooseAgain() {
-  const typed = choice.value.kind === 'new' ? name.value : ''
   reset()
-  query.value = typed
-  await focusSearch()
+  await focusName()
 }
 
 function pickPhoto(event: Event) {
@@ -207,15 +212,14 @@ function yearAdded(player: Player): boolean {
   return player.birthYear == null && year.value.trim() !== ''
 }
 
-// Lo que la web mira antes de enviar (decisión 9). Sin elegir a nadie, el buscador lo dice.
+// Lo que la web mira antes de enviar (decisión 9).
 function check(): boolean {
   const chosen = choice.value
   const found: typeof errors.value = {}
-  if (chosen.kind === 'none') found.query = 'Elige un jugador de la lista, o da de alta uno nuevo'
-  if (chosen.kind === 'new' || chosen.kind === 'edit') found.name = nameProblem(name.value)
+  if (chosen.kind !== 'profile') found.name = nameProblem(typedName.value)
   if (chosen.kind === 'new') found.year = yearProblem(year.value, new Date().getFullYear())
   if (chosen.kind === 'edit' && yearAdded(chosen.player)) found.year = yearProblem(year.value, new Date().getFullYear())
-  if (chosen.kind !== 'none') found.shirt = shirtProblem(shirt.value)
+  found.shirt = shirtProblem(shirt.value)
   errors.value = Object.fromEntries(Object.entries(found).filter(([, message]) => message !== undefined))
   return listedErrors.value.length === 0
 }
@@ -258,7 +262,6 @@ async function save(again: boolean) {
 
 async function send(again: boolean) {
   const chosen = choice.value
-  if (chosen.kind === 'none') return
   saving.value = true
   try {
     const common = { shirtNumber: shirtNumberOf(shirt.value), position: position.value }
@@ -276,7 +279,7 @@ async function send(again: boolean) {
       const body =
         chosen.kind === 'profile'
           ? { ...placed, profileId: chosen.profile.profileId }
-          : { ...placed, fullName: cleanName(name.value), birthYear: Number(year.value.trim()) }
+          : { ...placed, fullName: cleanName(typedName.value), birthYear: Number(year.value.trim()) }
       saved = await asResult(api.POST('/players', { body }))
     }
     if (!saved.ok) {
@@ -291,7 +294,7 @@ async function send(again: boolean) {
       const who = shownName(saved.data.fullName)
       reset()
       savedNow.value = problem ? `${who}: guardado, sin la foto: ${problem}.` : `${who}: guardado.`
-      await focusSearch()
+      await focusName()
     }
   } finally {
     saving.value = false
@@ -341,6 +344,7 @@ async function showSaveError(error: ShownError) {
     :style="{ width: '34rem' }"
     :breakpoints="{ '640px': '95vw' }"
     @update:visible="emit('close')"
+    @show="focusName"
   >
     <form
       class="player-form"
@@ -366,178 +370,166 @@ async function showSaveError(error: ShownError) {
         :retry="false"
       />
 
-      <!-- Quién: el buscador, hasta que se elige. -->
-      <FormField
-        v-if="choice.kind === 'none'"
-        :id="ids.query"
-        :label="labels.query"
-        :required="true"
-        help="Escribe al menos 3 letras para buscar entre los jugadores del club"
-        :error="errors.query"
-      >
-        <template #default="{ describedBy, invalid }">
-          <AutoComplete
-            v-model="query"
-            :input-id="ids.query"
-            :suggestions="suggestions"
-            option-label="label"
-            option-disabled="disabled"
-            :delay="0"
-            :min-length="1"
-            :invalid="invalid"
-            :aria-describedby="describedBy"
-            fluid
-            @complete="search.type($event.query)"
-            @option-select="choose"
-          >
-            <template #option="{ option }">
-              <span class="option">
-                <span :class="option.kind === 'new' ? 'detail' : 'name'">{{ option.kind === 'new' ? option.detail : option.name }}</span>
-                <span
-                  v-if="option.kind === 'profile'"
-                  class="detail"
-                >{{ option.detail }}</span>
-              </span>
-            </template>
-          </AutoComplete>
-        </template>
-      </FormField>
-
-      <template v-else>
-        <fieldset>
-          <legend>Del jugador, en todas sus temporadas</legend>
-          <FormField
-            :id="ids.name"
-            :label="labels.name"
-            :required="lockedName === undefined"
-            :error="errors.name"
-          >
-            <template #default="{ describedBy, invalid }">
-              <InputText
-                v-if="lockedName !== undefined"
-                :id="ids.name"
-                :model-value="lockedName"
-                disabled
-                fluid
-              />
-              <InputText
-                v-else
-                :id="ids.name"
-                v-model="name"
-                :invalid="invalid"
-                :aria-describedby="describedBy"
-                autocomplete="off"
-                fluid
-              />
-            </template>
-          </FormField>
-          <FormField
-            :id="ids.year"
-            :label="labels.year"
-            :required="choice.kind === 'new'"
-            :help="choice.kind === 'edit' && lockedYear === undefined ? 'Una vez puesto, no se puede cambiar' : undefined"
-            :error="errors.year"
-          >
-            <template #default="{ describedBy, invalid }">
-              <InputText
-                v-if="lockedYear !== undefined"
-                :id="ids.year"
-                :model-value="lockedYear"
-                disabled
-              />
-              <InputText
-                v-else
-                :id="ids.year"
-                v-model="year"
-                :invalid="invalid"
-                :aria-describedby="describedBy"
-                inputmode="numeric"
-                autocomplete="off"
-              />
-            </template>
-          </FormField>
-          <p v-if="!editing">
-            <Button
-              type="button"
-              label="Elegir otro jugador"
-              link
-              @click="chooseAgain"
+      <fieldset>
+        <legend>Del jugador, en todas sus temporadas</legend>
+        <!-- En el alta, el nombre es también el buscador; elegido uno del club, su nombre, bloqueado. -->
+        <FormField
+          :id="ids.name"
+          :label="labels.name"
+          :required="lockedName === undefined"
+          :help="!editing && choice.kind === 'new' ? 'Desde 3 letras, busca entre los jugadores del club' : undefined"
+          :error="errors.name"
+        >
+          <template #default="{ describedBy, invalid }">
+            <InputText
+              v-if="lockedName !== undefined"
+              :id="ids.name"
+              :model-value="lockedName"
+              disabled
+              fluid
             />
-          </p>
-        </fieldset>
+            <InputText
+              v-else-if="editing"
+              :id="ids.name"
+              v-model="name"
+              :invalid="invalid"
+              :aria-describedby="describedBy"
+              autocomplete="off"
+              fluid
+            />
+            <AutoComplete
+              v-else
+              v-model="query"
+              :input-id="ids.name"
+              :suggestions="suggestions"
+              option-label="label"
+              option-disabled="disabled"
+              :delay="0"
+              :min-length="1"
+              :invalid="invalid"
+              :pt="{ pcInputText: { root: { 'aria-describedby': describedBy } } }"
+              fluid
+              @complete="search.type($event.query)"
+              @option-select="choose"
+            >
+              <template #option="{ option }">
+                <span class="option">
+                  <span :class="option.kind === 'new' ? 'detail' : 'name'">{{ option.kind === 'new' ? option.detail : option.name }}</span>
+                  <span
+                    v-if="option.kind === 'profile'"
+                    class="detail"
+                  >{{ option.detail }}</span>
+                </span>
+              </template>
+            </AutoComplete>
+          </template>
+        </FormField>
+        <FormField
+          :id="ids.year"
+          :label="labels.year"
+          :required="choice.kind === 'new'"
+          :help="choice.kind === 'edit' && lockedYear === undefined ? 'Una vez puesto, no se puede cambiar' : undefined"
+          :error="errors.year"
+        >
+          <template #default="{ describedBy, invalid }">
+            <InputText
+              v-if="lockedYear !== undefined"
+              :id="ids.year"
+              :model-value="lockedYear"
+              disabled
+            />
+            <InputText
+              v-else
+              :id="ids.year"
+              v-model="year"
+              :invalid="invalid"
+              :aria-describedby="describedBy"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </template>
+        </FormField>
+        <p v-if="choice.kind === 'profile'">
+          <Button
+            type="button"
+            label="Elegir otro jugador"
+            link
+            @click="chooseAgain"
+          />
+        </p>
+      </fieldset>
 
-        <fieldset>
-          <legend>{{ rosterBlock }}</legend>
-          <FormField
-            :id="ids.shirt"
-            :label="labels.shirt"
-            :required="false"
-            help="Del 1 al 99"
-            :error="errors.shirt"
-          >
-            <template #default="{ describedBy, invalid }">
-              <InputText
-                :id="ids.shirt"
-                v-model="shirt"
-                :invalid="invalid"
-                :aria-describedby="describedBy"
-                inputmode="numeric"
-                autocomplete="off"
+      <fieldset>
+        <legend>{{ rosterBlock }}</legend>
+        <FormField
+          :id="ids.shirt"
+          :label="labels.shirt"
+          :required="false"
+          help="Del 1 al 99"
+          :error="errors.shirt"
+        >
+          <template #default="{ describedBy, invalid }">
+            <InputText
+              :id="ids.shirt"
+              v-model="shirt"
+              :invalid="invalid"
+              :aria-describedby="describedBy"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </template>
+        </FormField>
+        <FormField
+          id="player-position"
+          label="Demarcación"
+          :required="false"
+        >
+          <template #default="{ describedBy }">
+            <Select
+              v-model="position"
+              label-id="player-position"
+              :options="positionOptions"
+              option-label="label"
+              option-value="value"
+              placeholder="Sin demarcación"
+              show-clear
+              :aria-describedby="describedBy"
+              aria-labelledby="player-position-label"
+            />
+          </template>
+        </FormField>
+        <FormField
+          id="player-photo"
+          label="Foto"
+          :required="false"
+          help="JPEG o PNG, hasta 5 MB"
+        >
+          <template #default="{ describedBy }">
+            <div class="photo-field">
+              <PlayerPhoto
+                :url="photoShown"
+                :name="shownChosenName || 'Jugador'"
+                :initials="initialsOf(shownChosenName)"
               />
-            </template>
-          </FormField>
-          <FormField
-            id="player-position"
-            label="Demarcación"
-            :required="false"
-          >
-            <template #default="{ describedBy }">
-              <Select
-                v-model="position"
-                label-id="player-position"
-                :options="positionOptions"
-                option-label="label"
-                option-value="value"
-                placeholder="Sin demarcación"
-                show-clear
+              <input
+                id="player-photo"
+                type="file"
+                :accept="PHOTO_TYPES"
                 :aria-describedby="describedBy"
-                aria-labelledby="player-position-label"
+                @change="pickPhoto"
+              >
+              <Button
+                v-if="photoShown"
+                type="button"
+                label="Quitar foto"
+                severity="secondary"
+                size="small"
+                @click="clearPhoto"
               />
-            </template>
-          </FormField>
-          <FormField
-            id="player-photo"
-            label="Foto"
-            :required="false"
-            help="JPEG o PNG, hasta 5 MB"
-          >
-            <template #default="{ describedBy }">
-              <div class="photo-field">
-                <PlayerPhoto
-                  :url="photoShown"
-                  :name="shownChosenName || 'Jugador'"
-                  :initials="initialsOf(shownChosenName)"
-                />
-                <input
-                  id="player-photo"
-                  type="file"
-                  :accept="PHOTO_TYPES"
-                  :aria-describedby="describedBy"
-                  @change="pickPhoto"
-                >
-                <Button
-                  v-if="photoShown"
-                  type="button"
-                  label="Quitar foto"
-                  severity="secondary"
-                  size="small"
-                  @click="clearPhoto"
-                />
-              </div>
-            </template>
-          </FormField>
-        </fieldset>
-      </template>
+            </div>
+          </template>
+        </FormField>
+      </fieldset>
     </form>
 
     <template #footer>
@@ -592,7 +584,7 @@ async function showSaveError(error: ShownError) {
 .player-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 .player-form p {
   margin: 0;
@@ -600,9 +592,9 @@ async function showSaveError(error: ShownError) {
 fieldset {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
   margin: 0;
-  padding: 0.75rem 0.875rem 0.875rem;
+  padding: 0.5rem 0.875rem 0.75rem;
   border: 1px solid var(--p-content-border-color);
   border-radius: var(--p-content-border-radius);
 }
