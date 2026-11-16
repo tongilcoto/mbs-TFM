@@ -31,6 +31,8 @@ const messages: Record<ProblemCode, string> = {
   ROUND_NOT_FOUND: 'No se ha encontrado la jornada.',
   TEAM_NOT_REGISTERED: 'Este equipo no jugó esa temporada.',
 
+  PLAYER_NOT_FOUND: 'No se ha encontrado el jugador',
+
   // Lo que la web manda mal
   BAD_REQUEST: 'La web ha enviado algo que el servidor no entiende',
   EMPTY_PATCH: 'No hay ningún cambio que guardar',
@@ -44,6 +46,19 @@ const messages: Record<ProblemCode, string> = {
   // Lo que ya está (Plan R2, decisión 6)
   TEAM_ALREADY_REGISTERED: 'Ese equipo ya está dado de alta en esta temporada',
   SEASON_ALREADY_EXISTS: 'Ya existe una temporada con esa etiqueta. Si no la ves en el selector, está archivada: se recupera desde Temporadas',
+
+  // La plantilla (plan R6). El aviso del dorsal dice además quién lo tiene: lo busca la pantalla en la plantilla
+  // que ya pinta (decisión 5).
+  SHIRT_NUMBER_TAKEN: 'Ese dorsal ya lo tiene otro jugador de la plantilla.',
+  PLAYER_ALREADY_IN_ROSTER: 'Ese jugador ya está en una plantilla esta temporada.',
+  SEASON_ARCHIVED: 'Esta temporada está archivada: se ve, pero no se cambia.',
+  TEAM_NOT_OWN: 'Solo los equipos del club tienen plantilla.',
+  REFERENCE_NOT_FOUND: 'Uno de los datos elegidos ya no existe. Recarga la página y prueba otra vez.',
+
+  // La foto de un jugador (plan R6, decisiones 1 a 3)
+  NOT_AN_IMAGE: 'El fichero no es una imagen.',
+  IMAGE_TOO_LARGE: 'La foto es demasiado grande. Como mucho, 5 MB.',
+  UNSUPPORTED_IMAGE_TYPE: 'La foto tiene que ser JPEG o PNG.',
 
   // Sincronizar con la Federación (plan R3, decisión 6): con las palabras de la pantalla, y diciendo qué hacer.
   ALREADY_LINKED_TO_FEDERATION: 'Este equipo ya está sincronizado con otro equipo de la Federación en esa competición.',
@@ -71,6 +86,8 @@ const messages: Record<ProblemCode, string> = {
   // El servidor
   DATABASE_UNAVAILABLE: 'No se ha podido conectar con el servidor',
   INTERNAL: 'Error del servidor',
+  // Un jugador de la plantilla sin su perfil: no debería pasar, y no lo arregla quien usa la web.
+  PLAYER_PROFILE_MISSING: 'Error del servidor: a este jugador le faltan sus datos. Avisa a quien lo administra',
 }
 
 // Los únicos códigos que pueden ser pasajeros (LLD-B §4.4). Con el resto, reintentar daría lo mismo. Los dos de la
