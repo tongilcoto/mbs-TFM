@@ -710,4 +710,26 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       expect(notice.value).toBe('Guardado')
     })
   })
+
+  describe('corregir un jugador (R6.12)', () => {
+    test('✎ de una fila abre el diálogo de corregir con sus datos', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Corregir, Marcos Díaz' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Corregir a Marcos Díaz' })
+      expect(within(dialog).getByRole('textbox', { name: 'Dorsal' })).toHaveValue('1')
+    })
+
+    test('en una temporada archivada, las filas no tienen acciones', async () => {
+      fakeServer({ seasons: [season('2026/27', true), { ...season('2025/26'), archivedAt: '2026-08-01T00:00:00Z' }], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument()
+    })
+  })
 })

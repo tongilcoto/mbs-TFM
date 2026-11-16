@@ -1,8 +1,8 @@
 <!-- La pestaña Plantilla de la ficha del equipo (plan R6, §3 y decisión 7): los jugadores del equipo en la temporada,
      uno por fila, con su foto o sus iniciales, su dorsal, su nombre, su demarcación y su año. Los pide ella, al
      abrirse: la pestaña Resultados no los necesita. Si fallan, el error va aquí y la cabecera se queda.
-     Dar de alta, en un diálogo encima (`PlayerDialog`, R6.12); corregir, dar de baja, la ficha del jugador y
-     sincronizar llegan con el paso que los hace funcionar (decisión 1 de R6.11). Una temporada archivada se ve, pero
+     Dar de alta y corregir (✎ en cada fila), en un diálogo encima (`PlayerDialog`, R6.12); dar de baja, la ficha del
+     jugador y sincronizar llegan con el paso que los hace funcionar (decisión 1 de R6.11). Una temporada archivada se ve, pero
      no se cambia: sin botones (R6.3). -->
 <script setup lang="ts">
 import Button from 'primevue/button'
@@ -11,6 +11,7 @@ import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
 import { asResult } from '../../api/result'
 import type { components } from '../../api/schema'
+import IconAction from '../../components/IconAction.vue'
 import LoadError from '../../components/LoadError.vue'
 import PlayerPhoto from '../../components/PlayerPhoto.vue'
 import ScrollBox from '../../components/ScrollBox.vue'
@@ -35,7 +36,9 @@ const rows = computed(() => (players.value.kind === 'list' ? rosterRows(players.
 const caption = computed(() => `Plantilla de ${props.teamTitle} en la temporada ${props.season.label}`)
 const listed = computed(() => (players.value.kind === 'list' ? players.value.players : []))
 const editable = computed(() => props.season.archivedAt == null)
-const adding = ref(false)
+// El diálogo abierto: el alta, o corregir a un jugador.
+const dialog = ref<{ kind: 'add' } | { kind: 'edit'; player: Player }>()
+const playerOf = (id: string) => listed.value.find((player) => player.id === id)
 
 // Cada petición cancela la anterior, y salir cancela la que quede (LLD-B §3.2).
 let pending: AbortController | undefined
@@ -61,10 +64,10 @@ async function load(quiet = false) {
 // Al abrir, y si cambia el equipo o la temporada.
 watch([() => props.teamId, () => props.season.id], () => load(), { immediate: true })
 
-// Tras un alta: la plantilla otra vez y el aviso, que se ve también con el diálogo cerrado (LLD-B §5.4).
+// Tras guardar: la plantilla otra vez y el aviso, que se ve también con el diálogo cerrado (LLD-B §5.4).
 function saved(notice: string, again: boolean) {
   if (!again) {
-    adding.value = false
+    dialog.value = undefined
     announce(notice)
   }
   load(true)
@@ -95,7 +98,7 @@ onBeforeUnmount(() => pending?.abort())
       >
         <Button
           label="Dar de alta un jugador"
-          @click="adding = true"
+          @click="dialog = { kind: 'add' }"
         />
       </p>
       <p
@@ -135,6 +138,12 @@ onBeforeUnmount(() => pending?.abort())
               >
                 Año de nacimiento
               </th>
+              <th
+                v-if="editable"
+                scope="col"
+              >
+                <span class="visually-hidden">Acciones</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -159,18 +168,32 @@ onBeforeUnmount(() => pending?.abort())
               <td class="number">
                 {{ row.birthYear }}
               </td>
+              <!-- Las acciones de la fila, iconos con su texto (DW-19): sin ellas en una temporada archivada. -->
+              <td
+                v-if="editable"
+                class="row-actions"
+              >
+                <IconAction
+                  label="Corregir"
+                  :subject="row.name"
+                  icon="pencil"
+                  @press="dialog = { kind: 'edit', player: playerOf(row.id)! }"
+                />
+              </td>
             </tr>
           </tbody>
         </table>
       </ScrollBox>
     </template>
     <PlayerDialog
-      v-if="adding"
+      v-if="dialog"
+      :key="dialog.kind === 'edit' ? dialog.player.id : 'alta'"
       :team-id="teamId"
       :team-title="teamTitle"
       :season="season"
       :players="listed"
-      @close="adding = false"
+      :player="dialog.kind === 'edit' ? dialog.player : undefined"
+      @close="dialog = undefined"
       @saved="saved"
     />
   </section>
@@ -217,6 +240,12 @@ thead th {
 .photo {
   width: 1px;
   padding: 0.25rem 0.5rem;
+}
+/* El icono, de 40 px, ocupa casi toda la altura de la fila. */
+.row-actions {
+  width: 1px;
+  padding: 0.125rem 0.375rem;
+  white-space: nowrap;
 }
 /* Lo lee el lector de pantalla y no se ve. */
 .visually-hidden {

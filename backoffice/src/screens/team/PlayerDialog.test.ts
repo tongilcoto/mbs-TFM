@@ -18,7 +18,9 @@ const season = {
   updatedAt: '2026-01-01T00:00:00Z',
 }
 
-function player(id: string, fullName: string, shirtNumber: number | null) {
+type TestPlayer = Record<string, unknown> & { id: string; fullName: string }
+
+function player(id: string, fullName: string, shirtNumber: number | null): TestPlayer {
   return { id, profileId: `perfil-${id}`, teamId: TEAM, seasonId: 'id-2026', fullName, birthYear: 2011, shirtNumber, position: null, federated: null, lastListedAt: null, photoUrl: null, createdAt: 'x', updatedAt: 'x' }
 }
 
@@ -52,6 +54,12 @@ function fakeServer(fields: { profiles?: unknown[]; create?: () => Response; pho
       if (fields.create) return fields.create()
       return Response.json({ ...player('nuevo', body.fullName ?? 'JUAN GARCÍA FUENTE', body.shirtNumber) }, { status: 201 })
     }
+    if (path.startsWith('/players/') && request.method === 'PUT' && !path.endsWith('/photo')) {
+      const body = await request.json()
+      server.bodies.push(body)
+      if (fields.create) return fields.create()
+      return Response.json({ ...player(path.split('/')[2]!, body.fullName, body.shirtNumber), birthYear: body.birthYear })
+    }
     if (path.endsWith('/photo')) {
       server.photoTypes.push(request.headers.get('Content-Type') ?? '')
       return fields.photo ? fields.photo() : new Response(null, { status: 204 })
@@ -61,9 +69,9 @@ function fakeServer(fields: { profiles?: unknown[]; create?: () => Response; pho
   return server
 }
 
-function openDialog(players = [player('a', 'MARCOS DÍAZ', 9)]) {
+function openDialog(players: TestPlayer[] = [player('a', 'MARCOS DÍAZ', 9)], edited?: TestPlayer) {
   return render(PlayerDialog, {
-    props: { teamId: TEAM, teamTitle: 'Cadete A', season, players },
+    props: { teamId: TEAM, teamTitle: 'Cadete A', season, players: players as never, player: edited as never },
     global: { plugins: [[PrimeVue, primeVueOptions]] },
   })
 }
@@ -253,5 +261,129 @@ describe('sin elegir a nadie', () => {
 
     expect(await screen.findAllByText('Elige un jugador de la lista, o da de alta uno nuevo')).not.toHaveLength(0)
     expect(server.bodies).toEqual([])
+  })
+})
+
+describe('corregir (R6.12, decisión 1)', () => {
+  const ana = { ...player('b', 'ANA RUIZ', 4), position: 'portero', photoUrl: '/api/v1/player-photos/ana.jpg' }
+  const editDialog = () => screen.findByRole('dialog', { name: 'Corregir a Ana Ruiz' })
+  const pressIn = async (label: string) => fireEvent.click(within(await editDialog()).getByRole('button', { name: label }))
+
+  test('trae sus datos, en dos bloques: lo del jugador y lo de esta plantilla', async () => {
+    fakeServer()
+    openDialog([player('a', 'MARCOS DÍAZ', 9), ana], ana)
+
+    const ofPlayer = await screen.findByRole('group', { name: 'Del jugador, en todas sus temporadas' })
+    expect(within(ofPlayer).getByRole('textbox', { name: /Nombre y apellidos/ })).toHaveValue('Ana Ruiz')
+    const ofRoster = screen.getByRole('group', { name: 'En Cadete A, 2026/27' })
+    expect(within(ofRoster).getByRole('textbox', { name: 'Dorsal' })).toHaveValue('4')
+    expect(within(ofRoster).getByRole('combobox', { name: /Demarcación/ })).toHaveTextContent('Portero')
+    expect(within(ofRoster).getByRole('img', { name: 'Ana Ruiz' })).toBeInTheDocument()
+    expect(within(await editDialog()).queryByRole('button', { name: 'Guardar y dar de alta otro' })).not.toBeInTheDocument()
+  })
+
+  test('el año que ya tiene está bloqueado', async () => {
+    fakeServer()
+    openDialog([ana], ana)
+
+    const year = await screen.findByRole('textbox', { name: /Año de nacimiento/ })
+    expect(year).toHaveValue('2011')
+    expect(year).toBeDisabled()
+  })
+
+  test('corregir el nombre lo envía con lo demás como estaba, y cierra con «Guardado»', async () => {
+    const server = fakeServer()
+    const { emitted } = openDialog([ana], ana)
+    await fireEvent.update(await screen.findByRole('textbox', { name: /Nombre y apellidos/ }), 'Ana Ruíz')
+    await pressIn('Guardar')
+
+    await waitFor(() => expect(emitted().saved).toEqual([['Guardado', false]]))
+    expect(server.bodies).toEqual([{ fullName: 'Ana Ruíz', birthYear: 2011, shirtNumber: 4, position: 'portero' }])
+    expect(server.asked.some((a) => a.includes('/photo'))).toBe(false)
+  })
+
+  test('el dorsal de otro dice quién lo tiene; el suyo no cuenta', async () => {
+    fakeServer({ create: () => problem(409, 'SHIRT_NUMBER_TAKEN') })
+    openDialog([player('a', 'MARCOS DÍAZ', 9), ana], ana)
+    await fireEvent.update(await screen.findByRole('textbox', { name: 'Dorsal' }), '9')
+    await pressIn('Guardar')
+
+    expect(await screen.findAllByText('Ese dorsal ya lo tiene Marcos Díaz')).not.toHaveLength(0)
+  })
+
+  test('quitar la foto la quita de su fila', async () => {
+    const server = fakeServer()
+    const { emitted } = openDialog([ana], ana)
+    await pressIn('Quitar foto')
+    await pressIn('Guardar')
+
+    await waitFor(() => expect(emitted().saved).toBeDefined())
+    expect(server.asked).toContain('DELETE /players/b/photo')
+  })
+
+  describe('un jugador sin año', () => {
+    const sinAño = { ...ana, birthYear: null }
+
+    test('el año se puede poner, y avisa de que no se podrá cambiar', async () => {
+      fakeServer()
+      openDialog([sinAño], sinAño)
+
+      const year = await screen.findByRole('textbox', { name: /Año de nacimiento/ })
+      expect(year).toBeEnabled()
+      expect(year).toHaveAccessibleDescription('Una vez puesto, no se puede cambiar')
+    })
+
+    test('al guardar con el año, pregunta antes; confirmar lo envía', async () => {
+      const server = fakeServer()
+      const { emitted } = openDialog([sinAño], sinAño)
+      await fireEvent.update(await screen.findByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+      await pressIn('Guardar')
+
+      const confirm = await screen.findByRole('dialog', { name: 'Poner el año de nacimiento' })
+      expect(confirm).toHaveTextContent('El año no se podrá cambiar después.')
+      expect(confirm).toHaveTextContent('Si te equivocas, tendrás que dar de baja al jugador y darlo de alta como nuevo.')
+      expect(server.bodies).toEqual([])
+
+      await fireEvent.click(within(confirm).getByRole('button', { name: 'Guardar el año' }))
+      await waitFor(() => expect(emitted().saved).toEqual([['Guardado', false]]))
+      expect(server.bodies).toEqual([{ fullName: 'Ana Ruiz', birthYear: 2012, shirtNumber: 4, position: 'portero' }])
+    })
+
+    test('volver de la pregunta no envía nada, y el diálogo sigue abierto', async () => {
+      const server = fakeServer()
+      const { emitted } = openDialog([sinAño], sinAño)
+      await fireEvent.update(await screen.findByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+      await pressIn('Guardar')
+      await fireEvent.click(within(await screen.findByRole('dialog', { name: 'Poner el año de nacimiento' })).getByRole('button', { name: 'Volver' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Poner el año de nacimiento' })).not.toBeInTheDocument())
+      expect(await editDialog()).toBeInTheDocument()
+      expect(server.bodies).toEqual([])
+      expect(emitted().saved).toBeUndefined()
+    })
+
+    test('el nombre y el año a la vez no se guardan, y dice qué hacer', async () => {
+      const server = fakeServer()
+      openDialog([sinAño], sinAño)
+      await fireEvent.update(await screen.findByRole('textbox', { name: /Nombre y apellidos/ }), 'Lucía Gómez')
+      await fireEvent.update(screen.getByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+      await pressIn('Guardar')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'No se pueden cambiar a la vez el nombre y el año. Si es otra persona, da de baja a este jugador y da de alta al otro como nuevo.',
+      )
+      expect(screen.queryByRole('dialog', { name: 'Poner el año de nacimiento' })).not.toBeInTheDocument()
+      expect(server.bodies).toEqual([])
+    })
+
+    test('sin poner el año, se guarda sin preguntar', async () => {
+      const server = fakeServer()
+      const { emitted } = openDialog([sinAño], sinAño)
+      await fireEvent.update(await screen.findByRole('textbox', { name: 'Dorsal' }), '5')
+      await pressIn('Guardar')
+
+      await waitFor(() => expect(emitted().saved).toBeDefined())
+      expect(server.bodies).toEqual([{ fullName: 'Ana Ruiz', birthYear: null, shirtNumber: 5, position: 'portero' }])
+    })
   })
 })
