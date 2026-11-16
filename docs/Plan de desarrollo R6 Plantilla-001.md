@@ -627,14 +627,14 @@ suben el catálogo de 85 a 88, con la ruta que entrega la foto (decisión 3, cer
 ## 6. Los escenarios
 
 Escritos y revisados con el desarrollador en `R6.3` (2026-11-15), con la *skill* de escenarios, sin definir, con
-las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas), en
+las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas; **121** desde la decisión 1 de `R6.12`), en
 cuatro ficheros de `backoffice/e2e/features/`:
 
 | Fichero | Escenarios | `@e2e` | `@ui` | Qué cubre |
 |---|---|---|---|---|
 | `plantilla.feature` | 14 | 2 | 12 | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
 | `alta-jugador.feature` | 37 | 16 | 21 | El diálogo; el buscador (3 letras, sin tildes, palabra a palabra, no ofrece a los de esta plantilla, enseña desactivados a los de otro equipo); elegir uno que existe, que trae lo de su perfil; guardar, un campo opcional cada vez, ninguno o todos, mirando la fila y el perfil; otro con el mismo nombre; lo que no deja guardar; la foto que no vale |
-| `jugador.feature` | 22 | 12 | 10 | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
+| `jugador.feature` | 22 (24 desde `R6.12`) | 12 (14) | 10 | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
 | `plantilla-federacion.feature` | 46 | 17 | 29 | La plantilla entera (la fecha, nunca sincronizada, la federación que falla o tarda); cada caso de jugador, según cómo está en el club y en la federación; el resumen, que cuenta, estado a estado y con el mismo cambio dos veces; la ficha del federado |
 
 **Cómo se ordenan y se escriben**, lo que se aprendió al revisarlos:
@@ -696,6 +696,17 @@ perfiles, `D-121`, `D-122` y los pasos de la sincronización, que faltaban.*
 (las pruebas y los 170 escenarios de antes, en verde); después, la pestaña Plantilla. Los jugadores se piden solo
 al abrir su pestaña.
 
+**Decisiones de `R6.12`** (2026-11-16), una a una con el desarrollador:
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Corregir el nombre y el año** | Un aviso de que cambian en sus otras temporadas (el servidor no dice cuáles son: el buscador quita a los de esta plantilla y solo da la última), o no dejar que un perfil pase a ser otra persona | **El nombre se corrige** («Marcso» → «Marcos»). **El año, solo si está vacío** (lo deja así la sincronización), con una confirmación al guardar: no se podrá cambiar después, y si es un error hay que dar de baja al jugador y darlo de alta como nuevo. **Los dos a la vez, no**: si es otra persona, baja de este y alta del otro como nuevo. Sin aviso de las otras temporadas: el nombre y el año son del perfil, y se sabe. **Se asume**: un año mal tecleado en el alta ya no se corrige, y el perfil con el año malo sigue en el buscador hasta el purgado de la R11. **El servidor cumplirá la regla también** (`R6.17`): hoy acepta cambiar el año siempre |
+
+**Los escenarios de corregir, reescritos** (`jugador.feature`, 22 → 24; la rebanada, 119 → 121): fuera el aviso de las
+otras temporadas (2), «cambiar el dorsal no avisa de nada más» y «corregir el año lo cambia en la otra temporada»;
+entran corregir el nombre, el año bloqueado, la confirmación del año, confirmarla, cancelarla, y nombre y año a la vez.
+Cada guardado se mira en la fila de la plantilla, a la que se vuelve.
+
 ### D · Sincronizar la plantilla con la federación (decisión 9, `D-120`)
 
 | Paso | Qué |
@@ -708,8 +719,8 @@ al abrir su pestaña.
 
 | Paso | Qué |
 |---|---|
-| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene |
-| `R6.18` | Los 119 escenarios de la rebanada en verde, con axe en los dos modos |
+| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`) |
+| `R6.18` | Los 121 escenarios de la rebanada en verde, con axe en los dos modos |
 | `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
 

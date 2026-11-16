@@ -2,6 +2,8 @@
 # La ficha es la del jugador en una temporada: /temporadas/:temporada/jugadores/:id. Corregir y dar de baja se abren
 # igual desde la fila de la plantilla (✎ y 🗑) que desde la ficha. El diálogo de corregir separa lo del jugador, que
 # vale para todas sus temporadas (nombre y año, su perfil, D-119), de lo de esta plantilla (dorsal, demarcación y foto).
+# El nombre se corrige; el año, solo si está vacío, con confirmación; y los dos a la vez, no (decisión 1 de R6.12):
+# así un perfil no se reutiliza para otra persona.
 # Guardar el dorsal, la demarcación o la foto los copia también al perfil, como ayuda para la próxima alta (D-122).
 # Los jugadores se inventan al azar y se dan de alta por la API.
 #
@@ -9,7 +11,6 @@
 # - «la ficha del jugador»: la pantalla del jugador en una temporada; una página, no un diálogo. Encima lleva el
 #   enlace de vuelta a la plantilla de su equipo («← Plantilla del Cadete A»).
 # - «el diálogo de corregir»: el que abren ✎ en la fila y «Corregir» en la ficha.
-# - «un jugador con otra temporada»: uno con fila en la temporada en curso y en una pasada.
 # - «el perfil del jugador»: lo que devuelve de él la búsqueda de perfiles, por la API (`GET /player-profiles?q=`).
 # - «de la plantilla» y «de su perfil»: de dónde sale cada dato. La ficha enseña el dorsal, la demarcación y la foto
 #   de su fila de esa temporada, y el nombre y el año de su perfil; nunca el dorsal, la demarcación o la foto que el
@@ -72,25 +73,6 @@ Feature: La ficha de un jugador, corregirlo y darlo de baja
     Then el diálogo de corregir tiene un bloque "Del jugador, en todas sus temporadas" con el nombre y el año
     And el diálogo de corregir tiene un bloque con el equipo y la temporada en curso, con el dorsal, la demarcación y la foto
 
-  @ui
-  Scenario Outline: Cambiar el <dato> de un jugador con otra temporada avisa de que cambia también en ella
-    Given un jugador con otra temporada
-    And tengo abierto el diálogo de corregir del jugador, en la temporada en curso
-    When cambio el <dato> en el diálogo de corregir
-    Then el diálogo de corregir avisa que el <dato> cambia también en la temporada pasada, con su equipo
-
-    Examples:
-      | dato               |
-      | nombre             |
-      | año de nacimiento  |
-
-  @ui
-  Scenario: Cambiar el dorsal no avisa de nada más
-    Given un jugador con otra temporada
-    And tengo abierto el diálogo de corregir del jugador, en la temporada en curso
-    When cambio el dorsal por uno libre en el diálogo de corregir
-    Then el diálogo de corregir no tiene avisos
-
   @e2e
   Scenario: Corregir el dorsal lo cambia en la plantilla
     Given tengo abierto el diálogo de corregir de un jugador de mi club desde la plantilla, en la temporada en curso
@@ -100,11 +82,52 @@ Feature: La ficha de un jugador, corregirlo y darlo de baja
     And el perfil del jugador tiene el dorsal nuevo
 
   @e2e
-  Scenario: Corregir el año de un jugador con otra temporada lo cambia también en ella
-    Given un jugador con otra temporada
-    And en el diálogo de corregir del jugador, en la temporada en curso, he cambiado su año de nacimiento
+  Scenario: Corregir el nombre lo cambia en la plantilla
+    Given tengo abierto el diálogo de corregir de un jugador de mi club desde la plantilla, en la temporada en curso
+    And he cambiado el nombre en el diálogo de corregir
     When pulso "Guardar" en el diálogo de corregir
-    Then la ficha del jugador en la temporada pasada tiene el año nuevo
+    Then la fila del jugador en la plantilla tiene el nombre nuevo
+
+  # ── El año: solo si está vacío ──
+
+  @ui
+  Scenario: El año de un jugador que lo tiene está bloqueado en el diálogo de corregir
+    Given un equipo de mi club tiene en la plantilla de la temporada en curso un jugador con año en su perfil
+    And estoy en la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    When pulso la acción "Corregir" de la fila del jugador
+    Then el campo "Año de nacimiento" del diálogo de corregir tiene el año de su perfil, bloqueado
+
+  @ui
+  Scenario: Poner el año a un jugador sin año pide confirmación al guardar
+    Given un equipo de mi club tiene en la plantilla de la temporada en curso un jugador sin año en su perfil
+    And en el diálogo de corregir del jugador, desde la plantilla, he puesto su año de nacimiento
+    When pulso "Guardar" en el diálogo de corregir
+    Then la confirmación del año dice que no se podrá cambiar después
+    And la confirmación del año dice que, si es un error, hay que dar de baja al jugador y darlo de alta como nuevo
+
+  @e2e
+  Scenario: Confirmar el año lo guarda
+    Given un equipo de mi club tiene en la plantilla de la temporada en curso un jugador sin año en su perfil
+    And en el diálogo de corregir del jugador, desde la plantilla, he puesto su año de nacimiento y he pulsado "Guardar"
+    When confirmo el año
+    Then la fila del jugador en la plantilla tiene el año que he puesto
+
+  @e2e
+  Scenario: Cancelar la confirmación del año no lo guarda
+    Given un equipo de mi club tiene en la plantilla de la temporada en curso un jugador sin año en su perfil
+    And en el diálogo de corregir del jugador, desde la plantilla, he puesto su año de nacimiento y he pulsado "Guardar"
+    When cancelo la confirmación del año
+    Then la fila del jugador en la plantilla dice "Sin año" en el año de nacimiento
+
+  @ui
+  Scenario: Cambiar a la vez el nombre y el año no deja guardar, y dice qué hacer
+    Given un equipo de mi club tiene en la plantilla de la temporada en curso un jugador sin año en su perfil
+    And en el diálogo de corregir del jugador, desde la plantilla, he cambiado su nombre y he puesto su año de nacimiento
+    When pulso "Guardar" en el diálogo de corregir
+    Then el diálogo de corregir dice que no se pueden cambiar a la vez el nombre y el año
+    And el diálogo de corregir dice que, si es otra persona, hay que dar de baja a este jugador y dar de alta al otro como nuevo
+
+  # ── Corregir: el dorsal cogido, y cancelar ──
 
   @ui
   Scenario: Corregir con el dorsal de otro jugador del equipo dice quién lo tiene
