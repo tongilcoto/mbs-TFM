@@ -55,6 +55,18 @@ describe('cada fila de la plantilla', () => {
     expect(row).toMatchObject({ shirtNumber: '—', position: '—', birthYear: 'Sin año', photoUrl: undefined })
   })
 
+  test('«Federado» si la última sincronización lo listó, «No federado» si no (D-120)', () => {
+    expect(rosterRows([player({ federated: true })])[0]!.federation).toBe('Federado')
+    expect(rosterRows([player({ federated: false })])[0]!.federation).toBe('No federado')
+  })
+
+  test('sin sincronizar nunca, ni «Federado» ni «No federado», también si llega como clave ausente', () => {
+    expect(rosterRows([player({ federated: null })])[0]!.federation).toBeUndefined()
+    const missing: Record<string, unknown> = { ...player() }
+    delete missing.federated
+    expect(rosterRows([missing as never])[0]!.federation).toBeUndefined()
+  })
+
   test('en el orden en que llegan', () => {
     const rows = rosterRows([player({ id: 'a', shirtNumber: 9 }), player({ id: 'b', shirtNumber: 1 })])
     expect(rows.map((row) => row.id)).toEqual(['a', 'b'])

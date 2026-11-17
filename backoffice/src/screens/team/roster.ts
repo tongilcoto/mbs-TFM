@@ -20,6 +20,9 @@ export interface RosterRow {
   shirtNumber: string
   position: string
   birthYear: string
+  // «Federado» si la última sincronización lo listó, «No federado» si no; nada si la plantilla nunca se ha
+  // sincronizado o la federación no publica plantillas (`federated` nulo, D-120).
+  federation?: 'Federado' | 'No federado'
 }
 
 // En el orden en que llegan. Un nulo puede llegar como clave ausente (DW-21): `??` trata igual los dos.
@@ -34,5 +37,6 @@ export function rosterRows(players: Player[]): RosterRow[] {
     // catálogo solo admite las cuatro.
     position: player.position == null ? '—' : positionNames[player.position as PlayerPosition],
     birthYear: player.birthYear == null ? 'Sin año' : String(player.birthYear),
+    federation: player.federated == null ? undefined : player.federated ? 'Federado' : 'No federado',
   }))
 }
