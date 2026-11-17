@@ -418,8 +418,10 @@ export function federationDate(date: Date): string {
 
 // ── Jugadores de la ficha de equipo de la federación (plan R6, R6.15) ───────────────────────────────────────
 
-// Con la forma de los 46 medidos en dos fichas de verdad (plan R6, decisión 9): en mayúsculas, con tildes, eñe y
-// diéresis, nombres compuestos, apellidos con partícula o con guion, y alguno con un solo apellido.
+// Con las formas de los 46 medidos en dos fichas de verdad (plan R6, decisión 9): en mayúsculas, con tildes, eñe y
+// diéresis, nombres compuestos, apellidos con partícula o con guion, y alguno con un solo apellido. En la RFFM la
+// mayoría van sin tildes, aunque las lleven («FERNANDEZ»); aquí salen más a menudo, y cada escenario pide la marca
+// que necesita (`NameMark`).
 const givenNames = ['JUAN', 'PABLO', 'HUGO', 'MARIO', 'DANIEL', 'LUCAS', 'DIEGO', 'MARCOS', 'ADRIÁN', 'ÁLVARO', 'IVÁN',
   'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'ÍÑIGO', 'JOEL', 'NICOLÁS']
 const surnameList = ['GARCÍA', 'LÓPEZ', 'MARTÍN', 'SÁNCHEZ', 'PÉREZ', 'GÓMEZ', 'RUIZ', 'DÍAZ', 'MORENO', 'ALONSO',
