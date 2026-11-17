@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { notice } from '../../notice'
 import { primeVueOptions } from '../../theme/primevue'
 import TeamScreen from './TeamScreen.vue'
 
@@ -10,7 +11,7 @@ import TeamScreen from './TeamScreen.vue'
 
 const TEAM = '11111111-1111-4111-8111-111111111111'
 
-function season(label: string, isCurrent = false) {
+function season(label: string, isCurrent = false): Record<string, unknown> {
   const year = Number(label.slice(0, 4))
   return {
     id: `id-${year}`,
@@ -113,6 +114,23 @@ function fakeServer(fields: Partial<typeof defaults> = {}) {
       const data = server.matches.slice((page - 1) * perPage, page * perPage)
       return Response.json({ page, perPage, total: server.matches.length, data })
     }
+    const removing = path.match(/^\/players\/([^/]+)$/)
+    if (removing && request.method === 'DELETE') {
+      if (server.removeFails) return problem(503, 'DATABASE_UNAVAILABLE')
+      server.players = server.players.filter((p) => (p as { id: string }).id !== removing[1])
+      return new Response(null, { status: 204 })
+    }
+    if (path === '/players' && request.method === 'POST') {
+      const body = await request.json()
+      const created = player('nuevo', body.fullName, body.shirtNumber)
+      server.players = [...server.players, created]
+      return Response.json(created, { status: 201 })
+    }
+    if (path === '/players') {
+      if (server.playersFail) return problem(503, 'DATABASE_UNAVAILABLE')
+      return Response.json(server.players)
+    }
+    if (path === '/player-profiles') return Response.json([])
     if (path === '/ingestion-runs' && request.method === 'POST') return new Promise<Response>((resolve) => (server.finish = resolve))
     throw new Error(`Petición no esperada: ${request.method} ${path}`)
   })
@@ -128,6 +146,28 @@ const defaults = {
   tables: { 'liga-j5': table(16, 13), 'liga-j4': table(16, 11) } as Record<string, unknown[]>,
   matches: [match('liga', 5, 2, 1), match('liga', 6)] as unknown[],
   matchesFail: false,
+  players: [player('a', 'MARCOS DÍAZ', 1), player('b', 'JUAN CARLOS GARCÍA DE LA FUENTE', null)] as unknown[],
+  playersFail: false,
+  removeFails: false,
+}
+
+// Un jugador de la plantilla, con su dorsal o sin él; sin foto, salvo que se le dé.
+function player(id: string, fullName: string, shirtNumber: number | null, photoUrl: string | null = null) {
+  return {
+    id,
+    profileId: `perfil-${id}`,
+    teamId: TEAM,
+    seasonId: 'id-2026',
+    fullName,
+    birthYear: 2011,
+    shirtNumber,
+    position: shirtNumber === 1 ? 'portero' : null,
+    federated: null,
+    lastListedAt: null,
+    photoUrl,
+    createdAt: '2026-11-16T00:00:00Z',
+    updatedAt: '2026-11-16T00:00:00Z',
+  }
 }
 
 // Un partido del equipo en casa contra un rival; con marcador, jugado.
@@ -173,6 +213,7 @@ async function openTeam(address = `/temporadas/2026-27/equipos/${TEAM}/resultado
       { path: '/', component: landing('Equipos') },
       { path: '/equipos/:id/federacion', component: landing('Sincronizar con la Federación') },
       { path: '/temporadas/:temporada/equipos/:id/resultados', component: TeamScreen },
+      { path: '/temporadas/:temporada/equipos/:id/plantilla', component: TeamScreen, meta: { title: 'Plantilla', tab: 'plantilla' } },
       { path: '/equipos/:id', component: TeamScreen },
     ],
   })
@@ -524,5 +565,246 @@ describe('la pestaña Resultados (§3.3)', () => {
       `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=1&perPage=100`,
       `GET /matches?teamId=${TEAM}&seasonId=id-2026&page=2&perPage=100`,
     ])
+  })
+})
+
+describe('la pestaña Plantilla (plan R6, §3)', () => {
+  const rosterTable = (season = '2026/27') => screen.findByRole('table', { name: `Plantilla de Cadete A en la temporada ${season}` })
+  const plantilla = `/temporadas/2026-27/equipos/${TEAM}/plantilla`
+
+  test('la pestaña, sin la etiqueta «Federación», y un jugador por fila, como llegan', async () => {
+    fakeServer()
+    await openTeam(plantilla)
+
+    const table = await rosterTable()
+    expect(screen.getByRole('link', { name: 'Plantilla' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Resultados' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByText('Federación')).not.toBeInTheDocument()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('1')
+    expect(rows[0]).toHaveTextContent('Marcos Díaz')
+    expect(rows[0]).toHaveTextContent('Portero')
+    expect(rows[0]).toHaveTextContent('2011')
+    expect(rows[1]).toHaveTextContent('Juan Carlos García de la Fuente')
+    expect(rows[1]).toHaveTextContent('—')
+  })
+
+  test('el nombre lleva a su ficha, en la misma temporada', async () => {
+    fakeServer()
+    await openTeam(plantilla)
+
+    expect(within(await rosterTable()).getByRole('link', { name: 'Marcos Díaz' })).toHaveAttribute('href', '/temporadas/2026-27/jugadores/a')
+  })
+
+  test('la foto, con el nombre del jugador; sin foto, sus iniciales', async () => {
+    fakeServer({ players: [player('a', 'MARCOS DÍAZ', 1, '/api/v1/player-photos/a.jpg'), player('b', 'ANA RUIZ', 2)] })
+    await openTeam(plantilla)
+
+    const rows = within(await rosterTable()).getAllByRole('row').slice(1)
+    expect(within(rows[0]!).getByRole('img', { name: 'Marcos Díaz' })).toHaveAttribute('src', '/api/v1/player-photos/a.jpg')
+    expect(within(rows[1]!).getByText('AR')).toBeInTheDocument()
+  })
+
+  test('pide la plantilla de ese equipo y esa temporada, y no los partidos', async () => {
+    const server = fakeServer()
+    await openTeam(plantilla)
+    await rosterTable()
+
+    expect(server.asked).toContain(`GET /players?teamId=${TEAM}&seasonId=id-2026`)
+    expect(server.asked.some((a) => a.startsWith('GET /matches'))).toBe(false)
+  })
+
+  test('la pestaña Resultados no pide la plantilla', async () => {
+    const server = fakeServer()
+    await openTeam()
+    await screen.findByRole('table', { name: 'Partidos de Cadete A en la temporada 2026/27' })
+
+    expect(server.asked.some((a) => a.startsWith('GET /players'))).toBe(false)
+  })
+
+  test('de Resultados a Plantilla, la cabecera no se vuelve a pedir', async () => {
+    const server = fakeServer()
+    const router = await openTeam()
+    await positionShown()
+
+    await fireEvent.click(screen.getByRole('link', { name: 'Plantilla' }))
+
+    await rosterTable()
+    expect(router.currentRoute.value.path).toBe(plantilla)
+    expect(server.asked.filter((a) => a === `GET /teams/${TEAM}`)).toHaveLength(1)
+    expect(screen.queryByText('Cargando equipo…')).not.toBeInTheDocument()
+  })
+
+  test('al cambiar de temporada, se sigue en Plantilla', async () => {
+    fakeServer({ playsIn: ['id-2026', 'id-2025'] })
+    const router = await openTeam(plantilla)
+    await rosterTable()
+
+    await fireEvent.click(screen.getByRole('combobox', { name: 'Temporada' }))
+    await fireEvent.mouseDown(await screen.findByRole('option', { name: '2025/26' }))
+
+    await waitFor(() => expect(router.currentRoute.value.path).toBe(`/temporadas/2025-26/equipos/${TEAM}/plantilla`))
+    expect(await rosterTable('2025/26')).toBeInTheDocument()
+  })
+
+  test('sin jugadores, lo dice con la temporada', async () => {
+    fakeServer({ players: [] })
+    await openTeam(plantilla)
+
+    expect(await screen.findByText('Este equipo aún no tiene jugadores en 2026/27.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  test('mientras llegan, «Cargando jugadores…»; la cabecera ya está', async () => {
+    fakeServer()
+    const real = globalThis.fetch
+    vi.stubGlobal('fetch', (request: Request) =>
+      new URL(request.url).pathname === '/api/v1/players' ? new Promise(() => {}) : real(request),
+    )
+    await openTeam(plantilla)
+
+    expect(await screen.findByText('Cargando jugadores…')).toBeInTheDocument()
+    expect(box('Posición')).toHaveTextContent('13º')
+  })
+
+  test('si fallan, el error con «Reintentar», y la cabecera se queda', async () => {
+    const server = fakeServer({ playersFail: true })
+    await openTeam(plantilla)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se ha podido conectar con el servidor')
+    expect(box('Posición')).toHaveTextContent('13º')
+
+    server.playersFail = false
+    await fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(await rosterTable()).toBeInTheDocument()
+  })
+
+  describe('dar de alta un jugador (R6.12)', () => {
+    test('«Dar de alta un jugador» abre el diálogo encima de la plantilla', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de alta un jugador' }))
+
+      expect(await screen.findByRole('dialog', { name: 'Dar de alta un jugador en Cadete A, 2026/27' })).toBeInTheDocument()
+    })
+
+    test('sin jugadores, también se ofrece', async () => {
+      fakeServer({ players: [] })
+      await openTeam(plantilla)
+
+      await screen.findByText('Este equipo aún no tiene jugadores en 2026/27.')
+      expect(screen.getByRole('button', { name: 'Dar de alta un jugador' })).toBeInTheDocument()
+    })
+
+    test('en una temporada archivada, no', async () => {
+      fakeServer({ seasons: [season('2026/27', true), { ...season('2025/26'), archivedAt: '2026-08-01T00:00:00Z' }], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
+    })
+
+    test('al guardar, el diálogo se cierra, la plantilla trae al nuevo y el aviso dice «Guardado»', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de alta un jugador' }))
+      const box = await screen.findByRole('combobox', { name: /Nombre y apellidos/ })
+      await fireEvent.update(box, 'Ana Ruiz')
+      await fireEvent.input(box)
+      await fireEvent.click(await screen.findByRole('option', { name: /como jugador nuevo/ }, { timeout: 2000 }))
+      await fireEvent.update(screen.getByRole('textbox', { name: /Año de nacimiento/ }), '2012')
+      await fireEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      await waitFor(async () => expect(within(await rosterTable()).getAllByRole('row').slice(1)).toHaveLength(3))
+      expect(notice.value).toBe('Guardado')
+    })
+  })
+
+  describe('corregir un jugador (R6.12)', () => {
+    test('✎ de una fila abre el diálogo de corregir con sus datos', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Corregir, Marcos Díaz' }))
+
+      const dialog = await screen.findByRole('dialog', { name: 'Corregir a Marcos Díaz' })
+      expect(within(dialog).getByRole('textbox', { name: 'Dorsal' })).toHaveValue('1')
+    })
+
+    test('en una temporada archivada, las filas no tienen acciones', async () => {
+      fakeServer({ seasons: [season('2026/27', true), { ...season('2025/26'), archivedAt: '2026-08-01T00:00:00Z' }], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('dar de baja a un jugador (R6.12)', () => {
+    const confirmation = () => screen.findByRole('dialog', { name: 'Dar de baja' })
+
+    test('🗑 pide confirmación, con su nombre y su equipo, y dice qué pasa', async () => {
+      fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de baja, Marcos Díaz' }))
+
+      const dialog = await confirmation()
+      expect(dialog).toHaveTextContent('¿Dar de baja a Marcos Díaz del Cadete A?')
+      expect(dialog).toHaveTextContent('Sus goles y tarjetas siguen contando para el equipo.')
+      expect(dialog).toHaveTextContent('Sincronizar con la Federación no lo volverá a añadir.')
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toHaveFocus())
+    })
+
+    test('confirmar lo quita de la plantilla, con el aviso «Dado de baja»', async () => {
+      const server = fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de baja, Marcos Díaz' }))
+      await fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Dar de baja' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(server.asked).toContain('DELETE /players/a')
+      await waitFor(async () => expect(within(await rosterTable()).queryByText('Marcos Díaz')).not.toBeInTheDocument())
+      expect(notice.value).toBe('Dado de baja')
+    })
+
+    test('cancelar no la hace', async () => {
+      const server = fakeServer()
+      await openTeam(plantilla)
+      await rosterTable()
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de baja, Marcos Díaz' }))
+      await fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Cancelar' }))
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(server.asked.some((a) => a.startsWith('DELETE'))).toBe(false)
+      expect(within(await rosterTable()).getByText('Marcos Díaz')).toBeInTheDocument()
+    })
+
+    test('si falla, lo dice en la confirmación, que sigue abierta', async () => {
+      fakeServer({ removeFails: true })
+      await openTeam(plantilla)
+      await rosterTable()
+      await fireEvent.click(screen.getByRole('button', { name: 'Dar de baja, Marcos Díaz' }))
+      await fireEvent.click(within(await confirmation()).getByRole('button', { name: 'Dar de baja' }))
+
+      expect(await within(await confirmation()).findByRole('alert')).toHaveTextContent('No se ha podido conectar con el servidor')
+    })
+
+    test('en una temporada archivada, sin 🗑', async () => {
+      fakeServer({ seasons: [season('2026/27', true), { ...season('2025/26'), archivedAt: '2026-08-01T00:00:00Z' }], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: /^Dar de baja/ })).not.toBeInTheDocument()
+    })
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { components } from '../../api/schema'
-import { competitionPath, notPlayingText, positionIn, resultsPath, roundsToLookIn, teamHeading } from './header'
+import { competitionPath, notPlayingText, playerPath, positionIn, roundsToLookIn, tabPath, teamHeading } from './header'
 
 type Team = components['schemas']['TeamResponse']
 type Round = components['schemas']['RoundResponse']
@@ -62,8 +62,10 @@ describe('la cabecera de la ficha', () => {
   })
 
   test('los caminos, con la temporada con guion', () => {
-    expect(resultsPath('2025/26', 'equipo')).toBe('/temporadas/2025-26/equipos/equipo/resultados')
+    expect(tabPath('resultados', '2025/26', 'equipo')).toBe('/temporadas/2025-26/equipos/equipo/resultados')
+    expect(tabPath('plantilla', '2025/26', 'equipo')).toBe('/temporadas/2025-26/equipos/equipo/plantilla')
     expect(competitionPath('2025/26', 'liga')).toBe('/temporadas/2025-26/competiciones/liga')
+    expect(playerPath('2025/26', 'fila')).toBe('/temporadas/2025-26/jugadores/fila')
   })
 })
 

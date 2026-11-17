@@ -49,12 +49,12 @@ describe('cada tipo de regla, con su mensaje', () => {
   })
 
   test('el máximo de caracteres', () => {
-    expect(checkForm('CreatePlayerRequest', { fullName: 'a'.repeat(121) }).fullName).toBe('Como máximo 120 caracteres')
+    expect(checkForm('CreatePlayerNewProfileRequest', { fullName: 'a'.repeat(121) }).fullName).toBe('Como máximo 120 caracteres')
   })
 
   test('el valor mínimo y el máximo', () => {
-    expect(checkForm('CreatePlayerRequest', { shirtNumber: 0 }).shirtNumber).toBe('Como mínimo 1')
-    expect(checkForm('CreatePlayerRequest', { shirtNumber: 100 }).shirtNumber).toBe('Como máximo 99')
+    expect(checkForm('CreatePlayerNewProfileRequest', { shirtNumber: 0 }).shirtNumber).toBe('Como mínimo 1')
+    expect(checkForm('CreatePlayerNewProfileRequest', { shirtNumber: 100 }).shirtNumber).toBe('Como máximo 99')
   })
 })
 
