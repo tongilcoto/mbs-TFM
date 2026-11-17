@@ -54,6 +54,10 @@ public struct TeamRegistration: Identifiable, Equatable, Sendable {
     /// haya enganchado, y **siempre** nulo en la fila de junio, que no tiene
     /// competición en la que significar algo.
     public let federationTeamID: String?
+    /// **La última sincronización de la plantilla** (`D-120`), en la fila cuyo
+    /// código se usó. Nula hasta la primera. Columna propia y no `updatedAt`, que
+    /// cambia con cualquier guardado de la inscripción.
+    public let rosterSyncedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date
 
@@ -63,6 +67,7 @@ public struct TeamRegistration: Identifiable, Equatable, Sendable {
         seasonID: SeasonID,
         competitionID: CompetitionID? = nil,
         federationTeamID: String? = nil,
+        rosterSyncedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date
     ) throws {
@@ -102,6 +107,7 @@ public struct TeamRegistration: Identifiable, Equatable, Sendable {
         self.seasonID = seasonID
         self.competitionID = competitionID
         self.federationTeamID = federationTeamID
+        self.rosterSyncedAt = rosterSyncedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -135,13 +141,14 @@ extension TeamRegistration {
         }
         return TeamRegistration(
             id: id, teamID: teamID, seasonID: seasonID, competitionID: competitionID,
-            federationTeamID: incoming, createdAt: createdAt, updatedAt: updatedAt)
+            federationTeamID: incoming, rosterSyncedAt: rosterSyncedAt,
+            createdAt: createdAt, updatedAt: updatedAt)
     }
 
     /// Para `linked`, que ya parte de una fila válida y propia.
     private init(
         id: TeamRegistrationID, teamID: TeamID, seasonID: SeasonID,
-        competitionID: CompetitionID?, federationTeamID: String?,
+        competitionID: CompetitionID?, federationTeamID: String?, rosterSyncedAt: Date?,
         createdAt: Date, updatedAt: Date
     ) {
         self.id = id
@@ -149,6 +156,7 @@ extension TeamRegistration {
         self.seasonID = seasonID
         self.competitionID = competitionID
         self.federationTeamID = federationTeamID
+        self.rosterSyncedAt = rosterSyncedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

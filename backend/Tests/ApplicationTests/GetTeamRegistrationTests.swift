@@ -60,6 +60,32 @@ struct GetTeamRegistrationTests {
         ]))
     }
 
+    /// [D-120]: la fecha va en la fila de la competición cuyo código se usó; con
+    /// liga y copa, la de la inscripción es la más reciente de las dos.
+    @Test("la última sincronización de la plantilla: la más reciente de sus filas; sin ninguna, nula (D-120)")
+    func rosterSyncedAtIsTheMostRecent() async throws {
+        let season = try Self.season("2026/27")
+        let (cadeteA, cadeteB) = (try ListSeasonRegistrationsTests.team(.cadete, "A"),
+                                  try ListSeasonRegistrationsTests.team(.cadete, "B"))
+        let (antes, despues) = (Date(timeIntervalSince1970: 1_000), Date(timeIntervalSince1970: 2_000))
+        let store = IngestionStore()
+        await store.seed(club: Self.club)
+        await store.seed(seasons: [season], teams: [cadeteA, cadeteB])
+        await store.seed(teamRegistrations: [
+            try ListSeasonRegistrationsTests.registration(cadeteA, season.id, CompetitionID(raw: UUID()),
+                                                          code: "821", at: 10, synced: despues),
+            try ListSeasonRegistrationsTests.registration(cadeteA, season.id, CompetitionID(raw: UUID()),
+                                                          code: "900", at: 20, synced: antes),
+            try ListSeasonRegistrationsTests.registration(cadeteB, season.id, CompetitionID(raw: UUID()), code: "822"),
+        ])
+
+        let a = try await Self.useCase(store).execute(actor: Self.actor, teamID: cadeteA.id, seasonID: season.id)
+        let b = try await Self.useCase(store).execute(actor: Self.actor, teamID: cadeteB.id, seasonID: season.id)
+
+        #expect(a.registration.rosterSyncedAt == despues)
+        #expect(b.registration.rosterSyncedAt == nil)
+    }
+
     @Test("inscrito sin competición (junio): la lista vacía")
     func registeredWithoutCompetition() async throws {
         let season = try Self.season("2026/27")

@@ -323,14 +323,19 @@ struct MigrationIntegrityTests {
     /// **21 con `R5.12`** (enmienda a `D-105`): se borra el ficticio del descanso
     /// que se creó con su código negativo y se quedó sin partidos.
     ///
+    /// **22 con `D-119`**: las dos tablas de la plantilla.
+    ///
+    /// **23 con `D-120`** (R6.14): lo que escribe la sincronización de la
+    /// plantilla, en la inscripción y en la fila.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 22, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 23, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 22,
+        #expect(nombres.count == 23,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")

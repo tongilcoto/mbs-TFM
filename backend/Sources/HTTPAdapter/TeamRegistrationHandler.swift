@@ -77,7 +77,8 @@ extension SeasonRegistration {
                 .init(
                     competitionId: "\($0.competitionID)", federationTeamId: $0.federationTeamID,
                     summary: .init(value1: $0.summary.toResponse()))
-            })
+            },
+            rosterSyncedAt: rosterSyncedAt)
     }
 }
 

@@ -50,6 +50,10 @@ public final class PlayerRecord: Model, @unchecked Sendable {
     @OptionalField(key: "position") public var position: String?
     /// La clave del fichero, no una URL ([D-35]).
     @OptionalField(key: "photo_key") public var photoKey: String?
+    /// «Federado» y la última vez listado ([D-120], migración 23ª): nulos hasta la
+    /// primera sincronización de esa plantilla.
+    @OptionalField(key: "federated") public var federated: Bool?
+    @OptionalField(key: "last_listed_at") public var lastListedAt: Date?
 
     /// *Soft delete* sin guarda de dependientes ([D-36]): sus goles y tarjetas
     /// siguen contando para el equipo.
@@ -73,8 +77,8 @@ public final class PlayerRecord: Model, @unchecked Sendable {
 /// # Lo que no trae, y llega con la sincronización
 ///
 /// `federated` y `last_listed_at` en `players`, y `roster_synced_at` en
-/// `team_registrations` ([D-120]), van en la migración 23ª, en la rama de la
-/// sincronización (R6.14): esta rebanada puede cerrar sin ella.
+/// `team_registrations` ([D-120]), van en la migración 23ª,
+/// `AddRosterSyncColumns`, en la rama de la sincronización (R6.14).
 public struct CreatePlayers: AsyncMigration {
     public init() {}
 
@@ -187,6 +191,44 @@ extension PlayerProfileRecord {
     }
 }
 
+/// **La migración 23ª** ([D-120], R6.14): lo que escribe cada sincronización de la
+/// plantilla con la federación. Tres columnas anulables, en dos tablas:
+///
+/// - `team_registrations.roster_synced_at`, la fecha junto al botón, en la fila
+///   cuyo código se usó. Propia y no `updated_at`, que cambia con cualquier
+///   guardado de la inscripción (en la base del desarrollador, 3 de 6 por el
+///   enganche).
+/// - `players.federated` y `players.last_listed_at`: si la federación lo
+///   publica, y cuándo lo listó por última vez. Guardados y no calculados: el
+///   desarrollador prefirió el campo a mirar dos tablas.
+///
+/// **Nulas hasta la primera sincronización**, sin valor por defecto: «nunca
+/// sincronizada» no es «no federado» ([D-120], R6.4). Una sola migración: nacen
+/// juntas, por la misma operación.
+public struct AddRosterSyncColumns: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.schema(TeamRegistrationRecord.schema)
+            .field("roster_synced_at", .datetime)
+            .update()
+        try await database.schema(PlayerRecord.schema)
+            .field("federated", .bool)
+            .field("last_listed_at", .datetime)
+            .update()
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.schema(PlayerRecord.schema)
+            .deleteField("federated")
+            .deleteField("last_listed_at")
+            .update()
+        try await database.schema(TeamRegistrationRecord.schema)
+            .deleteField("roster_synced_at")
+            .update()
+    }
+}
+
 extension PlayerRecord {
     func toDomain() throws -> Player {
         let id = try requireID()
@@ -198,7 +240,8 @@ extension PlayerRecord {
             teamID: TeamID(raw: $team.id), seasonID: SeasonID(raw: $season.id),
             shirtNumber: try shirtNumber.map(ShirtNumber.init),
             position: try position.map { try Persistence.position($0, column: "position") },
-            photoKey: photoKey, createdAt: createdAt, updatedAt: updatedAt)
+            photoKey: photoKey, federated: federated, lastListedAt: lastListedAt,
+            createdAt: createdAt, updatedAt: updatedAt)
     }
 
     fileprivate func apply(_ player: Player) {
@@ -208,6 +251,8 @@ extension PlayerRecord {
         shirtNumber = player.shirtNumber?.value
         position = player.position?.rawValue
         photoKey = player.photoKey
+        federated = player.federated
+        lastListedAt = player.lastListedAt
     }
 }
 

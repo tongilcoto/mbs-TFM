@@ -60,15 +60,20 @@ struct PlayerRepositoryTests {
             lastPhotoKey: full ? "club/foto.jpg" : nil, createdAt: now, updatedAt: now)
     }
 
+    /// La última vez listado, en segundos enteros: la base guarda microsegundos.
+    static let listed = Date(timeIntervalSince1970: 1_800_000_000)
+
     static func row(_ profile: PlayerProfile, _ team: Team, _ season: Season, full: Bool = true)
         throws -> Player
     {
         Player(id: PlayerID(raw: UUID()), profileID: profile.id, teamID: team.id, seasonID: season.id,
                shirtNumber: full ? try ShirtNumber(9) : nil, position: full ? .delantero : nil,
-               photoKey: full ? "club/foto.jpg" : nil, createdAt: now, updatedAt: now)
+               photoKey: full ? "club/foto.jpg" : nil,
+               federated: full ? true : nil, lastListedAt: full ? listed : nil,
+               createdAt: now, updatedAt: now)
     }
 
-    @Test("el perfil y la fila van y vuelven enteros, llenos y vacíos (R6.6)")
+    @Test("el perfil y la fila van y vuelven enteros, llenos y vacíos (R6.6, D-120)")
     func roundTrip() async throws {
         try await Self.withFixture("rt") { tenant, a, _, vigente, _ in
             let lleno = try Self.profile()
@@ -99,8 +104,10 @@ struct PlayerRepositoryTests {
             let f1 = try #require(filas[0])
             #expect(f1.profileID == lleno.id && f1.teamID == a.id && f1.seasonID == vigente.id)
             #expect(f1.shirtNumber?.value == 9 && f1.position == .delantero && f1.photoKey == "club/foto.jpg")
+            #expect(f1.federated == true && f1.lastListedAt == Self.listed, "la migración 23ª (D-120)")
             let f2 = try #require(filas[1])
             #expect(f2.shirtNumber == nil && f2.position == nil && f2.photoKey == nil)
+            #expect(f2.federated == nil && f2.lastListedAt == nil, "nunca sincronizada: ni sí ni no")
         }
     }
 

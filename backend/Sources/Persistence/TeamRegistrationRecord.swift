@@ -30,6 +30,9 @@ public final class TeamRegistrationRecord: Model, @unchecked Sendable {
     /// El código del equipo **en esta competición** (`D-101`).
     @OptionalField(key: "federation_team_id") public var federationTeamID: String?
 
+    /// La última sincronización de la plantilla ([D-120], migración 23ª).
+    @OptionalField(key: "roster_synced_at") public var rosterSyncedAt: Date?
+
     @Timestamp(key: "created_at", on: .create) public var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) public var updatedAt: Date?
 

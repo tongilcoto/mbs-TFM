@@ -121,6 +121,9 @@ public enum TenantMigrations {
             // Solo borra filas: al final, que es su único requisito de orden ([D-90]).
             DropOrphanRestPlaceholders(),
             CreatePlayers(),
+            // `D-120` (R6.14): lo que escribe la sincronización de la plantilla,
+            // en la inscripción y en la fila. Detrás de las dos tablas que altera.
+            AddRosterSyncColumns(),
         ]
     }
 }

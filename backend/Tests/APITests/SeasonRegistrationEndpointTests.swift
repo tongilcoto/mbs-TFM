@@ -191,6 +191,8 @@ struct SeasonRegistrationEndpointTests {
                 #expect(entry.competitions.count == 1)
                 #expect(competition.competitionId == "\(seeded.competition)")
                 #expect(competition.federationTeamId == "821")
+                // Nunca sincronizada (D-120): sin fecha, y la columna ya existe.
+                #expect(entry.rosterSyncedAt == nil)
                 #expect(entry.team.id == "\(seeded.cadeteB)")
                 #expect(entry.team.category == .cadete)
                 #expect(entry.team.letter == "B")
