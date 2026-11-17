@@ -4,19 +4,24 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import App from './App.vue'
+import { club } from './club'
 import { announce, notice } from './notice'
 import { primeVueOptions } from './theme/primevue'
+
+// Una pantalla cualquiera, con su título.
+const equipos = defineComponent({ render: () => h('h1', 'Equipos') })
 
 afterEach(() => {
   vi.unstubAllGlobals()
   notice.value = undefined
+  club.value = undefined
 })
 
 test('el marco enseña el aviso «Guardado» en una zona que el lector lee sin mover el foco', async () => {
   vi.stubGlobal('fetch', async () => Response.json({ id: 'club', name: 'Celtic Castilla', shortName: 'Celtic' }))
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: defineComponent({ render: () => h('h1', 'Equipos') }), meta: { title: 'Equipos' } }],
+    routes: [{ path: '/', component: equipos, meta: { title: 'Equipos' } }],
   })
   await router.push('/')
   render(App, { global: { plugins: [router, [PrimeVue, primeVueOptions]] } })
@@ -63,4 +68,20 @@ test('una navegación cancelada no mueve el foco al título', async () => {
   stay = false
   await router.push('/otra')
   await vi.waitFor(() => expect(screen.getByRole('heading', { name: 'Otra' })).toHaveFocus())
+})
+
+// Las pantallas leen el club del sitio común (DW-24): el marco lo deja ahí al recibirlo.
+test('el marco deja el club en el sitio común, para las pantallas', async () => {
+  vi.stubGlobal('fetch', async () =>
+    Response.json({ id: 'club', name: 'Celtic Castilla', shortName: 'Celtic', federationProvidesTeamRoster: true }),
+  )
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/', component: equipos, meta: { title: 'Equipos' } }],
+  })
+  await router.push('/')
+  render(App, { global: { plugins: [router, [PrimeVue, primeVueOptions]] } })
+  await screen.findByRole('heading', { name: 'Equipos' })
+
+  expect(club.value).toMatchObject({ shortName: 'Celtic', federationProvidesTeamRoster: true })
 })

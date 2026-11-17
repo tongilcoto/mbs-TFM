@@ -5,15 +5,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from './api/client'
 import type { ShownError } from './api/errors'
 import { asResult } from './api/result'
-import type { components } from './api/schema'
+import { club } from './club'
 import AppHeader from './components/AppHeader.vue'
 import FullPageError from './components/FullPageError.vue'
 import SideMenu from './components/SideMenu.vue'
 import { notice } from './notice'
 
-type Club = components['schemas']['ClubResponse']
-
-const club = ref<Club>()
 const failure = ref<ShownError>()
 const route = useRoute()
 
