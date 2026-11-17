@@ -2,6 +2,7 @@
 // demarcación y la foto son de la fila de esa temporada; el nombre y el año, de su perfil (D-119).
 import type { components } from '../../api/schema'
 import { initialsOf, shownName } from '../../components/playerName'
+import { formatInstant } from '../../theme/format'
 import { namesOf } from '../../theme/names'
 
 type Player = components['schemas']['PlayerResponse']
@@ -39,4 +40,13 @@ export function rosterRows(players: Player[]): RosterRow[] {
     birthYear: player.birthYear == null ? 'Sin año' : String(player.birthYear),
     federation: player.federated == null ? undefined : player.federated ? 'Federado' : 'No federado',
   }))
+}
+
+// En la ficha del jugador (decisión 5 de R6.16): «Federado» o «No federado», con la última vez que lo publicó la
+// Federación si lo ha publicado alguna vez; nada si la plantilla nunca se ha sincronizado.
+export function federationText(player: Pick<Player, 'federated' | 'lastListedAt'>): string | undefined {
+  if (player.federated == null) return undefined
+  if (player.lastListedAt == null) return player.federated ? 'Federado' : 'No federado'
+  const when = formatInstant(player.lastListedAt)
+  return player.federated ? `Federado · publicado el ${when}` : `No federado · publicado por última vez el ${when}`
 }

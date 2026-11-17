@@ -102,6 +102,23 @@ describe('la ficha', () => {
     expect(screen.getAllByRole('definition').map((d) => d.textContent)).toEqual(['—', '—', 'Sin año'])
   })
 
+  test('un jugador federado dice «Federación» con la última vez que lo publicó (R6.16)', async () => {
+    fakeServer({ player: { federated: true, lastListedAt: '2026-11-17T17:30:00Z' } })
+    await openSheet()
+    await title()
+
+    expect(screen.getAllByRole('term').map((t) => t.textContent)).toContain('Federación')
+    expect(screen.getAllByRole('definition').at(-1)).toHaveTextContent(/^Federado · publicado el 17\/11\/2026 \d\d:30$/)
+  })
+
+  test('un jugador de una plantilla que nunca se ha sincronizado no tiene «Federación»', async () => {
+    fakeServer()
+    await openSheet()
+    await title()
+
+    expect(screen.getAllByRole('term').map((t) => t.textContent)).not.toContain('Federación')
+  })
+
   test('encima, el enlace de vuelta a la plantilla de su equipo', async () => {
     fakeServer()
     await openSheet()

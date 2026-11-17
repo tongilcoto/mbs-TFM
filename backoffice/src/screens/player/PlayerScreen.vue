@@ -21,6 +21,7 @@ import { namesOf, teamName } from '../../theme/names'
 import { canChange, type Season, toAddress, todayHere } from '../home/seasons'
 import { isTeamCode } from '../sync-team/link'
 import { tabPath } from '../team/header'
+import { federationText } from '../team/roster'
 import { PHOTO_TYPES, photoProblem, removePhoto, uploadPhoto } from '../team/photoUpload'
 import PlayerDialog from '../team/PlayerDialog.vue'
 import RemovePlayerDialog from '../team/RemovePlayerDialog.vue'
@@ -57,11 +58,14 @@ const rosterLink = computed(() => (ready.value ? tabPath('plantilla', ready.valu
 const facts = computed(() => {
   const player = ready.value?.player
   if (!player) return []
+  const federation = federationText(player)
   return [
     { label: 'Dorsal', value: player.shirtNumber == null ? '—' : String(player.shirtNumber) },
     // El generador ensancha la demarcación «o nula» a cualquier texto (R6.6); el catálogo solo admite las cuatro.
     { label: 'Demarcación', value: player.position == null ? '—' : positionNames[player.position as PlayerPosition] },
     { label: 'Año de nacimiento', value: player.birthYear == null ? 'Sin año' : String(player.birthYear) },
+    // «Federado» o «No federado», con su fecha; sin el dato si la plantilla nunca se ha sincronizado (R6.16).
+    ...(federation === undefined ? [] : [{ label: 'Federación', value: federation }]),
   ]
 })
 
