@@ -34,6 +34,7 @@
 | **DW-19** | Las acciones de una fila son iconos con su texto por ratón y por teclado, no un menú ⋮ ni botones con texto | §3.7 |
 | **DW-20** | Lo que está en marcha se refresca solo, cada 10 s y como mucho 5 minutos | §2.4 |
 | **DW-21** | Un nulo puede llegar como clave ausente, y la web los trata igual | §3.8 |
+| **DW-24** | El club que pide el marco al arrancar lo leen también las pantallas, de un sitio común | §2.1 |
 | **Cómo se comporta** | | |
 | **DW-06** | El campo de un error se lee del texto de `detail`, sin esperar a un campo `field` | §4.3, §4.5 |
 | **DW-07** | Las reglas de los formularios se leen del catálogo con Ajv | §5.1 |
@@ -595,6 +596,31 @@ su letra: ahí el orden lo da la fila, y lo que falta es el resultado.
 - **En la racha, el resultado se ve solo por el color**: quien no distingue el verde del rojo tiene que pasar el
   ratón o leerlo con el lector de pantalla. Es una excepción a la primera regla del §9.4, que se acepta porque el
   número es lo que hace legible la racha, y el resultado de cada partido se ve entero en la pestaña Resultados.
+---
+
+### DW-24 · El club que pide el marco al arrancar lo leen también las pantallas, de un sitio común
+
+**Qué hay que decidir** (2026-11-17, rebanada 6, decisión 2 de `R6.16`). La pestaña Plantilla enseña «Sincronizar
+con la Federación» solo si la federación del club publica las plantillas: lo dice `federationProvidesTeamRoster`, en
+los datos del club (`GET /club`). El marco (`App.vue`) ya los pide **una vez al arrancar** (§2.1), pero solo los usa
+él, para el nombre y el escudo: no los pasa a las pantallas.
+
+| Opción | Veredicto |
+|---|---|
+| **(a) El marco deja el club en un sitio común de la web, y las pantallas lo leen de ahí** | **Elegida** |
+| (b) La pantalla vuelve a pedir el club cada vez que se abre | Descartada: una petición más cada vez, que puede fallar y necesita su aviso, para un dato que ya está en memoria; y va contra el «una vez» del §2.1 |
+
+**Decisión: (a).** Como el aviso «Guardado» (`notice.ts`), que pone una pantalla y enseña el marco: un fichero
+pequeño, `club.ts`, con el club que guarda el marco al recibirlo. Las pantallas solo se pintan cuando ya está
+(`App.vue` no pinta ninguna sin él, §8.1), así que siempre lo encuentran.
+
+- **No cambia `DW-03`** (cada pantalla pide sus datos al entrar): el club es la excepción que ya tenía el §2.1, y
+  sigue siendo la única. Lo que cambia es que ahora lo leen también las pantallas.
+- **Servirá para las capacidades que vengan**, como `federationProvidesScorers` en la R10 (los goleadores).
+
+**Lo que se asume a cambio.** Si alguien cambia la federación del club con la web abierta, la web no lo sabe hasta
+recargar. Es lo mismo que ya pasa con el nombre y el escudo, y la federación de un club no cambia en una temporada.
+
 ---
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

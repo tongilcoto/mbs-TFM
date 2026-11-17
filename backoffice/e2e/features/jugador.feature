@@ -202,3 +202,17 @@ Feature: La ficha de un jugador, corregirlo y darlo de baja
     Given en la plantilla de un equipo de mi club, en la temporada en curso, he pedido dar de baja a un jugador
     When cancelo la baja
     Then la plantilla sigue teniendo al jugador
+
+  # ── Una temporada pasada ──
+
+  @ui
+  Scenario Outline: La ficha de un jugador en una temporada pasada <cómo> se ve, pero no se cambia
+    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada <cómo>
+    When abro la ficha de un jugador de la plantilla, en la temporada pasada <cómo>
+    Then la ficha del jugador tiene el nombre de su perfil como «Nombre Apellidos»
+    And la ficha del jugador no tiene los botones "Corregir", "Dar de baja" ni los de la foto
+
+    Examples:
+      | cómo          |
+      | archivada     |
+      | sin archivar  |

@@ -627,14 +627,14 @@ suben el catálogo de 85 a 88, con la ruta que entrega la foto (decisión 3, cer
 ## 6. Los escenarios
 
 Escritos y revisados con el desarrollador en `R6.3` (2026-11-15), con la *skill* de escenarios, sin definir, con
-las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas; **121** desde la decisión 1 de `R6.12`), en
+las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas; **121** desde la decisión 1 de `R6.12`, y **125** desde la decisión 3 de `R6.16`), en
 cuatro ficheros de `backoffice/e2e/features/`:
 
 | Fichero | Escenarios | `@e2e` | `@ui` | Qué cubre |
 |---|---|---|---|---|
-| `plantilla.feature` | 14 | 2 | 12 | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
+| `plantilla.feature` | 14 (16 desde `R6.16`) | 2 | 12 (14) | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
 | `alta-jugador.feature` | 37 | 16 | 21 | El diálogo; el buscador (3 letras, sin tildes, palabra a palabra, no ofrece a los de esta plantilla, enseña desactivados a los de otro equipo); elegir uno que existe, que trae lo de su perfil; guardar, un campo opcional cada vez, ninguno o todos, mirando la fila y el perfil; otro con el mismo nombre; lo que no deja guardar; la foto que no vale |
-| `jugador.feature` | 22 (24 desde `R6.12`) | 12 (14) | 10 | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
+| `jugador.feature` | 22 (24 desde `R6.12`, 26 desde `R6.16`) | 12 (14) | 10 (12) | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
 | `plantilla-federacion.feature` | 46 | 17 | 29 | La plantilla entera (la fecha, nunca sincronizada, la federación que falla o tarda); cada caso de jugador, según cómo está en el club y en la federación; el resumen, que cuenta, estado a estado y con el mismo cambio dos veces; la ficha del federado |
 
 **Cómo se ordenan y se escriben**, lo que se aprendió al revisarlos:
@@ -734,6 +734,16 @@ Antes, **lo medido**: el código de la federación que guarda cada inscripción 
 | Qué | Opciones | Elegida |
 |---|---|---|
 | **1 · Quién retiene la petición en «Mientras la Federación tarda»** | La federación falsa, que tarda en contestar la ficha; o la web, que retiene su petición al servidor (`hold-request.ts`) | **La federación falsa**: el servidor de verdad se queda esperando a la RFFM, que es lo que dice el escenario; como el calendario retenido de la ficha del equipo. Con la web, la pantalla sería la misma, pero ni el servidor ni la federación tardarían |
+
+**Decisiones de `R6.16`** (2026-11-17), una a una con el desarrollador, en la misma rama:
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Dónde sale el resumen de la sincronización** (hasta seis números y tres listas con nombres; el aviso breve se borra a los 5 s) | Una caja encima de la tabla, o una ventana encima de la página | **Una caja encima de la tabla**: se queda hasta cerrarla con ✕ o cambiar de temporada o de pestaña, y se ve a la vez que las filas que nombra. El lector la lee al aparecer, sin mover el foco. La ventana tapa la tabla, y al cerrarla para ver a los añadidos el resumen desaparece |
+| **2 · Cómo sabe la pestaña si la federación del club publica plantillas** (`federationProvidesTeamRoster`, en los datos del club, que el marco pide al arrancar y no pasa a las pantallas) | El club en un sitio común, o la pestaña lo pide otra vez | **Un sitio común** (`club.ts`), como el aviso «Guardado»: sin otra petición, y como dice el LLD-B §2.1 (el club se pide una vez y se mantiene en memoria). Servirá a la R10. [`DW-24`](./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md) |
+| **3 · La temporada pasada y la futura en la web, y sus escenarios** (decisión 4 de `R6.14`) | — | **Por sus fechas**: pasada, la que acabó antes de hoy (archivada o no); en curso, la que contiene hoy (`isCurrent`); futura, la que empieza después. **Cuatro escenarios nuevos** (121 → 125), revisados antes de escribirlos: la plantilla de una pasada, archivada y sin archivar, se ve pero no se cambia (el de la archivada pasa a esquema, 1 → 2); la de una futura se cambia a mano, pero no se sincroniza; y la ficha del jugador de una pasada, archivada y sin archivar, sin botones. El equipo sin enganchar, sin escenario: lo cubren las pruebas de piezas |
+| **4 · Dónde sale el aviso si la Federación falla o no contesta** (502 o 504, con sus textos ya en `errors.ts`; la plantilla no cambia) | En la caja del resumen, o con la pieza de error de las cargas y su «Reintentar» | **En la caja del resumen**, como aviso de error: se cierra con ✕, y otra sincronización lo quita; se vuelve a intentar con el mismo botón, sin un segundo que haga lo mismo. El lector lo lee al aparecer. Sustituye al resumen anterior, si lo había |
+| **5 · Cómo dice la ficha del jugador «Federado» y la fecha** (`federated` y `lastListedAt`, que se queda aunque deje de publicarlo) | Un dato «Federación» con la fecha dentro, o dos datos | **Un dato, «Federación»**: «Federado · publicado el 17/11/2026 18:30»; «No federado · publicado por última vez el …» si lo publicó antes; «No federado» si nunca; y sin el dato si la plantilla nunca se ha sincronizado o la federación no las publica, como la tabla. Con dos, una línea más, casi siempre con raya en las altas a mano. En la tabla, como estaba: «Federado» o «No federado» junto al nombre, sin fecha |
 
 ### E · Los escenarios en verde y el cierre
 
