@@ -134,4 +134,17 @@ struct PlayerTests {
         #expect(remembered.lastPosition == nil)
         #expect(remembered.lastPhotoKey == nil)
     }
+
+    /// `D-120`, R6.14: «federado» y la última vez listado son de la sincronización; cambiar la foto no los toca.
+    @Test("cambiar la foto conserva federado y la última vez listado (D-120)")
+    func photoKeepsFederated() {
+        let listed = Date(timeIntervalSince1970: 1_800_000_000)
+        let row = Player(id: PlayerID(raw: UUID()), profileID: PlayerProfileID(raw: UUID()), teamID: TeamID(raw: UUID()),
+                         seasonID: SeasonID(raw: UUID()), federated: true, lastListedAt: listed,
+                         createdAt: listed, updatedAt: listed)
+
+        let changed = row.with(photoKey: "club/nueva.jpg", updatedAt: listed)
+
+        #expect(changed.federated == true && changed.lastListedAt == listed && changed.photoKey == "club/nueva.jpg")
+    }
 }

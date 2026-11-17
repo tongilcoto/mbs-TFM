@@ -906,6 +906,7 @@ extension TeamRegistrationRecord {
             seasonID: SeasonID(raw: $season.id),
             competitionID: $competition.id.map { CompetitionID(raw: $0) },
             federationTeamID: federationTeamID,
+            rosterSyncedAt: rosterSyncedAt,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -918,5 +919,6 @@ extension TeamRegistrationRecord {
         self.$season.id = registration.seasonID.raw
         self.$competition.id = registration.competitionID?.raw
         self.federationTeamID = registration.federationTeamID
+        self.rosterSyncedAt = registration.rosterSyncedAt
     }
 }

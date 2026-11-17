@@ -1,0 +1,294 @@
+{
+  "title": "R6.14 · el servidor de la sincronización de la plantilla: el nombre, la ficha de la RFFM, el caso de uso, la base y las respuestas",
+  "filter": "SyncTeamRoster|RFFMTeamSheet|PlayerName|PlayerTests|PlayerRepository|TeamRegistration|GetTeamRegistration",
+  "mutations": [
+    {
+      "id": "D1-enye",
+      "description": "«el mismo nombre» pliega también la eñe",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "Array(\"ÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ\"), Array(\"AAAAAEEEEIIIIOOOOOUUUU\")",
+      "replace": "Array(\"ÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÑ\"), Array(\"AAAAAEEEEIIIIOOOOOUUUUN\")",
+      "filter": "PlayerNameTests|SyncTeamRosterTests"
+    },
+    {
+      "id": "D2-sin-pliegue",
+      "description": "«el mismo nombre» no quita las tildes",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "String(value.map { Self.unaccented[$0] ?? $0 })",
+      "replace": "value",
+      "filter": "PlayerNameTests|SyncTeamRosterTests"
+    },
+    {
+      "id": "D3-fecha",
+      "description": "sincronizar no pone la fecha en la inscripción",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "federationTeamID: federationTeamID, rosterSyncedAt: instant,",
+      "replace": "federationTeamID: federationTeamID, rosterSyncedAt: rosterSyncedAt,",
+      "filter": "TeamRegistrationTests|SyncTeamRosterTests"
+    },
+    {
+      "id": "D4-enganche",
+      "description": "enganchar pierde la fecha de la sincronización",
+      "file": "Sources/Domain/TeamRegistration.swift",
+      "find": "federationTeamID: incoming, rosterSyncedAt: rosterSyncedAt,",
+      "replace": "federationTeamID: incoming, rosterSyncedAt: nil,",
+      "filter": "TeamRegistrationTests"
+    },
+    {
+      "id": "D5-foto",
+      "description": "cambiar la foto pierde federado",
+      "file": "Sources/Domain/Player.swift",
+      "find": "position: position, photoKey: photoKey, federated: federated, lastListedAt: lastListedAt,",
+      "replace": "position: position, photoKey: photoKey, federated: nil, lastListedAt: nil,",
+      "filter": "PlayerTests"
+    },
+    {
+      "id": "P1-dos-comas",
+      "description": "se vuelve un nombre con dos comas",
+      "file": "Sources/Federation/RFFMTeamSheetParser.swift",
+      "find": "guard halves.count == 2 else { return nil }",
+      "replace": "guard halves.count >= 2 else { return nil }",
+      "filter": "RFFMTeamSheetParserTests"
+    },
+    {
+      "id": "P2-sin-recortar",
+      "description": "no se quitan los espacios de los apellidos",
+      "file": "Sources/Federation/RFFMTeamSheetParser.swift",
+      "find": "let surnames = halves[0].trimmingCharacters(in: .whitespaces)",
+      "replace": "let surnames = String(halves[0])",
+      "filter": "RFFMTeamSheetParserTests"
+    },
+    {
+      "id": "P3-mitad-vacia",
+      "description": "se vuelve un nombre sin nombre de pila",
+      "file": "Sources/Federation/RFFMTeamSheetParser.swift",
+      "find": "guard !surnames.isEmpty, !given.isEmpty else { return nil }",
+      "replace": "guard !surnames.isEmpty else { return nil }",
+      "filter": "RFFMTeamSheetParserTests"
+    },
+    {
+      "id": "P4-codigo-inexistente",
+      "description": "un código que no existe da una plantilla vacía",
+      "file": "Sources/Federation/RFFMTeamSheetParser.swift",
+      "find": "throw FederationError.coordinateNotFound(\n                detail: \"la RFFM no tiene ningún equipo con ese código (ficha con el equipo a null)\")",
+      "replace": "return FederationTeamRoster(players: [])",
+      "filter": "RFFMTeamSheetParserTests"
+    },
+    {
+      "id": "P5-direccion",
+      "description": "la dirección de la ficha, mal",
+      "file": "Sources/Federation/RFFMEndpoints.swift",
+      "find": "return \"\\(baseURL)/fichaequipo/\\(code)\"",
+      "replace": "return \"\\(baseURL)/fichaequipo/\\(code)/\"",
+      "filter": "RFFMTeamSheetParserTests"
+    },
+    {
+      "id": "U1-en-curso",
+      "description": "se sincroniza fuera de la temporada en curso",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "guard all.current(on: now)?.id == season.id else {",
+      "replace": "guard true else {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U2-capacidad",
+      "description": "se sincroniza aunque la federación no publique plantillas",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "guard club.federation.capabilities.providesTeamRoster else {",
+      "replace": "guard true else {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U3-codigo",
+      "description": "se pide la ficha con el código de la competición más nueva",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": ".min(by: { $0.createdAt < $1.createdAt })",
+      "replace": ".max(by: { $0.createdAt < $1.createdAt })",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U4-ya-estaba",
+      "description": "el que ya está no se cuenta",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "summary.alreadyInRoster += 1",
+      "replace": "summary.alreadyInRoster += 0",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U5-baja",
+      "description": "se vuelve a añadir al dado de baja",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "if deleted.contains(profile.id) {",
+      "replace": "if false && deleted.contains(profile.id) {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U6-otro-equipo",
+      "description": "el de otro equipo no sale en el resumen",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "summary.inOtherTeam.append(.init(profile: profile, team: otherTeam))",
+      "replace": "_ = otherTeam",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U7-dorsal",
+      "description": "el dorsal del perfil, aunque esté cogido",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "roster.contains { $0.shirtNumber == number } ? nil : number",
+      "replace": "number",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U8-demarcacion",
+      "description": "no trae la demarcación del perfil",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "shirtNumber: shirt, position: profile.lastPosition, photoKey: profile.lastPhotoKey,",
+      "replace": "shirtNumber: shirt, position: nil, photoKey: profile.lastPhotoKey,",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U9-sin-anho",
+      "description": "el casado sin año no cuenta entre los que no tienen",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "if profile.birthYear == nil { summary.withoutBirthYear += 1 }",
+      "replace": "if false { summary.withoutBirthYear += 1 }",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U10-repetido",
+      "description": "el que casa con dos no sale como repetido",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "if matches.count > 1 { summary.duplicateName.append",
+      "replace": "if matches.count > 2 { summary.duplicateName.append",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U11-nombre-malo",
+      "description": "el nombre que no vale no sale en el resumen",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "summary.invalidName.append(publishedPlayer.publishedName)",
+      "replace": "_ = publishedPlayer",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U12-federado",
+      "description": "todos quedan federados",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "federated: isListed,",
+      "replace": "federated: true,",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U13-listado",
+      "description": "la última vez listado se pone a todos",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "isListed ? now : row.lastListedAt",
+      "replace": "now",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U14-fecha",
+      "description": "no se guarda la fecha en la inscripción",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "try await r.teamRegistrations.save(plan.registration.rosterSynced(at: now))",
+      "replace": "_ = plan",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U15-archivada",
+      "description": "la archivada no se rechaza por archivada",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "        try RosterRules.requireEditable(in: season)\n",
+      "replace": "",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "U16-inscrito",
+      "description": "un equipo sin inscripción no es teamNotRegistered",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "guard !rows.isEmpty else {",
+      "replace": "guard true else {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "C1-alta",
+      "description": "el alta tras sincronizar sale sin dato",
+      "file": "Sources/Application/Players.swift",
+      "find": "photoKey: profile.lastPhotoKey, federated: synced ? false : nil,",
+      "replace": "photoKey: profile.lastPhotoKey, federated: nil,",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "C2-corregir",
+      "description": "corregir quita federado",
+      "file": "Sources/Application/Players.swift",
+      "find": "photoKey: player.photoKey, federated: player.federated, lastListedAt: player.lastListedAt,",
+      "replace": "photoKey: player.photoKey, federated: nil, lastListedAt: nil,",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "A1-mas-reciente",
+      "description": "la inscripción da la fecha más antigua",
+      "file": "Sources/Application/ListSeasonRegistrations.swift",
+      "find": "rosterSyncedAt: rows.compactMap(\\.rosterSyncedAt).max())",
+      "replace": "rosterSyncedAt: rows.compactMap(\\.rosterSyncedAt).min())",
+      "filter": "GetTeamRegistrationTests"
+    },
+    {
+      "id": "A2-resumen",
+      "description": "el resumen de la competición pierde la fecha",
+      "file": "Sources/Application/CompetitionSummaries.swift",
+      "find": "rosterSyncedAt: registration.rosterSyncedAt)",
+      "replace": "rosterSyncedAt: nil)",
+      "filter": "GetTeamRegistrationTests"
+    },
+    {
+      "id": "R1-bajas",
+      "description": "las dadas de baja incluyen las que siguen",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "            .filter(\\.$deletedAt != nil)\n",
+      "replace": "",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "R2-fecha-base",
+      "description": "la fecha de la inscripción no se guarda",
+      "file": "Sources/Persistence/FluentIngestionRepositories.swift",
+      "find": "        self.rosterSyncedAt = registration.rosterSyncedAt\n",
+      "replace": "",
+      "filter": "TeamRegistrationPersistenceTests"
+    },
+    {
+      "id": "R3-federado-base",
+      "description": "federado no se guarda",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "        federated = player.federated\n",
+      "replace": "",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "H1-inscripcion",
+      "description": "la respuesta de la inscripción no da la fecha",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "            rosterSyncedAt: rosterSyncedAt)",
+      "replace": "            rosterSyncedAt: nil)",
+      "filter": "SyncTeamRosterEndpointTests"
+    },
+    {
+      "id": "H2-jugador",
+      "description": "la respuesta del jugador no da federado",
+      "file": "Sources/HTTPAdapter/PlayerHandler.swift",
+      "find": "federated: player.federated,",
+      "replace": "federated: nil,",
+      "filter": "SyncTeamRosterEndpointTests"
+    },
+    {
+      "id": "H3-resumen",
+      "description": "el resumen da los añadidos donde los sin año",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": "withoutBirthYear: withoutBirthYear,",
+      "replace": "withoutBirthYear: added,",
+      "filter": "SyncTeamRosterEndpointTests"
+    }
+  ]
+}

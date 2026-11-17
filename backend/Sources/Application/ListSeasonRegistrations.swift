@@ -1,4 +1,5 @@
 public import Domain
+public import Foundation
 
 /// Caso de uso: los equipos del club en una temporada, cada uno con sus
 /// competiciones (`GET /v1/seasons/{seasonId}/registrations`, `D-102`).
@@ -72,11 +73,15 @@ public struct SeasonRegistration: Equatable, Sendable {
     public let team: Team
     public let seasonID: SeasonID
     public let competitions: [RegisteredCompetition]
+    /// La última sincronización de la plantilla (`D-120`): la más reciente de sus
+    /// filas, que con liga y copa son dos. Nula si nunca.
+    public let rosterSyncedAt: Date?
 
-    public init(team: Team, seasonID: SeasonID, competitions: [RegisteredCompetition]) {
+    public init(team: Team, seasonID: SeasonID, competitions: [RegisteredCompetition], rosterSyncedAt: Date? = nil) {
         self.team = team
         self.seasonID = seasonID
         self.competitions = competitions
+        self.rosterSyncedAt = rosterSyncedAt
     }
     /// La inscripción leída de sus filas (una por competición, y la de junio sin
     /// ninguna). La fila de junio no aporta competición: el equipo sale con la
@@ -90,7 +95,8 @@ public struct SeasonRegistration: Equatable, Sendable {
                     row.competitionID.map {
                         RegisteredCompetition(competitionID: $0, federationTeamID: row.federationTeamID)
                     }
-                })
+                },
+            rosterSyncedAt: rows.compactMap(\.rosterSyncedAt).max())
     }
 }
 

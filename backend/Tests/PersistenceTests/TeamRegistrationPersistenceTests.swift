@@ -232,6 +232,32 @@ struct TeamRegistrationPersistenceTests {
     /// **El código va y vuelve, y `list(competitionID:)` trae las de esa
     /// competición**, de todos los equipos propios: es lo que la pasada lee para
     /// reconocerlos (`D-101`). La de otra competición no sale.
+    /// La migración 23ª ([D-120]): la última sincronización de la plantilla, en
+    /// su columna propia y no en `updated_at`, que cambia por cualquier guardado.
+    @Test("la última sincronización de la plantilla va y vuelve, y vacía hasta la primera (D-120)")
+    func theRosterSyncRoundTrips() async throws {
+        try await Self.withFixture("treg-sync") { team, vigente, anterior, liga, tenant in
+            let synced = Date(timeIntervalSince1970: 1_800_000_000)
+            let sincronizada = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: team, seasonID: vigente,
+                competitionID: liga, federationTeamID: "821", rosterSyncedAt: synced,
+                createdAt: Date(), updatedAt: Date())
+            let nunca = try TeamRegistration(
+                id: TeamRegistrationID(raw: UUID()), team: team, seasonID: anterior,
+                competitionID: nil, createdAt: Date(), updatedAt: Date())
+
+            let (aqui, alli) = try await tenant.scope { r in
+                try await r.teamRegistrations.save(sincronizada)
+                try await r.teamRegistrations.save(nunca)
+                return (try await r.teamRegistrations.list(teamID: team.id, seasonID: vigente),
+                        try await r.teamRegistrations.list(teamID: team.id, seasonID: anterior))
+            }
+
+            #expect(aqui.first?.rosterSyncedAt == synced)
+            #expect(alli.count == 1 && alli.first?.rosterSyncedAt == nil)
+        }
+    }
+
     @Test("el código va y vuelve, y list por competición trae solo las suyas (D-101)")
     func theCodeRoundTripsAndListsByCompetition() async throws {
         try await Self.withFixture("treg-code") { team, vigente, anterior, liga, tenant in

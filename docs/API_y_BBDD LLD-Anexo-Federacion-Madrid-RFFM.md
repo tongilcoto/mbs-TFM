@@ -1243,3 +1243,29 @@ dirección, el cursor se queda al final, en el grupo; un dedo mal apoyado cambia
   documento cita y que contradice, en parte, «no existe una API de descubrimiento» (§F.1). Falta saber de qué
   llamada sale.
 
+## F.21 La ficha de equipo: la plantilla — **medido el 2026-11-17** (R6.14)
+
+`https://www.rffm.es/fichaequipo/<código>`, la página que lee la sincronización de la plantilla ([D-120]).
+Medida con los dos equipos del desarrollador (`821`, su Cadete A, y `3349086`, su Senior A) y con tres códigos
+más (`1`, `abc` y `999999999`), **leyendo solo la forma**: los nombres no se sacaron de la máquina.
+
+- **El código es el de la inscripción.** `fichaequipo/821` es el Cadete A, y `821` es el
+  `federation_team_id` que guarda su inscripción ([D-101]); igual el Senior A. No hace falta otro código.
+- **Es una página**, como el calendario (§F.7): los datos van en el `__NEXT_DATA__`, en `props.pageProps.team`,
+  un objeto de **33 campos**: el código y el nombre del equipo y del club, la categoría, el campo, el contacto
+  del club (titular, domicilio, correo, teléfonos, fax), una `clave_acceso`, y cinco listas. Los jugadores
+  (`jugadores_equipo`) llevan **solo su código y su nombre** (`cod_jugador`, `nombre`), como «APELLIDOS, NOMBRE»
+  en mayúsculas: 24 en el Cadete A y 22 en el Senior A, todos con una coma (medido ya en R6.1). Técnicos,
+  delegados y auxiliares, igual (`cod_tecnico`, `nombre`…).
+- **No dice de qué temporada es.** Ninguno de los 33 campos es la temporada: es la plantilla de hoy. Por eso la
+  sincronización solo se hace en la temporada en curso (decisión 1 de R6.14, enmienda a [D-120]).
+- **A un código que no existe, `200` con `team: null`** (`abc` y `999999999`), como el calendario a una
+  coordenada que no existe (§F.18). No es un 404.
+- **Hay fichas sin jugadores.** El código `1` es un equipo de otro club con `jugadores_equipo` vacía. No se sabe si
+  eso puede pasarle, de forma pasajera, a un equipo que sí tiene jugadores: **pendiente de observar**, y es lo que
+  decide qué hace la sincronización con una lista vacía.
+- **La RFFM no deja leerla desde otra web** (sin `Access-Control-Allow-Origin`, medido en R6.1): la lee el servidor.
+
+La grabación de las pruebas lleva los datos personales cambiados: ver el README de
+`backend/Tests/FederationTests/Fixtures`.
+

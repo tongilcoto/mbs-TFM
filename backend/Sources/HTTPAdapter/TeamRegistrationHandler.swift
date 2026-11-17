@@ -57,6 +57,54 @@ extension APIHandler {
     }
 }
 
+/// `POST /v1/teams/{teamId}/registrations/{seasonId}/roster-sync` (R6.14,
+/// `D-120`): sincronizar la plantilla con la federación. Contesta al momento, con
+/// el resumen. Los errores los lanza el caso de uso y los traduce el middleware:
+/// los dos 404 (el equipo y que no esté inscrito), los 422 (la temporada archivada
+/// o que no es la en curso, la federación que no publica plantillas, el equipo sin
+/// enganchar) y los 502 y 504 de la federación.
+extension APIHandler {
+    public func syncTeamRoster(_ input: Operations.syncTeamRoster.Input) async throws
+        -> Operations.syncTeamRoster.Output
+    {
+        let actor = try actors.currentActor()
+        let teamID: TeamID
+        let seasonID: SeasonID
+        do {
+            teamID = TeamID(raw: try Self.uuid(input.path.teamId, field: "teamId"))
+            seasonID = SeasonID(raw: try Self.uuid(input.path.seasonId, field: "seasonId"))
+        } catch let error as InvalidUUID {
+            return .badRequest(Self.invalidUUID(error))
+        }
+        let summary = try await SyncTeamRoster(
+            unitOfWork: unitOfWork, federations: federationClients, clock: clock, ids: ids
+        ).execute(actor: actor, teamID: teamID, seasonID: seasonID)
+        return .ok(.init(body: .json(summary.toResponse())))
+    }
+}
+
+extension RosterSyncSummary {
+    /// Mapeo `Caso de uso → DTO` (§2.2). Los nombres, en mayúsculas como se
+    /// guardan (`D-120`): la web los pinta como «Nombre Apellidos».
+    func toResponse() -> Components.Schemas.RosterSyncResponse {
+        .init(
+            syncedAt: syncedAt,
+            added: added,
+            alreadyInRoster: alreadyInRoster,
+            withoutBirthYear: withoutBirthYear,
+            deletedInClub: deletedInClub,
+            duplicateName: duplicateName.map {
+                .init(playerId: "\($0.player.id)", fullName: $0.profile.fullName.value)
+            },
+            inOtherTeam: inOtherTeam.map {
+                .init(profileId: "\($0.profile.id)", fullName: $0.profile.fullName.value,
+                      team: LabeledTeam(team: $0.team, clubName: club.name, clubShortName: club.shortName)
+                        .toTeamRef())
+            },
+            invalidName: invalidName)
+    }
+}
+
 extension APIHandler {
     /// El resumen de cada competición (`D-113`), con los repositorios del ámbito.
     static func summaries(_ repositories: any Repositories) -> CompetitionSummaries {
@@ -77,7 +125,8 @@ extension SeasonRegistration {
                 .init(
                     competitionId: "\($0.competitionID)", federationTeamId: $0.federationTeamID,
                     summary: .init(value1: $0.summary.toResponse()))
-            })
+            },
+            rosterSyncedAt: rosterSyncedAt)
     }
 }
 

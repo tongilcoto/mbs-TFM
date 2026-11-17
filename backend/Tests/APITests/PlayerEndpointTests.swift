@@ -146,9 +146,8 @@ struct PlayerEndpointTests {
                 #expect(p.birthYear == 2011)
                 #expect(p.shirtNumber == 9)
                 #expect(p.position?.value1 == .delantero)
-                // **Nulos a propósito hasta su rebanada**, y por eso se afirman,
-                // como `crestUrl`: «federado» llega con la sincronización (R6.14)
-                // y la foto con el almacén (R6.9).
+                // Nulos mientras la plantilla no se ha sincronizado nunca (D-120);
+                // sin foto en el alta.
                 #expect(p.federated == nil)
                 #expect(p.lastListedAt == nil)
                 #expect(p.photoUrl == nil)

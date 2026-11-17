@@ -1446,7 +1446,7 @@ Tres lecturas que no son evidentes en la tabla:
 | **DELETE** | `/v1/players/{id}/photo` | `DeletePlayerPhoto` | **204** (idempotente) | **403** (rol), 404, **422** (temporada archivada) |
 | **GET** | `/v1/player-photos/{fichero}?expires=&signature=` | `GetPlayerPhotoFile` | **200** + la imagen | 404 (no existe, firma mala o caducada, o de otro club: lo mismo). La ruta lleva solo `<código>.jpg`; el club, de la dirección ([D-117]) |
 | **GET** | `/v1/player-profiles?q=&teamId=&seasonId=` | `SearchPlayerProfiles` | **200** + hasta 10 `PlayerProfileSearchResult` | 400 (menos de 3 letras, falta ámbito), 404 (equipo o temporada inexistentes) |
-| **POST** | `/v1/teams/{teamId}/registrations/{seasonId}/roster-sync` | `SyncTeamRoster` | **200** + `RosterSyncResponse` | **403** (rol), 404, **422** (temporada archivada, la federación no publica plantillas, equipo sin enganchar), **502**, **504** |
+| **POST** | `/v1/teams/{teamId}/registrations/{seasonId}/roster-sync` | `SyncTeamRoster` | **200** + `RosterSyncResponse` | **403** (rol), 404, **422** (temporada archivada, o que no es la en curso, `SEASON_NOT_CURRENT`, R6.14; la federación no publica plantillas, equipo sin enganchar), **502**, **504** |
 
 - **Primer recurso de *dominio manual* y primero con CRUD completo.** No es excepción a la regla del BFF
   ([D-21]) sino su complemento: el club lo escribe a mano. **Desde [D-120], la federación puede añadir**

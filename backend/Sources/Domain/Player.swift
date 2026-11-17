@@ -105,13 +105,20 @@ public struct Player: Identifiable, Equatable, Sendable {
     /// La clave del fichero en el almacén, no una URL (`D-35`). Puede ser la misma
     /// que la de otra fila del jugador o la de su perfil (`D-122`).
     public let photoKey: String?
+    /// **Si la federación lo publica** en la plantilla del equipo, según la
+    /// última sincronización (`D-120`): sí, no, o nulo mientras esa plantilla no
+    /// se ha sincronizado nunca.
+    public let federated: Bool?
+    /// La última vez que la federación lo listó; nula si nunca.
+    public let lastListedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date
 
     public init(
         id: PlayerID, profileID: PlayerProfileID, teamID: TeamID, seasonID: SeasonID,
         shirtNumber: ShirtNumber? = nil, position: PlayerPosition? = nil,
-        photoKey: String? = nil, createdAt: Date, updatedAt: Date
+        photoKey: String? = nil, federated: Bool? = nil, lastListedAt: Date? = nil,
+        createdAt: Date, updatedAt: Date
     ) {
         self.id = id
         self.profileID = profileID
@@ -120,6 +127,8 @@ public struct Player: Identifiable, Equatable, Sendable {
         self.shirtNumber = shirtNumber
         self.position = position
         self.photoKey = photoKey
+        self.federated = federated
+        self.lastListedAt = lastListedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -127,7 +136,8 @@ public struct Player: Identifiable, Equatable, Sendable {
     /// La misma fila con otra foto, o sin ella (R6.9).
     public func with(photoKey: String?, updatedAt: Date) -> Player {
         Player(id: id, profileID: profileID, teamID: teamID, seasonID: seasonID, shirtNumber: shirtNumber,
-               position: position, photoKey: photoKey, createdAt: createdAt, updatedAt: updatedAt)
+               position: position, photoKey: photoKey, federated: federated, lastListedAt: lastListedAt,
+               createdAt: createdAt, updatedAt: updatedAt)
     }
 }
 

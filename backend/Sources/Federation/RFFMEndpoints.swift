@@ -1,5 +1,5 @@
 public import struct Application.FederationCoordinate
-import struct Foundation.URLComponents
+import Foundation
 public import enum Domain.Modality
 
 /// Dónde vive cada cosa en la RFFM ([Anexo RFFM §F.1], §F.7).
@@ -56,6 +56,15 @@ public struct RFFMEndpoints: Sendable, Equatable {
             + "&tipojuego=\(RFFMGameType.code(for: coordinate.modality))"
             + "&competicion=\(coordinate.federationCompetitionID)"
             + "&grupo=\(coordinate.federationGroupID)"
+    }
+
+    /// **La ficha de un equipo** ([D-120], R6.14): su plantilla, entre otras cosas.
+    /// El código es el del equipo en la competición, el que guarda la inscripción
+    /// (`D-101`); medido en R6.14 que es el mismo que usa esta ruta. Es una página,
+    /// como el calendario, con los datos en el `__NEXT_DATA__`.
+    public func teamSheet(federationTeamID: String) -> String {
+        let code = federationTeamID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? federationTeamID
+        return "\(baseURL)/fichaequipo/\(code)"
     }
 
     /// La clasificación **tras una jornada** ([Anexo RFFM §F.8], §F.18).

@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y la foto: su almacén, su saneado y sus tres operaciones; la parte del servidor, cerrada (mutación 43/43). **981 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y la foto: su almacén, su saneado y sus tres operaciones; la parte del servidor, cerrada (mutación 43/43). Y la sincronización de la plantilla con la RFFM (R6.14, mutación 36/36). **1024 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -51,7 +51,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/player-profiles?q=&teamId=&seasonId=`                                        | Backoffice R6.7 |
 | `PUT /v1/players/{id}/photo` · `DELETE /v1/players/{id}/photo`                        | Backoffice R6.9 |
 | `GET /v1/player-photos/{fichero}?expires=&signature=`                                 | Backoffice R6.9: la foto, por su enlace firmado (`D-117`) |
-| Las otras 62 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `POST /v1/teams/{id}/registrations/{seasonId}/roster-sync`                            | Backoffice R6.14: sincronizar la plantilla con la federación, solo en la temporada en curso (`D-120`) |
+| Las otras 61 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -628,7 +629,7 @@ curl -s "http://atleti.localhost:8080/v1/matches?roundId=<id de la jornada>" | j
 ## 5. Los tests
 
 ```sh
-REQUIRE_DB=1 swift test                 # 853 tests, ~40 s — la forma recomendada
+REQUIRE_DB=1 swift test                 # 1024 tests, ~25 s — la forma recomendada
 swift test                              # igual, pero se SALTA los de BD si Docker está parado
 swift test --filter DomainTests         # nivel 1 · sin Docker
 swift test --filter ApplicationTests    # nivel 2 · sin Docker

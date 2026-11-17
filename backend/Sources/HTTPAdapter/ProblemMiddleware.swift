@@ -107,6 +107,14 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "la temporada \(label) está archivada: solo se puede leer",
                                base: typeBaseURI, slug: "season-archived")
 
+            case .seasonNotCurrent(let label):
+                // **422**, como la archivada (R6.14): la ficha de equipo de la
+                // federación es la de hoy, y en otra temporada metería a los de hoy.
+                return Problem(status: .unprocessableEntity, code: "SEASON_NOT_CURRENT",
+                               title: "No es la temporada en curso",
+                               detail: "la plantilla solo se sincroniza en la temporada en curso, no en \(label)",
+                               base: typeBaseURI, slug: "season-not-current")
+
             case .notEditableAfterSync(let field):
                 // **409 y no 422** (§5.4, D-22): el valor puede ser
                 // perfectamente válido — lo que no lo es, es el *momento*. La
@@ -439,6 +447,23 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Federación todavía sin adaptador",
                                detail: "No hay adaptador de ingesta para '\(federation)'.",
                                base: typeBaseURI, slug: "federation-adapter-missing")
+
+            case .federationRosterUnavailable(let federation):
+                // **422** (R6.14): no falta nada en este servidor; es que esa
+                // federación no publica plantillas (`providesTeamRoster`). La web
+                // no enseña el botón.
+                return Problem(status: .unprocessableEntity, code: "FEDERATION_ROSTER_UNAVAILABLE",
+                               title: "La federación no publica las plantillas",
+                               detail: "la federación '\(federation)' no publica las plantillas: se hacen a mano",
+                               base: typeBaseURI, slug: "federation-roster-unavailable")
+
+            case .teamNotLinked(let team, let season):
+                // **422** (R6.14, `D-101`): el código va en la inscripción, y sin él
+                // no hay ficha que pedir. La web no enseña el botón.
+                return Problem(status: .unprocessableEntity, code: "TEAM_NOT_LINKED",
+                               title: "El equipo no está enganchado a la federación",
+                               detail: "el equipo \(team) no tiene código de la federación en la temporada \(season)",
+                               base: typeBaseURI, slug: "team-not-linked")
 
             case .databaseUnavailable:
                 // **503 y no 500** (H-23): 500 dice *"me he roto"* y 503 dice *"no

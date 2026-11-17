@@ -89,7 +89,8 @@ public struct CompetitionSummaries: Sendable {
                             position: summary.position, form: summary.form,
                             lastMatch: line(summary.lastMatch), nextMatch: line(summary.nextMatch),
                             nextOpponentPosition: summary.nextOpponentPosition))
-                })
+                },
+                rosterSyncedAt: registration.rosterSyncedAt)
         }
     }
 

@@ -125,6 +125,20 @@ struct TeamRegistrationTests {
         #expect(registration.federationTeamID == "33712")
     }
 
+    /// `D-120`, R6.14: la fecha de la sincronización de la plantilla es de la fila, y ni engancharla ni
+    /// sincronizarla otra vez la pierden por el camino.
+    @Test("enganchar conserva la fecha de la sincronización; sincronizar la pone, y lo demás se queda (D-120)")
+    func rosterSyncedAtSurvives() throws {
+        let synced = Date(timeIntervalSince1970: 1_800_000_000)
+        let registration = try Self.registration().rosterSynced(at: synced)
+
+        let linked = try registration.linked(toFederationTeamID: "821")
+        #expect(linked.rosterSyncedAt == synced && linked.federationTeamID == "821")
+        let again = linked.rosterSynced(at: synced.addingTimeInterval(60))
+        #expect(again.rosterSyncedAt == synced.addingTimeInterval(60))
+        #expect(again.federationTeamID == "821" && again.competitionID == registration.competitionID)
+    }
+
     /// La fila de junio no tiene competición, así que no hay grupo donde ese
     /// código signifique algo. El `CHECK` del esquema dice lo mismo.
     @Test("la fila de junio, sin competición, no lleva código (D-101)")

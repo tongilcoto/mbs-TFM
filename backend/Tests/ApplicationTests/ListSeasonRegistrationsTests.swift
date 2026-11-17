@@ -21,11 +21,11 @@ struct ListSeasonRegistrationsTests {
 
     static func registration(
         _ team: Team, _ season: SeasonID, _ competition: CompetitionID? = nil,
-        code: String? = nil, at seconds: TimeInterval = 0
+        code: String? = nil, at seconds: TimeInterval = 0, synced: Date? = nil
     ) throws -> TeamRegistration {
         try TeamRegistration(
             id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season,
-            competitionID: competition, federationTeamID: code,
+            competitionID: competition, federationTeamID: code, rosterSyncedAt: synced,
             createdAt: Date(timeIntervalSince1970: seconds), updatedAt: epoch)
     }
 

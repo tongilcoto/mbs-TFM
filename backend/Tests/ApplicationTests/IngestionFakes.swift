@@ -253,6 +253,9 @@ struct FakePlayerRepository: PlayerRepository {
     func list(profileIDs: [PlayerProfileID]) async throws -> [Player] {
         await store.players.filter { profileIDs.contains($0.profileID) }
     }
+    func deletedProfileIDs(teamID: TeamID, seasonID: SeasonID) async throws -> Set<PlayerProfileID> {
+        Set(await store.deletedPlayers.filter { $0.teamID == teamID && $0.seasonID == seasonID }.map(\.profileID))
+    }
 }
 
 struct FakePlayerProfileRepository: PlayerProfileRepository {
@@ -264,6 +267,7 @@ struct FakePlayerProfileRepository: PlayerProfileRepository {
         await store.playerProfiles.filter { ids.contains($0.id) }
     }
     func save(_ profile: PlayerProfile) async throws { await store.save(profile) }
+    func all() async throws -> [PlayerProfile] { await store.playerProfiles }
     /// Con la misma regla que el adaptador (`PlayerSearch.matches`), que la pliega
     /// con la misma tabla que su `translate`.
     func search(_ search: PlayerSearch, excludingRosterOf teamID: TeamID, seasonID: SeasonID,

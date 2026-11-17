@@ -45,6 +45,7 @@ El núcleo no habla nunca con la federación: pide un adaptador al **proveedor**
 | `PreviewFederationLink` | `POST /teams/{id}/federation-link/preview`: el administrador pega la URL del calendario | `coordinate(fromCalendarURL:)` → `fetchCalendar` |
 | `LinkTeamToFederation` | `POST /teams/{id}/federation-link`: confirma el enganche y crea temporada, competición e inscripción | `coordinate(fromCalendarURL:)` → `fetchCalendar` |
 | `IngestClubCalendars` | `POST /v1/ingestion-runs`, el comando `ingest` (lo que dispara `launchd`) y el `202` del enganche | Por competición, **en este orden**: `fetchCalendar` → `fetchStandings` (una vez por jornada que toque pedir) → `fetchScorers` |
+| `SyncTeamRoster` (R6.14) | `POST /teams/{id}/registrations/{seasonId}/roster-sync`: «Sincronizar con la Federación» en la plantilla | `fetchTeamRoster`, con el código de la inscripción |
 
 El orden de la ingesta importa: la clasificación empareja contra los `Team` que crea el calendario, y por
 eso va detrás.
@@ -74,7 +75,7 @@ Lo que **no** hay que tocar, porque ya se deriva solo:
 
 ---
 
-## 3. Los cuatro métodos
+## 3. Los cinco métodos
 
 El adaptador es **sin estado** (Plan §7.2): todo lo que una llamada necesita le llega por parámetro, y
 dos llamadas seguidas no comparten nada. Lo habitual es separar **transporte** (traer el texto) de
@@ -197,6 +198,24 @@ promesa 6.
 Las filas son **independientes**: una fila rara se descarta y se apunta, sin tirar la pasada ([D-75]).
 Justo al revés que en la clasificación.
 
+### 3.5 `fetchTeamRoster(federationTeamID:) async throws -> FederationTeamRoster`
+
+**La plantilla que publica la federación de un equipo** ([D-120], R6.14), con el código que guarda su
+inscripción ([D-101]). En la RFFM, su ficha de equipo ([Anexo RFFM §F.21]).
+
+**Es la de hoy**: si la fuente no dice de qué temporada es —la RFFM no lo dice—, el núcleo solo la pide para
+la temporada en curso. **Sin implementación por defecto**: si la federación no publica plantillas, se declara
+`providesTeamRoster: false` (§6) y el núcleo no llama.
+
+| Campo de cada `FederationRosterPlayer` | Tipo | Qué hace el núcleo con él | Si es `nil` |
+|---|---|---|---|
+| `publishedName` | `String`, **como lo escribe la federación** | Lo enseña el resumen si el nombre no vale | Obligatorio |
+| `fullName` | `String?`, ya como «NOMBRE APELLIDOS», **sin validar** | Lo valida el dominio (`PlayerName`) y casa por él con los perfiles del club | El jugador no se añade, y el resumen lo nombra |
+
+**Sin el código del jugador en la federación**: nunca sirve para casar (decisión 8 del plan R6). Un código que
+no designa ningún equipo es `coordinateNotFound`. **Una lista vacía es una respuesta**, no un error: hay fichas
+sin jugadores ([Anexo RFFM §F.21]).
+
 ---
 
 ## 4. Qué error lanzar en cada caso
@@ -247,6 +266,7 @@ Se declaran en `FederationCode.capabilities`, **con la sección del anexo que la
 |---|---|---|
 | `providesRoundStandings` | La fuente sirve la clasificación **de cualquier jornada pasada** | …pide solo la jornada que toca y calcula las anteriores a partir de `Match` ([D-15], [D-55]). Sigue habiendo dato oficial en régimen estacionario |
 | `providesScorers` | La fuente publica el ranking de goleadores | …no llama a `fetchScorers`, no hay *fallback* posible ([D-09]), y la app oculta la pantalla de goleadores |
+| `providesTeamRoster` | La fuente publica la plantilla de cada equipo ([D-120]) | …no llama a `fetchTeamRoster`, responde 422 a la sincronización, y la web no enseña el botón: la plantilla se hace a mano |
 
 La segunda llega a las apps por `ClubResponse.federationProvidesScorers`, y **deciden con ella qué
 pantalla enseñar**. Por eso `provision-tenant` no da de alta un club de una federación sin adaptador (H-93).

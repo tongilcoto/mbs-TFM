@@ -77,7 +77,8 @@ extension APIHandler {
         let (clock, ids) = (self.clock, self.ids)
         let entry = try await unitOfWork.withRepositories(actor: actor) { r in
             try await CreatePlayer(teams: r.teams, seasons: r.seasons, players: r.players,
-                                   profiles: r.playerProfiles, clock: clock, ids: ids)
+                                   profiles: r.playerProfiles, registrations: r.teamRegistrations,
+                                   clock: clock, ids: ids)
                 .execute(command)
         }
         return .created(.init(body: .json(entry.toResponse(photoURL))))
@@ -141,11 +142,10 @@ extension RosterEntry {
             birthYear: profile.birthYear?.value,
             shirtNumber: player.shirtNumber?.value,
             position: player.position.map { .init(value1: $0.toContract()) },
-            // **Nulos a propósito hasta su rebanada**: «federado» y la última vez
-            // listado llegan con la sincronización (R6.14). Se afirman nulos en los
-            // tests, como `crestUrl`.
-            federated: nil,
-            lastListedAt: nil,
+            // Los escribe la sincronización (`D-120`); nulos mientras esa plantilla
+            // no se ha sincronizado nunca.
+            federated: player.federated,
+            lastListedAt: player.lastListedAt,
             // El enlace firmado, nuevo en cada lectura (`D-117`).
             photoUrl: photoURL(player.photoKey),
             createdAt: player.createdAt,
