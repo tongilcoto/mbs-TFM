@@ -3,8 +3,8 @@
      abrirse: la pestaña Resultados no los necesita. Si fallan, el error va aquí y la cabecera se queda.
      Dar de alta y corregir (✎ en cada fila), en un diálogo encima (`PlayerDialog`, R6.12), y dar de baja (🗑), con su
      confirmación (`RemovePlayerDialog`). El nombre lleva a su ficha (R6.13). Sincronizar llega con su paso (decisión 1
-     de R6.11). Una temporada archivada se ve, pero
-     no se cambia: sin botones (R6.3). -->
+     de R6.11). Una temporada pasada o archivada se ve,
+     pero no se cambia: sin botones (R6.3; decisión 4 de R6.14). -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -17,7 +17,7 @@ import LoadError from '../../components/LoadError.vue'
 import PlayerPhoto from '../../components/PlayerPhoto.vue'
 import ScrollBox from '../../components/ScrollBox.vue'
 import { announce } from '../../notice'
-import type { Season } from '../home/seasons'
+import { canChange, type Season, todayHere } from '../home/seasons'
 import PlayerDialog from './PlayerDialog.vue'
 import RemovePlayerDialog from './RemovePlayerDialog.vue'
 import { playerPath } from './header'
@@ -38,7 +38,8 @@ const players = ref<Players>({ kind: 'loading' })
 const rows = computed(() => (players.value.kind === 'list' ? rosterRows(players.value.players) : []))
 const caption = computed(() => `Plantilla de ${props.teamTitle} en la temporada ${props.season.label}`)
 const listed = computed(() => (players.value.kind === 'list' ? players.value.players : []))
-const editable = computed(() => props.season.archivedAt == null)
+// Ni en una temporada pasada ni en una archivada (decisión 4 de R6.14).
+const editable = computed(() => canChange(props.season, todayHere()))
 // El diálogo abierto: el alta, corregir a un jugador, o su baja.
 const dialog = ref<{ kind: 'add' } | { kind: 'edit'; player: Player } | { kind: 'remove'; id: string; name: string }>()
 const playerOf = (id: string) => listed.value.find((player) => player.id === id)

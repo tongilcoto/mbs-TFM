@@ -199,4 +199,23 @@ describe('corregir y dar de baja desde la ficha', () => {
     expect(screen.queryByRole('button', { name: 'Dar de baja' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Poner foto' })).not.toBeInTheDocument()
   })
+
+  // Pasada, sin archivar: se ve pero no se cambia, como la archivada (decisión 4 de R6.14).
+  test('en una temporada pasada sin archivar, ni corregir, ni dar de baja, ni la foto', async () => {
+    fakeServer({ player: { seasonId: 'id-2025' } })
+    await openSheet(`/temporadas/2025-26/jugadores/${PLAYER}`)
+    await title()
+
+    expect(screen.queryByRole('button', { name: 'Corregir' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dar de baja' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Poner foto' })).not.toBeInTheDocument()
+  })
+
+  test('en una temporada futura, sí se corrige', async () => {
+    fakeServer({ seasons: [season('2026/27'), season('2040/41')], player: { seasonId: 'id-2040' } })
+    await openSheet(`/temporadas/2040-41/jugadores/${PLAYER}`)
+    await title()
+
+    expect(screen.getByRole('button', { name: 'Corregir' })).toBeInTheDocument()
+  })
 })

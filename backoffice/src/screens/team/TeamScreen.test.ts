@@ -707,6 +707,14 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
     })
 
+    test('en una temporada pasada sin archivar, tampoco (decisión 4 de R6.14)', async () => {
+      fakeServer({ seasons: [season('2026/27', true), season('2025/26')], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
+    })
+
     test('al guardar, el diálogo se cierra, la plantilla trae al nuevo y el aviso dice «Guardado»', async () => {
       fakeServer()
       await openTeam(plantilla)
@@ -744,6 +752,14 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       await rosterTable('2025/26')
       expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument()
+    })
+
+    test('en una temporada pasada sin archivar, tampoco', async () => {
+      fakeServer({ seasons: [season('2026/27', true), season('2025/26')], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
     })
   })
 
