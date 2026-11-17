@@ -132,6 +132,33 @@ struct PlayerRepositoryTests {
         }
     }
 
+    /// Las dos lecturas de la sincronización (R6.14, `D-120`): todos los perfiles, para casar por nombre; y de
+    /// las filas dadas de baja, solo las de esa plantilla, para no volver a añadirlas.
+    @Test("todos los perfiles del club, y los dados de baja de una plantilla y no de otra (D-120)")
+    func syncReads() async throws {
+        try await Self.withFixture("syncreads") { tenant, a, b, vigente, anterior in
+            let juan = try Self.profile()
+            let pedro = try Self.profile("Pedro López")
+            let luis = try Self.profile("Luis Gil")
+            let bajaAqui = try Self.row(juan, a, vigente, full: false)
+            let bajaOtroEquipo = try Self.row(pedro, b, vigente, full: false)
+            let bajaOtraTemporada = try Self.row(luis, a, anterior, full: false)
+            let sigue = try Self.row(luis, a, vigente, full: false)
+            try await tenant.scope { r in
+                for p in [juan, pedro, luis] { try await r.playerProfiles.save(p) }
+                for f in [bajaAqui, bajaOtroEquipo, bajaOtraTemporada, sigue] { try await r.players.save(f) }
+                for f in [bajaAqui, bajaOtroEquipo, bajaOtraTemporada] { try await r.players.delete(f.id) }
+            }
+
+            let (todos, deBaja) = try await tenant.scope { r in
+                (try await r.playerProfiles.all(),
+                 try await r.players.deletedProfileIDs(teamID: a.id, seasonID: vigente.id))
+            }
+            #expect(Set(todos.map(\.id)) == [juan.id, pedro.id, luis.id])
+            #expect(deBaja == [juan.id], "ni la de otro equipo, ni la de otra temporada, ni la que sigue")
+        }
+    }
+
     @Test("las listas son de ese par, y la baja es lógica: no se ve, pero sigue en la tabla (D-36)")
     func listsAndSoftDelete() async throws {
         try await Self.withFixture("lists") { tenant, a, b, vigente, anterior in

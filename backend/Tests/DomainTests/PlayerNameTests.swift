@@ -8,6 +8,24 @@ import Testing
 @Suite("PlayerName · D-120 · limpio, en mayúsculas y con al menos dos palabras")
 struct PlayerNameTests {
 
+    // ── «El mismo nombre», para casar la sincronización (D-120, R6.3) ──
+
+    /// Igual una vez en mayúsculas, con un solo espacio entre palabras y **sin tildes ni diéresis**; **la eñe
+    /// cuenta como letra distinta**, lo eligió el desarrollador. Las dos primeras ya las pone `PlayerName`.
+    @Test("el mismo nombre: sin contar tildes ni diéresis", arguments: [
+        ("José García", "JOSE GARCIA"), ("Íñigo Argüelles", "IÑIGO ARGUELLES"), ("ÁLVARO ÓSCAR", "alvaro oscar"),
+    ])
+    func sameNameIgnoresAccents(_ a: String, _ b: String) throws {
+        #expect(try PlayerName(a).sameNameKey == PlayerName(b).sameNameKey)
+    }
+
+    @Test("no es el mismo nombre: la eñe, otra letra, o un guion en vez de un espacio", arguments: [
+        ("Juan Muñoz", "Juan Munoz"), ("Juan García", "Juan Garcías"), ("Ana Pérez-Gil", "Ana Pérez Gil"),
+    ])
+    func sameNameKeepsTheRest(_ a: String, _ b: String) throws {
+        #expect(try PlayerName(a).sameNameKey != PlayerName(b).sameNameKey)
+    }
+
     @Test("se guarda en mayúsculas, también la eñe y las tildes")
     func uppercases() throws {
         #expect(try PlayerName("José Muñoz").value == "JOSÉ MUÑOZ")

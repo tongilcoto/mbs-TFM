@@ -57,6 +57,21 @@ public struct PlayerName: Hashable, Sendable {
         self.value = cleaned.uppercased(with: Locale(identifier: "es_ES"))
     }
 
+    /// **«El mismo nombre»**, como lo casa la sincronización con los perfiles del
+    /// club (`D-120`, R6.3): igual una vez en mayúsculas y con un solo espacio
+    /// entre palabras —eso ya lo pone el nombre—, y **sin tildes ni diéresis**
+    /// («GARCIA» es «GARCÍA»). **La eñe cuenta como letra distinta** («MUNOZ» no es
+    /// «MUÑOZ»): lo eligió el desarrollador. El guion y el apóstrofo se quedan.
+    ///
+    /// No es el pliegue del buscador (`PlayerSearch`), que también quita la eñe:
+    /// aquel ayuda a encontrar; esto compara.
+    public var sameNameKey: String {
+        String(value.map { Self.unaccented[$0] ?? $0 })
+    }
+
+    private static let unaccented: [Character: Character] = Dictionary(uniqueKeysWithValues: zip(
+        Array("ÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ"), Array("AAAAAEEEEIIIIOOOOOUUUU")))
+
     /// Letras (con tildes, eñe y diéresis), el espacio, el guion y el apóstrofo,
     /// recto o curvo: los dos llegan al copiar de otra página.
     private static func isAllowed(_ character: Character) -> Bool {

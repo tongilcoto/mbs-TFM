@@ -319,6 +319,16 @@ public struct FluentPlayerRepository: PlayerRepository {
             .map { try $0.toDomain() }
     }
 
+    public func deletedProfileIDs(teamID: TeamID, seasonID: SeasonID) async throws -> Set<PlayerProfileID> {
+        // `withDeleted` y luego solo las borradas: las dadas de baja (`D-36`).
+        let rows = try await PlayerRecord.query(on: database).withDeleted()
+            .filter(\.$team.$id == teamID.raw)
+            .filter(\.$season.$id == seasonID.raw)
+            .filter(\.$deletedAt != nil)
+            .all()
+        return Set(rows.map { PlayerProfileID(raw: $0.$profile.id) })
+    }
+
     public func isPhotoInUse(_ key: String) async throws -> Bool {
         // `withDeleted`: las dadas de baja también cuentan (`D-35`).
         let rows = try await PlayerRecord.query(on: database).withDeleted()
@@ -335,6 +345,10 @@ public struct FluentPlayerProfileRepository: PlayerProfileRepository {
 
     public func find(_ id: PlayerProfileID) async throws -> PlayerProfile? {
         try await PlayerProfileRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    public func all() async throws -> [PlayerProfile] {
+        try await PlayerProfileRecord.query(on: database).all().map { try $0.toDomain() }
     }
 
     public func list(ids: [PlayerProfileID]) async throws -> [PlayerProfile] {

@@ -35,6 +35,15 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// fila en `ingestion_runs`: es un club que aún no se puede sincronizar.
     case federationAdapterMissing(federation: String)
 
+    /// **La federación del club no publica las plantillas** (`D-120`, R6.14): su
+    /// capacidad `providesTeamRoster` es falsa, y la plantilla se hace a mano. 422.
+    case federationRosterUnavailable(federation: String)
+
+    /// **El equipo no está enganchado a la federación en esa temporada** (R6.14):
+    /// ninguna fila de su inscripción tiene código, así que no hay ficha que pedir
+    /// (`D-101`). 422.
+    case teamNotLinked(team: String, season: String)
+
     /// **El equipo que designa la ruta no existe** (F10, `C-E.6` → **404**).
     ///
     /// Lo estrena el enganche, que es el primer caso de uso que llega a un equipo

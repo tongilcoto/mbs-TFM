@@ -1627,6 +1627,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RosterSyncResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
@@ -1639,9 +1640,9 @@ paths:
           description: |
             Regla de negocio, por el `code` del *Problem*: la temporada está **archivada** (§5.1,
             `SEASON_ARCHIVED`); **no es la temporada en curso** (`SEASON_NOT_CURRENT`, R6.14); la
-            federación del club **no publica plantillas** (`ClubResponse.federationProvidesTeamRoster`); o
-            el equipo **no está enganchado** a la federación en esa temporada, y no hay código con el que
-            pedirla (D-101).
+            federación del club **no publica plantillas** (`ClubResponse.federationProvidesTeamRoster`,
+            `FEDERATION_ROSTER_UNAVAILABLE`); o el equipo **no está enganchado** a la federación en esa
+            temporada, y no hay código con el que pedirla (D-101, `TEAM_NOT_LINKED`).
           content:
             application/problem+json:
               schema:
@@ -4400,6 +4401,7 @@ components:
         - FEDERATION_ADAPTER_MISSING
         - FEDERATION_COORDINATE_NOT_FOUND
         - FEDERATION_MALFORMED_RESPONSE
+        - FEDERATION_ROSTER_UNAVAILABLE
         - FEDERATION_SEASON_MISMATCH
         - FEDERATION_SOURCE_MISMATCH
         - FEDERATION_TEAM_ID_TAKEN
@@ -4431,6 +4433,7 @@ components:
         - SHIRT_NUMBER_TAKEN
         - TEAM_ALREADY_REGISTERED
         - TEAM_NOT_FOUND
+        - TEAM_NOT_LINKED
         - TEAM_NOT_OWN
         - TEAM_NOT_REGISTERED
         - TENANT_MISMATCH

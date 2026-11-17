@@ -55,6 +55,7 @@ struct PlayerUseCaseTests {
             teams: FakeTeamRepository(store: store), seasons: FakeSeasonRepository(store: store),
             players: FakePlayerRepository(store: store),
             profiles: FakePlayerProfileRepository(store: store),
+            registrations: FakeTeamRegistrationRepository(store: store),
             clock: FixedClock(instant: now), ids: SequentialUUIDProvider())
     }
 

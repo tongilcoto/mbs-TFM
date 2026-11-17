@@ -20,6 +20,11 @@ public enum DomainError: Error, Equatable, Sendable {
     /// **422**, como una regla que el valor no cumple en este momento.
     case seasonArchived(label: String)
 
+    /// La plantilla solo se sincroniza **en la temporada en curso** (decisión 1 de
+    /// R6.14, enmienda a `D-120`): la ficha de equipo de la federación es la de
+    /// hoy. **422**, como la archivada.
+    case seasonNotCurrent(label: String)
+
     /// El campo dejó de ser editable porque la entidad ya se sincronizó (`D-22`).
     ///
     /// **No es lo mismo que `invalidValue`, y por eso es un caso aparte**: el

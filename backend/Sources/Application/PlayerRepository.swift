@@ -27,6 +27,11 @@ public protocol PlayerRepository: Sendable {
     /// temporada, **también las dadas de baja** (la baja no borra la foto, `D-35`,
     /// para que se pueda deshacer), o un perfil. Un fichero se borra solo si no.
     func isPhotoInUse(_ key: String) async throws -> Bool
+
+    /// **Los perfiles dados de baja de esta plantilla** (R6.14, `D-120`): la
+    /// sincronización no los vuelve a añadir. La única lectura que mira las filas
+    /// borradas, y solo para eso: de ellas, el perfil y nada más.
+    func deletedProfileIDs(teamID: TeamID, seasonID: SeasonID) async throws -> Set<PlayerProfileID>
 }
 
 /// El perfil del jugador, que dura entre temporadas (`D-119`).
@@ -35,6 +40,11 @@ public protocol PlayerProfileRepository: Sendable {
     func list(ids: [PlayerProfileID]) async throws -> [PlayerProfile]
     /// *Upsert* por `id`.
     func save(_ profile: PlayerProfile) async throws
+
+    /// **Todos los perfiles del club** (R6.14): la sincronización casa por «el
+    /// mismo nombre» (`PlayerName.sameNameKey`), que no es el pliegue de la base.
+    /// Un club tiene unos cientos: caben en memoria, como sus temporadas.
+    func all() async throws -> [PlayerProfile]
 
     /// **El buscador del alta** (R6.7, `D-120`): los perfiles cuyo nombre encaja
     /// con lo escrito, como lo pliega `PlayerSearch`, **sin los que ya están en la

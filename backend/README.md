@@ -51,7 +51,8 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/player-profiles?q=&teamId=&seasonId=`                                        | Backoffice R6.7 |
 | `PUT /v1/players/{id}/photo` · `DELETE /v1/players/{id}/photo`                        | Backoffice R6.9 |
 | `GET /v1/player-photos/{fichero}?expires=&signature=`                                 | Backoffice R6.9: la foto, por su enlace firmado (`D-117`) |
-| Las otras 62 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `POST /v1/teams/{id}/registrations/{seasonId}/roster-sync`                            | Backoffice R6.14: sincronizar la plantilla con la federación, solo en la temporada en curso (`D-120`) |
+| Las otras 61 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).

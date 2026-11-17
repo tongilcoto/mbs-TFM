@@ -77,7 +77,8 @@ extension APIHandler {
         let (clock, ids) = (self.clock, self.ids)
         let entry = try await unitOfWork.withRepositories(actor: actor) { r in
             try await CreatePlayer(teams: r.teams, seasons: r.seasons, players: r.players,
-                                   profiles: r.playerProfiles, clock: clock, ids: ids)
+                                   profiles: r.playerProfiles, registrations: r.teamRegistrations,
+                                   clock: clock, ids: ids)
                 .execute(command)
         }
         return .created(.init(body: .json(entry.toResponse(photoURL))))

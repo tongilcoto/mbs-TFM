@@ -145,6 +145,15 @@ extension TeamRegistration {
             createdAt: createdAt, updatedAt: updatedAt)
     }
 
+    /// **La plantilla, sincronizada ahora** (`D-120`, R6.14): la misma fila con la
+    /// fecha de la última sincronización.
+    public func rosterSynced(at instant: Date) -> TeamRegistration {
+        TeamRegistration(
+            id: id, teamID: teamID, seasonID: seasonID, competitionID: competitionID,
+            federationTeamID: federationTeamID, rosterSyncedAt: instant,
+            createdAt: createdAt, updatedAt: updatedAt)
+    }
+
     /// Para `linked`, que ya parte de una fila válida y propia.
     private init(
         id: TeamRegistrationID, teamID: TeamID, seasonID: SeasonID,

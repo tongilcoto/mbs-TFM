@@ -107,16 +107,19 @@ public struct CreatePlayer: Sendable {
     private let seasons: any SeasonRepository
     private let players: any PlayerRepository
     private let profiles: any PlayerProfileRepository
+    private let registrations: any TeamRegistrationRepository
     private let clock: any Clock
     private let ids: any UUIDProvider
 
     public init(teams: any TeamRepository, seasons: any SeasonRepository,
                 players: any PlayerRepository, profiles: any PlayerProfileRepository,
+                registrations: any TeamRegistrationRepository,
                 clock: any Clock, ids: any UUIDProvider) {
         self.teams = teams
         self.seasons = seasons
         self.players = players
         self.profiles = profiles
+        self.registrations = registrations
         self.clock = clock
         self.ids = ids
     }
@@ -182,13 +185,19 @@ public struct CreatePlayer: Sendable {
         try await requireShirtFree(shirt, team: team.id, season: season.id, except: nil,
                                    players: players)
 
+        // **Un alta a mano después de una sincronización sale «No federado»** (`D-120`):
+        // la plantilla ya se ha sincronizado y la federación aún no lo tiene. Antes
+        // de la primera, sin dato.
+        let synced = try await registrations.list(teamID: team.id, seasonID: season.id)
+            .contains { $0.rosterSyncedAt != nil }
+
         // **La fila empieza con la foto del perfil** (`D-122`, R6.9): el alta no lleva
         // foto, que se sube aparte (`D-35`), y copiar al perfil la de una fila vacía
         // le borraba la suya. Como la sincronización (`D-120`). Un jugador nuevo no tiene.
         let player = Player(
             id: PlayerID(raw: ids.next()), profileID: profile.id, teamID: team.id,
             seasonID: season.id, shirtNumber: shirt, position: command.position,
-            photoKey: profile.lastPhotoKey, createdAt: now, updatedAt: now)
+            photoKey: profile.lastPhotoKey, federated: synced ? false : nil, createdAt: now, updatedAt: now)
         if isNewProfile { try await profiles.save(profile) }
         try await players.save(player)
         // Lo que guarda la fila, al perfil, como ayuda para la próxima alta (`D-122`).
@@ -265,10 +274,13 @@ public struct UpdatePlayer: Sendable {
         try await requireShirtFree(shirt, team: player.teamID, season: player.seasonID,
                                    except: player.id, players: players)
 
+        // «Federado» y la última vez listado son de la sincronización (`D-120`):
+        // corregir no los toca.
         let corrected = Player(
             id: player.id, profileID: player.profileID, teamID: player.teamID,
             seasonID: player.seasonID, shirtNumber: shirt, position: command.position,
-            photoKey: player.photoKey, createdAt: player.createdAt, updatedAt: player.updatedAt)
+            photoKey: player.photoKey, federated: player.federated, lastListedAt: player.lastListedAt,
+            createdAt: player.createdAt, updatedAt: player.updatedAt)
         try await players.save(corrected)
         // El nombre y el año, del perfil: cambian en todas sus temporadas (`D-119`).
         // Y lo de la fila, al perfil, lo vacío también (`D-122`).
