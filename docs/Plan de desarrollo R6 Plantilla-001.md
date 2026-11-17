@@ -714,13 +714,24 @@ Cada guardado se mira en la fila de la plantilla, a la que se vuelve.
 |---|---|
 | `R6.14` | **El servidor, en su propia rama**, en ciclos TDD: la migración 23ª (`roster_synced_at` en la inscripción; «federado» y la última vez listado en la plantilla); la capacidad; el adaptador de la RFFM lee la ficha de equipo (con una grabación de verdad); el casado por nombre y lo que se copia del perfil; la operación y su resumen; al README |
 | `R6.15` | **La federación falsa** de los escenarios publica la ficha de equipo, con lo que piden: los jugadores de cada caso, el error y la petición retenida |
-| `R6.16` | **La web**, en su rama: el botón, el resumen, la fecha y «Federado» o «No federado» |
+| `R6.16` | **La web**, en su rama: el botón, el resumen, la fecha y «Federado» o «No federado»; el botón, solo en la temporada en curso; y la temporada pasada, sin botones ni acciones, como la archivada (decisiones 1 y 4 de `R6.14`), con sus escenarios |
+
+**Decisiones de `R6.14`** (2026-11-17), una a una con el desarrollador, en la rama `feature/r6-plantilla-backend-2`.
+Antes, **lo medido**: el código de la federación que guarda cada inscripción es el de su ficha de equipo
+(`fichaequipo/821` es el Cadete A del desarrollador; `fichaequipo/3349086`, su Senior A), leída sin sacar nombres.
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · En qué temporada se sincroniza** | En cualquiera sin archivar, como decía el catálogo, o solo en la en curso | **Solo en la en curso**: la ficha de equipo **no dice de qué temporada es** (de sus 33 campos, ninguno), así que es la plantilla de hoy; en una temporada pasada metería a los de hoy sin un solo error (el riesgo de `D-84`). En una pasada no se toca; en una futura, la plantilla es a mano. **El servidor responde con error** (un código nuevo) y **la web no enseña el botón** (`R6.16`). Enmienda a `D-120` |
+| **2 · La grabación de la ficha para las pruebas** | Tal cual, una página mínima escrita a mano, o la de verdad con los datos personales cambiados | **La de verdad, con los datos cambiados**: lleva los nombres y los códigos de 24 menores, y el contacto del club. Nombres inventados con la misma forma («APELLIDOS, NOMBRE», con tildes, eñe, guion y partícula), códigos inventados y el contacto vacío, por un guion que se queda en el repositorio para repetirla si la RFFM cambia |
+| **3 · Los arreglos del servidor de `R6.17`** (alta solo con inscripción, orden en español, año que no se cambia) | En esta rama, o al final | **Al final, en `R6.17`**, como estaba |
+| **4 · Qué se puede hacer en cada temporada** (salió al cerrar la 1) | Solo la archivada de solo lectura, como hasta ahora, o también la pasada | **La pasada, como la archivada: se ve, pero no se cambia** (ni alta, ni sincronizar, ni corregir, ni dar de baja, ni la foto). **La en curso**, todo. **La futura**, todo menos sincronizar (decisión 1). Un nombre o un año mal puestos son del perfil, y se corrigen desde la en curso. **La web** quita los botones de la pasada en `R6.16`; **el servidor** rechaza con error lo que se escriba en una pasada en `R6.17`; **los escenarios** ganan el caso de la pasada, revisados antes de escribirlos |
 
 ### E · Los escenarios en verde y el cierre
 
 | Paso | Qué |
 |---|---|
-| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`) |
+| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`). Y **nada se escribe en una temporada pasada**, como en la archivada (decisión 4 de `R6.14`) |
 | `R6.18` | Los 121 escenarios de la rebanada en verde, con axe en los dos modos |
 | `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
