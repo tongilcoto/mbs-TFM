@@ -5563,6 +5563,15 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
 `CreatePlayerRequest`, `UpdatePlayerRequest` y `PlayerResponse` en el catálogo (R6.4), al anexo de la RFFM (la ficha
 de equipo) y a §3.2, §3.7, §5.1, §5.2 y §5.6 del LLD.
 
+**Enmienda del 2026-11-17 (R6.14, decisión 1): solo en la temporada en curso.** Lo medido al empezar el servidor
+de la sincronización: el código de la federación que guarda cada inscripción es el de su ficha de equipo
+(`fichaequipo/<código>`), y **la ficha no dice de qué temporada es** (ninguno de los 33 campos del equipo). Es la
+plantilla de hoy, así que sincronizar una temporada pasada metería a los de hoy sin un solo error, el riesgo de
+[D-84]. Se sincroniza solo en la temporada en curso: fuera de ella, **422 `SEASON_NOT_CURRENT`** (la archivada
+sigue con `SEASON_ARCHIVED`), y la web no enseña el botón. En una futura, la plantilla se hace a mano. Descartado
+dejarlo en cualquier temporada sin archivar, como decía el punto 10. Y con ella, la decisión 4 de R6.14: **la
+temporada pasada, como la archivada, se ve pero no se cambia**; lo hará el servidor en R6.17.
+
 ### D-121 · Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro
 
 **Lo que lo obligó a decidirse** (2026-11-15, rebanada 6, al revisar los escenarios del alta). [D-37] daba por bueno

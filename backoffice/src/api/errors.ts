@@ -52,6 +52,7 @@ const messages: Record<ProblemCode, string> = {
   SHIRT_NUMBER_TAKEN: 'Ese dorsal ya lo tiene otro jugador de la plantilla.',
   PLAYER_ALREADY_IN_ROSTER: 'Ese jugador ya está en una plantilla esta temporada.',
   SEASON_ARCHIVED: 'Esta temporada está archivada: se ve, pero no se cambia.',
+  SEASON_NOT_CURRENT: 'Solo se sincroniza la plantilla de la temporada en curso.',
   TEAM_NOT_OWN: 'Solo los equipos del club tienen plantilla.',
   REFERENCE_NOT_FOUND: 'Uno de los datos elegidos ya no existe. Recarga la página y prueba otra vez.',
 

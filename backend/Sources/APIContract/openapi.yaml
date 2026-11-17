@@ -1601,6 +1601,10 @@ paths:
         en la federación (en la RFFM, su ficha de equipo) y **solo añade**: no corrige ni da de baja a
         nadie, y se puede pulsar siempre.
 
+        **Solo en la temporada en curso** (R6.14, enmienda a D-120): la ficha de equipo no dice de qué
+        temporada es, así que es la plantilla de hoy; en una temporada pasada metería a los de hoy sin un
+        solo error, y en una futura la plantilla se hace a mano.
+
         - **El que el club no tiene**: perfil nuevo y fila, sin año (la federación no lo da).
         - **El que casa por nombre con un perfil** del club («el mismo nombre»: en mayúsculas, un espacio
           entre palabras, sin tildes ni diéresis, y con la eñe distinta): solo la fila, con el dorsal, la
@@ -1633,7 +1637,8 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Regla de negocio, por el `code` del *Problem*: la temporada está **archivada** (§5.1); la
+            Regla de negocio, por el `code` del *Problem*: la temporada está **archivada** (§5.1,
+            `SEASON_ARCHIVED`); **no es la temporada en curso** (`SEASON_NOT_CURRENT`, R6.14); la
             federación del club **no publica plantillas** (`ClubResponse.federationProvidesTeamRoster`); o
             el equipo **no está enganchado** a la federación en esa temporada, y no hay código con el que
             pedirla (D-101).
@@ -4421,6 +4426,7 @@ components:
         - SEASON_ALREADY_LINKED
         - SEASON_ARCHIVED
         - SEASON_LABEL_UNAVAILABLE
+        - SEASON_NOT_CURRENT
         - SEASON_NOT_FOUND
         - SHIRT_NUMBER_TAKEN
         - TEAM_ALREADY_REGISTERED
