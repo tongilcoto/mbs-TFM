@@ -14,6 +14,7 @@ adaptador. Nivel 1 de la pirámide (§8.1): sin red y sin Docker.
 | `RFFM-standings-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/standings` responde a un `idGroup` que **no existe**: `200` y **`null` a secas**, cuatro bytes |
 | `RFFM-scorers-group-24037549.txt` | `docs/Federation APIs examples/` + el mismo nombre | **Los goleadores** (F8): **el mismo grupo** que los dos de arriba —PRIMERA DIVISION AUTONOMICA CADETE Grupo 1, 2025-26—, **218 filas** y 16 equipos ([Anexo RFFM §F.19]) |
 | `RFFM-scorers-coordenada-inexistente.txt` | `docs/Federation APIs examples/` + el mismo nombre | Lo que `/api/scorers` responde cuando el par `idGroup`+`idCompetition` no designa nada: `200` y **`null` a secas**, igual que su vecina — **y también si falta `idCompetition`**, que es la diferencia (§F.19) |
+| `RFFM-fichaequipo.html` | `https://www.rffm.es/fichaequipo/821`, **con los datos personales cambiados** (no es copia byte a byte) | **La ficha de equipo** (R6.14, [D-120]): el Cadete A del desarrollador, 24 jugadores. Nombres y códigos de jugadores, técnicos y delegados, inventados con la forma medida; el contacto del club y su clave, vacíos |
 
 **El nombre dice las dos cosas que hay que saber antes de usarlos.** Son `.html`
 —no `.txt`— porque la RFFM sirve el calendario como **página**, con el JSON
@@ -237,3 +238,23 @@ jugador únicos"* deje de ser una propiedad de una muestra ([D-93]).
 > liga sin empezar debería devolver la lista vacía, pero **no está medido** y la diferencia importaría: si en
 > ese caso el documento entero llegara a `null`, sería indistinguible de una coordenada mala. Apuntado en
 > §F.19 como pendiente de observar.
+
+
+## La ficha de equipo no es una copia: lleva los datos personales cambiados (R6.14)
+
+`RFFM-fichaequipo.html` es la página de verdad **con los datos personales cambiados** (decisión 2 de R6.14): la
+ficha lleva los nombres y los códigos federativos de los jugadores —menores, en el fútbol base—, de los técnicos
+y los delegados, y el contacto del club. Una vez en git se quedarían en la historia aunque se borraran después.
+
+Lo cambia un guion que se queda en el repositorio, para repetirla si la RFFM cambia la página:
+
+```sh
+curl -s -A "Mozilla/5.0" https://www.rffm.es/fichaequipo/821 -o /ruta/fuera/ficha.html   # fuera del repositorio
+swift Tools/Fixtures/anonymize-rffm-team-sheet.swift /ruta/fuera/ficha.html \
+    Tests/FederationTests/Fixtures/RFFM-fichaequipo.html
+```
+
+Cambia cada dato **en la página entera** (el bloque `__NEXT_DATA__` y el HTML que la RFFM pinta con él), tal
+cual y escapado en HTML y en JSON, y no guarda si queda alguno. La forma se queda exacta: lo que se prueba es
+cómo se lee la página. **Lo que sigue saliendo y no es del equipo**: la parte común a todas las páginas de la
+RFFM (sus menús, sus noticias y las fotos de su junta directiva), como en las demás grabaciones.

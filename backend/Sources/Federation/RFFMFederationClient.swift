@@ -3,6 +3,7 @@ public import struct Application.FederationCalendar
 public import struct Application.FederationCoordinate
 public import struct Application.FederationStanding
 public import struct Application.FederationScorerTable
+public import struct Application.FederationTeamRoster
 import enum Domain.DomainError
 
 /// El adaptador de la RFFM: implementa el puerto `FederationClient` (§4.3).
@@ -77,6 +78,13 @@ public struct RFFMFederationClient: FederationClient {
     ) async throws -> FederationScorerTable {
         let body = try await transport.get(endpoints.scorers(for: coordinate))
         return try RFFMScorersParser.parse(body)
+    }
+
+    /// La plantilla del equipo, de su ficha ([D-120], R6.14). Las mismas líneas que
+    /// sus hermanas: traer es del transporte, leer es del parser.
+    public func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster {
+        let page = try await transport.get(endpoints.teamSheet(federationTeamID: federationTeamID))
+        return try RFFMTeamSheetParser.parse(page)
     }
 
     /// La **inversa**: la coordenada que hay dentro de la URL pegada (F10, [D-97]).

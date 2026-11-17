@@ -225,6 +225,63 @@ public protocol FederationClient: Sendable {
     /// ingiere, y un dígito de más o de menos no da error — sirve otro calendario
     /// en silencio ([D-84]).
     func coordinate(fromCalendarURL url: String) throws -> FederationCoordinate
+
+    /// **La plantilla que publica la federación de un equipo** ([D-120], R6.14):
+    /// en la RFFM, su ficha de equipo. Con el código que guarda la inscripción
+    /// del equipo en esa competición (`D-101`).
+    ///
+    /// # Es la de hoy
+    ///
+    /// La ficha **no dice de qué temporada es** (medido en R6.14: ninguno de los
+    /// 33 campos del equipo), así que quien llama solo la pide para la temporada
+    /// en curso (decisión 1 de R6.14). Es el riesgo de `D-84` sin guarda posible
+    /// aquí: no hay fecha que no sea eco.
+    ///
+    /// # Qué devuelve y qué no
+    ///
+    /// Los jugadores en el orden en que los publica, cada uno con su nombre como
+    /// lo escribe la federación y, si se puede, vuelto a «NOMBRE APELLIDOS». **No
+    /// valida el nombre ni casa a nadie**: eso es del dominio y del caso de uso. Y
+    /// **una lista vacía es una respuesta**, no un error: hay fichas sin
+    /// jugadores, y qué hacer con eso lo decide quien llama.
+    ///
+    /// `FederationError.coordinateNotFound` si el código no designa ningún
+    /// equipo: en la RFFM, `200` con el equipo a `null`, como el calendario.
+    ///
+    /// **Sin implementación por defecto**, como la de arriba: el adaptador que
+    /// venga no puede nacer sin decir cómo lee su plantilla, o que no la publica
+    /// (`providesTeamRoster`).
+    func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster
+}
+
+/// La plantilla de un equipo, como la publica su federación ([D-120]).
+public struct FederationTeamRoster: Equatable, Sendable {
+    /// En el orden en que los publica la fuente.
+    public let players: [FederationRosterPlayer]
+
+    public init(players: [FederationRosterPlayer]) {
+        self.players = players
+    }
+}
+
+/// Un jugador de la plantilla publicada.
+///
+/// **Sin su código en la federación**: es informativo, y nunca sirve para casar
+/// jugadores (decisión 8 del plan R6, dicho por el desarrollador). Se casa por el
+/// nombre ([D-120]).
+public struct FederationRosterPlayer: Equatable, Sendable {
+    /// Como lo escribe la federación: en la RFFM, «GARCÍA LÓPEZ, JUAN CARLOS».
+    /// Es lo que el resumen enseña de un nombre que no vale ([D-120]).
+    public let publishedName: String
+    /// Ya como lo guarda el sistema, «JUAN CARLOS GARCÍA LÓPEZ», sin validar.
+    /// **Nulo si el adaptador no sabe darle la vuelta** (en la RFFM, sin coma o
+    /// con más de una): no se inventa dónde acaba el apellido.
+    public let fullName: String?
+
+    public init(publishedName: String, fullName: String?) {
+        self.publishedName = publishedName
+        self.fullName = fullName
+    }
 }
 
 /// Las coordenadas con las que se llama a una federación (§3.7).
