@@ -136,6 +136,7 @@
 | **D-120**              | La plantilla se sincroniza con la federación, si la publica: solo añade, y cada fila dice si está federado                      | §3.2, §3.7, §5.1, §5.2, §5.6       |
 | **D-121**              | Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro                                | §3.2, §5.2                         |
 | **D-122**              | El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila           | §3.2, §5.2, §5.6                   |
+| **D-123**              | La sincronización pone las tildes y las eñes que quita la RFFM, con un diccionario de nombres y apellidos en castellano | §5.2                               |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5638,6 +5639,45 @@ Si en el diálogo se quita o se cambia, la web llama después a quitar o subir l
 **Enmienda** a [D-119] (lo que guarda el perfil) y a [D-120] (lo que trae la sincronización); y a §3.2, §5.2 y §5.6
 del LLD (R6.4).
 
+### D-123 · La sincronización pone las tildes y las eñes que quita la RFFM, con un diccionario de nombres y apellidos en castellano
+
+**Lo que lo obligó a decidirse** (2026-11-17, rebanada 6, al sincronizar de verdad en R6.16; lo propuso el
+desarrollador). La RFFM escribe la mayoría de los nombres sin tildes ni eñes, aunque las lleven: «FERNANDEZ PEREZ,
+JORGE». En su base, de 51 perfiles sincronizados, uno con tilde o eñe, y 26 palabras acabadas en «-EZ» sin ella. La
+web pinta lo que hay («Jorge Fernandez Perez»), y el club tendría que corregirlos uno a uno. **Se trata de dejar
+las menos correcciones posibles.**
+
+**Decisión.**
+
+1. **Un diccionario de nombres y apellidos escritos en castellano**, solo con las palabras que llevan tilde, eñe o
+   diéresis («FERNÁNDEZ», «MUÑOZ», «JESÚS», «GÜELL»); la forma sin marcas con que se busca se saca de cada una.
+   **Lo escribe Claude y lo revisa el desarrollador**: unos 300 a 400, los más frecuentes en España, medido antes
+   cuánto cubre en la base del desarrollador. Con dos formas, **la castellana**: «Jesus» no existe en castellano,
+   es «Jesús»; igual «Román», «Martín» y «Muñoz». Las pocas que existen de las dos maneras («Díez» y «Diez»), una a
+   una con el desarrollador.
+2. **Solo para los nombres que llegan de la federación** ([D-120]), en la sincronización: cada palabra se busca sin
+   mirar tildes ni eñes, y si está, se guarda como en el diccionario; si no, como llega. **Lo que teclea el club no
+   se toca**, en el alta ni al corregir: un «Jesus» que sea así se queda así.
+3. **Una migración para los perfiles que ya están guardados**, solo los que **la federación ha publicado alguna
+   vez** (alguna fila con `last_listed_at`): su nombre es el de la federación, salvo tildes. Sin ella, un «MUNOZ»
+   guardado antes no casaría con el «MUÑOZ» que da el diccionario («el mismo nombre» distingue la eñe, [D-120]
+   punto 4), y saldría repetido.
+4. **«El mismo nombre» no cambia**: se compara después de pasar por el diccionario.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| No hacer nada: el club corrige los nombres | Decenas de correcciones el primer año de cada club |
+| El diccionario también para lo que teclea el club | El club no podría escribir un nombre fuera de la lista tal como es |
+| Migrar todos los perfiles | Cambiaría también los nombres que tecleó el club |
+| Partir de las listas del INE | Por lo que se sabe, sin tildes: habría que ponerlas a mano igual (sin comprobar) |
+| Una regla («-EZ» lleva tilde) | No sirve para Martín, Jesús o Muñoz, y falla en las excepciones |
+
+**Lo que se asume a cambio.** Una palabra que no está en el diccionario se queda sin tilde, y el club la corrige;
+el diccionario se amplía con lo que vaya saliendo. Un «Jesus» tecleado a mano que después publica la federación
+queda «Jesús» con la migración. Y una palabra con dos formas válidas puede quedar con la que no es.
+
+**Enmienda** a [D-120] (lo que guarda la sincronización). Se hace en `R6.17`.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5800,3 +5840,4 @@ del LLD (R6.4).
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
+[D-123]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

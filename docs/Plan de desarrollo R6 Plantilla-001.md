@@ -753,10 +753,23 @@ Antes, **lo medido**: el código de la federación que guarda cada inscripción 
 
 | Paso | Qué |
 |---|---|
-| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`). Y **nada se escribe en una temporada pasada**, como en la archivada (decisión 4 de `R6.14`) |
+| `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`). Y **nada se escribe en una temporada pasada**, como en la archivada (decisión 4 de `R6.14`). Y **el diccionario de nombres y apellidos** (`D-123`): la lista, revisada antes de grabarla; la sincronización que la usa; y la migración de los perfiles publicados alguna vez |
 | `R6.18` | Los 121 escenarios de la rebanada en verde, con axe en los dos modos |
 | `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
+
+
+**El diccionario de nombres y apellidos, para `R6.17`** (2026-11-17, propuesto por el desarrollador al sincronizar de
+verdad en R6.16: la RFFM quita tildes y eñes, «FERNANDEZ PEREZ, JORGE»). Una lista de nombres y apellidos en
+castellano; al sincronizar, cada palabra que llega se busca en ella sin mirar tildes ni eñes, y si está, se guarda
+como en la lista. Lo que no está, como llega. **Para dejar las menos correcciones posibles.** Decisiones, una a una,
+escritas en [`D-123`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md):
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · A qué nombres se aplica** | Solo a los que llegan de la Federación, o también al alta y a la corrección a mano | **Solo a los de la Federación**: es la que quita las tildes. Lo que teclea el club se queda como lo escribe («Jesus», si es su nombre) |
+| **2 · De dónde sale la lista** | Escrita por Claude y revisada por el desarrollador; las del INE (por lo que se sabe, sin tildes); o una regla («-EZ» lleva tilde) | **Escrita por Claude, revisada por el desarrollador**: solo las palabras con tilde, eñe o diéresis, unas 300 a 400 de las más frecuentes; con dos formas, la castellana («Jesús», «Román», «Martín», «Muñoz»), y las que existen de las dos maneras («Díez» y «Diez»), una a una. Antes de grabarla, medido cuánto cubre en la base del desarrollador. Con sus pruebas: cada palabra con su marca, y ninguna repetida |
+| **3 · Los perfiles ya guardados** (la base no guarda de dónde salió cada perfil) | Solo los que la Federación ha publicado alguna vez, o todos | **Una migración, solo para los publicados alguna vez**: los que tienen alguna fila con `last_listed_at`, cuyo nombre es el de la RFFM salvo tildes. Lo dado de alta a mano que la RFFM nunca ha publicado, como está. Sin ella, un «MUNOZ» guardado antes no casaría con el «MUÑOZ» que da el diccionario, y saldría repetido. Se asume: un «Jesus» tecleado a mano que luego publica la RFFM queda «Jesús» |
 
 ---
 
