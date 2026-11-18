@@ -420,10 +420,12 @@ export function federationDate(date: Date): string {
 
 // Con las formas de los 46 medidos en dos fichas de verdad (plan R6, decisión 9): en mayúsculas, con tildes, eñe y
 // diéresis, nombres compuestos, apellidos con partícula o con guion, y alguno con un solo apellido. En la RFFM la
-// mayoría van sin tildes, aunque las lleven («FERNANDEZ»); aquí salen más a menudo, y cada escenario pide la marca
-// que necesita (`NameMark`).
+// mayoría van sin tildes ni eñes, aunque las lleven («FERNANDEZ»): así los publica la federación falsa, salvo cuando
+// el escenario pide la marca (`asTheRFFM`, decisión 3 de R6.18). El servidor se las pone con su diccionario (D-123), y
+// cada palabra con marca de estas listas está en él tal cual, así que lo guardado es el nombre como se inventó.
+// «IÑIGO», sin tilde en la I, porque así lo escribe el diccionario.
 const givenNames = ['JUAN', 'PABLO', 'HUGO', 'MARIO', 'DANIEL', 'LUCAS', 'DIEGO', 'MARCOS', 'ADRIÁN', 'ÁLVARO', 'IVÁN',
-  'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'ÍÑIGO', 'JOEL', 'NICOLÁS']
+  'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'IÑIGO', 'JOEL', 'NICOLÁS']
 const surnameList = ['GARCÍA', 'LÓPEZ', 'MARTÍN', 'SÁNCHEZ', 'PÉREZ', 'GÓMEZ', 'RUIZ', 'DÍAZ', 'MORENO', 'ALONSO',
   'NAVARRO', 'TORRES', 'SANZ', 'VIDAL', 'ROMERO', 'MUÑOZ', 'IBÁÑEZ', 'CASTAÑO', 'PEÑA', 'GÜELL', 'ARGÜELLES',
   'SIGÜENZA', 'DE LA FUENTE', 'DEL RÍO', 'GARCÍA-PATIÑO', 'SAN JOSÉ']
@@ -439,6 +441,20 @@ export interface FederationPlayer {
 export interface InventedPerson {
   given: string
   surnames: string
+}
+
+/** Sin tildes, diéresis ni eñes: como manda la RFFM la mayoría de los nombres («MUÑOZ» → «MUNOZ»). */
+export function withoutAnyMark(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC')
+}
+
+/**
+ * El nombre como lo publica la ficha de equipo, a la manera de la RFFM (decisión 3 de R6.18): cuatro de cada cinco,
+ * sin ninguna marca; con `keepMarks`, tal cual, para los escenarios que piden que la Federación ponga la tilde.
+ */
+export function asTheRFFM(random: Random, person: InventedPerson, keepMarks = false): string {
+  const text = published(person)
+  return keepMarks || !random.chance(0.8) ? text : withoutAnyMark(text)
 }
 
 /** «APELLIDOS, NOMBRE»: como la escribe la ficha de equipo. */

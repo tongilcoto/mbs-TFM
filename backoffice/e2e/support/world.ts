@@ -57,8 +57,36 @@ export interface ScenarioData {
   newPlayer?: NewPlayer
   /** Lo último escrito en el buscador del alta. */
   typed?: string
-  /** Los nombres de la plantilla antes de abrir el diálogo. */
+  /** Los nombres de la plantilla antes de abrir el diálogo, o de sincronizar. */
   rosterBefore?: string[]
+  /** Lo que la Federación publica y lo que el escenario espera de sincronizar (plan R6, parte D). */
+  sync?: SyncData
+}
+
+/** Un jugador que publica la ficha de equipo de la Federación falsa. */
+export interface PublishedPlayer {
+  code: string
+  /** Tal cual va en la ficha: «APELLIDOS, NOMBRE», con o sin marcas, o un nombre que no vale. */
+  published: string
+  /** Como lo guarda el servidor: «NOMBRE APELLIDOS», con las marcas del diccionario. Vacío si no vale. */
+  fullName: string
+}
+
+export interface SyncData {
+  /** Lo que publica la ficha, en orden. */
+  published: PublishedPlayer[]
+  /** Los que había en la plantilla al empezar (los ya sincronizados). */
+  before: number
+  /** Los dados de baja por el club que la Federación sigue publicando. */
+  removed: string[]
+  /** El jugador del que habla el escenario. */
+  player?: PublishedPlayer
+  /** Lo que el resumen tiene que nombrar. */
+  duplicates: string[]
+  otherTeam: { fullName: string; teamId: string }[]
+  invalid: string[]
+  /** Si la ficha se ha retenido: entonces sincronizar no espera al resultado. */
+  held?: boolean
 }
 
 /** Lo puesto en el diálogo del alta. `undefined`, no se ha tocado; `null`, se ha dejado vacío. */
