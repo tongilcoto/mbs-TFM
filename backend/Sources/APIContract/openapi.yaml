@@ -1918,7 +1918,7 @@ paths:
         que muestra ninguna pantalla. Mismo criterio que el `roundId` de la clasificación (D-34).
 
         **Sin paginación y con orden fijo** (§5.3, D-118): por `shirtNumber` ascendente, y después los que
-        no tienen dorsal, por nombre. El ámbito acota a los ~25 jugadores de un equipo, y es el orden en el
+        no tienen dorsal, por nombre **en español** (D-124: la tilde con su letra, la eñe detrás de la ene). El ámbito acota a los ~25 jugadores de un equipo, y es el orden en el
         que se lee una plantilla. Tampoco hay búsqueda por nombre: la colección entera cabe en una pantalla
         (la de perfiles, para el alta, es `GET /player-profiles`).
 
@@ -2038,8 +2038,10 @@ paths:
         '422':
           description: |
             Regla de negocio (§5.4), por el `code` del *Problem*: el equipo, la temporada o el perfil
-            **no existen** en este club; el equipo **no es propio** (`opponentClubId != null`, §3.7); la
-            temporada está **archivada** (§5.1); o un valor no cumple su regla (`INVALID_VALUE`, con el
+            **no existen** en este club; el equipo **no es propio** (`opponentClubId != null`, §3.7); el
+            equipo **no está inscrito** en esa temporada (`TEAM_NOT_REGISTERED`, R6.17); la temporada está
+            **archivada** (`SEASON_ARCHIVED`, §5.1) o **ya terminó** (`SEASON_ENDED`, R6.17: se ve, pero no
+            se cambia); o un valor no cumple su regla (`INVALID_VALUE`, con el
             `detail` `<campo>: <motivo>`): el nombre (solo letras, espacio, guion y apóstrofo; al menos dos
             palabras; D-120) o el año (no posterior al año en curso).
 
@@ -2121,8 +2123,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1); o un valor no
-            cumple su regla (`INVALID_VALUE`, con el `detail` `<campo>: <motivo>`), como en el alta.
+            La temporada de la fila está **archivada** (`SEASON_ARCHIVED`, §5.1) o **ya terminó**
+            (`SEASON_ENDED`, R6.17): se ve, pero no se cambia. O un valor no cumple su regla (`INVALID_VALUE`,
+            con el `detail` `<campo>: <motivo>`), como en el alta; y **el año** (R6.17, decisión 1 de R6.12):
+            **uno ya puesto no se cambia** (`birthYear: ya está puesto y no se cambia; …`), y **no se pone a la
+            vez que se cambia el nombre** (`birthYear: no se cambia a la vez que el nombre; …`): un perfil no
+            pasa a ser otra persona.
           content:
             application/problem+json:
               schema:
@@ -2161,7 +2167,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: |
-            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+            La temporada de la fila está **archivada** (`SEASON_ARCHIVED`, §5.1) o **ya terminó**
+            (`SEASON_ENDED`, R6.17): se ve, pero no se cambia.
           content:
             application/problem+json:
               schema:
@@ -2231,7 +2238,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: |
-            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+            La temporada de la fila está **archivada** (`SEASON_ARCHIVED`, §5.1) o **ya terminó**
+            (`SEASON_ENDED`, R6.17): se ve, pero no se cambia.
           content:
             application/problem+json:
               schema:
@@ -2278,7 +2286,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: |
-            La temporada de la fila está **archivada**: es de solo lectura entera (§5.1).
+            La temporada de la fila está **archivada** (`SEASON_ARCHIVED`, §5.1) o **ya terminó**
+            (`SEASON_ENDED`, R6.17): se ve, pero no se cambia.
           content:
             application/problem+json:
               schema:
@@ -2368,7 +2377,8 @@ paths:
 
         **Cómo busca**: sin distinguir tildes, diéresis ni mayúsculas, y cada palabra por separado
         («juan fuen» encuentra a JUAN GARCÍA FUENTE). Para buscar, la eñe es una «n» («munoz» encuentra
-        a MUÑOZ): ayuda a encontrar, no compara. **Hasta 10**, por orden de nombre; sin paginación.
+        a MUÑOZ): ayuda a encontrar, no compara. **Hasta 10**, por orden de nombre en español (D-124);
+        sin paginación.
 
         **Devuelve el registro entero del perfil** (D-122): el último dorsal, la última demarcación y la
         última foto, que el diálogo trae al elegirlo.
@@ -4427,6 +4437,7 @@ components:
         - SEASON_ALREADY_EXISTS
         - SEASON_ALREADY_LINKED
         - SEASON_ARCHIVED
+        - SEASON_ENDED
         - SEASON_LABEL_UNAVAILABLE
         - SEASON_NOT_CURRENT
         - SEASON_NOT_FOUND
