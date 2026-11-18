@@ -20,6 +20,17 @@ public enum DomainError: Error, Equatable, Sendable {
     /// **422**, como una regla que el valor no cumple en este momento.
     case seasonArchived(label: String)
 
+    /// La temporada **ya terminó**: se ve, pero no se cambia, como la archivada
+    /// (decisión 4 de R6.14; `SEASON_ENDED`, decisión 3 de R6.17). **422**.
+    case seasonEnded(label: String)
+
+    /// El alta en la plantilla de un equipo que **no está inscrito** en esa
+    /// temporada (decisión 3 de R6.11). **422** con `TEAM_NOT_REGISTERED`
+    /// (decisión 2 de R6.17): el equipo y la temporada existen, y lo que falla es
+    /// la regla. Leer la inscripción que no existe sigue siendo el 404 de
+    /// `ApplicationError.teamNotRegistered`.
+    case teamNotRegistered(team: String, season: String)
+
     /// La plantilla solo se sincroniza **en la temporada en curso** (decisión 1 de
     /// R6.14, enmienda a `D-120`): la ficha de equipo de la federación es la de
     /// hoy. **422**, como la archivada.

@@ -107,6 +107,23 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "la temporada \(label) está archivada: solo se puede leer",
                                base: typeBaseURI, slug: "season-archived")
 
+            case .seasonEnded(let label):
+                // **422**, como la archivada (decisión 3 de R6.17): una temporada
+                // terminada se ve, pero no se cambia (decisión 4 de R6.14).
+                return Problem(status: .unprocessableEntity, code: "SEASON_ENDED",
+                               title: "La temporada ya terminó",
+                               detail: "la temporada \(label) ya terminó: solo se puede leer",
+                               base: typeBaseURI, slug: "season-ended")
+
+            case .teamNotRegistered(let team, let season):
+                // **422 y no 404** (decisión 2 de R6.17): en el alta, el equipo y la
+                // temporada existen y llegan en el cuerpo; lo que falla es la regla.
+                // El mismo código que el 404 de leer una inscripción que no existe.
+                return Problem(status: .unprocessableEntity, code: "TEAM_NOT_REGISTERED",
+                               title: "El equipo no está inscrito en esa temporada",
+                               detail: "equipo \(team), temporada \(season): sin inscripción no hay plantilla",
+                               base: typeBaseURI, slug: "team-not-registered")
+
             case .seasonNotCurrent(let label):
                 // **422**, como la archivada (R6.14): la ficha de equipo de la
                 // federación es la de hoy, y en otra temporada metería a los de hoy.

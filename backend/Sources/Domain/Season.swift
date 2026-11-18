@@ -61,6 +61,12 @@ public struct Season: Identifiable, Equatable, Sendable {
     public var endDate: Date { label.endDate }
 
     public var isArchived: Bool { archivedAt != nil }
+
+    /// **Si ya terminó**: el día de Madrid de `instant` es posterior a su 30 de
+    /// junio (decisión 4 de R6.14). Una terminada se ve, pero no se cambia.
+    public func hasEnded(on instant: Date) -> Bool {
+        MadridDay.of(instant) > endDate
+    }
 }
 
 extension Season {

@@ -328,14 +328,17 @@ struct MigrationIntegrityTests {
     /// **23 con `D-120`** (R6.14): lo que escribe la sincronización de la
     /// plantilla, en la inscripción y en la fila.
     ///
+    /// **24 con `D-123`** (R6.17): las tildes y eñes del castellano en los nombres
+    /// que ha publicado la federación.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 23, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 24, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 23,
+        #expect(nombres.count == 24,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
@@ -709,6 +712,55 @@ struct MigrationIntegrityTests {
                     "el motivo verdadero no sobrevive al envoltorio")
 
             try await Self.cleanUp(["fail"], on: app)
+        }
+    }
+
+    // ── D-123 · las tildes y eñes de los nombres que publicó la federación ──
+
+    /// **Solo los perfiles que la federación ha publicado alguna vez** (alguna fila con
+    /// `last_listed_at`, también dada de baja) pasan por el diccionario; lo que tecleó
+    /// el club, como está (decisiones 1 y 3 de `D-123`).
+    @Test("la migración pone las tildes y eñes a los nombres publicados, y no toca los tecleados (D-123)")
+    func publishedNamesGetCastilianSpelling() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)d123"
+            let sql = app.db(.control) as! any SQLDatabase
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+            try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+            let all = TenantMigrations.all()
+            let cut = try #require(all.firstIndex { $0.name.hasSuffix("SpellPublishedNamesInCastilian") })
+            try await MigrateTenantsCommand.migrate(schema: schema, migrations: Array(all.prefix(cut)), on: app)
+
+            let (season, team) = (UUID(), UUID())
+            let (published, typed, removed) = (UUID(), UUID(), UUID())
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).seasons (id, label, start_date, end_date)
+                VALUES (\(bind: season), '2026/27', '2026-07-01', '2027-06-30')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).teams (id, category, letter, gender, modality)
+                VALUES (\(bind: team), 'cadete', 'A', 'masculino', 'futbol_11')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).player_profiles (id, full_name)
+                VALUES (\(bind: published), 'JORGE FERNANDEZ PEREZ'), (\(bind: typed), 'JESUS MUNOZ'),
+                       (\(bind: removed), 'ROMAN MARTIN')
+                """).run()
+            try await sql.raw("""
+                INSERT INTO \(ident: schema).players (id, profile_id, team_id, season_id, federated, last_listed_at, deleted_at)
+                VALUES (\(bind: UUID()), \(bind: published), \(bind: team), \(bind: season), true, now(), NULL),
+                       (\(bind: UUID()), \(bind: typed), \(bind: team), \(bind: season), false, NULL, NULL),
+                       (\(bind: UUID()), \(bind: removed), \(bind: team), \(bind: season), true, now(), now())
+                """).run()
+
+            try await MigrateTenantsCommand.migrate(schema: schema, migrations: all, on: app)
+
+            let names = try await sql.raw("""
+                SELECT full_name FROM \(ident: schema).player_profiles ORDER BY full_name
+                """).all(decodingColumn: "full_name", as: String.self)
+            #expect(Set(names) == ["JORGE FERNÁNDEZ PÉREZ", "JESUS MUNOZ", "ROMÁN MARTÍN"])
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
         }
     }
 

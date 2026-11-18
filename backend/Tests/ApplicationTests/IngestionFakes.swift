@@ -233,12 +233,24 @@ struct FakeTeamRegistrationRepository: TeamRegistrationRepository {
     }
 }
 
-/// R6.6. Como el adaptador: **solo ve las no borradas**, y sin orden.
+/// R6.6. Como el adaptador: **solo ve las no borradas**, y la plantilla, en su orden.
 struct FakePlayerRepository: PlayerRepository {
     let store: IngestionStore
     func find(_ id: PlayerID) async throws -> Player? { await store.players.first { $0.id == id } }
+    /// En el orden de la base (`D-118`, `D-124`): por dorsal, y los que no tienen, por
+    /// nombre en español. Lo que de verdad lo prueba es `PlayerRepositoryTests`, contra
+    /// Postgres; aquí se imita para que los casos de uso vean lo mismo.
     func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Player] {
-        await store.players.filter { $0.teamID == teamID && $0.seasonID == seasonID }
+        let names = Dictionary(uniqueKeysWithValues: await store.playerProfiles.map { ($0.id, $0.fullName.value) })
+        return await store.players.filter { $0.teamID == teamID && $0.seasonID == seasonID }
+            .sorted { left, right in
+                switch (left.shirtNumber?.value, right.shirtNumber?.value) {
+                case let (l?, r?) where l != r: return l < r
+                case (.some, nil): return true
+                case (nil, .some): return false
+                default: return spanishOrder(names[left.profileID] ?? "", names[right.profileID] ?? "")
+                }
+            }
     }
     func list(profileID: PlayerProfileID, seasonID: SeasonID) async throws -> [Player] {
         await store.players.filter { $0.profileID == profileID && $0.seasonID == seasonID }
@@ -276,7 +288,7 @@ struct FakePlayerProfileRepository: PlayerProfileRepository {
             .filter { $0.teamID == teamID && $0.seasonID == seasonID }.map(\.profileID))
         return Array(await store.playerProfiles
             .filter { !inRoster.contains($0.id) && search.matches($0.fullName) }
-            .sorted { $0.fullName.value < $1.fullName.value }
+            .sorted { spanishOrder($0.fullName.value, $1.fullName.value) }
             .prefix(limit))
     }
 }
@@ -841,4 +853,9 @@ struct NotStubbed: Error, CustomStringConvertible {
     var description: String {
         "\(client) no prepara `\(operation)`: usa un doble que sí lo haga."
     }
+}
+
+/// El orden español de la base (`D-124`), imitado en los dobles con el de Foundation.
+func spanishOrder(_ left: String, _ right: String) -> Bool {
+    left.compare(right, locale: Locale(identifier: "es_ES")) == .orderedAscending
 }

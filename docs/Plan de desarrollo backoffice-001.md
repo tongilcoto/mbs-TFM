@@ -200,7 +200,8 @@ flowchart TB
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
     class mEq,NF,P,A,F,R,J hecha
-    class mTem,mCom,mRiv,mIng,mClub,mPer,E,PL,AX,ACTA,JUG,GT,GCo,GR,GI,GC,GP pendiente
+    class PL,JUG enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,E,AX,ACTA,GT,GCo,GR,GI,GC,GP pendiente
 ```
 
 Colores: **verde** = hecha · **ámbar** = en curso · **gris** = pendiente · **borde discontinuo** = sale en un

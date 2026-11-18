@@ -93,7 +93,7 @@ public struct SyncTeamRoster: Sendable {
             throw ApplicationError.teamNotRegistered(team: "\(teamID)", season: "\(seasonID)")
         }
         // La archivada, de solo lectura (R6.3); y solo la en curso (decisión 1 de R6.14).
-        try RosterRules.requireEditable(in: season)
+        try RosterRules.requireNotArchived(season)
         let all = try await r.seasons.list(includingArchived: false)
         guard all.current(on: now)?.id == season.id else {
             throw DomainError.seasonNotCurrent(label: season.label.value)
@@ -119,7 +119,8 @@ public struct SyncTeamRoster: Sendable {
         var listed = Set<PlayerID>()
 
         for publishedPlayer in published.players {
-            guard let raw = publishedPlayer.fullName, let name = try? PlayerName(raw) else {
+            // Con las tildes y eñes que quita la federación, antes de casar y de guardar (`D-123`).
+            guard let raw = publishedPlayer.fullName, let name = (try? PlayerName(raw))?.spelledInCastilian() else {
                 summary.invalidName.append(publishedPlayer.publishedName)
                 continue
             }

@@ -196,6 +196,52 @@ struct PlayerRepositoryTests {
     }
 }
 
+// ── El orden en español (D-124, R6.17) ───────────────────────────────────────
+
+extension PlayerRepositoryTests {
+    /// Nombres que en el orden de cada letra por su número salen mal: con tilde o eñe
+    /// detrás de la Z, y «NURIA» delante de «NUÑO». En español la eñe va entre la ene y
+    /// la o: «NUÑO» antes que «NURIA», y «ÑAKO» antes que «ÓSCAR».
+    static let spanish = ["Zoe Zapata", "Álvaro Gil", "Ñako Ruiz", "Nuño Sanz", "Óscar Díaz", "Nuria Pérez"]
+
+    /// La plantilla, por dorsal; y los que no tienen, al final, por nombre en español (D-118, D-124).
+    @Test("la plantilla va por dorsal, y los que no tienen, por nombre en español (D-124)")
+    func rosterInSpanishOrder() async throws {
+        try await Self.withFixture("spanishroster") { tenant, a, _, vigente, _ in
+            let profiles = try Self.spanish.map { try Self.profile($0, full: false) }
+            // Dos con dorsal: el 9 y el 3, que van primero y por número.
+            var rows = try profiles.map { try Self.row($0, a, vigente, full: false) }
+            rows[0] = Player(id: rows[0].id, profileID: rows[0].profileID, teamID: a.id, seasonID: vigente.id,
+                             shirtNumber: try ShirtNumber(9), createdAt: Self.now, updatedAt: Self.now)
+            rows[1] = Player(id: rows[1].id, profileID: rows[1].profileID, teamID: a.id, seasonID: vigente.id,
+                             shirtNumber: try ShirtNumber(3), createdAt: Self.now, updatedAt: Self.now)
+            let saved = rows
+            try await tenant.scope {
+                for p in profiles { try await $0.playerProfiles.save(p) }
+                for r in saved { try await $0.players.save(r) }
+            }
+            let names = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0.fullName.value) })
+            let listed = try await tenant.scope { try await $0.players.list(teamID: a.id, seasonID: vigente.id) }
+            #expect(listed.map { names[$0.profileID]! }
+                    == ["ÁLVARO GIL", "ZOE ZAPATA", "NUÑO SANZ", "NURIA PÉREZ", "ÑAKO RUIZ", "ÓSCAR DÍAZ"])
+        }
+    }
+
+    /// Seis con el mismo apellido, para que una búsqueda los traiga a todos.
+    @Test("el buscador ordena por nombre en español (D-124)")
+    func searchInSpanishOrder() async throws {
+        try await Self.withFixture("spanishsearch") { tenant, a, _, vigente, _ in
+            try await tenant.scope {
+                for name in ["Zoe", "Álvaro", "Ñako", "Nuño", "Óscar", "Nuria"] {
+                    try await $0.playerProfiles.save(try Self.profile("\(name) Mora", full: false))
+                }
+            }
+            #expect(try await Self.search(tenant, "mora", team: a, season: vigente)
+                    == ["ÁLVARO MORA", "NUÑO MORA", "NURIA MORA", "ÑAKO MORA", "ÓSCAR MORA", "ZOE MORA"])
+        }
+    }
+}
+
 // ── El buscador del alta (R6.7) ──────────────────────────────────────────────
 
 extension PlayerRepositoryTests {

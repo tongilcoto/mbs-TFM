@@ -263,14 +263,31 @@ struct SyncTeamRosterTests {
     }
 
     /// La eñe es otra letra (R6.3): «MUNOZ» no casa con «MUÑOZ», y es un jugador nuevo.
-    @Test("la eñe no se pliega: «MUNOZ» no casa con «MUÑOZ»")
+    /// La eñe sigue siendo otra letra al casar (`D-120`, punto 4). Con un apellido que no está en el
+    /// diccionario (`D-123`): con uno que está, la eñe la pone él (el test siguiente).
+    @Test("la eñe no se pliega: «CANERO» no casa con «CAÑERO», que no está en el diccionario")
     func enyeIsDifferent() async throws {
+        let s = try await Self.seed()
+        let canero = try await Self.profile(s, "Juan Cañero")
+
+        _ = try await Self.sync(s, RosterClient(["CANERO, JUAN"]))
+
+        #expect(await Self.roster(s).first?.profileID != canero.id)
+    }
+
+    /// Lo que llega de la federación pasa por el diccionario antes de casar y de guardarse (`D-123`).
+    @Test("el diccionario pone las tildes y eñes que quita la federación, antes de casar y de guardar (D-123)")
+    func castilianSpelling() async throws {
         let s = try await Self.seed()
         let munoz = try await Self.profile(s, "Juan Muñoz")
 
-        _ = try await Self.sync(s, RosterClient(["MUNOZ, JUAN"]))
+        let summary = try await Self.sync(s, RosterClient(["MUNOZ, JUAN", "FERNANDEZ PEREZ, JORGE"]))
 
-        #expect(await Self.roster(s).first?.profileID != munoz.id)
+        let rows = await Self.roster(s)
+        #expect(rows.contains { $0.profileID == munoz.id }, "«MUNOZ» casa ya con «MUÑOZ»: no sale repetido")
+        #expect(await Self.profileNamed(s, "JORGE FERNÁNDEZ PÉREZ").count == 1)
+        #expect(await Self.profileNamed(s, "JORGE FERNANDEZ PEREZ").isEmpty)
+        #expect(summary.added == 2)
     }
 
     @Test("un nombre que no vale no se añade, y el resumen lo da como lo escribe la federación",

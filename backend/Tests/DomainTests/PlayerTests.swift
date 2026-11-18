@@ -58,9 +58,15 @@ struct PlayerTests {
             archivedAt: archived ? Date() : nil, createdAt: Date(), updatedAt: Date())
     }
 
-    @Test("un equipo propio en una temporada sin archivar admite el alta")
+    /// Un día de la temporada 2025/26, y uno de cuando ya ha terminado: 1 de julio de 2026 en Madrid.
+    static let during = ISO8601DateFormatter().date(from: "2026-03-01T12:00:00Z")!
+    static let lastDay = ISO8601DateFormatter().date(from: "2026-06-30T21:30:00Z")!  // 23:30 en Madrid
+    static let afterwards = ISO8601DateFormatter().date(from: "2026-06-30T22:30:00Z")!  // 00:30 del 1 de julio
+
+    @Test("un equipo propio, inscrito, en una temporada sin archivar ni terminar admite el alta")
     func ownTeamInOpenSeason() throws {
-        try RosterRules.requireCanAdd(to: Self.team(own: true), in: Self.season(archived: false))
+        try RosterRules.requireCanAdd(to: Self.team(own: true), in: Self.season(archived: false),
+                                      on: Self.during, registered: true)
     }
 
     /// Un rival no tiene plantilla: no hay de dónde sacarla (§3.7).
@@ -68,7 +74,19 @@ struct PlayerTests {
     func opponentTeamHasNoRoster() throws {
         let rival = try Self.team(own: false)
         #expect(throws: DomainError.teamNotOwn(team: rival.id.description)) {
-            try RosterRules.requireCanAdd(to: rival, in: Self.season(archived: false))
+            try RosterRules.requireCanAdd(to: rival, in: Self.season(archived: false),
+                                          on: Self.during, registered: true)
+        }
+    }
+
+    /// Sin inscripción, el equipo no juega esa temporada (decisión 3 de R6.11; 422 con
+    /// `TEAM_NOT_REGISTERED`, decisión 2 de R6.17).
+    @Test("un equipo que no está inscrito en la temporada no admite el alta")
+    func unregisteredTeamRejectsAdding() throws {
+        let team = try Self.team(own: true)
+        let season = try Self.season(archived: false)
+        #expect(throws: DomainError.teamNotRegistered(team: team.id.description, season: season.id.description)) {
+            try RosterRules.requireCanAdd(to: team, in: season, on: Self.during, registered: false)
         }
     }
 
@@ -77,15 +95,47 @@ struct PlayerTests {
     @Test("en una temporada archivada no se da de alta a nadie")
     func archivedSeasonRejectsAdding() throws {
         #expect(throws: DomainError.seasonArchived(label: "2025/26")) {
-            try RosterRules.requireCanAdd(to: Self.team(own: true), in: Self.season(archived: true))
+            try RosterRules.requireCanAdd(to: Self.team(own: true), in: Self.season(archived: true),
+                                          on: Self.during, registered: true)
         }
     }
 
     @Test("y tampoco se corrige, se da de baja ni se cambia la foto")
     func archivedSeasonRejectsEditing() throws {
-        try RosterRules.requireEditable(in: Self.season(archived: false))
+        try RosterRules.requireEditable(in: Self.season(archived: false), on: Self.during)
         #expect(throws: DomainError.seasonArchived(label: "2025/26")) {
-            try RosterRules.requireEditable(in: Self.season(archived: true))
+            try RosterRules.requireEditable(in: Self.season(archived: true), on: Self.during)
+        }
+    }
+
+    /// La temporada terminada, como la archivada: se ve, pero no se cambia (decisión 4
+    /// de R6.14; `SEASON_ENDED`, decisión 3 de R6.17). Por días de Madrid.
+    @Test("una temporada terminada no admite el alta ni cambios; el último día, todavía sí")
+    func endedSeasonRejectsWriting() throws {
+        let season = try Self.season(archived: false)
+        try RosterRules.requireEditable(in: season, on: Self.lastDay)
+        #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try RosterRules.requireEditable(in: season, on: Self.afterwards)
+        }
+        #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try RosterRules.requireCanAdd(to: Self.team(own: true), in: season, on: Self.afterwards, registered: true)
+        }
+    }
+
+    @Test("terminada y archivada, dice que está archivada")
+    func endedAndArchivedSaysArchived() throws {
+        #expect(throws: DomainError.seasonArchived(label: "2025/26")) {
+            try RosterRules.requireEditable(in: Self.season(archived: true), on: Self.afterwards)
+        }
+    }
+
+    /// La sincronización mira aparte que sea la en curso (`SEASON_NOT_CURRENT`): de la
+    /// temporada solo le importa que no esté archivada.
+    @Test("para sincronizar, solo cuenta que no esté archivada")
+    func syncOnlyChecksArchived() throws {
+        try RosterRules.requireNotArchived(Self.season(archived: false))
+        #expect(throws: DomainError.seasonArchived(label: "2025/26")) {
+            try RosterRules.requireNotArchived(Self.season(archived: true))
         }
     }
 

@@ -18,10 +18,11 @@ func rosterScope<T: Sendable>(
     try await unitOfWork.withRepositories(actor: actor, work)
 }
 
-/// La fila, que exista y que su temporada no esté archivada (§5.1).
-func editableRow(_ id: PlayerID, in r: any Repositories) async throws -> Player {
+/// La fila, que exista y que su temporada no esté archivada (§5.1) ni terminada
+/// (decisión 4 de R6.14).
+func editableRow(_ id: PlayerID, now: Date, in r: any Repositories) async throws -> Player {
     guard let row = try await r.players.find(id) else { throw ApplicationError.playerNotFound(id: "\(id)") }
-    try await requireEditable(row.seasonID, seasons: r.seasons)
+    try await requireEditable(row.seasonID, seasons: r.seasons, now: now)
     return row
 }
 
@@ -30,7 +31,7 @@ func editableRow(_ id: PlayerID, in r: any Repositories) async throws -> Player 
 func storePhoto(_ key: String?, on id: PlayerID, now: Date, in r: any Repositories) async throws
     -> (entry: RosterEntry, before: [String])
 {
-    let row = try await editableRow(id, in: r)
+    let row = try await editableRow(id, now: now, in: r)
     guard let profile = try await r.playerProfiles.find(row.profileID) else {
         throw ApplicationError.playerProfileMissing(player: "\(id)")
     }
@@ -82,7 +83,8 @@ public struct UploadPlayerPhoto: Sendable {
         async throws -> RosterEntry
     {
         // 1 · La fila existe y se puede escribir: antes de sanear, que es lo caro.
-        _ = try await rosterScope(unitOfWork, actor) { try await editableRow(id, in: $0) }
+        let checkedAt = clock.now()
+        _ = try await rosterScope(unitOfWork, actor) { try await editableRow(id, now: checkedAt, in: $0) }
 
         // 2 · Fuera de la transacción: sanear y guardar el fichero.
         let clean = try sanitizer.sanitize(bytes, declared: declared)
@@ -119,7 +121,7 @@ public struct DeletePlayerPhoto: Sendable {
     public func execute(_ id: PlayerID, actor: ActorContext) async throws {
         let now = clock.now()
         let before = try await rosterScope(unitOfWork, actor) { r -> [String] in
-            let row = try await editableRow(id, in: r)
+            let row = try await editableRow(id, now: now, in: r)
             guard row.photoKey != nil else { return [] }
             return try await storePhoto(nil, on: id, now: now, in: r).before
         }

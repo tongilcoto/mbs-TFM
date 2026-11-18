@@ -15,6 +15,10 @@ struct PlayerUseCaseTests {
 
     /// 2026-11-15, en Madrid.
     static let now = Date(timeIntervalSince1970: 1_794_700_000)
+    /// Un día de la temporada anterior, la 2025/26, cuando todavía estaba en curso: sus
+    /// filas se escriben entonces, porque una temporada terminada ya no se cambia
+    /// (decisión 4 de R6.14).
+    static let then = ISO8601DateFormatter().date(from: "2026-03-01T12:00:00Z")!
 
     struct Seeded {
         let store: IngestionStore
@@ -47,16 +51,27 @@ struct PlayerUseCaseTests {
                             vigente: vigente, anterior: anterior, archivada: archivada)
         await store.seed(seasons: [vigente, anterior, archivada],
                          teams: [seeded.cadeteA, seeded.cadeteB, rival])
+        // Los dos equipos, inscritos en las tres: el alta lo pide (decisión 3 de R6.11).
+        var rows: [TeamRegistration] = []
+        for team in [seeded.cadeteA, seeded.cadeteB] {
+            for season in [vigente, anterior, archivada] {
+                rows.append(try TeamRegistration(
+                    id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season.id,
+                    competitionID: CompetitionID(raw: UUID()), federationTeamID: nil,
+                    createdAt: now, updatedAt: now))
+            }
+        }
+        await store.seed(teamRegistrations: rows)
         return seeded
     }
 
-    static func create(_ store: IngestionStore) -> CreatePlayer {
+    static func create(_ store: IngestionStore, at instant: Date = now) -> CreatePlayer {
         CreatePlayer(
             teams: FakeTeamRepository(store: store), seasons: FakeSeasonRepository(store: store),
             players: FakePlayerRepository(store: store),
             profiles: FakePlayerProfileRepository(store: store),
             registrations: FakeTeamRegistrationRepository(store: store),
-            clock: FixedClock(instant: now), ids: SequentialUUIDProvider())
+            clock: FixedClock(instant: instant), ids: SequentialUUIDProvider())
     }
 
     static func list(_ store: IngestionStore) -> ListPlayers {
@@ -71,9 +86,9 @@ struct PlayerUseCaseTests {
                      profiles: FakePlayerProfileRepository(store: store), clock: FixedClock(instant: now))
     }
 
-    static func delete(_ store: IngestionStore) -> DeletePlayer {
+    static func delete(_ store: IngestionStore, at instant: Date = now) -> DeletePlayer {
         DeletePlayer(seasons: FakeSeasonRepository(store: store),
-                     players: FakePlayerRepository(store: store))
+                     players: FakePlayerRepository(store: store), clock: FixedClock(instant: instant))
     }
 
     /// Un jugador nuevo en el Cadete A de la temporada en curso.
@@ -81,7 +96,9 @@ struct PlayerUseCaseTests {
     static func newPlayer(_ s: Seeded, name: String = "Juan García", shirt: Int? = nil,
                           position: PlayerPosition? = nil, team: Team? = nil,
                           season: Season? = nil) async throws -> RosterEntry {
-        try await create(s.store).execute(.init(
+        // En la anterior, cuando estaba en curso.
+        let at = season?.id == s.anterior.id ? then : now
+        return try await create(s.store, at: at).execute(.init(
             teamID: (team ?? s.cadeteA).id, seasonID: (season ?? s.vigente).id,
             who: .newPlayer(fullName: name, birthYear: 2011), shirtNumber: shirt, position: position))
     }
@@ -202,6 +219,35 @@ struct PlayerUseCaseTests {
         #expect(await s.store.writes == 0, "y no se ha escrito nada")
     }
 
+    /// Sin inscripción, el equipo no juega esa temporada (decisión 3 de R6.11): 422
+    /// con `TEAM_NOT_REGISTERED` (decisión 2 de R6.17).
+    @Test("un equipo sin inscripción en esa temporada no admite el alta (R6.17)")
+    func unregisteredTeamRejectsAdding() async throws {
+        let s = try await Self.seed()
+        let infantil = try Team(id: TeamID(raw: UUID()), category: .infantil, letter: "A", gender: .masculino,
+                                modality: .futbol11, createdAt: Self.now, updatedAt: Self.now)
+        await s.store.seed(teams: [infantil])
+        let writes = await s.store.writes
+
+        await #expect(throws: DomainError.teamNotRegistered(team: "\(infantil.id)", season: "\(s.vigente.id)")) {
+            try await Self.newPlayer(s, team: infantil)
+        }
+        #expect(await s.store.writes == writes, "y no se ha escrito nada")
+    }
+
+    /// Una temporada terminada se ve, pero no se cambia (decisión 4 de R6.14):
+    /// `SEASON_ENDED` (decisión 3 de R6.17).
+    @Test("una temporada terminada no admite altas (R6.17)")
+    func endedSeasonRejectsAdding() async throws {
+        let s = try await Self.seed()
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.create(s.store).execute(.init(
+                teamID: s.cadeteA.id, seasonID: s.anterior.id,
+                who: .newPlayer(fullName: "Juan García", birthYear: 2011)))
+        }
+        #expect(await s.store.writes == 0, "y no se ha escrito nada")
+    }
+
     @Test("un nombre que no vale, o un año posterior al en curso, 422 sin escribir nada (D-120)")
     func invalidValues() async throws {
         let s = try await Self.seed()
@@ -300,15 +346,15 @@ struct PlayerUseCaseTests {
         .init(fullName: name, birthYear: year, shirtNumber: shirt, position: position)
     }
 
-    @Test("corregir cambia el nombre y el año en el perfil, y lo de la fila (D-119)")
+    @Test("corregir cambia el nombre en el perfil, y lo de la fila (D-119)")
     func correcting() async throws {
         let s = try await Self.seed()
         let juan = try await Self.newPlayer(s, shirt: 9)
         let entry = try await Self.update(s.store).execute(
-            juan.player.id, Self.command(name: "Juan García Fuente", year: 2010, shirt: 11, position: .defensa))
+            juan.player.id, Self.command(name: "Juan García Fuente", year: 2011, shirt: 11, position: .defensa))
 
         #expect(entry.profile.fullName.value == "JUAN GARCÍA FUENTE")
-        #expect(entry.profile.birthYear?.value == 2010)
+        #expect(entry.profile.birthYear?.value == 2011)
         #expect(entry.player.shirtNumber?.value == 11)
         #expect(entry.player.position == .defensa)
         #expect(entry.profile.lastShirtNumber?.value == 11, "y el perfil recuerda la fila (D-122)")
@@ -342,13 +388,53 @@ struct PlayerUseCaseTests {
         #expect(entry.profile.lastPosition == nil)
     }
 
-    @Test("el año no se puede quitar si el perfil lo tenía (D-120)")
-    func birthYearCannotBeRemoved() async throws {
+    static let yearLocked = "ya está puesto y no se cambia; si es un error, da de baja al jugador y dalo de alta como nuevo"
+    static let yearWithName =
+        "no se cambia a la vez que el nombre; si es otra persona, da de baja a este y da de alta al otro como nuevo"
+
+    /// El año ya puesto no se cambia ni se quita (decisión 1 de R6.12; `INVALID_VALUE`,
+    /// decisión 4 de R6.17): si está mal, baja y alta como nuevo.
+    @Test("el año que ya tiene el perfil no se cambia ni se quita; el mismo, sí (R6.17)")
+    func birthYearIsLocked() async throws {
         let s = try await Self.seed()
         let juan = try await Self.newPlayer(s)
-        await #expect(throws: DomainError.invalidValue(field: "birthYear", reason: "no se puede quitar")) {
-            try await Self.update(s.store).execute(juan.player.id, Self.command(year: nil))
+        for year in [2010, nil] {
+            await #expect(throws: DomainError.invalidValue(field: "birthYear", reason: Self.yearLocked)) {
+                try await Self.update(s.store).execute(juan.player.id, Self.command(year: year))
+            }
         }
+        let entry = try await Self.update(s.store).execute(juan.player.id, Self.command(year: 2011, shirt: 3))
+        #expect(entry.profile.birthYear?.value == 2011)
+    }
+
+    /// Un perfil sin año (lo deja la sincronización) recibe el suyo; pero no a la vez que
+    /// cambia el nombre: así un perfil no pasa a ser otra persona (decisión 1 de R6.12).
+    @Test("a un perfil sin año se le pone, pero no a la vez que se cambia el nombre (R6.17)")
+    func birthYearNotWithName() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.newPlayer(s)
+        await s.store.save(PlayerProfile(
+            id: juan.profile.id, fullName: juan.profile.fullName, birthYear: nil,
+            createdAt: Self.now, updatedAt: Self.now))
+
+        await #expect(throws: DomainError.invalidValue(field: "birthYear", reason: Self.yearWithName)) {
+            try await Self.update(s.store).execute(juan.player.id, Self.command(name: "Pedro López", year: 2012))
+        }
+        let entry = try await Self.update(s.store).execute(juan.player.id, Self.command(year: 2012))
+        #expect(entry.profile.birthYear?.value == 2012)
+    }
+
+    /// El nombre se compara ya limpio y en mayúsculas: escribirlo igual con otras
+    /// mayúsculas o espacios no es cambiarlo.
+    @Test("el mismo nombre escrito de otra forma no cuenta como cambiarlo (R6.17)")
+    func sameNameOtherwiseWritten() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.newPlayer(s)
+        await s.store.save(PlayerProfile(
+            id: juan.profile.id, fullName: juan.profile.fullName, birthYear: nil,
+            createdAt: Self.now, updatedAt: Self.now))
+        let entry = try await Self.update(s.store).execute(juan.player.id, Self.command(name: "  juan   garcía ", year: 2012))
+        #expect(entry.profile.birthYear?.value == 2012)
     }
 
     /// Un perfil sin año lo deja la sincronización (`D-120`); corregir el dorsal no
@@ -405,6 +491,19 @@ struct PlayerUseCaseTests {
 
     /// La temporada archivada es de solo lectura entera (R6.3). Se siembra la
     /// fila a mano: el alta ya no deja ponerla.
+    @Test("en una temporada terminada no se corrige ni se da de baja (R6.17)")
+    func endedSeasonIsReadOnly() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.newPlayer(s, season: s.anterior)
+
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.update(s.store).execute(juan.player.id, Self.command())
+        }
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.delete(s.store).execute(juan.player.id)
+        }
+    }
+
     @Test("en una temporada archivada no se corrige ni se da de baja (R6.3)")
     func archivedSeasonIsReadOnly() async throws {
         let s = try await Self.seed()
@@ -468,7 +567,7 @@ extension PlayerUseCaseTests {
     func lastRosterIsTheLatestSeason() async throws {
         let s = try await Self.withClub(try await Self.seed())
         let ahora = try await Self.newPlayer(s, team: s.cadeteB)
-        _ = try await Self.create(s.store).execute(.init(
+        _ = try await Self.create(s.store, at: Self.then).execute(.init(
             teamID: s.cadeteA.id, seasonID: s.anterior.id, who: .profile(ahora.profile.id)))
 
         let match = try #require(try await Self.search(s, "juan").first)

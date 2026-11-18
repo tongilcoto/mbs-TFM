@@ -122,8 +122,9 @@ extension APIHandler {
                 Self.problem(status: 404, code: .PLAYER_NOT_FOUND,
                              title: "Jugador desconocido", detail: error.value))))
         }
+        let clock = self.clock
         try await unitOfWork.withRepositories(actor: actor) { r in
-            try await DeletePlayer(seasons: r.seasons, players: r.players).execute(id)
+            try await DeletePlayer(seasons: r.seasons, players: r.players, clock: clock).execute(id)
         }
         return .noContent(.init())
     }

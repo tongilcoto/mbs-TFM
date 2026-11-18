@@ -39,9 +39,12 @@ struct PlayerPhotoUseCaseTests {
         }
     }
 
-    static func upload(_ s: Seeded, _ store: MemoryStore, rejection: PhotoRejection? = nil) -> UploadPlayerPhoto {
+    /// `at`: cuándo; la fila de la temporada anterior se toca cuando estaba en curso
+    /// (`PlayerUseCaseTests.then`).
+    static func upload(_ s: Seeded, _ store: MemoryStore, rejection: PhotoRejection? = nil,
+                       at instant: Date = now) -> UploadPlayerPhoto {
         UploadPlayerPhoto(unitOfWork: FakeUnitOfWork(store: s.store), store: store,
-                          sanitizer: FakeSanitizer(rejection: rejection), clock: FixedClock(instant: now),
+                          sanitizer: FakeSanitizer(rejection: rejection), clock: FixedClock(instant: instant),
                           ids: SequentialUUIDProvider())
     }
 
@@ -91,7 +94,7 @@ struct PlayerPhotoUseCaseTests {
         let s = try await PlayerUseCaseTests.seed()
         let store = MemoryStore()
         let pasado = try await PlayerUseCaseTests.newPlayer(s, season: s.anterior)
-        let old = try #require(try await Self.upload(s, store).execute(
+        let old = try #require(try await Self.upload(s, store, at: PlayerUseCaseTests.then).execute(
             pasado.player.id, bytes: [1], declared: .jpeg, actor: Self.actor).player.photoKey)
         // El alta con su perfil empieza con la misma foto (D-122, corregido en la R6.9).
         let actual = try await PlayerUseCaseTests.create(s.store).execute(.init(
@@ -130,6 +133,22 @@ struct PlayerPhotoUseCaseTests {
 
         await #expect(throws: FakeOutage.self) {
             try await upload.execute(juan.player.id, bytes: [1], declared: .jpeg, actor: Self.actor)
+        }
+        #expect(await store.files.isEmpty)
+    }
+
+    /// Una temporada terminada se ve, pero no se cambia (`SEASON_ENDED`, R6.17), y no se
+    /// guarda ningún fichero: se mira antes de sanear.
+    @Test("en una temporada terminada, ni subir ni quitar la foto (R6.17)")
+    func endedSeasonRejectsPhotos() async throws {
+        let s = try await PlayerUseCaseTests.seed()
+        let store = MemoryStore()
+        let juan = try await PlayerUseCaseTests.newPlayer(s, season: s.anterior)
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.upload(s, store).execute(juan.player.id, bytes: [1], declared: .jpeg, actor: Self.actor)
+        }
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.remove(s, store).execute(juan.player.id, actor: Self.actor)
         }
         #expect(await store.files.isEmpty)
     }
@@ -181,7 +200,7 @@ struct PlayerPhotoUseCaseTests {
         let actual = try await PlayerUseCaseTests.create(s.store).execute(.init(
             teamID: s.cadeteA.id, seasonID: s.vigente.id, who: .profile(pasado.profile.id),
             shirtNumber: nil, position: nil))
-        let key = try #require(try await Self.upload(s, store).execute(
+        let key = try #require(try await Self.upload(s, store, at: PlayerUseCaseTests.then).execute(
             pasado.player.id, bytes: [1], declared: .jpeg, actor: Self.actor).player.photoKey)
         #expect(actual.player.photoKey == nil)
 
@@ -196,12 +215,12 @@ struct PlayerPhotoUseCaseTests {
         let s = try await PlayerUseCaseTests.seed()
         let store = MemoryStore()
         let pasado = try await PlayerUseCaseTests.newPlayer(s, season: s.anterior)
-        let key = try #require(try await Self.upload(s, store).execute(
+        let key = try #require(try await Self.upload(s, store, at: PlayerUseCaseTests.then).execute(
             pasado.player.id, bytes: [1], declared: .jpeg, actor: Self.actor).player.photoKey)
         let actual = try await PlayerUseCaseTests.create(s.store).execute(.init(
             teamID: s.cadeteA.id, seasonID: s.vigente.id, who: .profile(pasado.profile.id),
             shirtNumber: nil, position: nil))
-        try await PlayerUseCaseTests.delete(s.store).execute(pasado.player.id)
+        try await PlayerUseCaseTests.delete(s.store, at: PlayerUseCaseTests.then).execute(pasado.player.id)
 
         try await Self.remove(s, store).execute(actual.player.id, actor: Self.actor)
 

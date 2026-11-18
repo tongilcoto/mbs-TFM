@@ -1,0 +1,174 @@
+{
+  "title": "R6.17 · el servidor: la temporada terminada, el alta con inscripción, el año al corregir, el orden en español y el diccionario de nombres",
+  "filter": "PlayerTests|PlayerUseCaseTests|PlayerPhotoUseCaseTests|PlayerEndpointTests|PlayerRepositoryTests|SyncTeamRosterTests|CastilianNamesTests|MigrationIntegrityTests",
+  "mutations": [
+    {
+      "id": "E1-ultimo-dia",
+      "description": "el último día de la temporada ya cuenta como terminada",
+      "file": "Sources/Domain/Season.swift",
+      "find": "MadridDay.of(instant) > endDate",
+      "replace": "MadridDay.of(instant) >= endDate",
+      "filter": "PlayerTests"
+    },
+    {
+      "id": "E2-sin-terminada",
+      "description": "escribir en una temporada terminada se deja",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard !season.hasEnded(on: instant) else {",
+      "replace": "guard true else {",
+      "filter": "PlayerTests|PlayerUseCaseTests|PlayerPhotoUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "E3-sync-terminada",
+      "description": "la sincronización mira también la terminada, y da SEASON_ENDED en vez de SEASON_NOT_CURRENT",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "try RosterRules.requireNotArchived(season)",
+      "replace": "try RosterRules.requireEditable(in: season, on: now)",
+      "filter": "SyncTeamRosterTests|PlayerTests"
+    },
+    {
+      "id": "E4-baja",
+      "description": "la baja no mira la fecha",
+      "file": "Sources/Application/Players.swift",
+      "find": "try await requireEditable(player.seasonID, seasons: seasons, now: clock.now())\n        try await players.delete(id)",
+      "replace": "try await requireEditable(player.seasonID, seasons: seasons, now: .distantPast)\n        try await players.delete(id)",
+      "filter": "PlayerUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "E5-corregir",
+      "description": "corregir no mira la fecha",
+      "file": "Sources/Application/Players.swift",
+      "find": "try await requireEditable(player.seasonID, seasons: seasons, now: clock.now())\n\n        let name",
+      "replace": "try await requireEditable(player.seasonID, seasons: seasons, now: .distantPast)\n\n        let name",
+      "filter": "PlayerUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "E6-quitar-foto",
+      "description": "quitar la foto no mira la fecha",
+      "file": "Sources/Application/PlayerPhotos.swift",
+      "find": "let row = try await editableRow(id, now: now, in: r)\n            guard row.photoKey",
+      "replace": "let row = try await editableRow(id, now: .distantPast, in: r)\n            guard row.photoKey",
+      "filter": "PlayerPhotoUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "R1-sin-inscripcion",
+      "description": "el alta no pide inscripción",
+      "file": "Sources/Domain/Player.swift",
+      "find": "guard registered else {",
+      "replace": "guard true else {",
+      "filter": "PlayerTests|PlayerUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "R2-inscrito-siempre",
+      "description": "el alta da por inscrito a cualquiera",
+      "file": "Sources/Application/Players.swift",
+      "find": "registered: !enrolments.isEmpty",
+      "replace": "registered: true",
+      "filter": "PlayerUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "Y1-ano-puesto",
+      "description": "un año ya puesto se cambia",
+      "file": "Sources/Application/Players.swift",
+      "find": "guard command.birthYear == current.value else {",
+      "replace": "guard true else {",
+      "filter": "PlayerUseCaseTests|PlayerEndpointTests"
+    },
+    {
+      "id": "Y2-nombre-y-ano",
+      "description": "el año se pone a la vez que cambia el nombre",
+      "file": "Sources/Application/Players.swift",
+      "find": "guard name == profile.fullName else {",
+      "replace": "guard true else {",
+      "filter": "PlayerUseCaseTests"
+    },
+    {
+      "id": "O1-orden-bytes",
+      "description": "el orden por el número de cada letra",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "let spanishCollation = #\"\"es-ES-x-icu\"\"#",
+      "replace": "let spanishCollation = #\"\"C\"\"#",
+      "filter": "PlayerRepositoryTests"
+    },
+    {
+      "id": "O2-sin-dorsal",
+      "description": "la plantilla, solo por nombre",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "ORDER BY r.shirt_number NULLS LAST, p.full_name",
+      "replace": "ORDER BY p.full_name",
+      "filter": "PlayerRepositoryTests|PlayerEndpointTests"
+    },
+    {
+      "id": "O3-sin-dorsal-primero",
+      "description": "los que no tienen dorsal, delante",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "ORDER BY r.shirt_number NULLS LAST",
+      "replace": "ORDER BY r.shirt_number NULLS FIRST",
+      "filter": "PlayerRepositoryTests|PlayerEndpointTests"
+    },
+    {
+      "id": "C1-sync-sin-diccionario",
+      "description": "la sincronización no pasa por el diccionario",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "let name = (try? PlayerName(raw))?.spelledInCastilian() else {",
+      "replace": "let name = try? PlayerName(raw) else {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "C2-guion",
+      "description": "no se separa por el guion",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "if character == \" \" || character == \"-\" {",
+      "replace": "if character == \" \" {",
+      "filter": "CastilianNamesTests"
+    },
+    {
+      "id": "C3-sin-pliegue",
+      "description": "se busca la palabra tal cual, sin plegar",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "byKey[PlayerSearch.fold(String(word))] ?? String(word)",
+      "replace": "byKey[String(word)] ?? String(word)",
+      "filter": "CastilianNamesTests|SyncTeamRosterTests"
+    },
+    {
+      "id": "C4-ultima-palabra",
+      "description": "la última palabra no pasa por el diccionario",
+      "file": "Sources/Domain/PlayerName.swift",
+      "find": "        result += CastilianNames.spelled(word)\n        // Solo",
+      "replace": "        result += String(word)\n        // Solo",
+      "filter": "CastilianNamesTests"
+    },
+    {
+      "id": "M1-todos",
+      "description": "la migración arregla también lo tecleado",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "WHERE r.profile_id = p.id AND r.last_listed_at IS NOT NULL)",
+      "replace": "WHERE r.profile_id = p.id)",
+      "filter": "MigrationIntegrityTests"
+    },
+    {
+      "id": "M2-nada",
+      "description": "la migración no arregla nada",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "        for row in rows {\n            // Un nombre que hoy no valdría",
+      "replace": "        for row in rows where false {\n            // Un nombre que hoy no valdría",
+      "filter": "MigrationIntegrityTests"
+    },
+    {
+      "id": "P1-codigo",
+      "description": "la temporada terminada sale como archivada",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "code: \"SEASON_ENDED\",",
+      "replace": "code: \"SEASON_ARCHIVED\",",
+      "filter": "PlayerEndpointTests"
+    },
+    {
+      "id": "P2-404",
+      "description": "el alta sin inscripción, 404",
+      "file": "Sources/HTTPAdapter/ProblemMiddleware.swift",
+      "find": "return Problem(status: .unprocessableEntity, code: \"TEAM_NOT_REGISTERED\",",
+      "replace": "return Problem(status: .notFound, code: \"TEAM_NOT_REGISTERED\",",
+      "filter": "PlayerEndpointTests"
+    }
+  ]
+}

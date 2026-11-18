@@ -69,6 +69,28 @@ public struct PlayerName: Hashable, Sendable {
         String(value.map { Self.unaccented[$0] ?? $0 })
     }
 
+    /// **El nombre con las tildes y las eñes del castellano** (`D-123`): cada palabra
+    /// que está en el diccionario (`CastilianNames`), como allí; las demás, como
+    /// están. Palabras enteras, separadas por espacio o guion. Lo usa la
+    /// sincronización con lo que llega de la federación, que las quita; lo que
+    /// teclea el club no pasa por aquí.
+    public func spelledInCastilian() -> PlayerName {
+        var result = ""
+        var word = Substring()
+        for character in value {
+            if character == " " || character == "-" {
+                result += CastilianNames.spelled(word) + String(character)
+                word = Substring()
+            } else {
+                word.append(character)
+            }
+        }
+        result += CastilianNames.spelled(word)
+        // Solo cambia letras por letras del mismo largo: sigue siendo un nombre
+        // válido, y si no lo fuera, se queda el de antes.
+        return (try? PlayerName(result)) ?? self
+    }
+
     private static let unaccented: [Character: Character] = Dictionary(uniqueKeysWithValues: zip(
         Array("ÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛ"), Array("AAAAAEEEEIIIIOOOOOUUUU")))
 

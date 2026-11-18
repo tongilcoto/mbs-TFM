@@ -141,24 +141,39 @@ public struct Player: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Las dos reglas que deciden si se puede escribir en una plantilla.
+/// Las reglas que deciden si se puede escribir en una plantilla.
 ///
 /// Las otras dos (el dorsal sin repetir y un jugador en una sola plantilla por
 /// temporada, `D-118` y `D-121`) son de varias filas a la vez, y las sostiene la
-/// base con sus índices.
+/// base con sus índices. **El día lo pone quien llama**: el dominio no mira el reloj.
 public enum RosterRules {
-    /// El alta: solo en un equipo **propio** (un rival no tiene plantilla, §3.7) y
-    /// en una temporada **sin archivar**.
-    public static func requireCanAdd(to team: Team, in season: Season) throws {
+    /// El alta: solo en un equipo **propio** (un rival no tiene plantilla, §3.7),
+    /// en una temporada en la que se puede escribir, y con el equipo **inscrito**
+    /// en ella (decisión 3 de R6.11).
+    public static func requireCanAdd(to team: Team, in season: Season, on instant: Date,
+                                     registered: Bool) throws {
         guard team.isOwn else {
             throw DomainError.teamNotOwn(team: team.id.description)
         }
-        try requireEditable(in: season)
+        try requireEditable(in: season, on: instant)
+        guard registered else {
+            throw DomainError.teamNotRegistered(team: team.id.description, season: season.id.description)
+        }
     }
 
-    /// Corregir, dar de baja, poner o quitar la foto y sincronizar: la temporada
-    /// archivada es **de solo lectura entera** (R6.3).
-    public static func requireEditable(in season: Season) throws {
+    /// Corregir, dar de baja y poner o quitar la foto: ni en una temporada
+    /// **archivada** (R6.3) ni en una **terminada** (decisión 4 de R6.14). Si es
+    /// las dos cosas, dice que está archivada.
+    public static func requireEditable(in season: Season, on instant: Date) throws {
+        try requireNotArchived(season)
+        guard !season.hasEnded(on: instant) else {
+            throw DomainError.seasonEnded(label: season.label.value)
+        }
+    }
+
+    /// Solo que no esté archivada: lo que mira la sincronización, que además pide
+    /// que sea la en curso (`SEASON_NOT_CURRENT`, R6.14).
+    public static func requireNotArchived(_ season: Season) throws {
         guard !season.isArchived else {
             throw DomainError.seasonArchived(label: season.label.value)
         }
