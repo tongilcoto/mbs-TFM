@@ -60,23 +60,10 @@ public struct ListPlayers: Sendable {
         // Un rival no tiene plantilla (§3.7): lista vacía, no error.
         guard team.isOwn else { return [] }
 
+        // En el orden que trae la base (`D-118`, `D-124`); filtrar no lo cambia.
         let rows = try await players.list(teamID: teamID, seasonID: seasonID)
             .filter { position == nil || $0.position == position }
-        return Self.ordered(try await withTheirProfiles(rows, profiles: profiles))
-    }
-
-    /// **Por dorsal, y después los que no tienen, por nombre** (`D-118`). El nombre
-    /// desempata también entre los que tienen dorsal, aunque no puedan repetirlo:
-    /// así el orden es total y no depende de cómo lo devuelva la base.
-    static func ordered(_ entries: [RosterEntry]) -> [RosterEntry] {
-        entries.sorted { left, right in
-            switch (left.player.shirtNumber?.value, right.player.shirtNumber?.value) {
-            case let (l?, r?) where l != r: return l < r
-            case (.some, nil): return true
-            case (nil, .some): return false
-            default: return left.profile.fullName.value < right.profile.fullName.value
-            }
-        }
+        return try await withTheirProfiles(rows, profiles: profiles)
     }
 }
 

@@ -5,8 +5,9 @@ public import Domain
 public protocol PlayerRepository: Sendable {
     func find(_ id: PlayerID) async throws -> Player?
 
-    /// La plantilla de un equipo en una temporada. Sin orden: lo pone el caso de
-    /// uso, que es quien sabe cuál es (`D-118`).
+    /// La plantilla de un equipo en una temporada, **en su orden**: por dorsal, y los
+    /// que no tienen, al final, por nombre en español (`D-118`, `D-124`). Lo pone la
+    /// base, con su ordenación española.
     func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Player]
 
     /// Las filas de un perfil en una temporada: como mucho una (`D-121`).

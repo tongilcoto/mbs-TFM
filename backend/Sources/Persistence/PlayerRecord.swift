@@ -277,12 +277,24 @@ public struct FluentPlayerRepository: PlayerRepository {
         try await PlayerRecord.find(id.raw, on: database)?.toDomain()
     }
 
+    /// **En el orden de la plantilla** (`D-118`, `D-124`): por dorsal, y los que no
+    /// tienen, al final, por nombre **en español** (`spanishCollation`). El nombre es
+    /// del perfil, así que la consulta lo junta; y el `id` desempata, para que el orden
+    /// no dependa de cómo devuelva las filas la base.
     public func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Player] {
-        try await PlayerRecord.query(on: database)
-            .filter(\.$team.$id == teamID.raw)
-            .filter(\.$season.$id == seasonID.raw)
-            .all()
-            .map { try $0.toDomain() }
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "list", object: PlayerRecord.schema)
+        }
+        let ids = try await sql.raw("""
+            SELECT r.id FROM players r JOIN player_profiles p ON p.id = r.profile_id
+            WHERE r.team_id = \(bind: teamID.raw) AND r.season_id = \(bind: seasonID.raw)
+              AND r.deleted_at IS NULL
+            ORDER BY r.shirt_number NULLS LAST, p.full_name COLLATE \(unsafeRaw: spanishCollation), r.id
+            """).all(decodingColumn: "id", as: UUID.self)
+        guard !ids.isEmpty else { return [] }
+        let records = try await PlayerRecord.query(on: database).filter(\.$id ~~ Set(ids)).all()
+        let byID = Dictionary(uniqueKeysWithValues: try records.map { (try $0.requireID(), $0) })
+        return try ids.compactMap { byID[$0] }.map { try $0.toDomain() }
     }
 
     public func list(profileID: PlayerProfileID, seasonID: SeasonID) async throws -> [Player] {
@@ -402,7 +414,7 @@ public struct FluentPlayerProfileRepository: PlayerProfileRepository {
             query.appendInterpolation(unsafeRaw: ")) LIKE ")
             query.appendInterpolation(bind: "% \(word)%")
         }
-        query.appendInterpolation(unsafeRaw: " ORDER BY p.full_name LIMIT ")
+        query.appendInterpolation(unsafeRaw: " ORDER BY p.full_name COLLATE \(spanishCollation), p.id LIMIT ")
         query.appendInterpolation(bind: limit)
 
         let ids = try await sql.raw(query).all(decodingColumn: "id", as: UUID.self)
@@ -413,3 +425,8 @@ public struct FluentPlayerProfileRepository: PlayerProfileRepository {
         return try ids.compactMap { byID[$0] }.map { try $0.toDomain() }
     }
 }
+
+/// **La ordenación española de Postgres** (`D-124`): la tilde junto a su letra, y la
+/// eñe detrás de la ene. Viene con ICU, que trae el Postgres de desarrollo (16);
+/// el de producción, a comprobar en R16. Entre comillas por el guion.
+let spanishCollation = #""es-ES-x-icu""#
