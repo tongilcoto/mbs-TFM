@@ -496,8 +496,8 @@ Then('el buscador del alta está vacío y tiene el foco', async function (this: 
   )
 })
 
-Then('el buscador del alta tiene la ayuda {string}', async function (this: ScenarioWorld, text: string) {
-  // Lo que el lector lee al llegar al campo: su etiqueta, «Nombre y apellidos» (decisión 2 de R6.12).
+Then('el buscador del alta tiene la etiqueta {string}', async function (this: ScenarioWorld, text: string) {
+  // Lo que el lector lee al llegar al campo (decisión 2 de R6.12).
   await this.check('el nombre del buscador', () =>
     shows(dialog(this).getByRole('combobox', { name: new RegExp(`^${escaped(text)}`) }), `el buscador «${text}»`),
   )
