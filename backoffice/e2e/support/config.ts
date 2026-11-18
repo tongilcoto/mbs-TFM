@@ -29,6 +29,9 @@ export const config = {
   recordings: here('../federation-recordings'),
   /** Dónde deja cada proceso lo que escribe, para mirarlo si algo falla. */
   logs: here('../../e2e-results'),
+  /** Dónde guarda el servidor de pruebas las fotos de los jugadores (`PHOTOS_DIR`): fuera del repositorio, y vacía
+   *  al empezar cada pasada. Sin ella, iría a una carpeta `fotos/` junto a donde se lanzan las pruebas. */
+  photos: here('../../e2e-results/fotos'),
 
   /** Cuánto se espera a que un proceso conteste antes de dar el arranque por fallido. */
   startTimeoutMs: 20_000,
