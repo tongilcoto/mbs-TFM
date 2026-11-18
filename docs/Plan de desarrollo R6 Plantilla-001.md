@@ -756,7 +756,7 @@ Antes, **lo medido**: el código de la federación que guarda cada inscripción 
 | `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`). Y **nada se escribe en una temporada pasada**, como en la archivada (decisión 4 de `R6.14`). Y **el diccionario de nombres y apellidos** (`D-123`): la lista, revisada antes de grabarla; la sincronización que la usa; y la migración de los perfiles publicados alguna vez |
 | `R6.18` | Los 121 escenarios de la rebanada en verde, con axe en los dos modos |
 | `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
-| `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6) y lo aprendido |
+| `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6; y en el mapa de pantallas, la Plantilla y la Ficha del jugador, de ámbar a verde) y lo aprendido |
 
 
 **El diccionario de nombres y apellidos, para `R6.17`** (2026-11-17, propuesto por el desarrollador al sincronizar de
