@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
+import { club } from '../../club'
 import { notice } from '../../notice'
 import { primeVueOptions } from '../../theme/primevue'
 import TeamScreen from './TeamScreen.vue'
@@ -90,13 +91,15 @@ function fakeServer(fields: Partial<typeof defaults> = {}) {
     const path = url.pathname.replace('/api/v1', '')
     server.asked.push(`${request.method} ${path}${url.search}`)
     if (path === '/seasons') return Response.json(server.seasons)
+    if (path.endsWith('/roster-sync') && request.method === 'POST') return server.syncAnswer(server)
     const registration = path.match(/^\/teams\/.+\/registrations\/(.+)$/)
     if (registration) {
       if (!server.playsIn.includes(registration[1]!)) return problem(404, 'TEAM_NOT_REGISTERED')
       return Response.json({
         team: server.team,
         seasonId: registration[1],
-        competitions: server.competitions.map((c) => ({ competitionId: c.id, federationTeamId: '824' })),
+        competitions: server.competitions.map((c) => ({ competitionId: c.id, federationTeamId: server.linked ? '824' : null })),
+        rosterSyncedAt: server.rosterSyncedAt,
       })
     }
     if (path === `/teams/${TEAM}`) return Response.json(server.team)
@@ -149,7 +152,26 @@ const defaults = {
   players: [player('a', 'MARCOS DÍAZ', 1), player('b', 'JUAN CARLOS GARCÍA DE LA FUENTE', null)] as unknown[],
   playersFail: false,
   removeFails: false,
+  // La sincronización de la plantilla (R6.16): la fecha de la inscripción, si el equipo está enganchado, y qué
+  // contesta el servidor al sincronizar (por omisión, todos federados y un resumen).
+  rosterSyncedAt: null as string | null,
+  linked: true,
+  syncAnswer: (server: { players: unknown[] }): Response | Promise<Response> => {
+    server.players = server.players.map((p) => ({ ...(p as object), federated: true, lastListedAt: SYNCED_AT }))
+    return Response.json({
+      syncedAt: SYNCED_AT,
+      added: 0,
+      alreadyInRoster: 2,
+      withoutBirthYear: 0,
+      deletedInClub: 0,
+      duplicateName: [],
+      inOtherTeam: [],
+      invalidName: ['TORRES, IÑAKI/'],
+    })
+  },
 }
+
+const SYNCED_AT = '2026-11-17T17:30:00Z'
 
 // Un jugador de la plantilla, con su dorsal o sin él; sin foto, salvo que se le dé.
 function player(id: string, fullName: string, shirtNumber: number | null, photoUrl: string | null = null) {
@@ -707,6 +729,14 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
     })
 
+    test('en una temporada pasada sin archivar, tampoco (decisión 4 de R6.14)', async () => {
+      fakeServer({ seasons: [season('2026/27', true), season('2025/26')], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: 'Dar de alta un jugador' })).not.toBeInTheDocument()
+    })
+
     test('al guardar, el diálogo se cierra, la plantilla trae al nuevo y el aviso dice «Guardado»', async () => {
       fakeServer()
       await openTeam(plantilla)
@@ -744,6 +774,14 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       await rosterTable('2025/26')
       expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument()
+    })
+
+    test('en una temporada pasada sin archivar, tampoco', async () => {
+      fakeServer({ seasons: [season('2026/27', true), season('2025/26')], playsIn: ['id-2025'] })
+      await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+      await rosterTable('2025/26')
+      expect(screen.queryByRole('button', { name: /^Corregir/ })).not.toBeInTheDocument()
     })
   })
 
@@ -806,5 +844,143 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
       await rosterTable('2025/26')
       expect(screen.queryByRole('button', { name: /^Dar de baja/ })).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('sincronizar la plantilla con la Federación (R6.16)', () => {
+  const rosterTable = () => screen.findByRole('table', { name: 'Plantilla de Cadete A en la temporada 2026/27' })
+  const plantilla = `/temporadas/2026-27/equipos/${TEAM}/plantilla`
+  const syncButton = () => screen.queryByRole('button', { name: 'Sincronizar con la Federación' })
+  const withRoster = (provides = true) => (club.value = { federationProvidesTeamRoster: provides } as typeof club.value)
+
+  afterEach(() => (club.value = undefined))
+
+  test('en la temporada en curso, con el equipo enganchado, se ofrece, y dice que todavía no se ha hecho', async () => {
+    withRoster()
+    fakeServer()
+    await openTeam(plantilla)
+
+    await rosterTable()
+    expect(syncButton()).toBeInTheDocument()
+    expect(screen.getByText('Todavía no se ha sincronizado con la Federación')).toBeInTheDocument()
+  })
+
+  test('con una federación que no publica plantillas, no se ofrece', async () => {
+    withRoster(false)
+    fakeServer()
+    await openTeam(plantilla)
+
+    await rosterTable()
+    expect(syncButton()).not.toBeInTheDocument()
+  })
+
+  test('con el equipo sin enganchar esa temporada, no se ofrece', async () => {
+    withRoster()
+    fakeServer({ linked: false })
+    await openTeam(plantilla)
+
+    await rosterTable()
+    expect(syncButton()).not.toBeInTheDocument()
+  })
+
+  test('en una temporada pasada, no se ofrece', async () => {
+    withRoster()
+    fakeServer({ playsIn: ['id-2025'] })
+    await openTeam(`/temporadas/2025-26/equipos/${TEAM}/plantilla`)
+
+    await screen.findByRole('table', { name: 'Plantilla de Cadete A en la temporada 2025/26' })
+    expect(syncButton()).not.toBeInTheDocument()
+  })
+
+  test('sin jugadores, también se ofrece', async () => {
+    withRoster()
+    fakeServer({ players: [] })
+    await openTeam(plantilla)
+
+    await screen.findByText('Este equipo aún no tiene jugadores en 2026/27.')
+    expect(syncButton()).toBeInTheDocument()
+  })
+
+  test('junto al botón, la última sincronización', async () => {
+    withRoster()
+    fakeServer({ rosterSyncedAt: '2026-11-10T09:05:00Z' })
+    await openTeam(plantilla)
+
+    await rosterTable()
+    expect(screen.getByText(/^Última sincronización: 10\/11\/2026 \d\d:05$/)).toBeInTheDocument()
+  })
+
+  test('mientras sincroniza, el botón dice «Sincronizando…» y no se puede pulsar', async () => {
+    withRoster()
+    let answer!: (response: Response) => void
+    fakeServer({ syncAnswer: () => new Promise<Response>((resolve) => (answer = resolve)) })
+    await openTeam(plantilla)
+    await rosterTable()
+
+    await fireEvent.click(syncButton()!)
+
+    expect(await screen.findByRole('button', { name: 'Sincronizando…' })).toBeDisabled()
+    answer(problem(504, 'FEDERATION_UNREACHABLE'))
+    expect(await screen.findByRole('button', { name: 'Sincronizar con la Federación' })).toBeEnabled()
+  })
+
+  test('al acabar, el resumen encima de la tabla, la fecha nueva y cada fila «Federado»', async () => {
+    withRoster()
+    fakeServer()
+    await openTeam(plantilla)
+    await rosterTable()
+
+    await fireEvent.click(syncButton()!)
+
+    const status = await screen.findByText('Sincronizada con la Federación')
+    const summary = status.closest('[role="status"]')!
+    expect(summary).toHaveTextContent('0 añadidos y 2 que ya estaban.')
+    expect(summary).toHaveTextContent('para darlo de alta a mano: «TORRES, IÑAKI/».')
+    expect(screen.getByText(/^Última sincronización: 17\/11\/2026/)).toBeInTheDocument()
+    await waitFor(async () => expect(within(await rosterTable()).getAllByText('Federado')).toHaveLength(2))
+  })
+
+  test('el resumen se cierra con ✕', async () => {
+    withRoster()
+    fakeServer()
+    await openTeam(plantilla)
+    await rosterTable()
+    await fireEvent.click(syncButton()!)
+    await screen.findByText('Sincronizada con la Federación')
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cerrar el resumen' }))
+
+    expect(screen.queryByText('Sincronizada con la Federación')).not.toBeInTheDocument()
+  })
+
+  test('si la Federación falla, el aviso en la caja, como alerta, y la plantilla como estaba', async () => {
+    withRoster()
+    fakeServer({ syncAnswer: () => problem(502, 'FEDERATION_UNEXPECTED_STATUS') })
+    await openTeam(plantilla)
+    await rosterTable()
+
+    await fireEvent.click(syncButton()!)
+
+    const alert = await screen.findByText('La Federación ha respondido con un error. Prueba otra vez en un rato.')
+    expect(alert.closest('[role="alert"]')).toHaveTextContent('Código: FEDERATION_UNEXPECTED_STATUS')
+    expect(within(await rosterTable()).getAllByRole('row').slice(1)).toHaveLength(2)
+    expect(within(await rosterTable()).queryByText('Federado')).not.toBeInTheDocument()
+    expect(syncButton()).toBeEnabled()
+  })
+
+  test('la fecha nueva se queda al ir a Resultados y volver', async () => {
+    withRoster()
+    fakeServer()
+    const router = await openTeam(plantilla)
+    await rosterTable()
+    await fireEvent.click(syncButton()!)
+    await screen.findByText('Sincronizada con la Federación')
+
+    await router.push(`/temporadas/2026-27/equipos/${TEAM}/resultados`)
+    await router.push(plantilla)
+
+    await rosterTable()
+    expect(screen.getByText(/^Última sincronización: 17\/11\/2026/)).toBeInTheDocument()
+    expect(screen.queryByText('Sincronizada con la Federación')).not.toBeInTheDocument()
   })
 })

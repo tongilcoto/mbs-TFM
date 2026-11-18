@@ -47,3 +47,18 @@ export function todayHere(): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
+
+// Pasada, en curso o futura (plan R6, decisión 3 de R6.16): la en curso la marca el servidor (`isCurrent`, la que
+// contiene hoy); de las demás, la que acabó antes de hoy es pasada, y la otra, futura. Fechas como texto, como arriba.
+export type SeasonPhase = 'past' | 'current' | 'future'
+
+export function seasonPhase(season: Season, today: string): SeasonPhase {
+  if (season.isCurrent) return 'current'
+  return season.endDate < today ? 'past' : 'future'
+}
+
+// Si en esa temporada se puede cambiar algo (la plantilla, la ficha de un jugador): ni en una pasada ni en una
+// archivada, que se ven pero no se cambian (decisión 4 de R6.14). En la en curso y en la futura, sí.
+export function canChange(season: Season, today: string): boolean {
+  return season.archivedAt == null && seasonPhase(season, today) !== 'past'
+}

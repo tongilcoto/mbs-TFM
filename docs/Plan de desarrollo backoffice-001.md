@@ -319,6 +319,11 @@ categoría, de una división inferior. Ese jugador sigue en la plantilla de su e
 por temporada), así que lo que se apunta del partido (convocatoria, goles, tarjetas) tiene que poder apuntar a la
 fila de otro equipo. La plantilla (R6) no lo ve: lee la ficha del equipo, no las actas.
 
+**Pendiente, para la v2: rellenar el año de los jugadores que trae la sincronización** (lo dijo el desarrollador el
+2026-11-17, al sincronizar de verdad en R6.16: 48 de sus 51 perfiles, sin año). Hoy se pone uno a uno, con
+«Corregir» (plan R6, decisión 9; decisión 1 de R6.12). Una idea suya: marcar varias filas y ponerles el año a la
+vez. Pesa sobre todo el primer año de un club con el sistema; después llegan pocos cada temporada.
+
 **Pendiente, sin rebanada todavía: una paleta propia de cada club** ([Plan R1, decisión 7](./Plan%20de%20desarrollo%20R1%20Portada%20base-001.md)).
 La rebanada 1 deja los colores en un solo fichero (`src/theme/palette.ts`) que se aplica al arrancar, así que
 bastará con que la web aplique la del club si la tiene; podría ir en `settings` del club (`D-23`). **Una paleta que

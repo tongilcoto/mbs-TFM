@@ -2,8 +2,8 @@
      `:id` su fila de esa temporada. Una página, no un diálogo, con el enlace de vuelta a la plantilla de su equipo.
      Enseña el nombre y el año de su perfil, y el dorsal, la demarcación y la foto de su fila; nunca lo que el perfil
      guarda como ayuda (D-122). Desde aquí: corregir y dar de baja (los mismos diálogos que en la fila), y poner,
-     cambiar o quitar la foto, que se guarda en cuanto se elige (decisión 7). Una temporada archivada se ve, pero no
-     se cambia (R6.3). Si la temporada del camino no es la del jugador, «No se ha encontrado el jugador». -->
+     cambiar o quitar la foto, que se guarda en cuanto se elige (decisión 7). Una temporada pasada o archivada se ve,
+     pero no se cambia (R6.3; decisión 4 de R6.14). Si la temporada del camino no es la del jugador, «No se ha encontrado el jugador». -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
@@ -18,9 +18,10 @@ import PlayerPhoto from '../../components/PlayerPhoto.vue'
 import { initialsOf, shownName } from '../../components/playerName'
 import { announce } from '../../notice'
 import { namesOf, teamName } from '../../theme/names'
-import { type Season, toAddress } from '../home/seasons'
+import { canChange, type Season, toAddress, todayHere } from '../home/seasons'
 import { isTeamCode } from '../sync-team/link'
 import { tabPath } from '../team/header'
+import { federationText } from '../team/roster'
 import { PHOTO_TYPES, photoProblem, removePhoto, uploadPhoto } from '../team/photoUpload'
 import PlayerDialog from '../team/PlayerDialog.vue'
 import RemovePlayerDialog from '../team/RemovePlayerDialog.vue'
@@ -50,17 +51,21 @@ onBeforeUnmount(() => pending?.abort())
 const ready = computed(() => (state.value.kind === 'ready' ? state.value : undefined))
 const name = computed(() => (ready.value ? shownName(ready.value.player.fullName) : 'Jugador'))
 const teamTitle = computed(() => (ready.value ? teamName(ready.value.team.category, ready.value.team.letter) : ''))
-const editable = computed(() => ready.value !== undefined && ready.value.season.archivedAt == null)
+// Ni en una temporada pasada ni en una archivada (decisión 4 de R6.14).
+const editable = computed(() => ready.value !== undefined && canChange(ready.value.season, todayHere()))
 const rosterLink = computed(() => (ready.value ? tabPath('plantilla', ready.value.season.label, ready.value.team.id) : '/'))
 // Lo de su fila, como en la plantilla: una raya si no hay; el año, de su perfil, o «Sin año».
 const facts = computed(() => {
   const player = ready.value?.player
   if (!player) return []
+  const federation = federationText(player)
   return [
     { label: 'Dorsal', value: player.shirtNumber == null ? '—' : String(player.shirtNumber) },
     // El generador ensancha la demarcación «o nula» a cualquier texto (R6.6); el catálogo solo admite las cuatro.
     { label: 'Demarcación', value: player.position == null ? '—' : positionNames[player.position as PlayerPosition] },
     { label: 'Año de nacimiento', value: player.birthYear == null ? 'Sin año' : String(player.birthYear) },
+    // «Federado» o «No federado», con su fecha; sin el dato si la plantilla nunca se ha sincronizado (R6.16).
+    ...(federation === undefined ? [] : [{ label: 'Federación', value: federation }]),
   ]
 })
 

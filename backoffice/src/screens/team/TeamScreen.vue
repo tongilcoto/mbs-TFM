@@ -41,7 +41,9 @@ type State =
   | { kind: 'noSeasons'; team: Team }
   | { kind: 'unknownSeason'; team: Team; asked: string }
   | { kind: 'notPlaying'; team: Team; season: Season }
-  | { kind: 'ready'; team: Team; season: Season; competitions: Competition[] }
+  // `rosterSyncedAt` y `linked`, de la inscripción, para sincronizar la plantilla (R6.16): la fecha junto al botón,
+  // y si alguna de sus competiciones tiene el código del equipo en la federación.
+  | { kind: 'ready'; team: Team; season: Season; competitions: Competition[]; rosterSyncedAt: string | null; linked: boolean }
 
 // La posición, por separado: se vuelve a buscar al elegir otra competición, sin rehacer la ficha. Con ella, la
 // clasificación de la que sale (`table`): da el puesto de hoy de los partidos sin jugar (§3.3).
@@ -188,11 +190,23 @@ async function load() {
       return
     }
     position.value = located.data
-    state.value = { kind: 'ready', team, season, competitions: own }
+    state.value = {
+      kind: 'ready',
+      team,
+      season,
+      competitions: own,
+      rosterSyncedAt: registration.data.rosterSyncedAt ?? null,
+      linked: registration.data.competitions.some((c) => c.federationTeamId != null),
+    }
   } catch (error) {
     if (leaving.signal.aborted) return
     throw error
   }
+}
+
+// Tras sincronizar la plantilla, su fecha nueva: la pestaña la enseña, y la tiene otra vez si se sale y se vuelve a ella.
+function rosterSynced(at: string) {
+  if (state.value.kind === 'ready') state.value = { ...state.value, rosterSyncedAt: at }
 }
 
 function ok<T>(data: T): Result<T> {
@@ -461,6 +475,9 @@ function pickSeason(label: string) {
         :team-id="teamId"
         :team-title="heading?.title ?? ''"
         :season="state.season"
+        :roster-synced-at="state.rosterSyncedAt"
+        :linked="state.linked"
+        @synced="rosterSynced"
       />
       <ResultsTab
         v-else

@@ -15,11 +15,15 @@
 // y sus goleadores, todavía ninguno. Así el servidor las da de alta y las sincroniza por su camino
 // de siempre, y los datos no se escriben a mano en la base (la skill de escenarios, principio 9). Y a una
 // competición inventada se le puede pedir que falle o que tarde: es lo que hace la RFFM de verdad.
+//
+// Y la ficha de equipo (`fichaequipo/<código>`, plan R6, R6.15) de cada equipo de una competición inventada, con los
+// jugadores que el escenario le hace publicar (`publishRoster`), o ninguno; también se le puede pedir que falle o
+// que tarde. A un código que no es de ninguna, `team: null`, como la RFFM.
 import { readdirSync, readFileSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { config } from './config.ts'
-import { federationDate, standingsAfter, type Competition, type Round } from './invented.ts'
+import { federationDate, standingsAfter, type Competition, type FederationPlayer, type FederationTeam, type Round } from './invented.ts'
 
 /** Los calendarios grabados. Son páginas enteras y no llevan dentro la dirección, así que van aquí. */
 const calendars: Record<string, string> = {
@@ -158,6 +162,51 @@ function inventedScorers(competition: Competition): string {
   return JSON.stringify({ estado: '1', sesion_ok: '1', competicion: competition.division, grupo: competition.group, goles: [] })
 }
 
+/**
+ * La ficha de equipo, con la forma de la grabada (backend/Tests/FederationTests/Fixtures/RFFM-fichaequipo.html): los
+ * datos en `__NEXT_DATA__`, en `props.pageProps.team`, y cada jugador con `cod_jugador` y `nombre`. Lo demás del
+ * equipo va vacío: el servidor solo lee los jugadores. Sin equipo, `team: null`.
+ */
+function teamSheet(code: string, found?: { team: FederationTeam; competition: Competition; players: FederationPlayer[] }): string {
+  const team = found && {
+    estado: '1',
+    sesion_ok: '1',
+    codigo_equipo: code,
+    codigo_club: '',
+    clave_acceso: '',
+    nombre_equipo: found.team.rawName,
+    escudo_club: '',
+    nombre_club: found.team.rawName.replace(/ '[A-Z]'$/, ''),
+    categoria: found.competition.division,
+    codigo_categoria: '',
+    portal_web: '',
+    codigo_campo: '',
+    campo: '',
+    foto_campo: '',
+    campo_entrenamiento: '',
+    titular_correspondencia: '',
+    tratamiento_correspondencia: '',
+    domicilio_correspondencia: '',
+    localidad_correspondencia: '',
+    provincia_correspondencia: '',
+    codigo_postal_correspondencia: '',
+    email_correspondencia: '',
+    telefonos: '',
+    jugar_dia: '',
+    jugar_horario: '',
+    fax: '',
+    delegados_equipo: [],
+    auxiliares_equipo: [],
+    tecnicos_equipo: [],
+    jugadores_equipo: found.players.map((player) => ({ cod_jugador: player.code, nombre: player.published })),
+    equipaciones: [],
+    equipacion1_diseno: [],
+    host: 'https://appweb.rffm.es/',
+  }
+  const data = { props: { pageProps: { team: team ?? null, query: { codficha: [code] } } }, page: '/fichaequipo/[...codficha]' }
+  return `<html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script></body></html>`
+}
+
 // Una respuesta retenida: la federación tarda hasta que el escenario la suelta. `skip`, cuántas peticiones del
 // calendario deja pasar antes de retener una: el enganche lo lee una vez y la primera ingesta otra, así que
 // retener la ingesta sin retener el enganche es dejar pasar una.
@@ -198,11 +247,29 @@ export interface FakeFederation {
   /** Cuando el calendario retenido ya se ha pedido. */
   heldArrived(competition: Competition): Promise<void>
   /**
+   * Desde ahora la ficha del equipo del club en esta competición (el primero de sus equipos) publica estos
+   * jugadores, en este orden, y solo estos. Sin llamarla, la ficha sale sin jugadores.
+   */
+  publishRoster(competition: Competition, players: FederationPlayer[]): void
+  /** Desde ahora la ficha del equipo del club contesta 500, como la RFFM cuando falla. */
+  failRoster(competition: Competition): void
+  /** Desde ahora la ficha del equipo del club vuelve a contestar bien. */
+  answerRoster(competition: Competition): void
+  /** La próxima ficha que se pida del equipo del club no sale hasta `releaseAll`. */
+  holdRoster(competition: Competition): void
+  /** Cuando la ficha retenida ya se ha pedido. */
+  heldRosterArrived(competition: Competition): Promise<void>
+  /**
    * Suelta todo lo retenido. Lo inventado no se olvida: la pasada que se suelta todavía pide sus goleadores,
    * y cada escenario inventa códigos nuevos, así que no se pisan.
    */
   releaseAll(): void
   stop(): Promise<void>
+}
+
+/** El código del equipo del club en una competición inventada: el primero de sus equipos. */
+function ownCode(competition: Competition): string {
+  return competition.teams[0]!.code
 }
 
 // La que está en marcha, para que los pasos le pidan cosas.
@@ -220,6 +287,10 @@ export async function startFakeFederation(port = config.federationPort): Promise
   const invented = new Map<string, Competition>()
   const failing = new Set<string>()
   const failingCalendars = new Set<string>()
+  // Las fichas de equipo: los jugadores de cada equipo del club, y las que fallan, por su código.
+  const rosters = new Map<string, FederationPlayer[]>()
+  const failingRosters = new Set<string>()
+  // Las retenidas: los calendarios por su grupo, y las fichas por `fichaequipo/<código>`.
   const holds = new Map<string, Hold>()
   // Las retenidas que ya se pidieron y esperan a que las suelten.
   const waiting: Hold[] = []
@@ -256,6 +327,26 @@ export async function startFakeFederation(port = config.federationPort): Promise
       return send(failing.has(ours.federationGroupId) ? 'null' : inventedScorers(ours))
     }
 
+    const sheet = /^\/fichaequipo\/([^/]+)$/.exec(url.pathname)
+    if (sheet) {
+      const code = decodeURIComponent(sheet[1]!)
+      if (failingRosters.has(code)) {
+        response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+        return response.end('Error interno')
+      }
+      const hold = holds.get(`fichaequipo/${code}`)
+      if (hold) {
+        holds.delete(`fichaequipo/${code}`)
+        waiting.push(hold)
+        hold.markArrived()
+        await hold.gate
+      }
+      const competition = [...invented.values()].find((c) => c.teams.some((t) => t.code === code))
+      const team = competition?.teams.find((t) => t.code === code)
+      const found = competition && team && { team, competition, players: rosters.get(code) ?? [] }
+      return send(teamSheet(code, found), 'text/html; charset=utf-8')
+    }
+
     if (url.pathname === '/competicion/calendario') {
       const q = url.searchParams
       const coordinate = [q.get('temporada'), q.get('tipojuego'), q.get('competicion'), q.get('grupo')].join('|')
@@ -290,6 +381,11 @@ export async function startFakeFederation(port = config.federationPort): Promise
     answerScorers: (competition) => void failing.delete(competition.federationGroupId),
     // Si ya no está entre las que esperan su petición, es que ya llegó.
     heldArrived: (competition) => holds.get(competition.federationGroupId)?.arrived ?? Promise.resolve(),
+    publishRoster: (competition, players) => void rosters.set(ownCode(competition), [...players]),
+    failRoster: (competition) => void failingRosters.add(ownCode(competition)),
+    answerRoster: (competition) => void failingRosters.delete(ownCode(competition)),
+    holdRoster: (competition) => void holds.set(`fichaequipo/${ownCode(competition)}`, newHold()),
+    heldRosterArrived: (competition) => holds.get(`fichaequipo/${ownCode(competition)}`)?.arrived ?? Promise.resolve(),
     releaseAll: () => {
       for (const hold of [...holds.values(), ...waiting.splice(0)]) hold.release()
       holds.clear()

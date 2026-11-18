@@ -146,7 +146,8 @@ propósito. Con eso, cuatro reglas.
 La web **no necesita saber qué club es** para pedir sus datos: el servidor lo deduce del nombre de la
 dirección (`celtic-castilla.miapp.com`), como hace hoy (LLD del backend, §6.1). Al arrancar, la web pide
 **una vez** `/api/v1/club` para tener el nombre y el escudo, y lo mantiene en memoria mientras la pestaña
-está abierta. Es la única excepción a la regla 2.4. Qué enseña si el club no existe: §8.
+está abierta. Es la única excepción a la regla 2.4. Las pantallas lo leen de ahí, de un sitio común (`club.ts`), por
+ejemplo para saber qué publica su federación ([DW-24]). Qué enseña si el club no existe: §8.
 
 #### 2.2 Lo que debe sobrevivir a una recarga va en la dirección
 
@@ -1046,3 +1047,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-21]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-22]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-24]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

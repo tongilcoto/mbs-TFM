@@ -415,3 +415,120 @@ export function federationDate(date: Date): string {
   return `${String(date.getUTCDate()).padStart(2, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${date.getUTCFullYear()}`
 }
 
+
+// ── Jugadores de la ficha de equipo de la federación (plan R6, R6.15) ───────────────────────────────────────
+
+// Con las formas de los 46 medidos en dos fichas de verdad (plan R6, decisión 9): en mayúsculas, con tildes, eñe y
+// diéresis, nombres compuestos, apellidos con partícula o con guion, y alguno con un solo apellido. En la RFFM la
+// mayoría van sin tildes, aunque las lleven («FERNANDEZ»); aquí salen más a menudo, y cada escenario pide la marca
+// que necesita (`NameMark`).
+const givenNames = ['JUAN', 'PABLO', 'HUGO', 'MARIO', 'DANIEL', 'LUCAS', 'DIEGO', 'MARCOS', 'ADRIÁN', 'ÁLVARO', 'IVÁN',
+  'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'ÍÑIGO', 'JOEL', 'NICOLÁS']
+const surnameList = ['GARCÍA', 'LÓPEZ', 'MARTÍN', 'SÁNCHEZ', 'PÉREZ', 'GÓMEZ', 'RUIZ', 'DÍAZ', 'MORENO', 'ALONSO',
+  'NAVARRO', 'TORRES', 'SANZ', 'VIDAL', 'ROMERO', 'MUÑOZ', 'IBÁÑEZ', 'CASTAÑO', 'PEÑA', 'GÜELL', 'ARGÜELLES',
+  'SIGÜENZA', 'DE LA FUENTE', 'DEL RÍO', 'GARCÍA-PATIÑO', 'SAN JOSÉ']
+
+/** Un jugador como lo publica la ficha de equipo de la RFFM: su código y su nombre, «APELLIDOS, NOMBRE». */
+export interface FederationPlayer {
+  code: string
+  /** Tal cual va en la ficha: «GARCÍA DE LA FUENTE, JUAN CARLOS». Puede no valer (`invalidFederationName`). */
+  published: string
+}
+
+/** Una persona inventada, en mayúsculas como la publica la RFFM. */
+export interface InventedPerson {
+  given: string
+  surnames: string
+}
+
+/** «APELLIDOS, NOMBRE»: como la escribe la ficha de equipo. */
+export function published(person: InventedPerson): string {
+  return `${person.surnames}, ${person.given}`
+}
+
+/** «NOMBRE APELLIDOS», en mayúsculas: como lo guarda el servidor tras darle la vuelta por la coma. */
+export function fullName(person: InventedPerson): string {
+  return `${person.given} ${person.surnames}`
+}
+
+/** Sin tildes ni diéresis, pero con la eñe: «GÜELL MUÑOZ» → «GUELL MUÑOZ». */
+export function withoutMarks(text: string): string {
+  return text
+    .normalize('NFD')
+    // La eñe es una letra (D-120, punto 4): su virgulilla se queda.
+    .replace(/([nN])̃/g, '$1')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(//g, '̃')
+    .normalize('NFC')
+}
+
+/**
+ * «El mismo nombre», como casa la sincronización (D-120, punto 4): en mayúsculas, un solo espacio entre palabras y
+ * sin tildes ni diéresis; la eñe, distinta. Para no inventar dos que el servidor tomaría por el mismo.
+ */
+export function sameNameKey(name: string): string {
+  return withoutMarks(name.toLocaleUpperCase('es-ES').trim().replace(/\s+/g, ' '))
+}
+
+/** Lo que tiene que llevar el nombre: lo pide el caso del escenario (la tilde que una de las dos partes quita…). */
+export type NameMark = 'tilde' | 'diéresis' | 'eñe' | 'ninguna'
+
+const marks: Record<NameMark, (name: string) => boolean> = {
+  // Con tilde, pero sin eñe ni diéresis: así quitar la tilde no cambia nada más.
+  tilde: (name) => /[ÁÉÍÓÚ]/.test(name) && !/[ÑÜ]/.test(name),
+  diéresis: (name) => /Ü/.test(name) && !/Ñ/.test(name),
+  eñe: (name) => /Ñ/.test(name),
+  ninguna: (name) => /^[A-Z -]+$/.test(name),
+}
+
+/**
+ * Una persona que no se llama como ninguna de `taken` (con «el mismo nombre» de la sincronización). Con `mark`, su
+ * nombre lleva esa marca; sin ella, cualquiera. Uno de cada cinco, con un solo apellido.
+ */
+export function inventedPerson(random: Random, taken: InventedPerson[] = [], mark?: NameMark): InventedPerson {
+  const takenKeys = new Set(taken.map((person) => sameNameKey(fullName(person))))
+  for (;;) {
+    const first = random.pick(surnameList)
+    const second = random.pick(surnameList.filter((s) => s !== first))
+    const person = { given: random.pick(givenNames), surnames: random.chance(0.2) ? first : `${first} ${second}` }
+    if (mark && !marks[mark](fullName(person))) continue
+    if (!takenKeys.has(sameNameKey(fullName(person)))) return person
+  }
+}
+
+/** Un código de jugador de la RFFM (ocho cifras) que no está en `taken`. */
+export function federationPlayerCode(random: Random, taken: FederationPlayer[] = []): string {
+  for (;;) {
+    const code = String(random.int(10_000_000, 99_999_999))
+    if (!taken.some((player) => player.code === code)) return code
+  }
+}
+
+/** Cómo es un nombre que no vale (D-120, punto 6): los casos del escenario. */
+export type InvalidName = 'vacío' | 'de una sola palabra' | 'con un número' | 'con un símbolo' | 'de más de 120 letras'
+
+/**
+ * Un nombre de la ficha que no vale, como lo publicaría la federación. El servidor no lo añade y el resumen lo nombra
+ * tal cual.
+ */
+export function invalidFederationName(random: Random, how: InvalidName): string {
+  const person = inventedPerson(random)
+  switch (how) {
+    case 'vacío':
+      return ''
+    case 'de una sola palabra':
+      // Sin coma no hay vuelta que dar: una palabra sola.
+      return random.pick(surnameList.filter((s) => !s.includes(' ') && !s.includes('-')))
+    case 'con un número':
+      return published({ ...person, given: `${person.given} ${random.int(2, 9)}` })
+    case 'con un símbolo':
+      // Ni guion ni apóstrofo, que sí valen.
+      return published({ ...person, given: `${person.given}${random.pick(['*', '#', '@', '!', '?', '+', '/'])}` })
+    case 'de más de 120 letras': {
+      // Letras y espacios, que son válidos: lo único que falla es el largo (el servidor admite hasta 120).
+      let surnames = person.surnames
+      while (fullName({ ...person, surnames }).length <= 120) surnames += ` ${random.pick(surnameList)}`
+      return published({ ...person, surnames })
+    }
+  }
+}

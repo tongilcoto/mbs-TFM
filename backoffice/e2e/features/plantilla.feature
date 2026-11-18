@@ -7,6 +7,8 @@
 # - Una federación que no publica plantillas (sin «Sincronizar con la Federación»): la federación falsa es la RFFM,
 #   que sí las publica; la regla la cubren las pruebas de piezas.
 # - Un equipo rival: no tiene ficha en la web, así que no tiene pestaña Plantilla.
+# - Un equipo sin enganchar a la Federación en la temporada en curso (sin «Sincronizar con la Federación»): cada
+#   escenario da el enganche por hecho; la regla la cubren las pruebas de piezas.
 # - Las reglas de las mayúsculas del nombre, una a una: las cubren las pruebas de piezas de la función que lo
 #   formatea; aquí, un escenario con un nombre que las junta.
 #
@@ -118,13 +120,28 @@ Feature: La plantilla de un equipo
     And la pestaña Plantilla tiene el botón "Dar de alta un jugador"
     And la pestaña Plantilla tiene el botón "Sincronizar con la Federación"
 
-  # ── Una temporada archivada ──
+  # ── Una temporada pasada ──
 
   @ui
-  Scenario: En una temporada archivada, la plantilla se ve pero no se cambia
-    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada archivada
-    When abro la pestaña Plantilla de la ficha del equipo, en la temporada archivada
-    Then la plantilla tiene a los jugadores del equipo en la temporada archivada
+  Scenario Outline: En una temporada pasada <cómo>, la plantilla se ve pero no se cambia
+    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada <cómo>
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada pasada <cómo>
+    Then la plantilla tiene a los jugadores del equipo en esa temporada
     And la pestaña Plantilla no tiene el botón "Dar de alta un jugador"
     And la pestaña Plantilla no tiene el botón "Sincronizar con la Federación"
     And las filas de la plantilla no tienen acciones
+
+    Examples:
+      | cómo          |
+      | archivada     |
+      | sin archivar  |
+
+  # ── Una temporada futura ──
+
+  @ui
+  Scenario: En una temporada futura, la plantilla se cambia a mano, pero no se sincroniza
+    Given un equipo de mi club tiene jugadores en la plantilla de una temporada futura
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada futura
+    Then la pestaña Plantilla tiene el botón "Dar de alta un jugador"
+    And la pestaña Plantilla no tiene el botón "Sincronizar con la Federación"
+    And cada fila de la plantilla tiene la acción "Corregir"
