@@ -631,14 +631,14 @@ suben el catálogo de 85 a 88, con la ruta que entrega la foto (decisión 3, cer
 ## 6. Los escenarios
 
 Escritos y revisados con el desarrollador en `R6.3` (2026-11-15), con la *skill* de escenarios, sin definir, con
-las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas; **121** desde la decisión 1 de `R6.12`, y **125** desde la decisión 3 de `R6.16`), en
+las etiquetas `@e2e` y `@ui` y axe en los dos modos. **119 escenarios** (contando cada ejemplo de los esquemas; **121** desde la decisión 1 de `R6.12`, **125** desde la decisión 3 de `R6.16`, y **123** desde la decisión 2 de `R6.18`), en
 cuatro ficheros de `backoffice/e2e/features/`:
 
 | Fichero | Escenarios | `@e2e` | `@ui` | Qué cubre |
 |---|---|---|---|---|
-| `plantilla.feature` | 14 (16 desde `R6.16`) | 2 | 12 (14) | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
+| `plantilla.feature` | 14 (16 desde `R6.16`, 15 desde `R6.18`) | 2 | 12 (14, 13) | La pestaña: entrar, recargar, cambiar de temporada; el orden; cada dato de la fila, de la plantilla o de su perfil; el nombre formateado; foto o iniciales; las acciones; el nombre que lleva a la ficha; sin jugadores; la temporada archivada, de solo lectura |
 | `alta-jugador.feature` | 37 | 16 | 21 | El diálogo; el buscador (3 letras, sin tildes, palabra a palabra, no ofrece a los de esta plantilla, enseña desactivados a los de otro equipo); elegir uno que existe, que trae lo de su perfil; guardar, un campo opcional cada vez, ninguno o todos, mirando la fila y el perfil; otro con el mismo nombre; lo que no deja guardar; la foto que no vale |
-| `jugador.feature` | 22 (24 desde `R6.12`, 26 desde `R6.16`) | 12 (14) | 10 (12) | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
+| `jugador.feature` | 22 (24 desde `R6.12`, 26 desde `R6.16`, 25 desde `R6.18`) | 12 (14) | 10 (12, 11) | La ficha (una página, con su enlace de vuelta); corregir desde la fila y desde la ficha, con sus dos bloques y el aviso al cambiar nombre o año; la foto; la baja y su dorsal libre |
 | `plantilla-federacion.feature` | 46 | 17 | 29 | La plantilla entera (la fecha, nunca sincronizada, la federación que falla o tarda); cada caso de jugador, según cómo está en el club y en la federación; el resumen, que cuenta, estado a estado y con el mismo cambio dos veces; la ficha del federado |
 
 **Cómo se ordenan y se escriben**, lo que se aprendió al revisarlos:
@@ -754,7 +754,7 @@ Antes, **lo medido**: el código de la federación que guarda cada inscripción 
 | Paso | Qué |
 |---|---|
 | `R6.17` | **El servidor: el alta de un jugador pide que el equipo esté inscrito en esa temporada** (decisión 3 de `R6.11`), en ciclos TDD, con su entrada en la bitácora del backend y su código de error. Si la sincronización da de alta por el mismo camino, también. Y **el orden por nombre en español** (decisión 5 de `R6.11`): la plantilla y el buscador de perfiles, con las tildes junto a su letra y la eñe detrás de la ene. Y **corregir no cambia un año que ya está, ni el nombre y el año a la vez** (decisión 1 de `R6.12`). Y **nada se escribe en una temporada pasada**, como en la archivada (decisión 4 de `R6.14`). Y **el diccionario de nombres y apellidos** (`D-123`): la lista, revisada antes de grabarla; la sincronización que la usa; y la migración de los perfiles publicados alguna vez |
-| `R6.18` | Los 121 escenarios de la rebanada en verde, con axe en los dos modos |
+| `R6.18` | Los 123 escenarios de la rebanada en verde (125 hasta su decisión 2), con axe en los dos modos, en cuatro partes, una por fichero (`plantilla.feature`, `alta-jugador.feature`, `jugador.feature` y `plantilla-federacion.feature`), cada una con su commit |
 | `R6.19` | La revisión a mano: el teclado y el zoom al 200 % |
 | `R6.20` | El cierre: cifras, `AGENTS.md`, el plan del backoffice (§4 y §6; y en el mapa de pantallas, la Plantilla y la Ficha del jugador, de ámbar a verde) y lo aprendido |
 
@@ -780,6 +780,13 @@ escritas en [`D-123`](./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md):
 | **3 · Qué código da escribir en una temporada pasada sin archivar** (alta, corregir, baja y foto; la web no lo verá) | Uno nuevo, `SEASON_ENDED`; reutilizar `SEASON_ARCHIVED`; o `SEASON_NOT_CURRENT` | **Uno nuevo, `SEASON_ENDED`** (422), «Esta temporada ya terminó: se ve, pero no se cambia.». Si está terminada y archivada, `SEASON_ARCHIVED`, como hasta ahora. `SEASON_ARCHIVED` diría «archivada» de una que no lo está; `SEASON_NOT_CURRENT` habla de sincronizar, y en la futura sí se escribe. Sincronizar sigue con `SEASON_NOT_CURRENT` |
 | **4 · Qué código dan las dos reglas del año al corregir** (el año ya puesto no se cambia; el nombre y el año, no a la vez; decisión 1 de `R6.12`) | `INVALID_VALUE` con su motivo; o dos códigos nuevos | **`INVALID_VALUE`** (422), con el detalle «campo: motivo» que la web ya enseña junto al campo: `birthYear: ya está puesto y no se cambia; si es un error, da de baja al jugador y dalo de alta como nuevo`, y `birthYear: no se cambia a la vez que el nombre; si es otra persona, da de baja a este y da de alta al otro como nuevo`. Sin códigos nuevos para algo que la web ya impide |
 | **5 · Las palabras del diccionario que existen de las dos maneras** (`D-123`; salió al revisar la lista: 292 palabras, y 8 aparte) | Una a una: que entre (siempre con tilde) o que no (como llegue) | **Entran Díez, Sáez, Martí, Mía y Éric; fuera Saiz, Zoe e Iker**, que se escriben sin tilde (Iker, además, no es castellano). Medido en la base del desarrollador: de 50 perfiles publicados, el diccionario arregla 34 (50 palabras), y cubre los 26 apellidos en «-EZ» |
+
+**Decisiones de `R6.18`** (2026-11-18), una a una con el desarrollador, en la rama `feature/r6-plantilla-backoffice-3`:
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Cómo se ponen jugadores en una temporada pasada** (desde `R6.17` el servidor no deja escribir en una terminada, así que el alta por la API falla; lo piden seis escenarios, uno con la foto en su perfil) | Una fecha fija para el servidor de pruebas; escribir el perfil, la fila y la foto con SQL; o dar de alta por la API en la temporada en curso y mover la fila con SQL | **Alta por la API en la en curso, y una línea de SQL que mueve la fila a la pasada**: el perfil, la foto y lo que el perfil copia de la fila salen por la aplicación; el SQL solo cambia de qué temporada es la fila, con su porqué en el código, como `addArchivedSeason`. Una fecha fija cambiaría el servidor solo para las pruebas, y no sería la del navegador; el SQL entero repetiría el alta y necesitaría el fichero de la foto. Solo en la base de las pruebas (`tfm_test`) |
+| **2 · La temporada archivada** (salió al pasar `plantilla.feature`: la ficha del equipo dice «No hay ninguna temporada 2013/14», porque la web solo pide las temporadas sin archivar; así se decidió en la R2, y una archivada «se recupera desde Temporadas», en la R11) | Que las fichas del equipo y del jugador la encuentren si se escribe su dirección; o dejarla para la R11 | **Para la R11**, donde una archivada se ve y se recupera: fuera el ejemplo «archivada» de los dos esquemas (la plantilla y la ficha del jugador de una pasada), que quedan en un escenario cada uno (125 → 123), y los dos casos, apuntados en la fila de la R11 del plan del backoffice. La regla de solo lectura sigue probada en la web (`canChange`) y en el servidor (`SEASON_ARCHIVED`). Los enlaces viejos a una temporada que se archive, una pregunta para cuando exista archivar |
 
 ---
 

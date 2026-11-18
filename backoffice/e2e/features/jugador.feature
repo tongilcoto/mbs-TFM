@@ -15,6 +15,12 @@
 # - «de la plantilla» y «de su perfil»: de dónde sale cada dato. La ficha enseña el dorsal, la demarcación y la foto
 #   de su fila de esa temporada, y el nombre y el año de su perfil; nunca el dorsal, la demarcación o la foto que el
 #   perfil guarda como ayuda (D-122).
+#
+# Lo que no tiene escenario, y por qué:
+# - Una temporada archivada (decisión 2 de R6.18): la web no la abre, ni escribiendo su dirección, porque solo pide las
+#   temporadas sin archivar (plan R2: una archivada está escondida hasta recuperarla). Sus fichas, de
+#   solo lectura, se verán desde Temporadas, en la rebanada 11; hoy lo cubren las pruebas de piezas (`canChange`) y el
+#   servidor (`SEASON_ARCHIVED`).
 Feature: La ficha de un jugador, corregirlo y darlo de baja
 
   # ── La ficha ──
@@ -206,13 +212,8 @@ Feature: La ficha de un jugador, corregirlo y darlo de baja
   # ── Una temporada pasada ──
 
   @ui
-  Scenario Outline: La ficha de un jugador en una temporada pasada <cómo> se ve, pero no se cambia
-    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada <cómo>
-    When abro la ficha de un jugador de la plantilla, en la temporada pasada <cómo>
+  Scenario: La ficha de un jugador en una temporada pasada se ve, pero no se cambia
+    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada
+    When abro la ficha de un jugador de la plantilla, en la temporada pasada
     Then la ficha del jugador tiene el nombre de su perfil como «Nombre Apellidos»
     And la ficha del jugador no tiene los botones "Corregir", "Dar de baja" ni los de la foto
-
-    Examples:
-      | cómo          |
-      | archivada     |
-      | sin archivar  |

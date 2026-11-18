@@ -5,6 +5,7 @@ import type { ScenarioClub } from './clubs.ts'
 import type { HeldRequest } from './hold-request.ts'
 import { config } from './config.ts'
 import type { Competition, Season, Team } from './invented.ts'
+import type { ScenarioPlayer } from './players.ts'
 import type { Random } from './random.ts'
 
 /** Lo que los `Given` han dado de alta, para que los pasos siguientes se refieran a ello («el equipo»…). */
@@ -46,6 +47,10 @@ export interface ScenarioData {
   /** Los equipos con su puesto, y el que no tiene, para ordenar por posición (plan R5). */
   placed?: { team: Team; position: number }[]
   unplaced?: Team
+  /** Los jugadores que el escenario ha dado de alta, en cualquier plantilla (plan R6). */
+  players: ScenarioPlayer[]
+  /** El jugador del que habla el escenario («la fila del jugador», «ese jugador»). */
+  player?: ScenarioPlayer
 }
 
 export class ScenarioWorld extends World {
@@ -59,7 +64,7 @@ export class ScenarioWorld extends World {
   held?: HeldRequest
   /** El azar del escenario (random.ts): con la misma semilla, los mismos datos. */
   random!: Random
-  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [], byHealth: {} }
+  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [], byHealth: {}, players: [] }
   /** Los datos que le tocaron al escenario, en palabras: salen en el informe si falla. */
   chosen: string[] = []
 

@@ -44,7 +44,7 @@ export async function addSeason(club: ScenarioClub, season: Season): Promise<str
 }
 
 /** El `id` de la temporada; si el club no la tiene, la da de alta. */
-async function seasonIdOf(club: ScenarioClub, season: Season): Promise<string> {
+export async function seasonIdOf(club: ScenarioClub, season: Season): Promise<string> {
   const seasons = await expectApi<{ id: string; label: string }[]>(club, 'GET', '/seasons?includeArchived=true', undefined, 200)
   return seasons.find((s) => s.label === season.label)?.id ?? (await addSeason(club, season))
 }
@@ -273,6 +273,17 @@ async function ageIngestions(club: ScenarioClub, competitionId: string, days: nu
 export async function addArchivedSeason(club: ScenarioClub, season: Season): Promise<void> {
   const id = await addSeason(club, season)
   await sql(club, (query) => query('UPDATE $schema.seasons SET archived_at = now() WHERE id = $1', [id]))
+}
+
+/**
+ * Pasa la fila de un jugador a una temporada que ya terminó (plan R6, decisión 1 de R6.18). Por la API no se llega:
+ * desde R6.17 el servidor no deja escribir en una temporada terminada (`SEASON_ENDED`). Así que el jugador se da
+ * de alta por la API en la temporada en curso, con su perfil y su foto, y aquí solo cambia de qué temporada es su
+ * fila. El equipo tiene que estar inscrito en las dos.
+ */
+export async function moveRowToSeason(club: ScenarioClub, playerId: string, season: Season): Promise<void> {
+  const seasonId = await seasonIdOf(club, season)
+  await sql(club, (query) => query('UPDATE $schema.players SET season_id = $1 WHERE id = $2', [seasonId, playerId]))
 }
 
 /**
