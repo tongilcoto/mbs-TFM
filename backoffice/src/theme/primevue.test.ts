@@ -29,3 +29,17 @@ test('el tema quita el subrayado a los enlaces con aspecto de botón', () => {
   const styles = [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
   expect(styles).toMatch(/a\.p-button\s*\{\s*text-decoration:\s*none;?\s*\}/)
 })
+
+// El botón rojo («Dar de baja»), en claro, con el 700: el 500 de Aura no llega al contraste de WCAG con el texto
+// blanco (R6.18). Como antes, se comprueba que el color llega a la página con el tema.
+test('el botón rojo, en claro, es del 700: relleno, con borde y de solo texto', () => {
+  render(Button, {
+    props: { label: 'Dar de baja', severity: 'danger' },
+    global: { plugins: [[PrimeVue, primeVueOptions]] },
+  })
+
+  const styles = [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
+  expect(styles).toMatch(/--p-button-danger-background:\s*var\(--p-red-700\)/)
+  expect(styles).toMatch(/--p-button-outlined-danger-color:\s*var\(--p-red-700\)/)
+  expect(styles).toMatch(/--p-button-text-danger-color:\s*var\(--p-red-700\)/)
+})

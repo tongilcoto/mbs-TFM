@@ -214,6 +214,7 @@ async function changePhoto(file?: File) {
         >
           <PhotoPicker
             input-id="sheet-photo"
+            name="Foto"
             :label="state.player.photoUrl ? 'Cambiar foto' : 'Poner foto'"
             :accept="PHOTO_TYPES"
             :disabled="photoBusy"

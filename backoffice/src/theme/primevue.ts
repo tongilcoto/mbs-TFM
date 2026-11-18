@@ -42,6 +42,26 @@ const preset = definePreset(Aura, {
   },
   components: {
     button: {
+      colorScheme: {
+        light: {
+          root: {
+            // El rojo de «Dar de baja»: el 500 de Aura con el blanco se queda en 3,8 de contraste (WCAG pide 4,5); el
+            // 700 llega a 6,5. Como el principal, un tono más oscuro en claro (salió con axe en R6.18).
+            danger: {
+              background: '{red.700}',
+              hoverBackground: '{red.800}',
+              activeBackground: '{red.900}',
+              borderColor: '{red.700}',
+              hoverBorderColor: '{red.800}',
+              activeBorderColor: '{red.900}',
+              focusRing: { color: '{red.700}', shadow: 'none' },
+            },
+          },
+          // Y el texto rojo de los botones con borde y de solo texto («Dar de baja» en la ficha del jugador).
+          outlined: { danger: { color: '{red.700}' } },
+          text: { danger: { color: '{red.700}' } },
+        },
+      },
       // Un enlace con aspecto de botón («Dar de alta un equipo», que va a otra pantalla) se ve como un botón: sin
       // el subrayado que el navegador pone a todos los enlaces y que Aura solo quita a los botones de verdad.
       css: () => 'a.p-button { text-decoration: none; }',
