@@ -131,6 +131,27 @@ describe('el buscador', () => {
     expect(server.asked).toContain(`GET /player-profiles?q=juan&teamId=${TEAM}&seasonId=id-2026`)
   })
 
+  // Lo que se ve tiene que estar en lo que lee el lector, con sus espacios: axe lo pide (R6.18).
+  test('el nombre y el detalle de cada opción, separados por un espacio, como en lo que lee el lector', async () => {
+    fakeServer({ profiles: [profile()] })
+    openDialog()
+    await typeInSearch('juan')
+
+    const option = await screen.findByRole('option', { name: /Juan García Fuente/ }, { timeout: 2000 })
+    expect(option.textContent?.replace(/\s+/g, ' ')).toContain('Juan García Fuente 2010 · Celtic Infantil A 2025/26')
+  })
+
+  // Sin el aviso de PrimeVue de «sin resultados» (R6.18): con menos de tres letras no se busca, y no sale nada.
+  test('con menos de tres letras no sale ninguna lista', async () => {
+    const server = fakeServer({ profiles: [profile()] })
+    openDialog()
+    await typeInSearch('ju')
+    await new Promise((resolve) => setTimeout(resolve, 400))
+
+    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    expect(server.asked.some((asked) => asked.startsWith('GET /player-profiles'))).toBe(false)
+  })
+
   test('el que está en otro equipo esta temporada sale desactivado, diciendo dónde', async () => {
     fakeServer({ profiles: [profile({ otherTeamThisSeason: { teamId: 'infantil', displayName: 'Celtic Infantil A' } })] })
     openDialog()

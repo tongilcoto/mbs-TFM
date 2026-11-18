@@ -167,10 +167,9 @@ function choose(event: AutoCompleteOptionSelectEvent) {
   // La lista pone en el campo la opción entera; después, lo escrito.
   if (option.kind === 'new') {
     choice.value = { kind: 'new' }
-    void nextTick(() => {
-      query.value = option.name
-      document.getElementById(ids.year)?.focus()
-    })
+    void nextTick(() => (query.value = option.name))
+    // El foco, al año cuando la lista se cierre: al cerrarse, la lista lo devuelve al buscador (R6.18).
+    focusYearOnHide = true
     return
   }
   // Lo que el perfil guarda como ayuda (D-122): se puede cambiar.
@@ -179,6 +178,15 @@ function choose(event: AutoCompleteOptionSelectEvent) {
   shirt.value = profile.lastShirtNumber == null ? '' : String(profile.lastShirtNumber)
   position.value = (profile.lastPosition ?? null) as Position | null
   photo.value = profile.lastPhotoUrl ? { kind: 'current', url: profile.lastPhotoUrl } : { kind: 'none' }
+}
+
+// Tras «como jugador nuevo», el año. Al cerrarse, la lista devuelve el foco al buscador justo después de avisar
+// (`before-hide`): el año, en cuanto acaba.
+let focusYearOnHide = false
+function listHiding() {
+  if (!focusYearOnHide) return
+  focusYearOnHide = false
+  void nextTick(() => document.getElementById(ids.year)?.focus())
 }
 
 // Deshacer la elección: otra vez un jugador nuevo, con todo vacío.
@@ -406,12 +414,17 @@ async function showSaveError(error: ShownError) {
               :invalid="invalid"
               :pt="{ pcInputText: { root: { 'aria-describedby': describedBy } } }"
               fluid
+              :show-empty-message="false"
               @complete="search.type($event.query)"
               @option-select="choose"
+              @before-hide="listHiding"
             >
               <template #option="{ option }">
                 <span class="option">
                   <span :class="option.kind === 'new' ? 'detail' : 'name'">{{ option.kind === 'new' ? option.detail : option.name }}</span>
+                  <!-- Un espacio entre el nombre y el detalle: sin él, el texto que se ve («…Fuente2010») no es el que
+                       lee el lector («…Fuente, 2010»), y axe lo cuenta como fallo (R6.18). En una columna no se ve. -->
+                  {{ ' ' }}
                   <span
                     v-if="option.kind === 'profile'"
                     class="detail"
@@ -611,8 +624,9 @@ legend {
   font-weight: 600;
 }
 .detail {
+  /* Con el color del texto: el suave no llega al contraste sobre la opción resaltada (R6.18). Se distingue del nombre,
+     que va en negrita, por el tamaño. */
   font-size: 0.875rem;
-  color: var(--p-text-muted-color);
 }
 .photo-field {
   display: flex;
