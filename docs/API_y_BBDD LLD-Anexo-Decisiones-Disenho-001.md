@@ -137,6 +137,7 @@
 | **D-121**              | Un jugador, una plantilla por temporada: para cambiarlo de equipo, baja en uno y alta en el otro                                | §3.2, §5.2                         |
 | **D-122**              | El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila           | §3.2, §5.2, §5.6                   |
 | **D-123**              | La sincronización pone las tildes y las eñes que quita la RFFM, con un diccionario de nombres y apellidos en castellano | §5.2                               |
+| **D-124**              | Los nombres se ordenan en español, y lo hace la base                                                                             | §5.2                               |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5678,6 +5679,30 @@ queda «Jesús» con la migración. Y una palabra con dos formas válidas puede 
 
 **Enmienda** a [D-120] (lo que guarda la sincronización). Se hace en `R6.17`.
 
+### D-124 · Los nombres se ordenan en español, y lo hace la base
+
+**Lo que lo obligó a decidirse** (2026-11-16, al construir la pestaña Plantilla, decisión 5 de R6.11; decidido
+el 2026-11-18, decisión 1 de R6.17). La plantilla se ordenaba en Swift (`<`) y el buscador de perfiles en la base
+(`ORDER BY`), los dos por el número de cada letra: «ÁLVARO», «ÑAKO» y «ÓSCAR» iban detrás de «ZAPATA».
+
+**Decisión.**
+
+1. **Por nombre, en español**: la tilde junto a su letra, y la eñe detrás de la ene («ÁLVARO · NUÑO · NURIA · ÑAKO
+   · ÓSCAR · ZAPATA»).
+2. **Lo hace la base**, con la ordenación española de Postgres (`es-ES-x-icu`), en la plantilla y en el buscador.
+   La plantilla pasa a ordenarse en la consulta: por dorsal, y los que no tienen, al final por nombre ([D-118]).
+3. **Medido** que el Postgres de desarrollo (16, con ICU) la trae. **Para R16**: comprobar que el de Supabase también.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| La plantilla, en Swift con una comparación en español | Sin comprobar que en Linux compare en español; y dos reglas, en Swift y en la base, que tendrían que coincidir |
+| Que la web reordene | Cada cliente repetiría la regla |
+
+**Lo que se asume a cambio.** El orden depende de que la base tenga ICU; una base sin él daría un error al
+consultar, no un orden malo en silencio.
+
+**Enmienda** a [D-118] (el orden de la plantilla). Se hace en `R6.17`.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5841,3 +5866,4 @@ queda «Jesús» con la migración. Y una palabra con dos formas válidas puede 
 [Anexo RFFM §F.3.1]: ./API_y_BBDD%20LLD-Anexo-Federacion-Madrid-RFFM.md
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-123]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-124]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
