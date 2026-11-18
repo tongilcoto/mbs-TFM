@@ -337,19 +337,19 @@ struct PlayerEndpointTests {
     func correcting() async throws {
         try await Self.withSeededClub { app, s in
             let juan = try await Self.create(app, Self.newPlayerJSON(s, shirt: 9, position: "delantero"))
-            let json = #"{"fullName": "Juan García Fuente", "birthYear": 2010, "shirtNumber": null, "position": null}"#
+            let json = #"{"fullName": "Juan García Fuente", "birthYear": 2011, "shirtNumber": null, "position": null}"#
             try await Self.send(app, .PUT, "/v1/players/\(juan.id)", json: json) { (r: TestingHTTPResponse) async throws in
                 #expect(r.status == .ok)
                 let p = try Self.player(r)
                 #expect(p.fullName == "JUAN GARCÍA FUENTE")
-                #expect(p.birthYear == 2010)
+                #expect(p.birthYear == 2011)
                 #expect(p.shirtNumber == nil)
                 #expect(p.position == nil)
             }
             // Lo que no llega, también cuenta como vacío: con la ficha entera no
             // hay «no lo cambio» (R6.6).
             try await Self.send(app, .PUT, "/v1/players/\(juan.id)",
-                                json: #"{"fullName": "Juan García", "birthYear": 2010, "shirtNumber": 5}"#) { (r: TestingHTTPResponse) async throws in
+                                json: #"{"fullName": "Juan García", "birthYear": 2011, "shirtNumber": 5}"#) { (r: TestingHTTPResponse) async throws in
                 #expect(r.status == .ok)
                 #expect(try Self.player(r).shirtNumber == 5)
             }
@@ -357,11 +357,15 @@ struct PlayerEndpointTests {
             try await Self.send(app, .PUT, "/v1/players/\(juan.id)", json: #"{"birthYear": 2010}"#) { (r: TestingHTTPResponse) async throws in
                 #expect(r.status == .badRequest)
             }
-            // Quitar el año, que el perfil tenía: 422.
-            try await Self.send(app, .PUT, "/v1/players/\(juan.id)",
-                                json: #"{"fullName": "Juan García", "birthYear": null}"#) { (r: TestingHTTPResponse) async throws in
-                #expect(r.status == .unprocessableEntity)
-                #expect(try Self.decodeProblem(r).code == .INVALID_VALUE)
+            // Quitar o cambiar el año, que el perfil tenía: 422, con el campo (R6.17).
+            for year in ["null", "2010"] {
+                try await Self.send(app, .PUT, "/v1/players/\(juan.id)",
+                                    json: #"{"fullName": "Juan García", "birthYear": \#(year)}"#) { (r: TestingHTTPResponse) async throws in
+                    #expect(r.status == .unprocessableEntity)
+                    let problem = try Self.decodeProblem(r)
+                    #expect(problem.code == .INVALID_VALUE)
+                    #expect(problem.detail?.hasPrefix("birthYear: ya está puesto") == true)
+                }
             }
         }
     }

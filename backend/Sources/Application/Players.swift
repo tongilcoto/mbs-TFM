@@ -260,15 +260,26 @@ public struct UpdatePlayer: Sendable {
         try await requireEditable(player.seasonID, seasons: seasons, now: clock.now())
 
         let name = try PlayerName(command.fullName)
+        // El año (decisión 1 de R6.12; `INVALID_VALUE`, decisión 4 de R6.17): **uno ya
+        // puesto no se cambia ni se quita**; el que falta (lo deja la sincronización,
+        // `D-120`) se pone, **pero no a la vez que se cambia el nombre**: así un perfil
+        // no pasa a ser otra persona. Si es otra, baja de este y alta del otro.
         let year: BirthYear?
-        switch command.birthYear {
-        case .some(let value):
+        if let current = profile.birthYear {
+            guard command.birthYear == current.value else {
+                throw DomainError.invalidValue(
+                    field: "birthYear",
+                    reason: "ya está puesto y no se cambia; si es un error, da de baja al jugador y dalo de alta como nuevo")
+            }
+            year = current
+        } else if let value = command.birthYear {
+            guard name == profile.fullName else {
+                throw DomainError.invalidValue(
+                    field: "birthYear",
+                    reason: "no se cambia a la vez que el nombre; si es otra persona, da de baja a este y da de alta al otro como nuevo")
+            }
             year = try BirthYear(value, notAfter: currentYear(clock))
-        case .none where profile.birthYear != nil:
-            // Se puede poner o cambiar, no quitar: un perfil sin año solo lo deja
-            // la sincronización (`D-120`).
-            throw DomainError.invalidValue(field: "birthYear", reason: "no se puede quitar")
-        case .none:
+        } else {
             year = nil
         }
         let shirt = try command.shirtNumber.map(ShirtNumber.init)
