@@ -198,7 +198,7 @@ Given(
 )
 
 /** El jugador del escenario, entre otros de 1 a 3 de la misma plantilla, en un sitio al azar. */
-async function addThePlayer(world: ScenarioWorld, shape: PlayerShape) {
+export async function addThePlayer(world: ScenarioWorld, shape: PlayerShape) {
   await addRosterTeam(world)
   const season = currentSeason()
   const others = world.random.int(1, 3)

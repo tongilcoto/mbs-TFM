@@ -264,3 +264,43 @@ export function badPhoto(how: BadPhoto): PickedFile {
   }
 }
 
+/** Lo que lleva dentro la foto con ubicación, para buscarlo en la que sirve el servidor. */
+export const LOCATION_MARK = 'UBICACION-DE-PRUEBA-40.4168N-3.7038W'
+
+/**
+ * Una foto con la ubicación dentro, como las del móvil: un bloque Exif con su apartado GPS (la latitud «N» y, como
+ * método, un texto reconocible). Fabricada aquí, sobre una de las fotos de las pruebas.
+ */
+export function photoWithLocation(): PickedFile {
+  const mark = Buffer.concat([Buffer.from('ASCII\0\0\0'), Buffer.from(LOCATION_MARK)])
+  const tiff = Buffer.alloc(56 + mark.length)
+  tiff.write('MM', 0, 'latin1')
+  tiff.writeUInt16BE(42, 2)
+  tiff.writeUInt32BE(8, 4)
+  // IFD0: una entrada, la que apunta al apartado GPS (0x8825), en el 26.
+  tiff.writeUInt16BE(1, 8)
+  tiff.writeUInt16BE(0x8825, 10)
+  tiff.writeUInt16BE(4, 12)
+  tiff.writeUInt32BE(1, 14)
+  tiff.writeUInt32BE(26, 18)
+  tiff.writeUInt32BE(0, 22)
+  // El apartado GPS: la referencia de latitud («N») y el método, con el texto reconocible en el 56.
+  tiff.writeUInt16BE(2, 26)
+  tiff.writeUInt16BE(0x0001, 28)
+  tiff.writeUInt16BE(2, 30)
+  tiff.writeUInt32BE(2, 32)
+  tiff.write('N\0', 36, 'latin1')
+  tiff.writeUInt16BE(0x001b, 40)
+  tiff.writeUInt16BE(7, 42)
+  tiff.writeUInt32BE(mark.length, 44)
+  tiff.writeUInt32BE(56, 48)
+  tiff.writeUInt32BE(0, 52)
+  mark.copy(tiff, 56)
+  const body = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), tiff])
+  const header = Buffer.from([0xff, 0xe1, 0, 0])
+  header.writeUInt16BE(body.length + 2, 2)
+  const photo = photoBytes('foto-a.jpg')
+  // Justo detrás del comienzo del JPEG (FFD8), donde la pone una cámara.
+  return { name: 'foto-movil.jpg', mimeType: 'image/jpeg', buffer: Buffer.concat([photo.subarray(0, 2), header, body, photo.subarray(2)]) }
+}
+

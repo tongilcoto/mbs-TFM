@@ -146,13 +146,13 @@ Given('un equipo de mi club tiene jugadores con dorsal en la plantilla de la tem
  * Abre la pestaña Plantilla del equipo en la temporada en curso. Antes, una temporada pasada del club, vacía, desde la
  * que leer el perfil de un jugador por la API (el buscador quita a los de la plantilla desde la que se pregunta).
  */
-async function openTeamRoster(world: ScenarioWorld) {
+export async function openTeamRoster(world: ScenarioWorld) {
   if (world.data.pastSeasons.length === 0) await addPastSeason(world)
   world.data.rosterBefore = playersIn(world, currentSeason()).map((p) => shownName(p.fullName))
   await openRoster(world, currentSeason())
 }
 
-async function openDialog(world: ScenarioWorld) {
+export async function openDialog(world: ScenarioWorld) {
   await rosterTab(world).getByRole('button', { name: 'Dar de alta un jugador', exact: true }).click()
   await dialog(world).waitFor()
   // El foco llega al buscador cuando la ventana acaba de aparecer.
@@ -238,7 +238,7 @@ When('escribo en el buscador del alta el nombre entero de un jugador de la plant
 })
 
 /** Un nombre que no tiene ningún jugador del escenario, escrito como «Nombre Apellidos». */
-function newName(world: ScenarioWorld): string {
+export function newName(world: ScenarioWorld): string {
   return shownName(fullName(inventedPerson(world.random, world.data.players.map(asPerson))))
 }
 
@@ -301,7 +301,7 @@ async function setPhoto(world: ScenarioWorld, photo: PhotoName | null) {
 type Optional = 'el dorsal' | 'la demarcación' | 'la foto'
 
 /** Un jugador nuevo, con su nombre y su año, y los datos opcionales que se digan. */
-async function fillNew(world: ScenarioWorld, optional: Optional[], shirt?: number) {
+export async function fillNew(world: ScenarioWorld, optional: Optional[], shirt?: number) {
   await chooseNew(world)
   await setYear(world, birthYearFor(world.random))
   if (optional.includes('el dorsal')) await setShirt(world, shirt ?? freeShirtNumber(world.random, playersIn(world, currentSeason())))
@@ -773,7 +773,7 @@ Then(/^la fila del jugador nuevo no tiene (dorsal|demarcación|foto), ni (dorsal
 // ── Lo que se ve: el perfil, por la API ──────────────────────────────────────────────────────────────────────
 
 /** El perfil de un jugador, preguntando desde la temporada pasada del club, donde no está en ninguna plantilla. */
-async function profileOf(world: ScenarioWorld, name: string, profileId?: string): Promise<ProfileAnswer> {
+export async function profileOf(world: ScenarioWorld, name: string, profileId?: string): Promise<ProfileAnswer> {
   const found = await searchProfiles(world.club, name, theTeam(world).id!, await seasonIdOf(world.club, lastPastSeason(world)))
   const profile = found.find((p) => (profileId ? p.profileId === profileId : p.fullName === name))
   if (!profile) throw new Error(`el buscador no encuentra el perfil de ${name}`)
