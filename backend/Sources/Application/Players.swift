@@ -156,10 +156,12 @@ public struct CreatePlayer: Sendable {
         guard let season = try await seasons.find(command.seasonID) else {
             throw ApplicationError.referenceNotFound(field: "seasonId", id: "\(command.seasonID)")
         }
-        try RosterRules.requireCanAdd(to: team, in: season)
+        let now = clock.now()
+        // La inscripción: que exista (decisión 3 de R6.11), y si ya se sincronizó (abajo).
+        let enrolments = try await registrations.list(teamID: team.id, seasonID: season.id)
+        try RosterRules.requireCanAdd(to: team, in: season, on: now, registered: !enrolments.isEmpty)
 
         let shirt = try command.shirtNumber.map(ShirtNumber.init)
-        let now = clock.now()
 
         let profile: PlayerProfile
         var isNewProfile = false
@@ -188,8 +190,7 @@ public struct CreatePlayer: Sendable {
         // **Un alta a mano después de una sincronización sale «No federado»** (`D-120`):
         // la plantilla ya se ha sincronizado y la federación aún no lo tiene. Antes
         // de la primera, sin dato.
-        let synced = try await registrations.list(teamID: team.id, seasonID: season.id)
-            .contains { $0.rosterSyncedAt != nil }
+        let synced = enrolments.contains { $0.rosterSyncedAt != nil }
 
         // **La fila empieza con la foto del perfil** (`D-122`, R6.9): el alta no lleva
         // foto, que se sube aparte (`D-35`), y copiar al perfil la de una fila vacía
@@ -256,7 +257,7 @@ public struct UpdatePlayer: Sendable {
     public func execute(_ id: PlayerID, _ command: Command) async throws -> RosterEntry {
         let entry = try await GetPlayer(players: players, profiles: profiles).execute(id)
         let (player, profile) = (entry.player, entry.profile)
-        try await requireEditable(player.seasonID, seasons: seasons)
+        try await requireEditable(player.seasonID, seasons: seasons, now: clock.now())
 
         let name = try PlayerName(command.fullName)
         let year: BirthYear?
@@ -293,13 +294,13 @@ public struct UpdatePlayer: Sendable {
     }
 }
 
-/// La temporada de una fila, para mirar si está archivada. Que no esté es la base
-/// rota: la FK la protege.
-func requireEditable(_ seasonID: SeasonID, seasons: any SeasonRepository) async throws {
+/// La temporada de una fila, para mirar si está archivada o terminada. Que no esté
+/// es la base rota: la FK la protege.
+func requireEditable(_ seasonID: SeasonID, seasons: any SeasonRepository, now: Date) async throws {
     guard let season = try await seasons.find(seasonID) else {
         throw ApplicationError.seasonNotFound(id: "\(seasonID)")
     }
-    try RosterRules.requireEditable(in: season)
+    try RosterRules.requireEditable(in: season, on: now)
 }
 
 // ── La baja ───────────────────────────────────────────────────────────────────
@@ -309,17 +310,19 @@ func requireEditable(_ seasonID: SeasonID, seasons: any SeasonRepository) async 
 public struct DeletePlayer: Sendable {
     private let seasons: any SeasonRepository
     private let players: any PlayerRepository
+    private let clock: any Clock
 
-    public init(seasons: any SeasonRepository, players: any PlayerRepository) {
+    public init(seasons: any SeasonRepository, players: any PlayerRepository, clock: any Clock) {
         self.seasons = seasons
         self.players = players
+        self.clock = clock
     }
 
     public func execute(_ id: PlayerID) async throws {
         guard let player = try await players.find(id) else {
             throw ApplicationError.playerNotFound(id: "\(id)")
         }
-        try await requireEditable(player.seasonID, seasons: seasons)
+        try await requireEditable(player.seasonID, seasons: seasons, now: clock.now())
         try await players.delete(id)
     }
 }

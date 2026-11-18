@@ -29,12 +29,19 @@ struct PlayerEndpointTests {
         let rival: TeamID
         let vigente: SeasonID
         let archivada: SeasonID
+        /// Terminada y sin archivar (R6.17), con un jugador que se escribió cuando estaba en curso.
+        let terminada: SeasonID
+        let deLaTerminada: PlayerID
+        /// Un equipo propio sin inscripción en la vigente (R6.17).
+        let sinInscribir: TeamID
     }
 
     static func withSeededClub(
         _ body: @escaping @Sendable (Application, Seeded) async throws -> Void
     ) async throws {
-        try await TestEnvironment.withApp { app in
+        // Con su reloj: la «vigente» es la 2025/26, y con el de verdad ya habría terminado
+        // (una temporada terminada no se cambia, R6.17).
+        try await TestEnvironment.withApp(clock: FixedClock(instant: now)) { app in
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
             try await TestEnvironment.provisionClub(slug, federation: .rffm, schemaPrefix: prefix, on: app)
             let vigente = try Season(id: SeasonID(raw: UUID()), label: try SeasonLabel("2025/26"),
@@ -46,7 +53,13 @@ struct PlayerEndpointTests {
                 try Team(id: TeamID(raw: UUID()), category: .cadete, letter: letter, gender: .masculino,
                          modality: .futbol11, createdAt: now, updatedAt: now)
             }
-            let (a, b) = (try own("A"), try own("B"))
+            let (a, b, c) = (try own("A"), try own("B"), try own("C"))
+            let terminada = try Season(id: SeasonID(raw: UUID()), label: try SeasonLabel("2023/24"),
+                                       federationSeasonID: nil, createdAt: now, updatedAt: now)
+            let perfil = PlayerProfile(id: PlayerProfileID(raw: UUID()), fullName: try PlayerName("Luis Pasado"),
+                                       birthYear: nil, createdAt: now, updatedAt: now)
+            let fila = Player(id: PlayerID(raw: UUID()), profileID: perfil.id, teamID: a.id, seasonID: terminada.id,
+                              createdAt: now, updatedAt: now)
             let rivalClub = try OpponentClub(
                 id: OpponentClubID(raw: UUID()), name: "C.D. Rival", shortName: "Rival",
                 slug: try Slug("cd-rival"), federationClubID: "999", createdAt: now, updatedAt: now)
@@ -58,13 +71,24 @@ struct PlayerEndpointTests {
                 .withRepositories(actor: ActorContext(clubSlug: try Slug(slug))) {
                     try await $0.seasons.save(vigente)
                     try await $0.seasons.save(archivada)
+                    try await $0.seasons.save(terminada)
                     try await $0.teams.save(a)
                     try await $0.teams.save(b)
+                    try await $0.teams.save(c)
+                    try await $0.playerProfiles.save(perfil)
+                    try await $0.players.save(fila)
                     try await $0.opponentClubs.save(rivalClub)
                     try await $0.teams.save(rival)
+                    // Los dos, inscritos en la vigente: el alta lo pide (R6.17).
+                    for team in [a, b] {
+                        try await $0.teamRegistrations.save(try TeamRegistration(
+                            id: TeamRegistrationID(raw: UUID()), team: team, seasonID: vigente.id,
+                            createdAt: now, updatedAt: now))
+                    }
                 }
             try await body(app, Seeded(cadeteA: a.id, cadeteB: b.id, rival: rival.id,
-                                       vigente: vigente.id, archivada: archivada.id))
+                                       vigente: vigente.id, archivada: archivada.id,
+                                       terminada: terminada.id, deLaTerminada: fila.id, sinInscribir: c.id))
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
         }
     }
@@ -128,6 +152,11 @@ struct PlayerEndpointTests {
     }
 
     final class Box: @unchecked Sendable { var value: Components.Schemas.PlayerResponse? }
+
+    struct FixedClock: Clock {
+        let instant: Date
+        func now() -> Date { instant }
+    }
 
     // ── El alta ─────────────────────────────────────────────────────────────
 
@@ -208,6 +237,8 @@ struct PlayerEndpointTests {
                  .REFERENCE_NOT_FOUND),
                 (Self.newPlayerJSON(s, team: s.rival), .TEAM_NOT_OWN),
                 (Self.newPlayerJSON(s, season: s.archivada), .SEASON_ARCHIVED),
+                (Self.newPlayerJSON(s, season: s.terminada), .SEASON_ENDED),
+                (Self.newPlayerJSON(s, team: s.sinInscribir), .TEAM_NOT_REGISTERED),
                 (Self.newPlayerJSON(s, name: "Juan"), .INVALID_VALUE),
                 (Self.newPlayerJSON(s, year: 2999), .INVALID_VALUE),
             ]
@@ -220,6 +251,29 @@ struct PlayerEndpointTests {
             // El `detail` del valor dice el campo, para pintarlo junto a él (R6.4).
             try await Self.send(app, .POST, "/v1/players", json: Self.newPlayerJSON(s, name: "Juan")) { (r: TestingHTTPResponse) async throws in
                 #expect(try Self.decodeProblem(r).detail?.hasPrefix("fullName: ") == true)
+            }
+        }
+    }
+
+    /// Una temporada terminada se ve, pero no se cambia (R6.17): corregir, la baja y la foto, 422
+    /// `SEASON_ENDED`; leer, sí.
+    @Test("en una temporada terminada se lee, y corregir, la baja y quitar la foto son 422 SEASON_ENDED (R6.17)")
+    func endedSeasonIsReadOnly() async throws {
+        try await Self.withSeededClub { app, s in
+            let id = s.deLaTerminada
+            try await Self.send(app, .GET, "/v1/players/\(id)") { (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+            }
+            let writes: [(HTTPMethod, String, String?)] = [
+                (.PUT, "/v1/players/\(id)", #"{"fullName": "Luis Pasado"}"#),
+                (.DELETE, "/v1/players/\(id)", nil),
+                (.DELETE, "/v1/players/\(id)/photo", nil),
+            ]
+            for (method, path, json) in writes {
+                try await Self.send(app, method, path, json: json) { (r: TestingHTTPResponse) async throws in
+                    #expect(r.status == .unprocessableEntity, "\(method) \(path)")
+                    #expect(try Self.decodeProblem(r).code == .SEASON_ENDED)
+                }
             }
         }
     }

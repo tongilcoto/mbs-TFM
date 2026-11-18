@@ -15,6 +15,10 @@ struct PlayerUseCaseTests {
 
     /// 2026-11-15, en Madrid.
     static let now = Date(timeIntervalSince1970: 1_794_700_000)
+    /// Un día de la temporada anterior, la 2025/26, cuando todavía estaba en curso: sus
+    /// filas se escriben entonces, porque una temporada terminada ya no se cambia
+    /// (decisión 4 de R6.14).
+    static let then = ISO8601DateFormatter().date(from: "2026-03-01T12:00:00Z")!
 
     struct Seeded {
         let store: IngestionStore
@@ -47,16 +51,27 @@ struct PlayerUseCaseTests {
                             vigente: vigente, anterior: anterior, archivada: archivada)
         await store.seed(seasons: [vigente, anterior, archivada],
                          teams: [seeded.cadeteA, seeded.cadeteB, rival])
+        // Los dos equipos, inscritos en las tres: el alta lo pide (decisión 3 de R6.11).
+        var rows: [TeamRegistration] = []
+        for team in [seeded.cadeteA, seeded.cadeteB] {
+            for season in [vigente, anterior, archivada] {
+                rows.append(try TeamRegistration(
+                    id: TeamRegistrationID(raw: UUID()), team: team, seasonID: season.id,
+                    competitionID: CompetitionID(raw: UUID()), federationTeamID: nil,
+                    createdAt: now, updatedAt: now))
+            }
+        }
+        await store.seed(teamRegistrations: rows)
         return seeded
     }
 
-    static func create(_ store: IngestionStore) -> CreatePlayer {
+    static func create(_ store: IngestionStore, at instant: Date = now) -> CreatePlayer {
         CreatePlayer(
             teams: FakeTeamRepository(store: store), seasons: FakeSeasonRepository(store: store),
             players: FakePlayerRepository(store: store),
             profiles: FakePlayerProfileRepository(store: store),
             registrations: FakeTeamRegistrationRepository(store: store),
-            clock: FixedClock(instant: now), ids: SequentialUUIDProvider())
+            clock: FixedClock(instant: instant), ids: SequentialUUIDProvider())
     }
 
     static func list(_ store: IngestionStore) -> ListPlayers {
@@ -71,9 +86,9 @@ struct PlayerUseCaseTests {
                      profiles: FakePlayerProfileRepository(store: store), clock: FixedClock(instant: now))
     }
 
-    static func delete(_ store: IngestionStore) -> DeletePlayer {
+    static func delete(_ store: IngestionStore, at instant: Date = now) -> DeletePlayer {
         DeletePlayer(seasons: FakeSeasonRepository(store: store),
-                     players: FakePlayerRepository(store: store))
+                     players: FakePlayerRepository(store: store), clock: FixedClock(instant: instant))
     }
 
     /// Un jugador nuevo en el Cadete A de la temporada en curso.
@@ -81,7 +96,9 @@ struct PlayerUseCaseTests {
     static func newPlayer(_ s: Seeded, name: String = "Juan García", shirt: Int? = nil,
                           position: PlayerPosition? = nil, team: Team? = nil,
                           season: Season? = nil) async throws -> RosterEntry {
-        try await create(s.store).execute(.init(
+        // En la anterior, cuando estaba en curso.
+        let at = season?.id == s.anterior.id ? then : now
+        return try await create(s.store, at: at).execute(.init(
             teamID: (team ?? s.cadeteA).id, seasonID: (season ?? s.vigente).id,
             who: .newPlayer(fullName: name, birthYear: 2011), shirtNumber: shirt, position: position))
     }
@@ -198,6 +215,35 @@ struct PlayerUseCaseTests {
         }
         await #expect(throws: DomainError.seasonArchived(label: "2024/25")) {
             try await Self.newPlayer(s, season: s.archivada)
+        }
+        #expect(await s.store.writes == 0, "y no se ha escrito nada")
+    }
+
+    /// Sin inscripción, el equipo no juega esa temporada (decisión 3 de R6.11): 422
+    /// con `TEAM_NOT_REGISTERED` (decisión 2 de R6.17).
+    @Test("un equipo sin inscripción en esa temporada no admite el alta (R6.17)")
+    func unregisteredTeamRejectsAdding() async throws {
+        let s = try await Self.seed()
+        let infantil = try Team(id: TeamID(raw: UUID()), category: .infantil, letter: "A", gender: .masculino,
+                                modality: .futbol11, createdAt: Self.now, updatedAt: Self.now)
+        await s.store.seed(teams: [infantil])
+        let writes = await s.store.writes
+
+        await #expect(throws: DomainError.teamNotRegistered(team: "\(infantil.id)", season: "\(s.vigente.id)")) {
+            try await Self.newPlayer(s, team: infantil)
+        }
+        #expect(await s.store.writes == writes, "y no se ha escrito nada")
+    }
+
+    /// Una temporada terminada se ve, pero no se cambia (decisión 4 de R6.14):
+    /// `SEASON_ENDED` (decisión 3 de R6.17).
+    @Test("una temporada terminada no admite altas (R6.17)")
+    func endedSeasonRejectsAdding() async throws {
+        let s = try await Self.seed()
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.create(s.store).execute(.init(
+                teamID: s.cadeteA.id, seasonID: s.anterior.id,
+                who: .newPlayer(fullName: "Juan García", birthYear: 2011)))
         }
         #expect(await s.store.writes == 0, "y no se ha escrito nada")
     }
@@ -405,6 +451,19 @@ struct PlayerUseCaseTests {
 
     /// La temporada archivada es de solo lectura entera (R6.3). Se siembra la
     /// fila a mano: el alta ya no deja ponerla.
+    @Test("en una temporada terminada no se corrige ni se da de baja (R6.17)")
+    func endedSeasonIsReadOnly() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.newPlayer(s, season: s.anterior)
+
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.update(s.store).execute(juan.player.id, Self.command())
+        }
+        await #expect(throws: DomainError.seasonEnded(label: "2025/26")) {
+            try await Self.delete(s.store).execute(juan.player.id)
+        }
+    }
+
     @Test("en una temporada archivada no se corrige ni se da de baja (R6.3)")
     func archivedSeasonIsReadOnly() async throws {
         let s = try await Self.seed()
@@ -468,7 +527,7 @@ extension PlayerUseCaseTests {
     func lastRosterIsTheLatestSeason() async throws {
         let s = try await Self.withClub(try await Self.seed())
         let ahora = try await Self.newPlayer(s, team: s.cadeteB)
-        _ = try await Self.create(s.store).execute(.init(
+        _ = try await Self.create(s.store, at: Self.then).execute(.init(
             teamID: s.cadeteA.id, seasonID: s.anterior.id, who: .profile(ahora.profile.id)))
 
         let match = try #require(try await Self.search(s, "juan").first)
