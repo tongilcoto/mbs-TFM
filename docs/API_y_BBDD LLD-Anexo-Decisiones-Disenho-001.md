@@ -5677,6 +5677,10 @@ las menos correcciones posibles.**
 el diccionario se amplía con lo que vaya saliendo. Un «Jesus» tecleado a mano que después publica la federación
 queda «Jesús» con la migración. Y una palabra con dos formas válidas puede quedar con la que no es.
 
+**Revisada la lista** (2026-11-18, R6.17): 297 palabras. De las que existen de las dos maneras, entran Díez,
+Sáez, Martí, Mía y Éric, y se quedan fuera Saiz, Zoe e Iker. En la base del desarrollador arregla 34 de sus 50
+perfiles publicados. La migración es la 24ª (`SpellPublishedNamesInCastilian`).
+
 **Enmienda** a [D-120] (lo que guarda la sincronización). Se hace en `R6.17`.
 
 ### D-124 · Los nombres se ordenan en español, y lo hace la base

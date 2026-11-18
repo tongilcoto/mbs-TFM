@@ -124,6 +124,10 @@ public enum TenantMigrations {
             // `D-120` (R6.14): lo que escribe la sincronización de la plantilla,
             // en la inscripción y en la fila. Detrás de las dos tablas que altera.
             AddRosterSyncColumns(),
+            // `D-123` (R6.17): las tildes y eñes del castellano en los nombres que
+            // publicó la federación. Solo cambia datos: al final, que es su único
+            // requisito de orden ([D-90]).
+            SpellPublishedNamesInCastilian(),
         ]
     }
 }

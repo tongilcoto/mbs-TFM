@@ -229,6 +229,46 @@ public struct AddRosterSyncColumns: AsyncMigration {
     }
 }
 
+/// **Las tildes y eñes del castellano en los nombres que publicó la federación**
+/// (`D-123`, R6.17): la sincronización ya pasa por el diccionario lo que llega
+/// (`PlayerName.spelledInCastilian`); esto arregla lo que se guardó antes.
+///
+/// **Solo los perfiles que la federación ha publicado alguna vez**: alguna fila con
+/// `last_listed_at`, también una dada de baja. Su nombre es el de la federación,
+/// salvo tildes. Lo que el club dio de alta a mano y la federación nunca publicó, como
+/// está (decisiones 1 y 3 de `D-123`). Sin esto, un «MUNOZ» guardado antes no casaría
+/// con el «MUÑOZ» que da ahora el diccionario, y saldría repetido.
+///
+/// **El revert no hace nada**: el nombre sin tildes no se guarda en ningún sitio, y
+/// volver a quitarlas no arreglaría nada.
+public struct SpellPublishedNamesInCastilian: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(
+                helper: "SpellPublishedNamesInCastilian", object: PlayerProfileRecord.schema)
+        }
+        struct Row: Decodable { let id: UUID; let full_name: String }
+        let rows = try await sql.raw("""
+            SELECT p.id, p.full_name FROM \(ident: PlayerProfileRecord.schema) p
+             WHERE EXISTS (SELECT 1 FROM \(ident: PlayerRecord.schema) r
+                            WHERE r.profile_id = p.id AND r.last_listed_at IS NOT NULL)
+            """).all(decoding: Row.self)
+        for row in rows {
+            // Un nombre que hoy no valdría se deja como está: no es de este arreglo.
+            guard let spelled = (try? PlayerName(row.full_name))?.spelledInCastilian(),
+                  spelled.value != row.full_name else { continue }
+            try await sql.raw("""
+                UPDATE \(ident: PlayerProfileRecord.schema) SET full_name = \(bind: spelled.value)
+                 WHERE id = \(bind: row.id)
+                """).run()
+        }
+    }
+
+    public func revert(on database: any Database) async throws {}
+}
+
 extension PlayerRecord {
     func toDomain() throws -> Player {
         let id = try requireID()
