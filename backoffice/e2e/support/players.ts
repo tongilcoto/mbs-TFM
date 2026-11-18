@@ -206,3 +206,61 @@ export function initialsOf(name: string): string {
     .map((word) => word.charAt(0).toLocaleUpperCase('es-ES'))
     .join('')
 }
+
+// ── El perfil, por la API ────────────────────────────────────────────────────────────────────────────────────
+
+/** Un perfil como lo da el buscador del alta (`searchPlayerProfiles`): lo que el perfil guarda como ayuda (D-122). */
+export interface ProfileAnswer {
+  profileId: string
+  fullName: string
+  birthYear?: number | null
+  lastShirtNumber?: number | null
+  lastPosition?: Position | null
+  lastPhotoUrl?: string | null
+  lastRoster?: { team: { displayName: string }; seasonLabel: string } | null
+  otherTeamThisSeason?: { displayName: string } | null
+}
+
+/**
+ * Los perfiles del club que encuentra el buscador con ese texto, preguntando desde una plantilla (`teamId` y
+ * `seasonId`): el buscador quita a los de esa plantilla, así que para leer el de alguien hay que preguntar desde otra.
+ */
+export function searchProfiles(club: ScenarioClub, text: string, teamId: string, seasonId: string): Promise<ProfileAnswer[]> {
+  // Con `encodeURIComponent`: el espacio, `%20`. `URLSearchParams` lo escribe `+`, y el servidor no lo lee como espacio.
+  const q = encodeURIComponent(text)
+  return expectApi<ProfileAnswer[]>(club, 'GET', `/player-profiles?q=${q}&teamId=${teamId}&seasonId=${seasonId}`, undefined, 200)
+}
+
+/** El nombre de un equipo del club como lo manda el servidor (`displayName`: el club, la categoría y la letra). */
+export async function teamDisplayName(club: ScenarioClub, team: Team): Promise<string> {
+  return (await expectApi<{ displayName: string }>(club, 'GET', `/teams/${team.id}`, undefined, 200)).displayName
+}
+
+// ── Las fotos que no valen ───────────────────────────────────────────────────────────────────────────────────
+
+/** Un fichero para el campo de la foto, como lo elegiría alguien en su ordenador. */
+export interface PickedFile {
+  name: string
+  mimeType: string
+  buffer: Buffer
+}
+
+export type BadPhoto = 'que no es una imagen' | 'de más de 5 MB' | 'en un formato que no es JPEG ni PNG'
+
+// Un GIF de un punto: una imagen de verdad, pero ni JPEG ni PNG.
+const tinyGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
+
+export function badPhoto(how: BadPhoto): PickedFile {
+  switch (how) {
+    case 'que no es una imagen':
+      return { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('Esto no es una foto.\n') }
+    case 'de más de 5 MB': {
+      // Una foto que vale, con relleno hasta pasar de 5 MB: lo que falla es solo el peso.
+      const photo = photoBytes('foto-a.jpg')
+      return { name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.concat([photo, Buffer.alloc(5 * 1024 * 1024 + 1)]) }
+    }
+    case 'en un formato que no es JPEG ni PNG':
+      return { name: 'foto.gif', mimeType: 'image/gif', buffer: tinyGif }
+  }
+}
+

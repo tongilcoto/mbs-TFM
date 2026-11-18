@@ -42,13 +42,13 @@ export const rosterTab = (world: ScenarioWorld) => world.page.getByRole('region'
 export const rosterTable = (world: ScenarioWorld) => rosterTab(world).getByRole('table')
 const bodyRows = (world: ScenarioWorld) => rosterTable(world).locator('tbody tr')
 /** La fila de un jugador: la que tiene su nombre como enlace. */
-export const rowOfPlayer = (world: ScenarioWorld, player: ScenarioPlayer) =>
+export const rowOfPlayer = (world: ScenarioWorld, player: Pick<ScenarioPlayer, 'fullName'>) =>
   bodyRows(world).filter({ has: world.page.getByRole('link', { name: shownName(player.fullName), exact: true }) })
 /** Las celdas de la fila, por su columna: la foto, el dorsal, el nombre, la demarcación, el año y las acciones. */
 const column = { photo: 0, shirtNumber: 1, name: 2, position: 3, birthYear: 4 }
-const cellOf = (world: ScenarioWorld, player: ScenarioPlayer, which: keyof typeof column) =>
+export const cellOf = (world: ScenarioWorld, player: Pick<ScenarioPlayer, 'fullName'>, which: keyof typeof column) =>
   rowOfPlayer(world, player).locator('td').nth(column[which])
-const textOf = async (world: ScenarioWorld, player: ScenarioPlayer, which: keyof typeof column) =>
+export const textOf = async (world: ScenarioWorld, player: Pick<ScenarioPlayer, 'fullName'>, which: keyof typeof column) =>
   (await cellOf(world, player, which).innerText()).replace(/\s+/g, ' ').trim()
 
 /** La pestaña Plantilla del equipo en una temporada: `/temporadas/2026-27/equipos/<id>/plantilla`. */
@@ -88,7 +88,7 @@ export async function rosterLoaded(world: ScenarioWorld) {
  * escenarios dan el enganche por hecho, y sin él no se ofrece sincronizar (R6.16). En una futura no se sincroniza, así
  * que basta con inscribirlo.
  */
-async function addRosterTeam(world: ScenarioWorld, season: Season = currentSeason()) {
+export async function addRosterTeam(world: ScenarioWorld, season: Season = currentSeason()) {
   if (season.label === currentSeason().label) {
     const { team, competition: plays } = await addPlayingTeam(world.club, world.random, season, world.data.teams)
     world.data.competition = plays
@@ -113,7 +113,7 @@ async function registerIn(world: ScenarioWorld, season: Season) {
 const asPerson = (player: ScenarioPlayer): InventedPerson => ({ given: player.fullName, surnames: '' })
 
 /** Da de alta a un jugador en la plantilla del equipo del escenario, y lo apunta. */
-async function addOne(world: ScenarioWorld, season: Season, shape: PlayerShape = {}) {
+export async function addOne(world: ScenarioWorld, season: Season, shape: PlayerShape = {}) {
   const player = await addPlayer(world.club, world.random, theTeam(world), season, world.data.players, shape)
   world.data.players.push(player)
   world.note(
@@ -124,7 +124,7 @@ async function addOne(world: ScenarioWorld, season: Season, shape: PlayerShape =
 }
 
 /** De 2 a 5 jugadores, al azar, en la plantilla del equipo. */
-async function addSome(world: ScenarioWorld, season: Season) {
+export async function addSome(world: ScenarioWorld, season: Season) {
   const count = world.random.int(2, 5)
   for (let i = 0; i < count; i++) await addOne(world, season)
 }
@@ -334,7 +334,7 @@ When('pulso el nombre de un jugador de la plantilla', async function (this: Scen
 // ── Lo que se ve ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Los nombres de las filas, en el orden de la tabla: la celda del nombre de cada una. */
-async function shownNames(world: ScenarioWorld): Promise<string[]> {
+export async function shownNames(world: ScenarioWorld): Promise<string[]> {
   const rows = await bodyRows(world).all()
   const names: string[] = []
   for (const row of rows) names.push((await row.locator('td').nth(column.name).getByRole('link').innerText()).trim())
@@ -439,6 +439,8 @@ Then('la fila del jugador tiene las iniciales de su nombre en el sitio de la fot
 
 /** La foto de la fila, si la tiene. */
 const photoOf = (world: ScenarioWorld) => cellOf(world, thePlayer(world), 'photo').getByRole('img')
+/** La foto de la fila de un jugador, si la tiene. */
+export const rowPhoto = (world: ScenarioWorld, player: Pick<ScenarioPlayer, 'fullName'>) => cellOf(world, player, 'photo').getByRole('img')
 
 Then('la fila del jugador tiene la foto de la plantilla', async function (this: ScenarioWorld) {
   const expected = thePlayer(this).photoPath!

@@ -5,7 +5,7 @@ import type { ScenarioClub } from './clubs.ts'
 import type { HeldRequest } from './hold-request.ts'
 import { config } from './config.ts'
 import type { Competition, Season, Team } from './invented.ts'
-import type { ScenarioPlayer } from './players.ts'
+import type { PhotoName, Position, ScenarioPlayer } from './players.ts'
 import type { Random } from './random.ts'
 
 /** Lo que los `Given` han dado de alta, para que los pasos siguientes se refieran a ello («el equipo»…). */
@@ -51,6 +51,24 @@ export interface ScenarioData {
   players: ScenarioPlayer[]
   /** El jugador del que habla el escenario («la fila del jugador», «ese jugador»). */
   player?: ScenarioPlayer
+  /** «El jugador presente en el club», o «el de la otra plantilla»: el que el buscador del alta encuentra. */
+  present?: ScenarioPlayer
+  /** Lo que el escenario ha puesto en el diálogo del alta, para comparar después (plan R6). */
+  newPlayer?: NewPlayer
+  /** Lo último escrito en el buscador del alta. */
+  typed?: string
+  /** Los nombres de la plantilla antes de abrir el diálogo. */
+  rosterBefore?: string[]
+}
+
+/** Lo puesto en el diálogo del alta. `undefined`, no se ha tocado; `null`, se ha dejado vacío. */
+export interface NewPlayer {
+  /** En mayúsculas, como lo guarda el servidor. */
+  fullName?: string
+  birthYear?: number
+  shirtNumber?: number | null
+  position?: Position | null
+  photo?: PhotoName | null
 }
 
 export class ScenarioWorld extends World {
