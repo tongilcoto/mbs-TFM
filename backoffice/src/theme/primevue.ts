@@ -58,12 +58,13 @@ const preset = definePreset(Aura, {
             },
             // El botón gris («Sincronizar con la Federación», «Elegir foto», «Quitar foto»…), elegido por el
             // desarrollador en R6.18b sobre una maqueta: el 100 de Aura casi no se distinguía de la página (1,05); el
-            // 300 llega a 1,42, con el texto de siempre (5,1), y lo marca el borde verde de «Dar de alta un jugador»
-            // (5,8 sobre la página). Al pasar el ratón y al pulsar, un tono más oscuro, con el texto casi negro (7,0).
+            // 200 llega a 1,18, con el texto de siempre (6,1), y lo marca el borde verde de «Dar de alta un jugador»
+            // (5,8 sobre la página). Al pasar el ratón y al pulsar, un tono más oscuro, el 300, con el texto casi
+            // negro.
             secondary: {
-              background: '{surface.300}',
-              hoverBackground: '{surface.400}',
-              activeBackground: '{surface.400}',
+              background: '{surface.200}',
+              hoverBackground: '{surface.300}',
+              activeBackground: '{surface.300}',
               borderColor: '{primary.800}',
               hoverBorderColor: '{primary.800}',
               activeBorderColor: '{primary.800}',
