@@ -351,3 +351,17 @@ describe('de dónde sale la clasificación', () => {
     expect(await screen.findByRole('heading', { name: 'Clasificación tras la jornada 1 Federación' })).toBeInTheDocument()
   })
 })
+
+// «‹ Anterior» y «Siguiente ›», con el formato del botón gris de la web (R6.19d): sin la variante de solo borde, que
+// no usa sus colores.
+test('los botones de jornada son el botón gris de la web', async () => {
+  fakeServer()
+  await openCompetition()
+
+  await waitFor(() => expect(next()).toBeInTheDocument())
+  for (const button of [previous(), next()]) {
+    expect(button).toHaveClass('p-button-secondary')
+    expect(button).not.toHaveClass('p-button-outlined')
+  }
+})
+

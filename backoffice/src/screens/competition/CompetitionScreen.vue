@@ -248,7 +248,6 @@ function goTo(number: number | undefined) {
       <Button
         label="‹ Anterior"
         severity="secondary"
-        outlined
         :disabled="!round || round.number === first"
         @click="goTo(options[options.findIndex((o) => o.value === round?.number) - 1]?.value)"
       />
@@ -269,7 +268,6 @@ function goTo(number: number | undefined) {
       <Button
         label="Siguiente ›"
         severity="secondary"
-        outlined
         :disabled="!round || round.number === last"
         @click="goTo(options[options.findIndex((o) => o.value === round?.number) + 1]?.value)"
       />
