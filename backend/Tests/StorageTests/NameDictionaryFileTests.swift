@@ -52,6 +52,8 @@ struct NameDictionaryFileTests {
         ("JORGE FERNANDEZ PEREZ", "JORGE FERNÁNDEZ PÉREZ"),
         ("JESUS MUNOZ IBANEZ", "JESÚS MUÑOZ IBÁÑEZ"),
         ("ROMAN MARTIN ARGUELLES", "ROMÁN MARTÍN ARGÜELLES"),
+        // Corregido en R6.19, editando solo su línea: es esdrújula.
+        ("INIGO SAEZ", "ÍÑIGO SÁEZ"),
     ])
     func spellsTheUsualNames(_ raw: String, _ spelled: String) throws {
         #expect(try PlayerName(raw).spelledInCastilian(with: Self.repositoryNames()).value == spelled)
