@@ -43,3 +43,19 @@ test('el botón rojo, en claro, es del 700: relleno, con borde y de solo texto',
   expect(styles).toMatch(/--p-button-outlined-danger-color:\s*var\(--p-red-700\)/)
   expect(styles).toMatch(/--p-button-text-danger-color:\s*var\(--p-red-700\)/)
 })
+
+// El botón gris, elegido en R6.18b: en claro, el 300 con el borde verde del principal; en oscuro, el gris de siempre
+// con el borde verde de la paleta de oscuro. Como antes, se comprueba que los colores llegan a la página con el tema.
+test('el botón gris, con su relleno y el borde verde en los dos modos', () => {
+  render(Button, {
+    props: { label: 'Sincronizar con la Federación', severity: 'secondary' },
+    global: { plugins: [[PrimeVue, primeVueOptions]] },
+  })
+
+  const styles = [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
+  // Los dos modos, cada uno en su bloque: el claro con el 300 y el borde del 800; el oscuro, el gris de siempre (el 800)
+  // con el borde del 500.
+  expect(styles).toMatch(/--p-button-secondary-background:var\(--p-surface-300\)[^}]*--p-button-secondary-border-color:var\(--p-primary-800\)/)
+  expect(styles).toMatch(/--p-button-secondary-background:var\(--p-surface-800\)[^}]*--p-button-secondary-border-color:var\(--p-primary-500\)/)
+})
+

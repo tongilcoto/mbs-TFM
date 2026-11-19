@@ -56,10 +56,34 @@ const preset = definePreset(Aura, {
               activeBorderColor: '{red.900}',
               focusRing: { color: '{red.700}', shadow: 'none' },
             },
+            // El botón gris («Sincronizar con la Federación», «Elegir foto», «Quitar foto»…), elegido por el
+            // desarrollador en R6.18b sobre una maqueta: el 100 de Aura casi no se distinguía de la página (1,05); el
+            // 300 llega a 1,42, con el texto de siempre (5,1), y lo marca el borde verde de «Dar de alta un jugador»
+            // (5,8 sobre la página). Al pasar el ratón y al pulsar, un tono más oscuro, con el texto casi negro (7,0).
+            secondary: {
+              background: '{surface.300}',
+              hoverBackground: '{surface.400}',
+              activeBackground: '{surface.400}',
+              borderColor: '{primary.800}',
+              hoverBorderColor: '{primary.800}',
+              activeBorderColor: '{primary.800}',
+              hoverColor: '{surface.900}',
+              activeColor: '{surface.900}',
+            },
           },
           // Y el texto rojo de los botones con borde y de solo texto («Dar de baja» en la ficha del jugador).
           outlined: { danger: { color: '{red.700}' } },
           text: { danger: { color: '{red.700}' } },
+        },
+        // En oscuro, el gris de siempre, con el borde verde de la paleta de oscuro (8,8 sobre la página).
+        dark: {
+          root: {
+            secondary: {
+              borderColor: '{primary.500}',
+              hoverBorderColor: '{primary.500}',
+              activeBorderColor: '{primary.500}',
+            },
+          },
         },
       },
       // Un enlace con aspecto de botón («Dar de alta un equipo», que va a otra pantalla) se ve como un botón: sin
