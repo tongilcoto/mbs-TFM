@@ -57,6 +57,9 @@ public struct APIHandler: APIProtocol {
     /// que falla si se usa: lo construyen así los tests que no tocan fotos.
     let photos: any PhotoStore
     let sanitizer: any PhotoSanitizer
+    /// R6.19: el diccionario de nombres (`D-123`), que la sincronización lee cada vez. Por omisión, ninguno: lo
+    /// construyen así los tests que no sincronizan.
+    let names: any NameDictionarySource
 
     public init(
         unitOfWork: any TenantUnitOfWork,
@@ -70,7 +73,8 @@ public struct APIHandler: APIProtocol {
         actors: any ActorResolver = AmbientTenantActorResolver(),
         logger: Logger = Logger(label: "ingestion"),
         photos: any PhotoStore = NoPhotoStore(),
-        sanitizer: any PhotoSanitizer = NoPhotoStore()
+        sanitizer: any PhotoSanitizer = NoPhotoStore(),
+        names: any NameDictionarySource = FixedNameDictionary(nil)
     ) {
         self.unitOfWork = unitOfWork
         self.federationClients = federationClients
@@ -81,6 +85,7 @@ public struct APIHandler: APIProtocol {
         self.logger = logger
         self.photos = photos
         self.sanitizer = sanitizer
+        self.names = names
     }
 
     public func getClub(_ input: Operations.getClub.Input) async throws

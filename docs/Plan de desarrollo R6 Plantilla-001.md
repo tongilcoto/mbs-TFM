@@ -819,10 +819,11 @@ se lanza el servidor); y el servidor de los escenarios se lanza desde `backoffic
 | **2 · Qué pasa si el fichero tiene una línea mala o falta** | No sincronizar y decirlo; sincronizar sin diccionario; o usar la última lista buena | **Ninguna de las tres, propuesta del desarrollador: nunca se para.** Una línea mala (sin marca, repetida, en minúsculas, con otro signo) **se salta**, y se usan las demás; de una palabra dos veces, vale la primera. Si **falta el fichero**, se sincroniza sin diccionario. En los dos casos **el resumen de la web lo dice**, con las líneas saltadas y por qué, o que no se ha encontrado. Para eso, la respuesta de la sincronización gana un dato y la web, una línea en el resumen, en esta rama |
 | **3 · Qué hace la migración 24ª** (usa la lista que sale del código; en su base ya corrió, y en un club nuevo no encuentra perfiles) | Una copia fija de la lista; leer el fichero; o quitarle el diccionario | **Leer el fichero**, igual que la sincronización, y como ella sin pararse. En su base no vuelve a correr, en un club nuevo no hay nada que arreglar y en R16 los datos se copiarán ya arreglados: dos copias de la lista no compensan |
 
-**Cómo se hace `R6.19`, en seis commits**: las decisiones; el fichero, con la lista de hoy tal cual y sus pruebas
-mirando el fichero de verdad; la lectura en caliente en la sincronización, con lo que dice el resumen (en el catálogo,
-el servidor y la web); la migración 24ª, que lee el fichero; «ÍÑIGO» con tilde, en el fichero y en los nombres
-inventados de los escenarios, como primera corrección en caliente; y el cierre.
+**Cómo se hace `R6.19`, en seis commits**: las decisiones; el fichero y su lectura en caliente, en la sincronización y
+en la migración 24ª, con sus pruebas mirando el fichero de verdad (las dos van juntas porque la lista sale del código:
+sin leer el fichero no compilaría); lo que dice el resumen (en el catálogo, el servidor y la web); la migración, si
+pide algo más; «ÍÑIGO» con tilde, en el fichero y en los nombres inventados de los escenarios, como primera corrección
+en caliente; y el cierre.
 
 ---
 

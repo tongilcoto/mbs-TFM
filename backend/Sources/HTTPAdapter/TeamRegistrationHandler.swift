@@ -77,7 +77,7 @@ extension APIHandler {
             return .badRequest(Self.invalidUUID(error))
         }
         let summary = try await SyncTeamRoster(
-            unitOfWork: unitOfWork, federations: federationClients, clock: clock, ids: ids
+            unitOfWork: unitOfWork, federations: federationClients, clock: clock, ids: ids, names: names
         ).execute(actor: actor, teamID: teamID, seasonID: seasonID)
         return .ok(.init(body: .json(summary.toResponse())))
     }

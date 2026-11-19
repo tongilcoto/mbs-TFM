@@ -34,6 +34,7 @@ export async function startApiServer(): Promise<Started> {
       API_PORT: String(config.apiPort),
       RFFM_BASE_URL: `http://127.0.0.1:${config.federationPort}`,
       PHOTOS_DIR: config.photos,
+      NAMES_DICTIONARY_FILE: config.namesDictionary,
     },
   })
   startedBefore = true

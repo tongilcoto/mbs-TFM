@@ -88,10 +88,15 @@ struct SyncTeamRosterTests {
                       archivada: archivada, liga: liga)
     }
 
+    /// El diccionario de nombres de estas pruebas (`D-123`): pequeño, con las palabras que usan. El del fichero de
+    /// verdad lo miran las pruebas de `Storage` (R6.19).
+    static let names = CastilianNames(text: "MUÑOZ\nFERNÁNDEZ\nPÉREZ\nGARCÍA\nLÓPEZ\nMARTÍN\nJESÚS")
+
     static func useCase(_ store: IngestionStore, _ client: RosterClient) -> SyncTeamRoster {
         SyncTeamRoster(unitOfWork: FakeUnitOfWork(store: store),
                        federations: FakeFederationClientProvider([.rffm: client]),
-                       clock: FixedClock(instant: now), ids: SequentialUUIDProvider())
+                       clock: FixedClock(instant: now), ids: SequentialUUIDProvider(),
+                       names: FixedNameDictionary(names))
     }
 
     static let actor = ActorContext(clubSlug: try! Slug("celtic"))
