@@ -14,6 +14,16 @@ const states = {
   oscuro: { bien: '{green.400}', fallo: '{red.400}', enMarcha: '{sky.400}', aviso: '{amber.400}', sinDatos: '{surface.400}' },
 }
 
+// Lo gris secundario: el botón gris («Sincronizar con la Federación», «Elegir foto»…) y el óvalo del puesto. Elegido
+// por el desarrollador sobre una maqueta (R6.18b) para el botón, y llevado al óvalo en R6.19b: los dos, del mismo sitio.
+// Salen como --p-secundario-fondo, --p-secundario-borde y --p-secundario-texto. En claro, el 200 con el borde verde de
+// «Dar de alta un jugador» (relleno sobre la página, 1,18; borde, 5,8; texto, 6,1); en oscuro, el gris de Aura con el
+// borde verde de su paleta (borde, 8,8; texto, 10,1).
+const secondary = {
+  claro: { fondo: '{surface.200}', borde: '{primary.800}', texto: '{surface.600}' },
+  oscuro: { fondo: '{surface.800}', borde: '{primary.500}', texto: '{surface.300}' },
+}
+
 // Aura con la paleta encima (plan R1, decisión 7). Lo que la paleta no dice —los colores de los estados, los
 // bordes, los campos de los formularios— sigue siendo de Aura.
 const preset = definePreset(Aura, {
@@ -28,6 +38,7 @@ const preset = definePreset(Aura, {
         text: { color: palette.claro.texto, mutedColor: palette.claro.textoSuave },
         fondo: palette.claro.fondo,
         estado: states.claro,
+        secundario: secondary.claro,
       },
       dark: {
         primary: { color: '{primary.500}', hoverColor: '{primary.400}', activeColor: '{primary.300}' },
@@ -37,6 +48,7 @@ const preset = definePreset(Aura, {
         // El fondo de la página: no es de ninguna pieza, así que Aura no lo tiene. Sale como --p-fondo (index.html).
         fondo: palette.oscuro.fondo,
         estado: states.oscuro,
+        secundario: secondary.oscuro,
       },
     },
   },
@@ -62,12 +74,13 @@ const preset = definePreset(Aura, {
             // (5,8 sobre la página). Al pasar el ratón y al pulsar, un tono más oscuro, el 300, con el texto casi
             // negro.
             secondary: {
-              background: '{surface.200}',
+              background: '{secundario.fondo}',
               hoverBackground: '{surface.300}',
               activeBackground: '{surface.300}',
-              borderColor: '{primary.800}',
-              hoverBorderColor: '{primary.800}',
-              activeBorderColor: '{primary.800}',
+              borderColor: '{secundario.borde}',
+              hoverBorderColor: '{secundario.borde}',
+              activeBorderColor: '{secundario.borde}',
+              color: '{secundario.texto}',
               hoverColor: '{surface.900}',
               activeColor: '{surface.900}',
             },
@@ -76,13 +89,15 @@ const preset = definePreset(Aura, {
           outlined: { danger: { color: '{red.700}' } },
           text: { danger: { color: '{red.700}' } },
         },
-        // En oscuro, el gris de siempre, con el borde verde de la paleta de oscuro (8,8 sobre la página).
+        // En oscuro, el gris de siempre, con el borde verde de la paleta de oscuro (8,8 sobre la página): `secundario`.
         dark: {
           root: {
             secondary: {
-              borderColor: '{primary.500}',
-              hoverBorderColor: '{primary.500}',
-              activeBorderColor: '{primary.500}',
+              background: '{secundario.fondo}',
+              borderColor: '{secundario.borde}',
+              hoverBorderColor: '{secundario.borde}',
+              activeBorderColor: '{secundario.borde}',
+              color: '{secundario.texto}',
             },
           },
         },
