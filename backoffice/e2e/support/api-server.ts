@@ -4,7 +4,7 @@
 //
 // Un escenario puede pararlo y volver a arrancarlo, para ver los errores de verdad (DW-17, LLD-B §11.5). Solo
 // es seguro porque los escenarios van de uno en uno. El del desarrollador no se toca nunca.
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { config } from './config.ts'
 import { requireFreePort, startProcess, waitUntilAnswers, type Started } from './processes.ts'
 
@@ -24,6 +24,8 @@ export async function startApiServer(): Promise<Started> {
   }
   await requireFreePort(name, config.apiPort)
 
+  // Las fotos de la pasada anterior, fuera: sus clubs ya se han barrido.
+  if (!startedBefore) rmSync(config.photos, { recursive: true, force: true })
   const server = startProcess(name, config.serverBinary, ['serve'], {
     logName: 'servidor',
     append: startedBefore,
@@ -31,6 +33,7 @@ export async function startApiServer(): Promise<Started> {
       DB_NAME: config.database.name,
       API_PORT: String(config.apiPort),
       RFFM_BASE_URL: `http://127.0.0.1:${config.federationPort}`,
+      PHOTOS_DIR: config.photos,
     },
   })
   startedBefore = true

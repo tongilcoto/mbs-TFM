@@ -1,6 +1,7 @@
 <!-- Elegir una foto (plan R6): un botón con el texto de la web, que abre el selector de ficheros. El campo del
      fichero del navegador sale con su propio texto, en su idioma («Choose File»); aquí va escondido y lo abre el
-     botón. Sigue en la página, con su `id`, para que una etiqueta de fuera («Foto») lo nombre. -->
+     botón. Sigue en la página, con su `id`, para que una etiqueta de fuera («Foto») lo nombre; sin ella, lo nombra
+     `name`. -->
 <script setup lang="ts">
 import Button from 'primevue/button'
 import { ref } from 'vue'
@@ -13,6 +14,8 @@ defineProps<{
   accept: string
   describedBy?: string
   disabled?: boolean
+  // El nombre del campo, si no hay una etiqueta de fuera que lo nombre (en la ficha del jugador).
+  name?: string
 }>()
 const emit = defineEmits<{ pick: [file: File] }>()
 
@@ -43,6 +46,7 @@ function picked() {
       class="visually-hidden"
       type="file"
       tabindex="-1"
+      :aria-label="name"
       :accept="accept"
       @change="picked"
     >

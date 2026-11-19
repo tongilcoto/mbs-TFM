@@ -130,7 +130,9 @@ When('elijo una jornada jugada en el selector de jornada', async function (this:
 
 When('recargo la página', async function (this: ScenarioWorld) {
   await this.page.reload()
-  await roundShown(this)
+  // En la jornada, hasta que sale su tabla; en las demás pantallas, su título, y cada `Then` espera lo suyo.
+  if (this.data.round !== undefined) await roundShown(this)
+  else await this.page.locator('h1').first().waitFor()
 })
 
 // ── Lo que se ve ─────────────────────────────────────────────────────────────────────────────────────────────

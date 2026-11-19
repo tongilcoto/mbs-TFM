@@ -10,13 +10,24 @@ export interface ApiAnswer<T> {
   body: T
 }
 
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+
+/** Un fichero que va en crudo, con su tipo, como sube la web la foto de un jugador (`PUT /players/{id}/photo`). */
+export interface RawBody {
+  raw: Buffer
+  type: string
+}
+
+const isRaw = (body: unknown): body is RawBody => typeof body === 'object' && body !== null && Buffer.isBuffer((body as RawBody).raw)
+
 export function callApi<T = unknown>(
   club: ScenarioClub,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: Method,
   path: string,
   body?: unknown,
 ): Promise<ApiAnswer<T>> {
-  const payload = body === undefined ? undefined : JSON.stringify(body)
+  const payload = body === undefined ? undefined : isRaw(body) ? body.raw : JSON.stringify(body)
+  const type = isRaw(body) ? body.type : 'application/json'
   return new Promise((resolve, reject) => {
     const request = http.request(
       {
@@ -26,7 +37,7 @@ export function callApi<T = unknown>(
         method,
         headers: {
           host: `${club.slug}.localhost:${config.apiPort}`,
-          ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+          ...(payload ? { 'content-type': type, 'content-length': Buffer.byteLength(payload) } : {}),
         },
         timeout: 30_000,
       },
@@ -55,7 +66,7 @@ export function callApi<T = unknown>(
 /** Como `callApi`, pero falla si el servidor no contesta lo esperado, con lo que contestó. */
 export async function expectApi<T = unknown>(
   club: ScenarioClub,
-  method: 'GET' | 'POST' | 'PATCH',
+  method: Method,
   path: string,
   body: unknown,
   expected: number,

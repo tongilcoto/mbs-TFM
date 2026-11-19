@@ -42,6 +42,51 @@ const preset = definePreset(Aura, {
   },
   components: {
     button: {
+      colorScheme: {
+        light: {
+          root: {
+            // El rojo de «Dar de baja»: el 500 de Aura con el blanco se queda en 3,8 de contraste (WCAG pide 4,5); el
+            // 700 llega a 6,5. Como el principal, un tono más oscuro en claro (salió con axe en R6.18).
+            danger: {
+              background: '{red.700}',
+              hoverBackground: '{red.800}',
+              activeBackground: '{red.900}',
+              borderColor: '{red.700}',
+              hoverBorderColor: '{red.800}',
+              activeBorderColor: '{red.900}',
+              focusRing: { color: '{red.700}', shadow: 'none' },
+            },
+            // El botón gris («Sincronizar con la Federación», «Elegir foto», «Quitar foto»…), elegido por el
+            // desarrollador en R6.18b sobre una maqueta: el 100 de Aura casi no se distinguía de la página (1,05); el
+            // 200 llega a 1,18, con el texto de siempre (6,1), y lo marca el borde verde de «Dar de alta un jugador»
+            // (5,8 sobre la página). Al pasar el ratón y al pulsar, un tono más oscuro, el 300, con el texto casi
+            // negro.
+            secondary: {
+              background: '{surface.200}',
+              hoverBackground: '{surface.300}',
+              activeBackground: '{surface.300}',
+              borderColor: '{primary.800}',
+              hoverBorderColor: '{primary.800}',
+              activeBorderColor: '{primary.800}',
+              hoverColor: '{surface.900}',
+              activeColor: '{surface.900}',
+            },
+          },
+          // Y el texto rojo de los botones con borde y de solo texto («Dar de baja» en la ficha del jugador).
+          outlined: { danger: { color: '{red.700}' } },
+          text: { danger: { color: '{red.700}' } },
+        },
+        // En oscuro, el gris de siempre, con el borde verde de la paleta de oscuro (8,8 sobre la página).
+        dark: {
+          root: {
+            secondary: {
+              borderColor: '{primary.500}',
+              hoverBorderColor: '{primary.500}',
+              activeBorderColor: '{primary.500}',
+            },
+          },
+        },
+      },
       // Un enlace con aspecto de botón («Dar de alta un equipo», que va a otra pantalla) se ve como un botón: sin
       // el subrayado que el navegador pone a todos los enlaces y que Aura solo quita a los botones de verdad.
       css: () => 'a.p-button { text-decoration: none; }',

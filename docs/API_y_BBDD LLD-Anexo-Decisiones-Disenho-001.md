@@ -5683,6 +5683,23 @@ perfiles publicados. La migración es la 24ª (`SpellPublishedNamesInCastilian`)
 
 **Enmienda** a [D-120] (lo que guarda la sincronización). Se hace en `R6.17`.
 
+**Enmienda (2026-11-19, al cerrar `R6.18`): la lista, en un fichero que se cambia en caliente.** Salió al ver que
+«IÑIGO» estaba sin tilde en la I, y es «ÍÑIGO» (esdrújula): corregir una palabra no debe obligar a recompilar ni a
+relanzar el servidor. Decidido con el desarrollador, una a una:
+
+1. **Dónde vive la lista**: en **un fichero de texto** del servidor, una palabra por línea, que la sincronización
+   lee **cada vez que sincroniza**; la siguiente sincronización ya usa lo cambiado. Sigue en el repositorio, y cada
+   cambio pasa por un PR, con sus pruebas (cada palabra con su marca, ninguna repetida). Leerlo cada vez no cuesta:
+   unas 300 líneas, y se sincroniza a mano, equipo a equipo. Descartados: una tabla en la base, común a los clubes
+   (se cambia con SQL también en internet, pero sin historial ni revisión, y es una tabla más); y leerlo al arrancar
+   vigilando si cambia (lo mismo, con más piezas). **Para R16**: con el servidor en internet, cambiarlo pide acceso a
+   sus ficheros; si hace falta sin desplegar, se pasa entonces a la tabla.
+2. **Dónde y cuándo**: en una rama nueva del servidor, `feature/r6-plantilla-backend-4`, tras fusionar la de `R6.18`;
+   es el paso **`R6.19`** del plan R6. Con él, «ÍÑIGO» con tilde (y en los nombres inventados de los escenarios).
+
+Lo ya guardado no cambia al tocar la lista: un «IÑIGO» guardado y un «ÍÑIGO» nuevo son «el mismo nombre», así que no
+salen repetidos. En la base del desarrollador no hay ninguno (contado el 2026-11-19).
+
 ### D-124 · Los nombres se ordenan en español, y lo hace la base
 
 **Lo que lo obligó a decidirse** (2026-11-16, al construir la pestaña Plantilla, decisión 5 de R6.11; decidido

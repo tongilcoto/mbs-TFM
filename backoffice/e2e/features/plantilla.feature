@@ -11,6 +11,10 @@
 #   escenario da el enganche por hecho; la regla la cubren las pruebas de piezas.
 # - Las reglas de las mayúsculas del nombre, una a una: las cubren las pruebas de piezas de la función que lo
 #   formatea; aquí, un escenario con un nombre que las junta.
+# - Una temporada archivada (decisión 2 de R6.18): la web no la abre, ni escribiendo su dirección, porque solo pide las
+#   temporadas sin archivar (plan R2: una archivada está escondida hasta recuperarla). Su plantilla y sus fichas, de
+#   solo lectura, se verán desde Temporadas, en la rebanada 11; hoy lo cubren las pruebas de piezas (`canChange`) y el
+#   servidor (`SEASON_ARCHIVED`).
 #
 # Vocabulario de los pasos:
 # - «la plantilla»: la tabla de la pestaña Plantilla.
@@ -123,18 +127,13 @@ Feature: La plantilla de un equipo
   # ── Una temporada pasada ──
 
   @ui
-  Scenario Outline: En una temporada pasada <cómo>, la plantilla se ve pero no se cambia
-    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada <cómo>
-    When abro la pestaña Plantilla de la ficha del equipo, en la temporada pasada <cómo>
+  Scenario: En una temporada pasada, la plantilla se ve pero no se cambia
+    Given un equipo de mi club tiene jugadores en la plantilla de una temporada pasada
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada pasada
     Then la plantilla tiene a los jugadores del equipo en esa temporada
     And la pestaña Plantilla no tiene el botón "Dar de alta un jugador"
     And la pestaña Plantilla no tiene el botón "Sincronizar con la Federación"
     And las filas de la plantilla no tienen acciones
-
-    Examples:
-      | cómo          |
-      | archivada     |
-      | sin archivar  |
 
   # ── Una temporada futura ──
 

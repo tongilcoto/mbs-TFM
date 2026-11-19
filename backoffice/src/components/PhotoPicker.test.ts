@@ -6,9 +6,9 @@ import PhotoPicker from './PhotoPicker.vue'
 
 // Elegir una foto (plan R6): un botón con texto de la web, no el del navegador, que abre el selector de ficheros.
 
-function renderPicker() {
+function renderPicker(extra: { name?: string } = {}) {
   return render(PhotoPicker, {
-    props: { inputId: 'foto', label: 'Elegir foto', accept: 'image/jpeg,image/png' },
+    props: { inputId: 'foto', label: 'Elegir foto', accept: 'image/jpeg,image/png', ...extra },
     global: { plugins: [[PrimeVue, primeVueOptions]] },
   })
 }
@@ -44,5 +44,18 @@ describe('elegir una foto', () => {
 
     expect(emitted().pick).toEqual([[file]])
     expect(input.value).toBe('')
+  })
+
+  // Sin una etiqueta de fuera (la ficha del jugador), el campo no tendría nombre: axe lo pide (R6.18).
+  test('con `name`, el campo del fichero se llama así; sin él, lo nombra la etiqueta de fuera', () => {
+    renderPicker({ name: 'Foto' })
+
+    expect(screen.getByLabelText('Foto')).toBe(document.getElementById('foto'))
+  })
+
+  test('sin `name`, el campo no lleva nombre propio', () => {
+    renderPicker()
+
+    expect(document.getElementById('foto')).not.toHaveAttribute('aria-label')
   })
 })

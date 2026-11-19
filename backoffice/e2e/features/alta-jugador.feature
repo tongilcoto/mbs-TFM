@@ -32,7 +32,7 @@ Feature: El alta de un jugador
     Given estoy en la pestaña Plantilla de la ficha de un equipo de mi club, en la temporada en curso
     When pulso el botón "Dar de alta un jugador" de la pestaña Plantilla
     Then el buscador del alta está vacío y tiene el foco
-    And el buscador del alta tiene la ayuda "Nombre y apellidos"
+    And el buscador del alta tiene la etiqueta "Nombre y apellidos"
 
   # ── El buscador ──
 

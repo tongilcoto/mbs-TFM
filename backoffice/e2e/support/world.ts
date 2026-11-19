@@ -5,6 +5,7 @@ import type { ScenarioClub } from './clubs.ts'
 import type { HeldRequest } from './hold-request.ts'
 import { config } from './config.ts'
 import type { Competition, Season, Team } from './invented.ts'
+import type { PhotoName, Position, ScenarioPlayer } from './players.ts'
 import type { Random } from './random.ts'
 
 /** Lo que los `Given` han dado de alta, para que los pasos siguientes se refieran a ello («el equipo»…). */
@@ -46,6 +47,56 @@ export interface ScenarioData {
   /** Los equipos con su puesto, y el que no tiene, para ordenar por posición (plan R5). */
   placed?: { team: Team; position: number }[]
   unplaced?: Team
+  /** Los jugadores que el escenario ha dado de alta, en cualquier plantilla (plan R6). */
+  players: ScenarioPlayer[]
+  /** El jugador del que habla el escenario («la fila del jugador», «ese jugador»). */
+  player?: ScenarioPlayer
+  /** «El jugador presente en el club», o «el de la otra plantilla»: el que el buscador del alta encuentra. */
+  present?: ScenarioPlayer
+  /** Lo que el escenario ha puesto en el diálogo del alta, para comparar después (plan R6). */
+  newPlayer?: NewPlayer
+  /** Lo último escrito en el buscador del alta. */
+  typed?: string
+  /** Los nombres de la plantilla antes de abrir el diálogo, o de sincronizar. */
+  rosterBefore?: string[]
+  /** Lo que la Federación publica y lo que el escenario espera de sincronizar (plan R6, parte D). */
+  sync?: SyncData
+}
+
+/** Un jugador que publica la ficha de equipo de la Federación falsa. */
+export interface PublishedPlayer {
+  code: string
+  /** Tal cual va en la ficha: «APELLIDOS, NOMBRE», con o sin marcas, o un nombre que no vale. */
+  published: string
+  /** Como lo guarda el servidor: «NOMBRE APELLIDOS», con las marcas del diccionario. Vacío si no vale. */
+  fullName: string
+}
+
+export interface SyncData {
+  /** Lo que publica la ficha, en orden. */
+  published: PublishedPlayer[]
+  /** Los que había en la plantilla al empezar (los ya sincronizados). */
+  before: number
+  /** Los dados de baja por el club que la Federación sigue publicando. */
+  removed: string[]
+  /** El jugador del que habla el escenario. */
+  player?: PublishedPlayer
+  /** Lo que el resumen tiene que nombrar. */
+  duplicates: string[]
+  otherTeam: { fullName: string; teamId: string }[]
+  invalid: string[]
+  /** Si la ficha se ha retenido: entonces sincronizar no espera al resultado. */
+  held?: boolean
+}
+
+/** Lo puesto en el diálogo del alta. `undefined`, no se ha tocado; `null`, se ha dejado vacío. */
+export interface NewPlayer {
+  /** En mayúsculas, como lo guarda el servidor. */
+  fullName?: string
+  birthYear?: number
+  shirtNumber?: number | null
+  position?: Position | null
+  photo?: PhotoName | null
 }
 
 export class ScenarioWorld extends World {
@@ -59,7 +110,7 @@ export class ScenarioWorld extends World {
   held?: HeldRequest
   /** El azar del escenario (random.ts): con la misma semilla, los mismos datos. */
   random!: Random
-  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [], byHealth: {} }
+  data: ScenarioData = { teams: [], pastSeasons: [], ingesting: [], byHealth: {}, players: [] }
   /** Los datos que le tocaron al escenario, en palabras: salen en el informe si falla. */
   chosen: string[] = []
 
