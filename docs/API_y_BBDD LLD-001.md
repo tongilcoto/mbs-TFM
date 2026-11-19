@@ -1877,7 +1877,9 @@ struct SeasonResponse: Content {
   `TeamRegistrationResponse`**, donde se guarda, y no con la plantilla, que dejaría de ser una lista.
 - **`PlayerProfileSearchResult` y `RosterSyncResponse`** son lecturas para una pantalla: el buscador del
   alta (el perfil entero, con su última plantilla y el equipo si ya está en otro, [D-121], [D-122]) y el
-  resumen de la sincronización (números, y con nombre los tres casos que hay que revisar a mano).
+  resumen de la sincronización (números, y con nombre los tres casos que hay que revisar a mano; y, desde
+  R6.19, cómo estaba el diccionario de nombres, `namesDictionary`: si se encontró el fichero y las líneas que
+  no se usaron, porque nunca para la sincronización, [D-123]).
 - **`PlayerResponse` no embebe el equipo** aunque `MatchResponse` y `StandingResponse` sí lo hagan: dentro
   de una plantilla el equipo es **constante** —lo acaba de pedir el cliente como ámbito—, así que un
   `TeamRef` por fila sería la columna repetida que [D-28] y [D-29] ya rechazaron en otro sitio. El criterio

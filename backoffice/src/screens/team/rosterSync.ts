@@ -3,9 +3,13 @@
 import type { components } from '../../api/schema'
 import { shownName } from '../../components/playerName'
 import { formatInstant } from '../../theme/format'
+import { namesOf } from '../../theme/names'
 import { type Season, seasonPhase } from '../home/seasons'
 
 type RosterSync = components['schemas']['RosterSyncResponse']
+type SkipReason = components['schemas']['NamesDictionarySkipReason']
+
+const skipReasons = namesOf('NamesDictionarySkipReason')
 
 export interface SyncConditions {
   season: Season
@@ -53,6 +57,24 @@ export function summaryLines(summary: RosterSync): string[] {
     const list = summary.invalidName.map((name) => `«${name}»`).join(', ')
     const what = summary.invalidName.length === 1 ? 'no añadido; para darlo' : 'no añadidos; para darlos'
     lines.push(`Con un nombre que no vale, ${what} de alta a mano: ${list}.`)
+  }
+  // El diccionario de nombres (R6.19): nunca para la sincronización, así que el resumen dice si faltaba o qué líneas no
+  // se han usado, para arreglarlas en el fichero.
+  const dictionary = summary.namesDictionary
+  if (!dictionary.found) {
+    lines.push('No se ha encontrado el diccionario de nombres: los nombres se han guardado como llegan de la Federación.')
+  } else if (dictionary.skippedLines.length > 0) {
+    const skipped = dictionary.skippedLines
+    const one = skipped.length === 1
+    const list = skipped
+      .map((line) => {
+        const why = skipReasons[line.reason as SkipReason]
+        const where = line.reason === 'repeated' && line.repeatedLine != null ? `: ya está en la línea ${line.repeatedLine}` : ''
+        return `línea ${line.line}, «${line.text}» (${why}${where})`
+      })
+      .join('; ')
+    const what = one ? 'línea con error, que no se ha usado' : 'líneas con error, que no se han usado'
+    lines.push(`El diccionario de nombres tiene ${skipped.length} ${what}: ${list}.`)
   }
   return lines
 }

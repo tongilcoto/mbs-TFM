@@ -68,6 +68,7 @@ function summary(fields: Partial<RosterSync> = {}): RosterSync {
     duplicateName: [],
     inOtherTeam: [],
     invalidName: [],
+    namesDictionary: { found: true, skippedLines: [] },
     ...fields,
   }
 }
@@ -114,5 +115,37 @@ describe('el resumen de la sincronización', () => {
   test('nombra a los de un nombre que no vale, tal cual los escribe la federación', () => {
     const lines = summaryLines(summary({ invalidName: ['TORRES, IÑAKI/'] }))
     expect(lines[1]).toBe('Con un nombre que no vale, no añadido; para darlo de alta a mano: «TORRES, IÑAKI/».')
+  })
+
+  // R6.19: el diccionario de nombres nunca para la sincronización; el resumen dice cómo estaba.
+  test('sin el diccionario de nombres, lo dice', () => {
+    const lines = summaryLines(summary({ namesDictionary: { found: false, skippedLines: [] } }))
+    expect(lines[1]).toBe('No se ha encontrado el diccionario de nombres: los nombres se han guardado como llegan de la Federación.')
+  })
+
+  test('las líneas del diccionario que no se han usado, con su número y por qué', () => {
+    const one = summaryLines(summary({ namesDictionary: { found: true, skippedLines: [{ line: 37, text: 'GARCIA', reason: 'noMark' }] } }))
+    expect(one[1]).toBe(
+      'El diccionario de nombres tiene 1 línea con error, que no se ha usado: línea 37, «GARCIA» (no lleva tilde, eñe ni diéresis).',
+    )
+    const two = summaryLines(
+      summary({
+        namesDictionary: {
+          found: true,
+          skippedLines: [
+            { line: 40, text: 'garcía', reason: 'notOneUppercaseWord' },
+            { line: 52, text: 'DÍEZ', reason: 'repeated', repeatedLine: 12 },
+          ],
+        },
+      }),
+    )
+    expect(two[1]).toBe(
+      'El diccionario de nombres tiene 2 líneas con error, que no se han usado: línea 40, «garcía» (no es una palabra en ' +
+        'mayúsculas); línea 52, «DÍEZ» (repetida: ya está en la línea 12).',
+    )
+  })
+
+  test('con el diccionario bien, no dice nada de él', () => {
+    expect(summaryLines(summary())).toEqual(['0 añadidos y 0 que ya estaban.'])
   })
 })

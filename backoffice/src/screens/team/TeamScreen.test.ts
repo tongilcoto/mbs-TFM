@@ -167,6 +167,7 @@ const defaults = {
       duplicateName: [],
       inOtherTeam: [],
       invalidName: ['TORRES, IÑAKI/'],
+      namesDictionary: { found: true, skippedLines: [] },
     })
   },
 }

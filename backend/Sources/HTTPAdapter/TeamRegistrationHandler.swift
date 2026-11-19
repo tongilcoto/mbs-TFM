@@ -101,7 +101,24 @@ extension RosterSyncSummary {
                       team: LabeledTeam(team: $0.team, clubName: club.name, clubShortName: club.shortName)
                         .toTeamRef())
             },
-            invalidName: invalidName)
+            invalidName: invalidName,
+            namesDictionary: .init(
+                found: namesDictionary.found,
+                skippedLines: namesDictionary.skippedLines.map(\.toResponse)))
+    }
+}
+
+extension CastilianNames.Problem {
+    /// Una línea del diccionario que no se ha usado (R6.19), con su motivo; si es repetida, dónde está la que vale.
+    var toResponse: Components.Schemas.NamesDictionarySkippedLine {
+        switch reason {
+        case .noMark:
+            .init(line: line, text: text, reason: .noMark)
+        case .notOneUppercaseWord:
+            .init(line: line, text: text, reason: .notOneUppercaseWord)
+        case .repeated(let first):
+            .init(line: line, text: text, reason: .repeated, repeatedLine: first)
+        }
     }
 }
 

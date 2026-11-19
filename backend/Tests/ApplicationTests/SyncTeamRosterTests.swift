@@ -92,7 +92,8 @@ struct SyncTeamRosterTests {
     /// verdad lo miran las pruebas de `Storage` (R6.19).
     static let names = CastilianNames(text: "MUÑOZ\nFERNÁNDEZ\nPÉREZ\nGARCÍA\nLÓPEZ\nMARTÍN\nJESÚS")
 
-    static func useCase(_ store: IngestionStore, _ client: RosterClient) -> SyncTeamRoster {
+    static func useCase(_ store: IngestionStore, _ client: RosterClient,
+                        names: CastilianNames? = names) -> SyncTeamRoster {
         SyncTeamRoster(unitOfWork: FakeUnitOfWork(store: store),
                        federations: FakeFederationClientProvider([.rffm: client]),
                        clock: FixedClock(instant: now), ids: SequentialUUIDProvider(),
@@ -293,6 +294,45 @@ struct SyncTeamRosterTests {
         #expect(await Self.profileNamed(s, "JORGE FERNÁNDEZ PÉREZ").count == 1)
         #expect(await Self.profileNamed(s, "JORGE FERNANDEZ PEREZ").isEmpty)
         #expect(summary.added == 2)
+    }
+
+    /// Sin el fichero del diccionario, la sincronización no se para (decisión 2 de R6.19): los nombres se guardan como
+    /// llegan, y el resumen dice que no se encontró.
+    @Test("sin diccionario, sincroniza igual, guarda los nombres como llegan y el resumen lo dice (R6.19)")
+    func withoutDictionary() async throws {
+        let s = try await Self.seed()
+
+        let summary = try await Self.useCase(s.store, RosterClient(["FERNANDEZ PEREZ, JORGE"]), names: nil)
+            .execute(actor: Self.actor, teamID: s.cadeteA.id, seasonID: s.vigente.id)
+
+        #expect(summary.added == 1)
+        #expect(await Self.profileNamed(s, "JORGE FERNANDEZ PEREZ").count == 1)
+        #expect(summary.namesDictionary == .init(found: false, skippedLines: []))
+    }
+
+    /// Una línea mala del diccionario se salta y las demás se usan; el resumen la nombra (decisión 2 de R6.19).
+    @Test("con una línea mala en el diccionario, usa las demás y el resumen la nombra (R6.19)")
+    func dictionaryWithBadLine() async throws {
+        let s = try await Self.seed()
+        let names = CastilianNames(text: "FERNÁNDEZ\nPEREZ\nPÉREZ")
+
+        let summary = try await Self.useCase(s.store, RosterClient(["FERNANDEZ PEREZ, JORGE"]), names: names)
+            .execute(actor: Self.actor, teamID: s.cadeteA.id, seasonID: s.vigente.id)
+
+        #expect(await Self.profileNamed(s, "JORGE FERNÁNDEZ PÉREZ").count == 1)
+        #expect(summary.namesDictionary == .init(found: true, skippedLines: [
+            .init(line: 2, text: "PEREZ", reason: .noMark),
+        ]))
+    }
+
+    /// Con el diccionario bien, el resumen dice que se encontró y que no hay líneas malas.
+    @Test("con el diccionario bien, el resumen dice que se encontró, sin líneas malas (R6.19)")
+    func dictionaryFine() async throws {
+        let s = try await Self.seed()
+
+        let summary = try await Self.sync(s, RosterClient(["FERNANDEZ PEREZ, JORGE"]))
+
+        #expect(summary.namesDictionary == .init(found: true, skippedLines: []))
     }
 
     @Test("un nombre que no vale no se añade, y el resumen lo da como lo escribe la federación",

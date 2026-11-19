@@ -6603,7 +6603,7 @@ components:
         el largo de su lista.
       required:
         [syncedAt, added, alreadyInRoster, withoutBirthYear, deletedInClub, duplicateName, inOtherTeam,
-         invalidName]
+         invalidName, namesDictionary]
       properties:
         syncedAt:
           type: string
@@ -6645,6 +6645,59 @@ components:
             mano. Va el nombre **tal como lo escribe la federación**.
           items:
             type: string
+        namesDictionary:
+          $ref: '#/components/schemas/NamesDictionaryReport'
+
+    NamesDictionaryReport:
+      type: object
+      description: |
+        **Cómo estaba el diccionario de nombres** al sincronizar (D-123; decisión 2 de R6.19). Se lee del
+        fichero en cada sincronización, y nunca la para: si no se encuentra, los nombres se guardan como llegan;
+        una línea mala se salta y se usan las demás. La web lo dice en el resumen.
+      required: [found, skippedLines]
+      properties:
+        found:
+          type: boolean
+          readOnly: true
+          description: Si se ha encontrado el fichero. Sin él, ningún nombre ha pasado por el diccionario.
+        skippedLines:
+          type: array
+          description: Las líneas del fichero que no se han usado, en su orden. Vacía si no hay ninguna, o sin fichero.
+          items:
+            $ref: '#/components/schemas/NamesDictionarySkippedLine'
+
+    NamesDictionarySkippedLine:
+      type: object
+      required: [line, text, reason]
+      properties:
+        line:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: El número de la línea, contando desde 1, como un editor.
+        text:
+          type: string
+          readOnly: true
+          description: La línea, sin los espacios de los lados.
+        reason:
+          $ref: '#/components/schemas/NamesDictionarySkipReason'
+        repeatedLine:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: Con `repeated`, la línea donde está la palabra que vale.
+
+    NamesDictionarySkipReason:
+      type: string
+      description: |
+        Por qué no se ha usado una línea del diccionario de nombres (R6.19): sin tilde, eñe ni diéresis (ya llega
+        bien); no es una palabra en mayúsculas (minúsculas, un espacio, un guion, una cifra u otro signo); o es otra
+        forma de una palabra que ya está antes, en `repeatedLine`.
+      enum: [noMark, notOneUppercaseWord, repeated]
+      x-enum-names:
+        noMark: no lleva tilde, eñe ni diéresis
+        notOneUppercaseWord: no es una palabra en mayúsculas
+        repeated: repetida
 
     RosterSyncPlayerRef:
       type: object

@@ -78,3 +78,4 @@ filter:
     - IngestionHealth
     - IngestionOutcome
     - IngestionSkipReason
+    - NamesDictionarySkipReason

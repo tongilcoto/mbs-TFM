@@ -62,12 +62,16 @@ public struct SyncTeamRoster: Sendable {
         }
         // 2 · La federación, fuera de la transacción; y el diccionario, leído ahora: lo cambiado vale ya (R6.19).
         let published = try await client.fetchTeamRoster(federationTeamID: plan.code)
-        let dictionary = names.read() ?? .empty
+        let read = names.read()
+        let dictionary = read ?? .empty
         // 3 · Todo lo que se escribe, en una.
         let ids = self.ids
-        return try await unitOfWork.withRepositories(actor: actor) { r in
+        var summary = try await unitOfWork.withRepositories(actor: actor) { r in
             try await Self.apply(published, plan: plan, now: now, ids: ids, names: dictionary, in: r)
         }
+        // Cómo estaba el diccionario: el resumen lo dice, porque nunca para la sincronización (decisión 2 de R6.19).
+        summary.namesDictionary = .init(found: read != nil, skippedLines: dictionary.problems)
+        return summary
     }
 
     // ── 1 · Que se pueda ───────────────────────────────────────────────────────
@@ -208,6 +212,19 @@ public struct RosterSyncSummary: Equatable, Sendable {
     public var inOtherTeam: [Elsewhere] = []
     /// Los que no se añaden porque su nombre no vale, como lo escribe la federación.
     public var invalidName: [String] = []
+    /// Cómo estaba el diccionario de nombres (`D-123`, R6.19): si se encontró el fichero, y las líneas que no se
+    /// usaron.
+    public var namesDictionary = NamesDictionary(found: false, skippedLines: [])
+
+    public struct NamesDictionary: Equatable, Sendable {
+        public let found: Bool
+        public let skippedLines: [CastilianNames.Problem]
+
+        public init(found: Bool, skippedLines: [CastilianNames.Problem]) {
+            self.found = found
+            self.skippedLines = skippedLines
+        }
+    }
 
     public init(club: Club, syncedAt: Date) {
         self.club = club
