@@ -808,6 +808,22 @@ con borde verde). El óvalo del puesto, que se parece, queda para después:
 |---|---|---|
 | **1 · Cómo es el botón gris** (hoy, en claro, el 100 de Aura sobre la página: 1,05) | En claro, el relleno: el de ahora, slate-200, slate-300, slate-300 con el texto más oscuro, o slate-400 con el texto casi negro; con borde gris o verde. En oscuro: borde gris o verde | **En claro, slate-200 con el borde verde** de «Dar de alta un jugador» (`primary.800`): el texto se queda en 6,1, el relleno sobre la página sube a 1,18 y el borde llega a 5,8. Al pasar el ratón y al pulsar, slate-300 con el texto casi negro (12,0). Se eligió primero slate-300 y, visto en su web, el desarrollador lo bajó a slate-200. **En oscuro, el gris de siempre con el borde verde** de su paleta (`primary.500`, 8,8). En el tema (`theme/primevue.ts`), para toda la web |
 
+**Decisiones de `R6.19`** (2026-11-19), una a una con el desarrollador, en la rama `feature/r6-plantilla-backend-4`.
+Antes, **lo medido**: la lista la usan la sincronización (`PlayerName.spelledInCastilian`) y la migración 24ª, que
+ya corrió en su base; la carpeta de las fotos se configura igual (`PHOTOS_DIR`, o relativa a la carpeta desde la que
+se lanza el servidor); y el servidor de los escenarios se lanza desde `backoffice/`, con sus rutas por variables.
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Dónde va el fichero y con qué formato** | En el repositorio, leído por ruta; o dentro del programa compilado | **`backend/diccionario-nombres.txt`**, en el repositorio. El servidor lo busca en `NAMES_DICTIONARY_FILE` y, si no está, en la carpeta desde la que se lanza, como las fotos; los escenarios le pasan la ruta entera. **Una palabra por línea**, en mayúsculas y con su marca; **líneas vacías y comentarios con `#`**, para los grupos de hoy y para anotar por qué entra una dudosa. Texto plano y no JSON, que no admite comentarios. Dentro del programa, cambiarlo pediría recompilar |
+| **2 · Qué pasa si el fichero tiene una línea mala o falta** | No sincronizar y decirlo; sincronizar sin diccionario; o usar la última lista buena | **Ninguna de las tres, propuesta del desarrollador: nunca se para.** Una línea mala (sin marca, repetida, en minúsculas, con otro signo) **se salta**, y se usan las demás; de una palabra dos veces, vale la primera. Si **falta el fichero**, se sincroniza sin diccionario. En los dos casos **el resumen de la web lo dice**, con las líneas saltadas y por qué, o que no se ha encontrado. Para eso, la respuesta de la sincronización gana un dato y la web, una línea en el resumen, en esta rama |
+| **3 · Qué hace la migración 24ª** (usa la lista que sale del código; en su base ya corrió, y en un club nuevo no encuentra perfiles) | Una copia fija de la lista; leer el fichero; o quitarle el diccionario | **Leer el fichero**, igual que la sincronización, y como ella sin pararse. En su base no vuelve a correr, en un club nuevo no hay nada que arreglar y en R16 los datos se copiarán ya arreglados: dos copias de la lista no compensan |
+
+**Cómo se hace `R6.19`, en seis commits**: las decisiones; el fichero, con la lista de hoy tal cual y sus pruebas
+mirando el fichero de verdad; la lectura en caliente en la sincronización, con lo que dice el resumen (en el catálogo,
+el servidor y la web); la migración 24ª, que lee el fichero; «ÍÑIGO» con tilde, en el fichero y en los nombres
+inventados de los escenarios, como primera corrección en caliente; y el cierre.
+
 ---
 
 ## 8. Estado
