@@ -203,6 +203,7 @@ struct SyncTeamRosterEndpointTests {
                 let report = try Self.decode(Components.Schemas.RosterSyncResponse.self, r).namesDictionary
                 #expect(report.found)
                 #expect(report.skippedLines.map(\.line) == [2, 3])
+                #expect(report.skippedLines.map(\.text) == ["RUIZ", "DÍAZ"])
                 #expect(report.skippedLines.map(\.reason) == [.noMark, .repeated])
                 #expect(report.skippedLines.map(\.repeatedLine) == [nil, 1])
             }
