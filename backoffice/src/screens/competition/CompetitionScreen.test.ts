@@ -3,6 +3,7 @@ import PrimeVue from 'primevue/config'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
 import { createRouter, createWebHistory, RouterView } from 'vue-router'
+import { club } from '../../club'
 import { primeVueOptions } from '../../theme/primevue'
 import CompetitionScreen from './CompetitionScreen.vue'
 
@@ -151,7 +152,8 @@ describe('la jornada que se enseña', () => {
     expect(screen.getByText('Cadete · Masculino · Fútbol 11 · 2026/27')).toBeInTheDocument()
     await waitFor(() => expect(roundPicker()).toHaveTextContent('Jornada 1 · 1 – 2 oct'))
     expect(screen.getByRole('table', { name: 'Clasificación tras la jornada 1' })).toBeInTheDocument()
-    expect(screen.getByText('Federación')).toBeInTheDocument()
+    // La última clasificación, de la Federación (R6.19c).
+    expect(screen.getByRole('heading', { name: 'Clasificación tras la jornada 1 Federación' })).toBeInTheDocument()
     // Desde la en curso hacia atrás, y los partidos solo de la que se enseña.
     expect(asked.filter((a) => a.startsWith('/standings') || a.startsWith('/matches'))).toEqual([
       '/standings?roundId=j2',
@@ -309,5 +311,43 @@ describe('lo que no se puede enseñar', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('No se ha podido conectar con el servidor')
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 1, name: 'PREFERENTE CADETE · Grupo 2' })).toBeInTheDocument()
+  })
+})
+
+// De dónde sale la clasificación (D-29, D-55; R6.19c): la última, siempre de la Federación; las anteriores, calculadas
+// por la aplicación cuando la federación del club no publica la de cada jornada.
+describe('de dónde sale la clasificación', () => {
+  // Cinco jornadas, en curso la 5: la última clasificación es la de la 5 o la de la 4.
+  const five = [1, 2, 3, 4, 5].map((number) => ({ ...rounds[0]!, id: `j${number}`, number, isCurrent: number === 5 }))
+  const publishes = (yes: boolean) => (club.value = { federationProvidesRoundStandings: yes } as typeof club.value)
+  const address = (round: number) => `/temporadas/2026-27/competiciones/${LIGA}?jornada=${round}`
+  const note = 'La Federación no publica la clasificación de esta jornada: la ha calculado la aplicación con los resultados.'
+
+  afterEach(() => (club.value = undefined))
+
+  test('sin la de cada jornada, la última clasificación dice «Federación»', async () => {
+    publishes(false)
+    fakeServer({ rounds: five })
+    await openCompetition(address(4))
+
+    expect(await screen.findByRole('heading', { name: 'Clasificación tras la jornada 4 Federación' })).toBeInTheDocument()
+    expect(screen.queryByText(note)).not.toBeInTheDocument()
+  })
+
+  test('sin la de cada jornada, una anterior dice «Calculada», y lo explica', async () => {
+    publishes(false)
+    fakeServer({ rounds: five })
+    await openCompetition(address(3))
+
+    expect(await screen.findByRole('heading', { name: 'Clasificación tras la jornada 3 Calculada' })).toBeInTheDocument()
+    expect(screen.getByText(note)).toBeInTheDocument()
+  })
+
+  test('con la de cada jornada (la RFFM), todas dicen «Federación»', async () => {
+    publishes(true)
+    fakeServer({ rounds: five })
+    await openCompetition(address(1))
+
+    expect(await screen.findByRole('heading', { name: 'Clasificación tras la jornada 1 Federación' })).toBeInTheDocument()
   })
 })

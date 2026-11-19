@@ -270,6 +270,8 @@ describe('la cabecera de un equipo que ha jugado', () => {
     expect(box('Competición')).toHaveTextContent('Al día')
     expect(box('Posición')).toHaveTextContent('13º')
     expect(box('Posición')).toHaveTextContent('de 16 · tras la jornada 5')
+    // Sin marca de dónde sale: es siempre la última clasificación, y esa siempre es de la Federación (R6.19c).
+    expect(within(box('Posición')).queryByText('Federación')).not.toBeInTheDocument()
   })
 
   test('la posición, de la jornada en curso; sin tabla, de la anterior, y ahí para', async () => {
@@ -464,13 +466,15 @@ describe('mientras la ingesta está «En marcha», se refresca sola', () => {
 describe('la pestaña Resultados (§3.3)', () => {
   const matchesTable = () => screen.findByRole('table', { name: 'Partidos de Cadete A en la temporada 2026/27' })
 
-  test('la pestaña, con la etiqueta «Federación», y la tabla con un partido por fila', async () => {
+  // Sin la etiqueta «Federación» junto a las pestañas: toda la web es de la Federación (R6.19c).
+  test('la pestaña, sin la etiqueta «Federación», y la tabla con un partido por fila', async () => {
     fakeServer()
     await openTeam()
 
     const table = await matchesTable()
     expect(screen.getByRole('link', { name: 'Resultados' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByText('Federación')).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Secciones del equipo' }).parentElement!).queryByText('Federación'))
+      .not.toBeInTheDocument()
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('Celtic Castilla A')
@@ -602,7 +606,8 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
     const table = await rosterTable()
     expect(screen.getByRole('link', { name: 'Plantilla' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Resultados' })).not.toHaveAttribute('aria-current')
-    expect(screen.queryByText('Federación')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Secciones del equipo' }).parentElement!).queryByText('Federación'))
+      .not.toBeInTheDocument()
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('1')

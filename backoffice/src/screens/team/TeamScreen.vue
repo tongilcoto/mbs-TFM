@@ -464,10 +464,6 @@ function pickSeason(label: string) {
             {{ item.label }}
           </RouterLink>
         </nav>
-        <span
-          v-if="tab === 'resultados'"
-          class="source"
-        >Federación</span>
       </div>
 
       <RosterTab
@@ -594,13 +590,5 @@ h1 {
 .tab[aria-current='page'] {
   border-bottom: 3px solid var(--p-primary-color);
   margin-bottom: -1px;
-}
-.source {
-  margin-bottom: 0.375rem;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
 }
 </style>

@@ -623,6 +623,39 @@ recargar. Es lo mismo que ya pasa con el nombre y el escudo, y la federación de
 
 ---
 
+### DW-25 · Lo que se rotula es de dónde sale la clasificación, no que la página sea de la Federación
+
+**Qué hay que decidir** (2026-11-20, rebanada 6, `R6.19c`; enmienda al LLD-B §7.5). La etiqueta «Federación» junto
+a las pestañas de la ficha del equipo, y junto al selector de jornada de la competición, explicaba por qué no hay
+botones de crear ni borrar (§7.5). El desarrollador, al verla: **es obvia y redundante**, porque toda la web parte
+de la sincronización con la Federación. Lo que contradice esa idea es **la clasificación que calcula la aplicación**
+cuando la federación del club no publica la de cada jornada (`D-29`, `D-55`: con la FCF, las jornadas anteriores al
+alta), que el servidor ya avisa con `ClubResponse.federationProvidesRoundStandings` y la web no usaba.
+
+| Opción | Veredicto |
+|---|---|
+| (a) Dejar la etiqueta y añadir la marca de la calculada | Descartada: la etiqueta no dice nada que no se sepa |
+| **(b) Quitar la etiqueta y marcar de dónde sale cada clasificación** | **Elegida** |
+| (c) Cambiar el texto o el sitio de la etiqueta | Descartada, por lo mismo que la (a) |
+
+**Decisión: (b).** Sin la etiqueta. Cada clasificación dice de dónde sale, con una marca del gris secundario del tema
+(`SourceMark.vue`, como el óvalo del puesto):
+
+- **«Federación»**: **la última clasificación siempre**, con las dos federaciones (la de la jornada en curso o, si aún
+  no tiene tabla, la de la anterior: `roundsToLookIn`), y todas si la federación publica la de cada jornada (la RFFM).
+  Lo pidió el desarrollador al ver la primera versión, que marcaba también la última.
+- **«Calculada»**, con una frase debajo, en las anteriores cuando la federación no la publica.
+- Va **junto al título de la clasificación** de la competición. **No en la caja Posición** de la ficha, ni en la
+  columna Posición de la portada ni en la de Resultados: enseñan siempre la última, que es siempre de la Federación,
+  así que la marca no diría nada (la caja la llevó en la primera versión, y el desarrollador la quitó al verla).
+
+**Lo que se asume a cambio.** Con la FCF, las jornadas entre el alta y la última también son oficiales (el servidor
+guarda la clasificación cada semana), pero el servidor no lo dice jornada a jornada, y la web las marca «Calculada».
+Afinarlo pide un dato más del servidor por jornada; hoy no hay ningún club de la FCF. En un club de la RFFM no sale
+nunca «Calculada»: se vio forzándolo a mano, sin grabar.
+
+---
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-01]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

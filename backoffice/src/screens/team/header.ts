@@ -52,3 +52,15 @@ export function positionIn(table: Standing[], teamId: string): { position: numbe
   const row = table.find((standing) => standing.team.teamId === teamId)
   return row && { position: row.position, of: table.length }
 }
+
+// De dónde sale la clasificación de una jornada (D-29, D-55): la última, la de la jornada en curso o la anterior
+// (`roundsToLookIn`), viene siempre de la Federación, la publique por jornada o no; las anteriores, de la Federación si
+// la publica por jornada, y si no, la calcula la aplicación con los resultados.
+export type StandingsSource = 'Federación' | 'Calculada'
+
+export function standingsSource(roundNumber: number, rounds: Round[], roundStandingsPublished: boolean): StandingsSource {
+  if (roundStandingsPublished) return 'Federación'
+  const latest = roundsToLookIn(rounds)[0]
+  return latest && roundNumber >= latest.number - 1 ? 'Federación' : 'Calculada'
+}
+

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { components } from '../../api/schema'
-import { competitionPath, notPlayingText, playerPath, positionIn, roundsToLookIn, tabPath, teamHeading } from './header'
+import { competitionPath, notPlayingText, playerPath, positionIn, roundsToLookIn, standingsSource, tabPath, teamHeading } from './header'
 
 type Team = components['schemas']['TeamResponse']
 type Round = components['schemas']['RoundResponse']
@@ -92,3 +92,23 @@ describe('el puesto en una clasificación', () => {
     expect(positionIn([row('otro', 1)], 'equipo')).toBeUndefined()
   })
 })
+
+// De dónde sale la clasificación de una jornada (D-29, D-55; R6.19c).
+describe('de dónde sale la clasificación', () => {
+  // En curso la 5: la última clasificación es la de la 5 o, si aún no tiene tabla, la de la 4.
+  const rounds = [round(1), round(2), round(3), round(4), round(5, true)]
+
+  test('con la de cada jornada (la RFFM), todas de la Federación', () => {
+    expect([1, 3, 5].map((n) => standingsSource(n, rounds, true))).toEqual(['Federación', 'Federación', 'Federación'])
+  })
+
+  test('sin ella, la última, de la Federación; las anteriores, calculadas', () => {
+    expect([1, 3, 4, 5].map((n) => standingsSource(n, rounds, false))).toEqual(['Calculada', 'Calculada', 'Federación', 'Federación'])
+  })
+
+  test('sin ella y con la competición acabada, la última jornada, de la Federación', () => {
+    const ended = [round(1), round(2), round(3)]
+    expect([1, 2, 3].map((n) => standingsSource(n, ended, false))).toEqual(['Calculada', 'Federación', 'Federación'])
+  })
+})
+
