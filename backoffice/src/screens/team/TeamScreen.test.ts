@@ -272,6 +272,24 @@ describe('la cabecera de un equipo que ha jugado', () => {
     expect(box('Posición')).toHaveTextContent('de 16 · tras la jornada 5')
     // Sin marca de dónde sale: es siempre la última clasificación, y esa siempre es de la Federación (R6.19c).
     expect(within(box('Posición')).queryByText('Federación')).not.toBeInTheDocument()
+    // Sin racha en la tabla, la jornada es solo su número (R6.19f).
+    expect(within(box('Posición')).queryByTitle(/en la jornada 5/)).not.toBeInTheDocument()
+  })
+
+  // La jornada, en su cuadro del color del resultado del equipo, como en la racha (R6.19f).
+  test('la jornada de la posición, en su cuadro del color del resultado', async () => {
+    const withForm = table(16, 13).map((r) =>
+      r.team.teamId === TEAM ? { ...r, form: [{ roundNumber: 5, outcome: 'victoria' }, { roundNumber: 4, outcome: 'derrota' }] } : r,
+    )
+    fakeServer({ tables: { 'liga-j5': withForm } })
+    await openTeam()
+
+    await positionShown()
+    const roundBox = within(box('Posición')).getByTitle('Victoria en la jornada 5')
+    expect(roundBox).toHaveClass('victoria')
+    // A la vista, el número; el lector, el número y el resultado.
+    expect(roundBox.querySelector('[aria-hidden="true"]')).toHaveTextContent('5')
+    expect(within(roundBox).getByText('5, victoria')).toHaveClass('visually-hidden')
   })
 
   test('la posición, de la jornada en curso; sin tabla, de la anterior, y ahí para', async () => {

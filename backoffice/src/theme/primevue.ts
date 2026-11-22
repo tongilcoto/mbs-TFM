@@ -106,6 +106,17 @@ const preset = definePreset(Aura, {
       // el subrayado que el navegador pone a todos los enlaces y que Aura solo quita a los botones de verdad.
       css: () => 'a.p-button { text-decoration: none; }',
     },
+    select: {
+      // Los selectores de temporada y de jornada (R6.19f): el campo con el gris secundario, como los botones grises.
+      // Solo el campo, no la lista que se abre; al recibir el foco, el borde y el anillo de siempre.
+      css: () => `.p-select.selector-secundario {
+  --p-select-background: var(--p-secundario-fondo);
+  --p-select-border-color: var(--p-secundario-borde);
+  --p-select-hover-border-color: var(--p-secundario-borde);
+  --p-select-color: var(--p-secundario-texto);
+  --p-select-dropdown-color: var(--p-secundario-texto);
+}`,
+    },
   },
 })
 

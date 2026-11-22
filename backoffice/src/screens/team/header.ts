@@ -2,6 +2,8 @@
 import type { components } from '../../api/schema'
 import { namesOf, teamName } from '../../theme/names'
 import { toAddress } from '../home/seasons'
+import type { StreakBox } from '../../components/streak'
+import { streakBoxes } from '../competition/round'
 
 type Team = components['schemas']['TeamResponse']
 type Round = components['schemas']['RoundResponse']
@@ -51,6 +53,14 @@ export function roundsToLookIn(rounds: Round[]): Round[] {
 export function positionIn(table: Standing[], teamId: string): { position: number; of: number } | undefined {
   const row = table.find((standing) => standing.team.teamId === teamId)
   return row && { position: row.position, of: table.length }
+}
+
+// La jornada de la caja Posición, con el resultado del equipo en ella (R6.19f): el cuadro de esa jornada en su racha
+// (`StandingResponse.form`, D-34), como en la clasificación. Nada si la racha no la trae: entonces, solo el número.
+export function roundBoxIn(table: Standing[], teamId: string, round: number): StreakBox | undefined {
+  const row = table.find((standing) => standing.team.teamId === teamId)
+  // Sin racha (puede faltar, DW-21), sin cuadro.
+  return row && streakBoxes(row.form ?? []).find((box) => box.round === round)
 }
 
 // De dónde sale la clasificación de una jornada (D-29, D-55): la última, la de la jornada en curso o la anterior

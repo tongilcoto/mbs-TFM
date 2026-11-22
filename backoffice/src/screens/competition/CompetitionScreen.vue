@@ -256,7 +256,9 @@ function goTo(number: number | undefined) {
         for="round-picker"
         class="visually-hidden"
       >Jornada</label>
+      <!-- Con el gris secundario, como los botones de al lado y el selector de temporada (R6.19f). -->
       <Select
+        class="selector-secundario"
         label-id="round-picker"
         aria-labelledby="round-picker-label"
         :options="options"

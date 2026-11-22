@@ -12,3 +12,14 @@ test('el selector se llama «Temporada» y enseña la elegida', () => {
 
   expect(screen.getByRole('combobox', { name: 'Temporada' })).toHaveTextContent('2026/27')
 })
+
+// Con el gris secundario del tema, como los botones grises (R6.19f).
+test('el campo lleva el gris secundario del tema', () => {
+  render(SeasonPicker, {
+    props: { labels: ['2026/27'], modelValue: '2026/27' },
+    global: { plugins: [[PrimeVue, primeVueOptions]] },
+  })
+
+  expect(screen.getByRole('combobox', { name: 'Temporada' }).closest('.p-select')).toHaveClass('selector-secundario')
+})
+

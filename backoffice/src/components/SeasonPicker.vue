@@ -1,4 +1,6 @@
-<!-- El selector de temporada de la portada (plan R1, decisión 5): con su etiqueta, no solo el desplegable. -->
+<!-- El selector de temporada (plan R1, decisión 5): con su etiqueta, no solo el desplegable. En la portada y en la
+     cabecera de la ficha del equipo. Con el gris secundario del tema, como los botones grises y el óvalo del puesto
+     (R6.19f): la clase `selector-secundario` del tema. -->
 <script setup lang="ts">
 import Select from 'primevue/select'
 
@@ -13,7 +15,9 @@ defineEmits<{ 'update:modelValue': [label: string] }>()
       id="season-picker-label"
       for="season-picker"
     >Temporada</label>
+    <!-- El gris secundario, del tema (`selector-secundario`). -->
     <Select
+      class="selector-secundario"
       label-id="season-picker"
       :options="labels"
       :model-value="modelValue"

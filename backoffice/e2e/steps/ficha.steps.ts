@@ -238,11 +238,15 @@ Then('la caja de la posición dice el puesto del equipo tras la última jornada 
   const plays = theCompetition(this)
   const last = playedRounds(plays).length
   const positions = positionsAfter(plays, last)
-  const expected = [`${positions.get(plays.teams[0]!.code)}º`, `de ${positions.size} · tras la jornada ${last}`]
-  this.note(`posición esperada: ${expected.join(' ')}`)
-  for (const text of expected) {
-    await this.check(`«${text}»`, () => shows(box(this, 'Posición').getByText(text, { exact: true }), `«${text}»`))
-  }
+  const place = `${positions.get(plays.teams[0]!.code)}º`
+  const of = `de ${positions.size} · tras la jornada`
+  this.note(`posición esperada: ${place} ${of} ${last}`)
+  await this.check(`«${place}»`, () => shows(box(this, 'Posición').getByText(place, { exact: true }), `«${place}»`))
+  await this.check(`«${of}»`, () => shows(box(this, 'Posición').getByText(of), `«${of}»`))
+  // La jornada, en su cuadro del color del resultado (R6.19f), que dice al pasar el ratón cuál es.
+  await this.check(`la jornada ${last}`, () =>
+    shows(box(this, 'Posición').getByTitle(new RegExp(` en la jornada ${last}$`)), `el cuadro de la jornada ${last}`),
+  )
 })
 
 Then('la caja de la posición dice {string} y {string}', async function (this: ScenarioWorld, first: string, second: string) {

@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/vue'
 import PrimeVue from 'primevue/config'
 import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
+import Select from 'primevue/select'
 import { expect, test } from 'vitest'
 import { primeVueOptions } from './primevue'
 
@@ -58,3 +59,17 @@ test('lo gris secundario, en los dos modos, y el botón gris sale de ahí', () =
   expect(styles).toMatch(/--p-secundario-fondo:var\(--p-surface-800\);--p-secundario-borde:var\(--p-primary-500\);--p-secundario-texto:var\(--p-surface-300\)/)
   expect(styles).toMatch(/--p-button-secondary-background:var\(--p-secundario-fondo\)[^}]*--p-button-secondary-border-color:var\(--p-secundario-borde\)/)
 })
+
+// Los selectores de temporada y de jornada, con el gris secundario (R6.19f): una regla del tema, la clase
+// `selector-secundario`, que cambia los colores del campo. Como antes, se comprueba que llega a la página.
+test('la clase selector-secundario pone el gris secundario al campo', () => {
+  render(Select, {
+    props: { options: ['2026/27'], modelValue: '2026/27' },
+    attrs: { class: 'selector-secundario' },
+    global: { plugins: [[PrimeVue, primeVueOptions]] },
+  })
+
+  const styles = [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n')
+  expect(styles).toMatch(/\.p-select\.selector-secundario\s*\{[^}]*--p-select-background:\s*var\(--p-secundario-fondo\);[^}]*--p-select-border-color:\s*var\(--p-secundario-borde\)/)
+})
+

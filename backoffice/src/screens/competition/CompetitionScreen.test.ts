@@ -365,3 +365,12 @@ test('los botones de jornada son el botón gris de la web', async () => {
   }
 })
 
+// Y el selector de jornada, con el gris secundario del tema, como los botones de al lado (R6.19f).
+test('el selector de jornada lleva el gris secundario', async () => {
+  fakeServer()
+  await openCompetition()
+
+  await waitFor(() => expect(roundPicker()).toBeInTheDocument())
+  expect(roundPicker().closest('.p-select')).toHaveClass('selector-secundario')
+})
+
