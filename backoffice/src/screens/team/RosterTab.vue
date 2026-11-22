@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
               v-for="row in rows"
               :key="row.id"
             >
-              <td class="photo">
+              <td class="photo-cell">
                 <PlayerPhoto
                   :url="row.photoUrl"
                   :name="row.name"
@@ -442,7 +442,7 @@ thead th {
   font-weight: 700;
 }
 /* La foto, de 40 px, ocupa casi toda la altura de la fila. */
-.photo {
+.photo-cell {
   width: 1px;
   padding: 0.25rem 0.5rem;
 }

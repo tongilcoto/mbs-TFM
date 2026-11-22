@@ -14,20 +14,22 @@ watch(() => props.url, () => (failed.value = false))
 <template>
   <img
     v-if="url && !failed"
-    class="photo"
+    class="player-photo"
     :src="url"
     :alt="name"
     @error="failed = true"
   >
   <span
     v-else
-    class="photo initials"
+    class="player-photo initials"
     aria-hidden="true"
   >{{ initials }}</span>
 </template>
 
 <style scoped>
-.photo {
+/* `player-photo` y no `photo`: una pantalla con su propio `.photo` (la celda de la plantilla) alcanzaría la raíz de esta
+   pieza y la dejaría de 16 px (R6.21). */
+.player-photo {
   display: inline-flex;
   flex: none;
   align-items: center;

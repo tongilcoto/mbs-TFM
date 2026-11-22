@@ -883,7 +883,10 @@ en caliente; y el cierre.
 - **Un dato que se corrige no va escrito en el código.** El diccionario de nombres pasó a un fichero que se lee en
   cada sincronización (R6.19): corregir «ÍÑIGO» fue cambiar una línea, sin recompilar ni relanzar.
 - **Un estilo con ámbito de Vue alcanza la raíz de una pieza hija.** El `.box` de la ficha pintaba el cuadro de la
-  jornada como una caja más (R6.19f). Las piezas comunes, con nombres de clase propios.
+  jornada como una caja más (R6.19f); y el `.photo` de la celda de la plantilla dejaba la foto de cada fila en 16 px
+  de ancho y las iniciales sin su círculo, desde R6.11, sin que lo viera nadie hasta que el desarrollador puso la
+  primera foto de verdad (tras R6.21). Las piezas comunes, con nombres de clase propios (`round-box`,
+  `player-photo`); y un escenario que mire una imagen, que mire también su tamaño.
 - **Con la página en segundo plano, el navegador deja paradas las transiciones.** Medir un color justo después de
   cambiar de modo daba el del modo anterior (R6.18b, R6.19b): se mide quitándolas.
 - **`URLSearchParams` escribe el espacio como `+`**, y el servidor no lo lee como espacio: la búsqueda de perfiles

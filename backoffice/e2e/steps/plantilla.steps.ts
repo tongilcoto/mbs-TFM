@@ -454,6 +454,13 @@ Then('la fila del jugador tiene la foto de la plantilla', async function (this: 
   await this.check('que la foto carga', () =>
     becomes(this.page, () => photoOf(this).evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), true, 'la foto cargada'),
   )
+  // Y que se ve entera: un círculo de 40 × 40. Un estilo de la tabla la dejó una vez en 16 de ancho (R6.21).
+  await this.check('el tamaño de la foto', () =>
+    becomes(this.page, () => photoOf(this).evaluate((img: HTMLImageElement) => {
+      const box = img.getBoundingClientRect()
+      return `${Math.round(box.width)} × ${Math.round(box.height)}`
+    }), '40 × 40', 'el tamaño de la foto'),
+  )
 })
 
 Then('la foto de la fila del jugador dice al lector su nombre', async function (this: ScenarioWorld) {
