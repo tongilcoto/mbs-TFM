@@ -25,7 +25,8 @@ import { shownHealth, useRelaunch } from '../../relaunch'
 import { competitionLabel } from '../../theme/names'
 import { chooseSeason, newestFirst, type Season, todayHere, toAddress } from '../home/seasons'
 import { isTeamCode, teamNotFound } from '../sync-team/link'
-import { competitionPath, notPlayingText, positionIn, roundsToLookIn, tabPath, type TeamTab, teamHeading } from './header'
+import { competitionPath, notPlayingText, positionIn, roundBoxIn, roundsToLookIn, tabPath, type TeamTab, teamHeading } from './header'
+import RoundBox from '../../components/RoundBox.vue'
 import ResultsTab from './ResultsTab.vue'
 import RosterTab from './RosterTab.vue'
 
@@ -72,6 +73,10 @@ const { running: relaunched, failure: relaunchFailure, relaunch } = useRelaunch(
 
 const teamId = computed(() => String(route.params.id))
 // La pestaña que se ve; sin ella en el camino (`/equipos/:id`), Resultados.
+// La jornada de la caja Posición, en su cuadro del color del resultado del equipo (R6.19f).
+const positionBox = computed(() =>
+  position.value.kind === 'found' ? roundBoxIn(position.value.table, teamId.value, position.value.round) : undefined,
+)
 const tab = computed<TeamTab>(() => route.meta.tab ?? 'resultados')
 // Las pestañas, en su orden. A la derecha de la barra, de dónde vienen los datos, si son de la Federación: los de
 // la plantilla los teclea el club (decisión 2 de R6.11).
@@ -433,7 +438,14 @@ function pickSeason(label: string) {
               {{ position.position }}º
             </p>
             <p class="detail">
-              de {{ position.of }} · tras la jornada {{ position.round }}
+              de {{ position.of }} · tras la jornada
+              <RoundBox
+                v-if="positionBox"
+                :box="positionBox"
+              />
+              <template v-else>
+                {{ position.round }}
+              </template>
             </p>
           </template>
           <template v-else>
@@ -464,10 +476,6 @@ function pickSeason(label: string) {
             {{ item.label }}
           </RouterLink>
         </nav>
-        <span
-          v-if="tab === 'resultados'"
-          class="source"
-        >Federación</span>
       </div>
 
       <RosterTab
@@ -594,13 +602,5 @@ h1 {
 .tab[aria-current='page'] {
   border-bottom: 3px solid var(--p-primary-color);
   margin-bottom: -1px;
-}
-.source {
-  margin-bottom: 0.375rem;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
 }
 </style>

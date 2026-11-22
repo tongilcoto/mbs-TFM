@@ -167,6 +167,7 @@ const defaults = {
       duplicateName: [],
       inOtherTeam: [],
       invalidName: ['TORRES, IÑAKI/'],
+      namesDictionary: { found: true, skippedLines: [] },
     })
   },
 }
@@ -269,6 +270,26 @@ describe('la cabecera de un equipo que ha jugado', () => {
     expect(box('Competición')).toHaveTextContent('Al día')
     expect(box('Posición')).toHaveTextContent('13º')
     expect(box('Posición')).toHaveTextContent('de 16 · tras la jornada 5')
+    // Sin marca de dónde sale: es siempre la última clasificación, y esa siempre es de la Federación (R6.19c).
+    expect(within(box('Posición')).queryByText('Federación')).not.toBeInTheDocument()
+    // Sin racha en la tabla, la jornada es solo su número (R6.19f).
+    expect(within(box('Posición')).queryByTitle(/en la jornada 5/)).not.toBeInTheDocument()
+  })
+
+  // La jornada, en su cuadro del color del resultado del equipo, como en la racha (R6.19f).
+  test('la jornada de la posición, en su cuadro del color del resultado', async () => {
+    const withForm = table(16, 13).map((r) =>
+      r.team.teamId === TEAM ? { ...r, form: [{ roundNumber: 5, outcome: 'victoria' }, { roundNumber: 4, outcome: 'derrota' }] } : r,
+    )
+    fakeServer({ tables: { 'liga-j5': withForm } })
+    await openTeam()
+
+    await positionShown()
+    const roundBox = within(box('Posición')).getByTitle('Victoria en la jornada 5')
+    expect(roundBox).toHaveClass('victoria')
+    // A la vista, el número; el lector, el número y el resultado.
+    expect(roundBox.querySelector('[aria-hidden="true"]')).toHaveTextContent('5')
+    expect(within(roundBox).getByText('5, victoria')).toHaveClass('visually-hidden')
   })
 
   test('la posición, de la jornada en curso; sin tabla, de la anterior, y ahí para', async () => {
@@ -463,13 +484,15 @@ describe('mientras la ingesta está «En marcha», se refresca sola', () => {
 describe('la pestaña Resultados (§3.3)', () => {
   const matchesTable = () => screen.findByRole('table', { name: 'Partidos de Cadete A en la temporada 2026/27' })
 
-  test('la pestaña, con la etiqueta «Federación», y la tabla con un partido por fila', async () => {
+  // Sin la etiqueta «Federación» junto a las pestañas: toda la web es de la Federación (R6.19c).
+  test('la pestaña, sin la etiqueta «Federación», y la tabla con un partido por fila', async () => {
     fakeServer()
     await openTeam()
 
     const table = await matchesTable()
     expect(screen.getByRole('link', { name: 'Resultados' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByText('Federación')).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Secciones del equipo' }).parentElement!).queryByText('Federación'))
+      .not.toBeInTheDocument()
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('Celtic Castilla A')
@@ -601,7 +624,8 @@ describe('la pestaña Plantilla (plan R6, §3)', () => {
     const table = await rosterTable()
     expect(screen.getByRole('link', { name: 'Plantilla' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Resultados' })).not.toHaveAttribute('aria-current')
-    expect(screen.queryByText('Federación')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Secciones del equipo' }).parentElement!).queryByText('Federación'))
+      .not.toBeInTheDocument()
     const rows = within(table).getAllByRole('row').slice(1)
     expect(rows).toHaveLength(2)
     expect(rows[0]).toHaveTextContent('1')

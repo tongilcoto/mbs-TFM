@@ -1,3 +1,4 @@
+public import Application
 public import Fluent
 import Persistence
 
@@ -48,7 +49,9 @@ import Persistence
 /// en ese hueco: la enmienda de `D-68` la hizo depender de `Competition`, así
 /// que su sitio es detrás (ver su comentario en la lista).
 public enum TenantMigrations {
-    public static func all() -> [any Migration] {
+    /// `names`: el diccionario que usa la migración 24ª (`D-123`), el mismo fichero que la
+    /// sincronización (decisión 3 de R6.19).
+    public static func all(names: any NameDictionarySource = NamesDictionaryConfig.fromEnvironment()) -> [any Migration] {
         [
             CreateClub(),
             CreateSeason(),
@@ -127,7 +130,7 @@ public enum TenantMigrations {
             // `D-123` (R6.17): las tildes y eñes del castellano en los nombres que
             // publicó la federación. Solo cambia datos: al final, que es su único
             // requisito de orden ([D-90]).
-            SpellPublishedNamesInCastilian(),
+            SpellPublishedNamesInCastilian(names: names),
         ]
     }
 }

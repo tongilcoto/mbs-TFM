@@ -1,81 +1,105 @@
-/// **El diccionario de nombres y apellidos en castellano** (`D-123`): solo las palabras que
+import Foundation
+
+/// **El diccionario de nombres y apellidos en castellano** (`D-123`): las palabras que
 /// llevan tilde, eñe o diéresis, escritas bien y en mayúsculas. La sincronización busca
 /// en él cada palabra que llega de la federación sin mirar tildes ni eñes («FERNANDEZ»), y
 /// si está, la guarda como aquí («FERNÁNDEZ»). Lo que no está, como llega.
 ///
-/// Con dos formas, **la castellana** («Jesus» no existe en castellano: es «Jesús»). Las que
-/// existen de las dos maneras se decidieron una a una con el desarrollador (R6.17): entran
-/// Díez, Sáez, Martí, Mía y Éric; se quedan fuera Saiz, Zoe e Iker, que se escriben sin
-/// tilde. Un nombre que también es apellido (Martín, Román) va una sola vez: el
-/// diccionario es uno.
+/// **La lista no está aquí**: vive en un fichero de texto, `backend/diccionario-nombres.txt`,
+/// que se cambia en caliente (enmienda a `D-123`, R6.19). Esto es lo que se construye al
+/// leerlo: una palabra por línea; las líneas vacías y las que empiezan por `#` no
+/// cuentan. **Una línea mala no se usa** y se apunta con su motivo, para que el resumen de
+/// la sincronización la nombre; las demás, sí (decisión 2 de R6.19). De una palabra dos
+/// veces, vale la primera.
 ///
-/// Escrito por Claude y revisado por el desarrollador (R6.17). Se amplía con lo que salga.
-enum CastilianNames {
+/// Cero I/O: quien lee el fichero es el adaptador (`Storage`), y le pasa aquí su texto.
+public struct CastilianNames: Sendable, Equatable {
 
-    // ── Nombres ──────────────────────────────────────────────────────────────
+    /// Una línea del fichero que no se ha usado, y por qué.
+    public struct Problem: Sendable, Equatable {
+        public enum Reason: Sendable, Equatable {
+            /// Sin tilde, eñe ni diéresis: no hace falta, porque ya llega bien.
+            case noMark
+            /// En minúsculas, con un espacio, un guion, una cifra u otro signo: no es una palabra
+            /// en mayúsculas.
+            case notOneUppercaseWord
+            /// Otra forma de una palabra que ya está en la línea `line` (la misma, o con otras
+            /// tildes): vale la primera.
+            case repeated(line: Int)
+        }
 
-    static let givenNames: [String] = [
-        // De chico
-        "ABDÓN", "ADÁN", "ADRIÁN", "AGUSTÍN", "ÁLVARO", "ANDRÉS", "ÁNGEL", "ANÍBAL", "ANTÓN",
-        "BENJAMÍN", "BERNABÉ", "CÉSAR", "CRISTIÁN", "CRISTÓBAL", "DAMIÁN", "DARÍO", "EFRÉN",
-        "ELÍAS", "FABIÁN", "FÉLIX", "FERMÍN", "FERNÁN", "GASTÓN", "GERMÁN", "HÉCTOR", "HERNÁN",
-        "IÑAKI", "IÑIGO", "ISAÍAS", "IVÁN", "JERÓNIMO", "JESÚS", "JOAQUÍN", "JOSÉ", "JOSUÉ",
-        "JULIÁN", "LEÓN", "MARTÍN", "MATÍAS", "MÁXIMO", "MOISÉS", "NICOLÁS", "NOÉ", "ÓSCAR",
-        "PLÁCIDO", "RAMÓN", "RAÚL", "RENÉ", "ROMÁN", "RUBÉN", "SAÚL", "SEBASTIÁN", "SERAFÍN",
-        "SIMÓN", "TOMÁS", "VALENTÍN", "VÍCTOR", "ZACARÍAS", "ÉRIC",
-        "AARÓN", "ÁLEX", "CÁNDIDO", "DÁMASO", "GÉNESIS", "LEÓNIDAS", "NÉSTOR", "TEÓFILO", "TRISTÁN",
-        // De chica
-        "ÁFRICA", "ÁNGELA", "ÁNGELES", "ARÁNZAZU", "ASUNCIÓN", "BEGOÑA", "BELÉN", "CONCEPCIÓN",
-        "DÉBORA", "ENCARNACIÓN", "ESTÍBALIZ", "INÉS", "LUCÍA", "MARÍA", "MÓNICA", "ROCÍO",
-        "ROSALÍA", "SOFÍA", "VERÓNICA",
-        "ANAÍS", "ELOÍSA", "ESTEFANÍA", "NOEMÍ", "SALOMÉ", "ÚRSULA", "MÍA",
-    ]
+        /// Contando desde 1, como un editor.
+        public let line: Int
+        /// La línea, sin los espacios de los lados.
+        public let text: String
+        public let reason: Reason
 
-    // ── Apellidos ────────────────────────────────────────────────────────────
+        public init(line: Int, text: String, reason: Reason) {
+            self.line = line
+            self.text = text
+            self.reason = reason
+        }
+    }
 
-    static let surnames: [String] = [
-        // Los acabados en «-EZ», que casi siempre llevan tilde
-        "ÁLVAREZ", "BENÍTEZ", "BERMÚDEZ", "BLÁZQUEZ", "DOMÍNGUEZ", "ESTÉVEZ", "FERNÁNDEZ",
-        "GALÍNDEZ", "GÁLVEZ", "GIMÉNEZ", "GÓMEZ", "GONZÁLEZ", "GONZÁLVEZ", "GUTIÉRREZ",
-        "HERNÁNDEZ", "ÍÑIGUEZ", "JIMÉNEZ", "JUÁREZ", "LÓPEZ", "MÁRQUEZ", "MARTÍNEZ", "MELÉNDEZ",
-        "MÉNDEZ", "NÚÑEZ", "ORDÓÑEZ", "PÁEZ", "PELÁEZ", "PÉREZ", "PERIÁÑEZ", "RAMÍREZ",
-        "RODRÍGUEZ", "SÁNCHEZ", "SUÁREZ", "TÉLLEZ", "VÁZQUEZ", "VELÁZQUEZ", "VÉLEZ", "VÍLCHEZ",
-        "YÁÑEZ", "BÁEZ", "DÍEZ", "SÁEZ", "IBÁÑEZ", "MENÉNDEZ", "NARVÁEZ", "AMÉZQUITA", "FERRÁNDEZ", "FERRÁNDIZ",
-        "MIGUÉLEZ", "ESTÉBANEZ", "HERNÁEZ",
-        // Los demás con tilde
-        "ALARCÓN", "ALBÉNIZ", "ALCÁNTARA", "ALCÁZAR", "ALEGRÍA", "ANDÚJAR", "ARAGÓN",
-        "ARAGONÉS", "ARÉVALO", "ÁVILA", "BARBERÁ", "BARRAGÁN", "BELTRÁN", "CÁCERES", "CALDERÓN",
-        "CALLEJÓN", "CÁRDENAS", "CARRIÓN", "CEBRIÁN", "CERDÁN", "CHACÓN", "COLÓN", "CÓRDOBA",
-        "CORTÉS", "CUÉLLAR", "DÁVILA", "DURÁN", "ECHEVARRÍA", "GALÁN", "GALVÁN", "GARCÉS",
-        "GARCÍA", "GARZÓN", "GIRÓN", "GUZMÁN", "HERNÁIZ", "HERRÁIZ", "JAÉN", "LAÍNEZ",
-        "LÁZARO", "LIÉBANA", "MACÍAS", "MARÍN", "MARQUÉS", "MESÍAS", "MILLÁN", "MONTALBÁN",
-        "MONTAÑÉS", "MORÁN", "PADRÓN", "PAVÓN", "QUIRÓS", "RINCÓN", "RÍO", "RÍOS", "ROLDÁN",
-        "SALOMÓN", "SANTAMARÍA", "SOLÍS", "TOMÉ", "TORRÓN", "URÍA", "VALDÉS", "VARÓN", "YÉBENES",
-        "DÍAZ", "MARTÍ", "ALBARRÁN", "ALMAZÁN", "ARAÚJO", "ASÍN", "BARRÓN", "BOLÍVAR", "CASTELLÓN",
-        "CASTRILLÓN", "CORDÓN", "ECHEVERRÍA", "ESPÍN", "FALCÓN", "GARRIGÓS", "GASCÓN", "GAVILÁN",
-        "GUILLÉN", "HERRÁN", "JORDÁN", "LAÍN", "LUJÁN", "MAGÁN", "MÁRMOL", "MÉRIDA", "NÁJERA",
-        "OLIVÁN", "OREJÓN", "PALACÍN", "PICÓN", "SARRIÓN", "TERÁN", "VALLÉS", "VILLALÓN",
-        // Con eñe
-        "ACUÑA", "ARIÑO", "AZAÑA", "BAÑOS", "BOLAÑOS", "CABAÑAS", "CAMPAÑA", "CAÑADA",
-        "CARDEÑOSA", "CASTAÑEDA", "CASTAÑO", "ESPAÑA", "ESPAÑOL", "LARRAÑAGA", "MAÑAS",
-        "MONTAÑO", "MUÑIZ", "MUÑOZ", "OCAÑA", "PEÑA", "PEÑALOSA", "PEÑALVER", "PIÑA",
-        "PIÑEIRO", "PIÑERO", "QUIÑONES", "RIAÑO", "SALDAÑA", "TREVIÑO", "ZÚÑIGA",
-        "BAÑUELOS", "BRAÑA", "CAÑAS", "CAÑETE", "CAÑIZARES", "CARREÑO", "CASTAÑÓN", "FARIÑA",
-        "LIÑÁN", "MARAÑÓN", "OÑATE", "PARDIÑAS", "PATIÑO", "PEÑAS", "PIÑÓN", "QUIÑONERO",
-        "BAÑÓN", "CEDEÑO", "ORDOÑO",
-        // Con diéresis
-        "AGÜERO", "ARGÜELLES", "SIGÜENZA", "GÜELL",
-    ]
-
-    // ── Buscar en ella ──────────────────────────────────────────────────────
+    /// Las palabras que valen, en el orden del fichero.
+    public let words: [String]
+    /// Las líneas que no se han usado.
+    public let problems: [Problem]
 
     /// Cada palabra, por su forma sin tildes, diéresis ni eñes: el pliegue del buscador
     /// (`PlayerSearch.fold`), el mismo que usa la base.
-    private static let byKey: [String: String] = Dictionary(
-        uniqueKeysWithValues: (givenNames + surnames).map { (PlayerSearch.fold($0), $0) })
+    private let byKey: [String: String]
+
+    /// Sin palabras: cuando no hay fichero, los nombres se quedan como llegan.
+    public static let empty = CastilianNames(text: "")
+
+    /// El diccionario a partir del texto del fichero.
+    public init(text: String) {
+        var words: [String] = []
+        var problems: [Problem] = []
+        var byKey: [String: String] = [:]
+        var lineOf: [String: Int] = [:]
+        // Por saltos de línea, también los de Windows.
+        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        for (index, raw) in lines.enumerated() {
+            let line = index + 1
+            let word = raw.trimmingCharacters(in: .whitespaces)
+            if word.isEmpty || word.hasPrefix("#") { continue }
+            guard word.allSatisfy(Self.isUppercaseLetter) else {
+                problems.append(Problem(line: line, text: word, reason: .notOneUppercaseWord))
+                continue
+            }
+            let key = PlayerSearch.fold(word)
+            guard key != word else {
+                problems.append(Problem(line: line, text: word, reason: .noMark))
+                continue
+            }
+            if let first = lineOf[key] {
+                problems.append(Problem(line: line, text: word, reason: .repeated(line: first)))
+                continue
+            }
+            lineOf[key] = line
+            byKey[key] = word
+            words.append(word)
+        }
+        self.words = words
+        self.problems = problems
+        self.byKey = byKey
+    }
 
     /// La palabra como en la lista, si está; si no, como llega.
-    static func spelled(_ word: Substring) -> String {
+    public func spelled(_ word: Substring) -> String {
         byKey[PlayerSearch.fold(String(word))] ?? String(word)
+    }
+
+    /// Una letra mayúscula: la que no cambia al pasarla a mayúsculas y sí al pasarla a
+    /// minúsculas. Así valen la Ñ, la Ü y las vocales con tilde, y no las cifras ni los signos.
+    private static func isUppercaseLetter(_ character: Character) -> Bool {
+        character.isLetter && character.uppercased() == String(character)
+            && character.lowercased() != String(character)
+    }
+
+    public static func == (lhs: CastilianNames, rhs: CastilianNames) -> Bool {
+        lhs.words == rhs.words && lhs.problems == rhs.problems
     }
 }

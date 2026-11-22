@@ -5700,6 +5700,18 @@ relanzar el servidor. Decidido con el desarrollador, una a una:
 Lo ya guardado no cambia al tocar la lista: un «IÑIGO» guardado y un «ÍÑIGO» nuevo son «el mismo nombre», así que no
 salen repetidos. En la base del desarrollador no hay ninguno (contado el 2026-11-19).
 
+**Cómo es el fichero** (2026-11-19, al empezar `R6.19`), decidido una a una con el desarrollador:
+
+3. **`backend/diccionario-nombres.txt`**, una palabra por línea, en mayúsculas y con su marca; con líneas vacías y
+   comentarios con `#` (texto plano: el JSON no admite comentarios). El servidor lo busca en `NAMES_DICTIONARY_FILE`
+   y, si no está, en la carpeta desde la que se lanza.
+4. **Nunca para la sincronización.** Una línea mala se salta y se usan las demás (de una palabra dos veces, la
+   primera); si falta el fichero, se sincroniza sin diccionario. El resumen lo dice en los dos casos: la respuesta
+   de `syncTeamRoster` gana el dato, y la web lo pinta. Propuesto por el desarrollador, frente a no sincronizar, a
+   sincronizar sin avisar o a usar la última lista buena.
+5. **La migración 24ª lee el mismo fichero**, de la misma manera. Ya corrió en la base del desarrollador; en un club
+   nuevo no encuentra perfiles; y en R16 los datos se copiarán ya arreglados.
+
 ### D-124 · Los nombres se ordenan en español, y lo hace la base
 
 **Lo que lo obligó a decidirse** (2026-11-16, al construir la pestaña Plantilla, decisión 5 de R6.11; decidido

@@ -231,7 +231,8 @@ public struct AddRosterSyncColumns: AsyncMigration {
 
 /// **Las tildes y eñes del castellano en los nombres que publicó la federación**
 /// (`D-123`, R6.17): la sincronización ya pasa por el diccionario lo que llega
-/// (`PlayerName.spelledInCastilian`); esto arregla lo que se guardó antes.
+/// (`PlayerName.spelledInCastilian`); esto arregla lo que se guardó antes. Con el
+/// diccionario del fichero, como ella (R6.19).
 ///
 /// **Solo los perfiles que la federación ha publicado alguna vez**: alguna fila con
 /// `last_listed_at`, también una dada de baja. Su nombre es el de la federación,
@@ -242,13 +243,20 @@ public struct AddRosterSyncColumns: AsyncMigration {
 /// **El revert no hace nada**: el nombre sin tildes no se guarda en ningún sitio, y
 /// volver a quitarlas no arreglaría nada.
 public struct SpellPublishedNamesInCastilian: AsyncMigration {
-    public init() {}
+    /// El diccionario, del mismo fichero que la sincronización (decisión 3 de R6.19). Sin
+    /// fichero, no cambia nada, y no se para.
+    private let names: any NameDictionarySource
+
+    public init(names: any NameDictionarySource) {
+        self.names = names
+    }
 
     public func prepare(on database: any Database) async throws {
         guard let sql = database as? any SQLDatabase else {
             throw PersistenceError.schemaHelperNeedsSQL(
                 helper: "SpellPublishedNamesInCastilian", object: PlayerProfileRecord.schema)
         }
+        let dictionary = names.read() ?? .empty
         struct Row: Decodable { let id: UUID; let full_name: String }
         let rows = try await sql.raw("""
             SELECT p.id, p.full_name FROM \(ident: PlayerProfileRecord.schema) p
@@ -257,7 +265,7 @@ public struct SpellPublishedNamesInCastilian: AsyncMigration {
             """).all(decoding: Row.self)
         for row in rows {
             // Un nombre que hoy no valdría se deja como está: no es de este arreglo.
-            guard let spelled = (try? PlayerName(row.full_name))?.spelledInCastilian(),
+            guard let spelled = (try? PlayerName(row.full_name))?.spelledInCastilian(with: dictionary),
                   spelled.value != row.full_name else { continue }
             try await sql.raw("""
                 UPDATE \(ident: PlayerProfileRecord.schema) SET full_name = \(bind: spelled.value)

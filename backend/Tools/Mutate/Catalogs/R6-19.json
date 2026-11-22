@@ -1,0 +1,110 @@
+{
+  "title": "R6.19 · el diccionario de nombres, en un fichero que se lee en caliente",
+  "filter": "CastilianNamesTests|NameDictionaryFileTests|NamesDictionaryConfigTests|SyncTeamRosterTests|SyncTeamRosterEndpointTests|MigrationIntegrityTests",
+  "mutations": [
+    {
+      "id": "L1-comentarios",
+      "description": "las líneas con # cuentan como palabras",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "if word.isEmpty || word.hasPrefix(\"#\") { continue }",
+      "replace": "if word.isEmpty { continue }",
+      "filter": "CastilianNamesTests|NameDictionaryFileTests"
+    },
+    {
+      "id": "L2-mayusculas",
+      "description": "una línea que no es una palabra en mayúsculas se usa",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "guard word.allSatisfy(Self.isUppercaseLetter) else {",
+      "replace": "guard true else {",
+      "filter": "CastilianNamesTests"
+    },
+    {
+      "id": "L3-sin-marca",
+      "description": "una palabra sin tilde, eñe ni diéresis se usa",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "guard key != word else {",
+      "replace": "guard true else {",
+      "filter": "CastilianNamesTests|NameDictionaryFileTests"
+    },
+    {
+      "id": "L4-repetida",
+      "description": "una palabra repetida no se salta: vale la última",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "if let first = lineOf[key] {",
+      "replace": "if let first = lineOf[key], first < 0 {",
+      "filter": "CastilianNamesTests"
+    },
+    {
+      "id": "L5-espacios",
+      "description": "los espacios de los lados cuentan",
+      "file": "Sources/Domain/CastilianNames.swift",
+      "find": "let word = raw.trimmingCharacters(in: .whitespaces)",
+      "replace": "let word = String(raw)",
+      "filter": "CastilianNamesTests"
+    },
+    {
+      "id": "F1-sin-fichero",
+      "description": "sin fichero, un diccionario vacío en vez de ninguno",
+      "file": "Sources/Storage/NameDictionaryFile.swift",
+      "find": "guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }",
+      "replace": "guard let text = try? String(contentsOf: file, encoding: .utf8) else { return .empty }",
+      "filter": "NameDictionaryFileTests"
+    },
+    {
+      "id": "C1-variable",
+      "description": "NAMES_DICTIONARY_FILE no manda",
+      "file": "Sources/App/NamesDictionaryConfig.swift",
+      "find": "let path = (value?.isEmpty ?? true) ? defaultFile : value!",
+      "replace": "let path = defaultFile",
+      "filter": "NamesDictionaryConfigTests"
+    },
+    {
+      "id": "C2-por-defecto",
+      "description": "el fichero por defecto es otro",
+      "file": "Sources/App/NamesDictionaryConfig.swift",
+      "find": "public static let defaultFile = \"diccionario-nombres.txt\"",
+      "replace": "public static let defaultFile = \"nombres.txt\"",
+      "filter": "NamesDictionaryConfigTests|SyncTeamRosterEndpointTests|MigrationIntegrityTests"
+    },
+    {
+      "id": "S1-sin-usar",
+      "description": "la sincronización no usa el diccionario",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "let name = (try? PlayerName(raw))?.spelledInCastilian(with: names) else {",
+      "replace": "let name = (try? PlayerName(raw))?.spelledInCastilian(with: .empty) else {",
+      "filter": "SyncTeamRosterTests"
+    },
+    {
+      "id": "S2-encontrado",
+      "description": "el resumen dice siempre que se encontró el diccionario",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "summary.namesDictionary = .init(found: read != nil, skippedLines: dictionary.problems)",
+      "replace": "summary.namesDictionary = .init(found: true, skippedLines: dictionary.problems)",
+      "filter": "SyncTeamRosterTests|SyncTeamRosterEndpointTests"
+    },
+    {
+      "id": "S3-lineas",
+      "description": "el resumen no dice las líneas saltadas",
+      "file": "Sources/Application/SyncTeamRoster.swift",
+      "find": "summary.namesDictionary = .init(found: read != nil, skippedLines: dictionary.problems)",
+      "replace": "summary.namesDictionary = .init(found: read != nil, skippedLines: [])",
+      "filter": "SyncTeamRosterTests|SyncTeamRosterEndpointTests"
+    },
+    {
+      "id": "H1-repetida-donde",
+      "description": "la respuesta no dice dónde está la que vale",
+      "file": "Sources/HTTPAdapter/TeamRegistrationHandler.swift",
+      "find": ".init(line: line, text: text, reason: .repeated, repeatedLine: first)",
+      "replace": ".init(line: line, text: text, reason: .repeated, repeatedLine: nil)",
+      "filter": "SyncTeamRosterEndpointTests"
+    },
+    {
+      "id": "M1-migracion",
+      "description": "la migración 24ª no usa el diccionario",
+      "file": "Sources/Persistence/PlayerRecord.swift",
+      "find": "guard let spelled = (try? PlayerName(row.full_name))?.spelledInCastilian(with: dictionary),",
+      "replace": "guard let spelled = (try? PlayerName(row.full_name))?.spelledInCastilian(with: .empty),",
+      "filter": "MigrationIntegrityTests"
+    }
+  ]
+}

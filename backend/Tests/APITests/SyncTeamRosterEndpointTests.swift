@@ -82,9 +82,11 @@ struct SyncTeamRosterEndpointTests {
     /// Marcos Díaz, que guarda el 9 y es defensa.
     static func withSeededClub(
         federation: FederationCode = .rffm, client: RosterClient = RosterClient(),
+        names: (any NameDictionarySource)? = nil,
         _ body: @escaping @Sendable (Application, Seeded) async throws -> Void
     ) async throws {
-        try await TestEnvironment.withApp(federationClients: Provider(client: client), clock: FixedClock(instant: now)) { app in
+        try await TestEnvironment.withApp(federationClients: Provider(client: client), clock: FixedClock(instant: now),
+                                          names: names) { app in
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
             try await TestEnvironment.provisionClub(slug, federation: federation, schemaPrefix: prefix, on: app)
             func season(_ label: String) throws -> Season {
@@ -164,6 +166,9 @@ struct SyncTeamRosterEndpointTests {
                 #expect(summary.duplicateName.isEmpty)
                 #expect(summary.inOtherTeam.isEmpty)
                 #expect(summary.invalidName == ["GARCIA, PEPE 1"])
+                // El diccionario del repositorio, sin líneas malas (R6.19).
+                #expect(summary.namesDictionary.found)
+                #expect(summary.namesDictionary.skippedLines.isEmpty)
             }
             try await app.testing().test(
                 .GET, "/v1/players?teamId=\(s.cadeteA)&seasonId=\(s.vigente)",
@@ -183,6 +188,38 @@ struct SyncTeamRosterEndpointTests {
                 beforeRequest: { $0.headers.add(name: "X-Club", value: Self.slug) }
             ) { (r: TestingHTTPResponse) async throws in
                 #expect(try Self.decode(Components.Schemas.TeamRegistrationResponse.self, r).rosterSyncedAt == Self.now)
+            }
+        }
+    }
+
+    /// Una línea mala del diccionario se salta, y el resumen la da con su motivo (decisión 2 de R6.19).
+    @Test("el resumen dice las líneas del diccionario que no se han usado, con su motivo")
+    func reportsSkippedDictionaryLines() async throws {
+        let client = RosterClient(published: ["RUIZ, ANA"])
+        let names = FixedNameDictionary(CastilianNames(text: "DÍAZ\nRUIZ\nDÍAZ"))
+        try await Self.withSeededClub(client: client, names: names) { app, s in
+            try await Self.sync(app, team: s.cadeteA, season: s.vigente) { (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+                let report = try Self.decode(Components.Schemas.RosterSyncResponse.self, r).namesDictionary
+                #expect(report.found)
+                #expect(report.skippedLines.map(\.line) == [2, 3])
+                #expect(report.skippedLines.map(\.text) == ["RUIZ", "DÍAZ"])
+                #expect(report.skippedLines.map(\.reason) == [.noMark, .repeated])
+                #expect(report.skippedLines.map(\.repeatedLine) == [nil, 1])
+            }
+        }
+    }
+
+    @Test("sin el fichero del diccionario, sincroniza igual y el resumen dice que no se encontró")
+    func reportsMissingDictionary() async throws {
+        let client = RosterClient(published: ["RUIZ, ANA"])
+        try await Self.withSeededClub(client: client, names: FixedNameDictionary(nil)) { app, s in
+            try await Self.sync(app, team: s.cadeteA, season: s.vigente) { (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+                let summary = try Self.decode(Components.Schemas.RosterSyncResponse.self, r)
+                #expect(summary.added == 1)
+                #expect(!summary.namesDictionary.found)
+                #expect(summary.namesDictionary.skippedLines.isEmpty)
             }
         }
     }

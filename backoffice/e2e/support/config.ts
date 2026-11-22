@@ -23,6 +23,9 @@ export const config = {
 
   /** El servidor ya compilado: `swift build --product Run` lo deja aquí. */
   serverBinary: here('../../../backend/.build/debug/Run'),
+  /** El diccionario de nombres del servidor (D-123, R6.19): el del repositorio. El servidor de pruebas se lanza desde
+   *  `backoffice/`, así que hay que darle la ruta entera. */
+  namesDictionary: here('../../../backend/diccionario-nombres.txt'),
   /** Las respuestas grabadas de la federación, las mismas que usa el backend. */
   fixtures: here('../../../backend/Tests/FederationTests/Fixtures'),
   /** Las que se grabaron solo para los escenarios, porque el backend no las necesitaba. */

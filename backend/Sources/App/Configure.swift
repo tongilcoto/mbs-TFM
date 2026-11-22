@@ -85,7 +85,9 @@ public func configure(
     // saltar la guarda de §6.1 sin esperar a JWKS.
     actors: any ActorResolver = AmbientTenantActorResolver(),
     // R6.8: el almacén de las fotos (`D-115`). Por defecto, la carpeta de `PhotosConfig`; cada test pone la suya.
-    photos: any PhotoStore = PhotosConfig.fromEnvironment().store()
+    photos: any PhotoStore = PhotosConfig.fromEnvironment().store(),
+    // R6.19: el diccionario de nombres (`D-123`), un fichero leído en cada sincronización.
+    names: any NameDictionarySource = NamesDictionaryConfig.fromEnvironment()
 ) async throws {
     // ── Puerto ───────────────────────────────────────────────────────────────
     // El **por defecto** de `serve`: `--port` sigue ganando. Sale de `API_PORT`
@@ -144,7 +146,8 @@ public func configure(
         background: background,
         actors: actors,
         photos: photos,
-        sanitizer: LibraryPhotoSanitizer()
+        sanitizer: LibraryPhotoSanitizer(),
+        names: names
     )
 
     // El transporte se registra sobre un `RoutesBuilder` ya decorado, que es lo

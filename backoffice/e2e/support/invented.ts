@@ -423,9 +423,9 @@ export function federationDate(date: Date): string {
 // mayoría van sin tildes ni eñes, aunque las lleven («FERNANDEZ»): así los publica la federación falsa, salvo cuando
 // el escenario pide la marca (`asTheRFFM`, decisión 3 de R6.18). El servidor se las pone con su diccionario (D-123), y
 // cada palabra con marca de estas listas está en él tal cual, así que lo guardado es el nombre como se inventó.
-// «IÑIGO», sin tilde en la I, porque así lo escribe el diccionario.
+// «ÍÑIGO», con tilde, como lo escribe el diccionario desde R6.19.
 const givenNames = ['JUAN', 'PABLO', 'HUGO', 'MARIO', 'DANIEL', 'LUCAS', 'DIEGO', 'MARCOS', 'ADRIÁN', 'ÁLVARO', 'IVÁN',
-  'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'IÑIGO', 'JOEL', 'NICOLÁS']
+  'RUBÉN', 'JESÚS', 'SAÚL', 'NOÉ', 'JOSÉ MARÍA', 'JUAN CARLOS', 'MIGUEL ÁNGEL', 'IÑAKI', 'ÍÑIGO', 'JOEL', 'NICOLÁS']
 const surnameList = ['GARCÍA', 'LÓPEZ', 'MARTÍN', 'SÁNCHEZ', 'PÉREZ', 'GÓMEZ', 'RUIZ', 'DÍAZ', 'MORENO', 'ALONSO',
   'NAVARRO', 'TORRES', 'SANZ', 'VIDAL', 'ROMERO', 'MUÑOZ', 'IBÁÑEZ', 'CASTAÑO', 'PEÑA', 'GÜELL', 'ARGÜELLES',
   'SIGÜENZA', 'DE LA FUENTE', 'DEL RÍO', 'GARCÍA-PATIÑO', 'SAN JOSÉ']

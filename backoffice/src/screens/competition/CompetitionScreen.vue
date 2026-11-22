@@ -12,11 +12,13 @@ import { api } from '../../api/client'
 import type { ShownError } from '../../api/errors'
 import { asResult, type Result } from '../../api/result'
 import type { components } from '../../api/schema'
+import { roundStandingsPublished } from '../../club'
 import LoadError from '../../components/LoadError.vue'
+import SourceMark from '../../components/SourceMark.vue'
 import { competitionLabel } from '../../theme/names'
 import { isTeamCode } from '../sync-team/link'
 import { type Season, toAddress } from '../home/seasons'
-import { roundsToLookIn } from '../team/header'
+import { roundsToLookIn, standingsSource } from '../team/header'
 import RoundMatchesTable from './RoundMatchesTable.vue'
 import StandingTable from './StandingTable.vue'
 import { askedRound, competitionDetails, roundMatchRows, roundOptions, standingLines } from './round'
@@ -63,6 +65,12 @@ const ready = computed(() => (state.value.kind === 'ready' ? state.value : undef
 const options = computed(() => roundOptions(ready.value?.rounds ?? []))
 const round = computed(() => (shown.value.kind === 'round' ? shown.value.round : undefined))
 const first = computed(() => options.value[0]?.value)
+// De dónde sale la clasificación que se ve: de la Federación, o calculada por la aplicación (D-29).
+const source = computed(() =>
+  shown.value.kind === 'round' && state.value.kind === 'ready'
+    ? standingsSource(shown.value.round.number, state.value.rounds, roundStandingsPublished.value)
+    : 'Federación',
+)
 const last = computed(() => options.value.at(-1)?.value)
 const matchRows = computed(() => (shown.value.kind === 'round' ? roundMatchRows(shown.value.matches) : []))
 const lines = computed(() => (shown.value.kind === 'round' ? standingLines(shown.value.table) : []))
@@ -240,7 +248,6 @@ function goTo(number: number | undefined) {
       <Button
         label="‹ Anterior"
         severity="secondary"
-        outlined
         :disabled="!round || round.number === first"
         @click="goTo(options[options.findIndex((o) => o.value === round?.number) - 1]?.value)"
       />
@@ -249,7 +256,9 @@ function goTo(number: number | undefined) {
         for="round-picker"
         class="visually-hidden"
       >Jornada</label>
+      <!-- Con el gris secundario, como los botones de al lado y el selector de temporada (R6.19f). -->
       <Select
+        class="selector-secundario"
         label-id="round-picker"
         aria-labelledby="round-picker-label"
         :options="options"
@@ -261,11 +270,9 @@ function goTo(number: number | undefined) {
       <Button
         label="Siguiente ›"
         severity="secondary"
-        outlined
         :disabled="!round || round.number === last"
         @click="goTo(options[options.findIndex((o) => o.value === round?.number) + 1]?.value)"
       />
-      <span class="source">Federación</span>
     </div>
 
     <p
@@ -299,7 +306,16 @@ function goTo(number: number | undefined) {
         :caption="`Partidos de la jornada ${shown.round.number}`"
       />
 
-      <h2>Clasificación tras la jornada {{ shown.round.number }}</h2>
+      <h2 class="with-mark">
+        Clasificación tras la jornada {{ shown.round.number }}
+        <SourceMark :source="source" />
+      </h2>
+      <p
+        v-if="source === 'Calculada'"
+        class="calculated-note"
+      >
+        La Federación no publica la clasificación de esta jornada: la ha calculado la aplicación con los resultados.
+      </p>
       <StandingTable
         v-if="lines.length > 0"
         :lines="lines"
@@ -316,6 +332,17 @@ function goTo(number: number | undefined) {
 </template>
 
 <style scoped>
+.with-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.calculated-note {
+  margin: 0 0 0.5rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+}
 .back {
   margin: 0 0 0.5rem;
 }
@@ -335,14 +362,6 @@ h2 {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-}
-.source {
-  margin-left: auto;
-  padding: 0.125rem 0.5rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
 }
 .empty {
   color: var(--p-text-muted-color);

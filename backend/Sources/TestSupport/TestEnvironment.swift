@@ -150,6 +150,8 @@ public enum TestEnvironment {
         // ambiental, que es lo único que hace caer la guarda de §6.1 antes de
         // que exista el *claim* firmado.
         actors: (any ActorResolver)? = nil,
+        // R6.19: el diccionario de nombres; sin él, el fichero del repositorio, como el servidor.
+        names: (any NameDictionarySource)? = nil,
         _ body: (Application) async throws -> Void
     ) async throws {
         try await bootstrap()
@@ -159,7 +161,7 @@ public enum TestEnvironment {
         do {
             try await withAppHoldingASlot(
                 federationClients: federationClients, background: background,
-                clock: clock, actors: actors, body)
+                clock: clock, actors: actors, names: names, body)
         } catch {
             await AppSlots.shared.release()
             throw error
@@ -172,6 +174,7 @@ public enum TestEnvironment {
         background: (any BackgroundWork)?,
         clock: (any Clock)?,
         actors: (any ActorResolver)?,
+        names: (any NameDictionarySource)?,
         _ body: (Application) async throws -> Void
     ) async throws {
         let app = try await Application.make(.testing)
@@ -186,7 +189,8 @@ public enum TestEnvironment {
                 // `D-115`, punto 2: las fotos de cada test, en una carpeta temporal suya.
                 photos: PhotosConfig(folder: FileManager.default.temporaryDirectory
                     .appendingPathComponent("tfm-fotos-\(UUID().uuidString)", isDirectory: true),
-                    signingKey: "secreto-de-los-tests").store())
+                    signingKey: "secreto-de-los-tests").store(),
+                names: names ?? NamesDictionaryConfig.fromEnvironment())
             // Sin `autoMigrate()`: el plano de control ya lo migró `bootstrap()`,
             // una sola vez. Llamarlo aquí es lo que producía la carrera.
             try await body(app)

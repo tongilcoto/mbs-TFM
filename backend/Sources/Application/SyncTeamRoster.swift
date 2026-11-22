@@ -39,13 +39,16 @@ public struct SyncTeamRoster: Sendable {
     private let federations: any FederationClientProvider
     private let clock: any Clock
     private let ids: any UUIDProvider
+    /// El diccionario de nombres (`D-123`), leído en cada sincronización (R6.19).
+    private let names: any NameDictionarySource
 
     public init(unitOfWork: any TenantUnitOfWork, federations: any FederationClientProvider,
-                clock: any Clock, ids: any UUIDProvider) {
+                clock: any Clock, ids: any UUIDProvider, names: any NameDictionarySource) {
         self.unitOfWork = unitOfWork
         self.federations = federations
         self.clock = clock
         self.ids = ids
+        self.names = names
     }
 
     public func execute(actor: ActorContext, teamID: TeamID, seasonID: SeasonID) async throws -> RosterSyncSummary {
@@ -57,13 +60,18 @@ public struct SyncTeamRoster: Sendable {
         guard let client = federations.client(for: plan.federation) else {
             throw ApplicationError.federationAdapterMissing(federation: plan.federation.rawValue)
         }
-        // 2 · La federación, fuera de la transacción.
+        // 2 · La federación, fuera de la transacción; y el diccionario, leído ahora: lo cambiado vale ya (R6.19).
         let published = try await client.fetchTeamRoster(federationTeamID: plan.code)
+        let read = names.read()
+        let dictionary = read ?? .empty
         // 3 · Todo lo que se escribe, en una.
         let ids = self.ids
-        return try await unitOfWork.withRepositories(actor: actor) { r in
-            try await Self.apply(published, plan: plan, now: now, ids: ids, in: r)
+        var summary = try await unitOfWork.withRepositories(actor: actor) { r in
+            try await Self.apply(published, plan: plan, now: now, ids: ids, names: dictionary, in: r)
         }
+        // Cómo estaba el diccionario: el resumen lo dice, porque nunca para la sincronización (decisión 2 de R6.19).
+        summary.namesDictionary = .init(found: read != nil, skippedLines: dictionary.problems)
+        return summary
     }
 
     // ── 1 · Que se pueda ───────────────────────────────────────────────────────
@@ -110,7 +118,7 @@ public struct SyncTeamRoster: Sendable {
     // ── 3 · Lo que se escribe ──────────────────────────────────────────────────
 
     static func apply(_ published: FederationTeamRoster, plan: Plan, now: Date, ids: any UUIDProvider,
-                      in r: any Repositories) async throws -> RosterSyncSummary {
+                      names: CastilianNames, in r: any Repositories) async throws -> RosterSyncSummary {
         let (team, season) = (plan.team, plan.season)
         var roster = try await r.players.list(teamID: team.id, seasonID: season.id)
         let deleted = try await r.players.deletedProfileIDs(teamID: team.id, seasonID: season.id)
@@ -120,7 +128,7 @@ public struct SyncTeamRoster: Sendable {
 
         for publishedPlayer in published.players {
             // Con las tildes y eñes que quita la federación, antes de casar y de guardar (`D-123`).
-            guard let raw = publishedPlayer.fullName, let name = (try? PlayerName(raw))?.spelledInCastilian() else {
+            guard let raw = publishedPlayer.fullName, let name = (try? PlayerName(raw))?.spelledInCastilian(with: names) else {
                 summary.invalidName.append(publishedPlayer.publishedName)
                 continue
             }
@@ -204,6 +212,19 @@ public struct RosterSyncSummary: Equatable, Sendable {
     public var inOtherTeam: [Elsewhere] = []
     /// Los que no se añaden porque su nombre no vale, como lo escribe la federación.
     public var invalidName: [String] = []
+    /// Cómo estaba el diccionario de nombres (`D-123`, R6.19): si se encontró el fichero, y las líneas que no se
+    /// usaron.
+    public var namesDictionary = NamesDictionary(found: false, skippedLines: [])
+
+    public struct NamesDictionary: Equatable, Sendable {
+        public let found: Bool
+        public let skippedLines: [CastilianNames.Problem]
+
+        public init(found: Bool, skippedLines: [CastilianNames.Problem]) {
+            self.found = found
+            self.skippedLines = skippedLines
+        }
+    }
 
     public init(club: Club, syncedAt: Date) {
         self.club = club

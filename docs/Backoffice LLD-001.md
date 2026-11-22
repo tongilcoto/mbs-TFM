@@ -644,11 +644,15 @@ sigue siendo quien manda**: si la web se equivoca, responde con un error del §4
 
 Por qué: [DW-10].
 
-#### 7.5 La etiqueta «Federación»
+#### 7.5 De dónde sale la clasificación
 
-Las pantallas de los tipos 1 y 2 llevan una **etiqueta «Federación»** que explica, sin preguntar, por qué no
-hay botones de crear o borrar. Las del tipo 2 añaden: **«Tus correcciones se mantienen aunque la federación
-actualice los datos»**.
+~~Las pantallas de los tipos 1 y 2 llevan una **etiqueta «Federación»** que explica, sin preguntar, por qué no
+hay botones de crear o borrar.~~ **Enmendado por [DW-25]** (R6.19c): esa etiqueta era redundante, porque toda la web
+parte de la Federación. Lo que se rotula es **de dónde sale cada clasificación**: «Federación» (la última siempre, y
+todas si la federación publica la de cada jornada) o «Calculada» (las anteriores, cuando no la publica), junto al
+título de la clasificación de la competición. Donde se enseña solo la última (la caja Posición, las columnas de
+posición), sin marca: siempre es de la Federación. Las del tipo 2 siguen añadiendo, cuando lleguen: **«Tus
+correcciones se mantienen aunque la federación actualice los datos»**.
 
 #### 7.6 Lo que no se puede enseñar con lo que hay hoy
 
@@ -1048,3 +1052,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-22]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-24]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-25]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

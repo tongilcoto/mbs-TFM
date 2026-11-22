@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { components } from '../../api/schema'
-import { competitionPath, notPlayingText, playerPath, positionIn, roundsToLookIn, tabPath, teamHeading } from './header'
+import { competitionPath, notPlayingText, playerPath, positionIn, roundBoxIn, roundsToLookIn, standingsSource, tabPath, teamHeading } from './header'
 
 type Team = components['schemas']['TeamResponse']
 type Round = components['schemas']['RoundResponse']
@@ -92,3 +92,42 @@ describe('el puesto en una clasificación', () => {
     expect(positionIn([row('otro', 1)], 'equipo')).toBeUndefined()
   })
 })
+
+// De dónde sale la clasificación de una jornada (D-29, D-55; R6.19c).
+describe('de dónde sale la clasificación', () => {
+  // En curso la 5: la última clasificación es la de la 5 o, si aún no tiene tabla, la de la 4.
+  const rounds = [round(1), round(2), round(3), round(4), round(5, true)]
+
+  test('con la de cada jornada (la RFFM), todas de la Federación', () => {
+    expect([1, 3, 5].map((n) => standingsSource(n, rounds, true))).toEqual(['Federación', 'Federación', 'Federación'])
+  })
+
+  test('sin ella, la última, de la Federación; las anteriores, calculadas', () => {
+    expect([1, 3, 4, 5].map((n) => standingsSource(n, rounds, false))).toEqual(['Calculada', 'Calculada', 'Federación', 'Federación'])
+  })
+
+  test('sin ella y con la competición acabada, la última jornada, de la Federación', () => {
+    const ended = [round(1), round(2), round(3)]
+    expect([1, 2, 3].map((n) => standingsSource(n, ended, false))).toEqual(['Calculada', 'Federación', 'Federación'])
+  })
+})
+
+// La jornada de la caja Posición, en su cuadro del color del resultado (R6.19f).
+describe('el cuadro de la jornada de la caja Posición', () => {
+  const withForm = (form: Standing['form']): Standing => ({ ...row('equipo', 2), form })
+
+  test('el de esa jornada en la racha del equipo, con su resultado', () => {
+    const table = [row('otro', 1), withForm([{ roundNumber: 5, outcome: 'victoria' }, { roundNumber: 4, outcome: 'derrota' }])]
+    expect(roundBoxIn(table, 'equipo', 5)).toEqual({ round: 5, outcome: 'victoria', label: 'Victoria en la jornada 5' })
+  })
+
+  test('si descansó esa jornada, el descanso', () => {
+    expect(roundBoxIn([withForm([{ roundNumber: 5, outcome: 'descanso' }])], 'equipo', 5)?.outcome).toBe('descanso')
+  })
+
+  test('sin esa jornada en su racha, o sin él en la tabla, nada', () => {
+    expect(roundBoxIn([withForm([{ roundNumber: 4, outcome: 'empate' }])], 'equipo', 5)).toBeUndefined()
+    expect(roundBoxIn([row('otro', 1)], 'equipo', 5)).toBeUndefined()
+  })
+})
+

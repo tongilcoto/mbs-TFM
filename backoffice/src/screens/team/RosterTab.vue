@@ -400,14 +400,17 @@ onBeforeUnmount(() => {
   top: 0.25rem;
   right: 0.25rem;
 }
-/* Junto al nombre, en texto normal y más pequeño: un dato de la fila, no parte del nombre. */
+/* Junto al nombre, más pequeña: un dato de la fila, no parte del nombre. Con el gris secundario del tema, como el
+   óvalo del puesto y los botones grises (R6.19e). */
 .federation {
   margin-left: 0.5rem;
-  padding: 0.0625rem 0.375rem;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 0.25rem;
+  padding: 0.0625rem 0.5rem;
+  border: 1px solid var(--p-secundario-borde);
+  border-radius: 999px;
+  background: var(--p-secundario-fondo);
+  color: var(--p-secundario-texto);
   font-size: 0.8125rem;
-  font-weight: 400;
+  font-weight: 600;
   white-space: nowrap;
 }
 .roster {
