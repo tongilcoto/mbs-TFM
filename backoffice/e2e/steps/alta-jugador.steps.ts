@@ -52,7 +52,7 @@ const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Los campos, por su `id` (DialogPlayer): el nombre, el año, el dorsal, la demarcación y la foto. */
 const fieldIds: Record<string, string> = {
-  'Nombre y apellidos': 'player-name',
+  'Nombre y apellidos': 'player-search',
   'Año de nacimiento': 'player-year',
   Dorsal: 'player-shirt',
   Demarcación: 'player-position',
@@ -156,7 +156,7 @@ export async function openDialog(world: ScenarioWorld) {
   await rosterTab(world).getByRole('button', { name: 'Dar de alta un jugador', exact: true }).click()
   await dialog(world).waitFor()
   // El foco llega al buscador cuando la ventana acaba de aparecer.
-  await becomes(world.page, () => world.page.evaluate(() => document.activeElement?.id ?? ''), 'player-name', 'el foco')
+  await becomes(world.page, () => world.page.evaluate(() => document.activeElement?.id ?? ''), 'player-search', 'el foco')
 }
 
 /** Un equipo de mi club nuevo, con el diálogo del alta abierto en su plantilla de la temporada en curso. */
@@ -492,7 +492,7 @@ Then('el título del diálogo del alta dice el equipo y la temporada en curso', 
 Then('el buscador del alta está vacío y tiene el foco', async function (this: ScenarioWorld) {
   await this.check('vacío', () => becomes(this.page, () => searchBox(this).inputValue(), '', 'el buscador'))
   await this.check('el foco', () =>
-    becomes(this.page, () => this.page.evaluate(() => document.activeElement?.id ?? ''), 'player-name', 'el campo con el foco'),
+    becomes(this.page, () => this.page.evaluate(() => document.activeElement?.id ?? ''), 'player-search', 'el campo con el foco'),
   )
 })
 
@@ -571,7 +571,7 @@ Then(
 
 Then('el diálogo del alta tiene el nombre y el año del jugador presente en el club, bloqueados', async function (this: ScenarioWorld) {
   const present = thePresent(this)
-  const name = dialog(this).locator('#player-name')
+  const name = dialog(this).locator('#player-search')
   const year = dialog(this).locator('#player-year')
   await this.check('el nombre', () => becomes(this.page, () => name.inputValue(), shownName(present.fullName), 'el nombre'))
   await this.check('el año', () => becomes(this.page, () => year.inputValue(), String(present.birthYear), 'el año'))

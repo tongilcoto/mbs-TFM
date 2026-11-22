@@ -99,7 +99,9 @@ const typedName = computed(() => (editing.value ? name.value : typedText()))
 const shownChosenName = computed(() => lockedName.value ?? typedName.value)
 
 const labels = { name: 'Nombre y apellidos', year: 'Año de nacimiento', shirt: 'Dorsal' }
-const ids = { name: 'player-name', year: 'player-year', shirt: 'player-shirt' }
+// El del nombre dice «search» y no «name»: así Safari no ofrece los contactos de la agenda del Mac (su Autorrelleno no
+// hace caso de `autocomplete="off"`, y sí de los buscadores). Lo vio el desarrollador en la revisión a mano (R6.20).
+const ids = { name: 'player-search', year: 'player-year', shirt: 'player-shirt' }
 const listedErrors = computed<FormError[]>(() =>
   (Object.keys(errors.value) as (keyof typeof labels)[])
     .filter((field) => errors.value[field] !== undefined)
