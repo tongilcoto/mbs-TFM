@@ -199,8 +199,7 @@ flowchart TB
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,NF,P,A,F,R,J hecha
-    class PL,JUG enCurso
+    class mEq,NF,P,A,F,R,J,PL,JUG hecha
     class mTem,mCom,mRiv,mIng,mClub,mPer,E,AX,ACTA,GT,GCo,GR,GI,GC,GP pendiente
 ```
 
@@ -228,7 +227,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **3** · Enganche | «Sincronizar con la Federación», en dos pasos · Portada: las acciones de cada fila, como iconos; el equipo pasa a tener competición, y la portada se refresca sola mientras haya algo en marcha | `getTeam` · `previewFederationLink` ● ⚠️ — que diga qué equipos del grupo ya tiene el club (`D-110`) · `linkTeamToFederation` ● |
 | **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | `listSeasonRegistrations` ● ⚠️ y `getTeamRegistration` ● ⚠️ — cada competición del equipo trae su resumen (`D-113`, Plan R5, decisión 1) |
-| **6** · Plantilla | Plantilla: lista y gestión, sin cifras, y «Sincronizar con la Federación» · Ficha del jugador: datos y foto | `listPlayers` ⚠️ · `getPlayer` ⚠️ · `createPlayer` ⚠️ · `updatePlayer` ⚠️ — el perfil del jugador que dura entre temporadas, el dorsal y la demarcación opcionales y si está federado (`D-118` a `D-120`) · `deletePlayer` · `uploadPlayerPhoto` · `deletePlayerPhoto` — la foto en una carpeta del disco, saneada y con enlace firmado (`D-115` a `D-117`) · 🆕 **buscar perfiles de jugador** por nombre, para el alta (`D-120`) · 🆕 **sincronizar la plantilla** con la federación, si la publica (`D-120`) |
+| **6** · Plantilla | Plantilla: lista y gestión, sin cifras, y «Sincronizar con la Federación» · Ficha del jugador: datos y foto | `listPlayers` ● · `getPlayer` ● · `createPlayer` ● · `updatePlayer` ● — el perfil del jugador que dura entre temporadas, el dorsal y la demarcación opcionales y si está federado (`D-118` a `D-120`) · `deletePlayer` ● · `uploadPlayerPhoto` ● · `deletePlayerPhoto` ● · `getPlayerPhotoFile` ● — la foto en una carpeta del disco, saneada y con enlace firmado (`D-115` a `D-117`) · `searchPlayerProfiles` ● — buscar perfiles de jugador por nombre, para el alta (`D-120`) · `syncTeamRoster` ● — sincronizar la plantilla con la federación, si la publica (`D-120`), con el diccionario de nombres en un fichero (`D-123`) |
 | **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
@@ -420,6 +419,7 @@ su comprobación.
 | **3** · Enganche · [su plan](./Plan%20de%20desarrollo%20R3%20Enganche-001.md) | ✅ hecha | 16/16 | 2026-10-27 |
 | **4** · Resultados · [su plan](./Plan%20de%20desarrollo%20R4%20Resultados-001.md) | ✅ hecha | 16/16 | 2026-11-13 |
 | **5** · Portada del boceto · [su plan](./Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md) | ✅ hecha | 11/11, y la mini-fase `R5.12` (el descanso con otro código en la RFFM) | 2026-11-14 |
+| **6** · Plantilla · [su plan](./Plan%20de%20desarrollo%20R6%20Plantilla-001.md) | ✅ hecha | 21/21, y seis pasos más a petición del desarrollador (`R6.18b`, `R6.19b` a `R6.19f`: el gris secundario en la web y la clasificación que dice de dónde sale) | 2026-11-22 |
 
 **Punto de partida: 604 tests en el backend, 0 en la web.**
 

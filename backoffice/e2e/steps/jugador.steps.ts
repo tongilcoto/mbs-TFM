@@ -164,7 +164,7 @@ When('pulso {string} en la ficha del jugador', async function (this: ScenarioWor
 async function openEdit(world: ScenarioWorld) {
   await rowAction(world, 'Corregir')
   await editDialog(world).waitFor()
-  await becomes(world.page, () => focusedId(world), 'player-name', 'el foco')
+  await becomes(world.page, () => focusedId(world), 'player-search', 'el foco')
 }
 
 Given(
@@ -194,7 +194,7 @@ Given('he cambiado el dorsal por el de otro jugador del equipo en el diálogo de
 
 async function setName(world: ScenarioWorld) {
   const name = newName(world)
-  await editDialog(world).locator('#player-name').fill(name)
+  await editDialog(world).locator('#player-search').fill(name)
   world.data.newPlayer = { ...world.data.newPlayer, fullName: name.toLocaleUpperCase('es-ES') }
   world.note(`nombre nuevo: ${name}`)
 }
@@ -398,7 +398,7 @@ Then('el diálogo de corregir está abierto', async function (this: ScenarioWorl
 Then('el diálogo de corregir tiene el nombre y el año de su perfil', async function (this: ScenarioWorld) {
   const player = thePlayer(this)
   await this.check('el nombre', () =>
-    becomes(this.page, () => editDialog(this).locator('#player-name').inputValue(), shownName(player.fullName), 'el nombre'),
+    becomes(this.page, () => editDialog(this).locator('#player-search').inputValue(), shownName(player.fullName), 'el nombre'),
   )
   await this.check('el año', () =>
     becomes(this.page, () => editDialog(this).locator('#player-year').inputValue(), player.birthYear == null ? '' : String(player.birthYear), 'el año'),
@@ -438,7 +438,7 @@ const block = (world: ScenarioWorld, legend: string) =>
 Then(
   'el diálogo de corregir tiene un bloque {string} con el nombre y el año',
   async function (this: ScenarioWorld, legend: string) {
-    for (const id of ['player-name', 'player-year']) {
+    for (const id of ['player-search', 'player-year']) {
       await this.check(`«${id}» en «${legend}»`, () => shows(block(this, legend).locator(`#${id}`), `el campo ${id} en «${legend}»`))
     }
   },

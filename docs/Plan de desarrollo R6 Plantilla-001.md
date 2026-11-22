@@ -24,6 +24,9 @@
 > Al revisar los escenarios (`R6.3`, 2026-11-15) salieron dos más: **un jugador, una plantilla por temporada**
 > (`D-121`, dentro de la 9) y **el perfil guarda el último dorsal, demarcación y foto** (10, `D-122`).
 > **Dos ramas**, como en la R5: el servidor en `feature/plantilla-backend` (partes A y B) y la web en otra.
+>
+> **Cerrada el 2026-11-22** (`R6.21`): **1062 tests** en el backend (1059 + 3 omitidos); en la web, **622 pruebas de
+> piezas y 293 escenarios**. Lo que queda abierto, al final de la §9.
 
 ---
 
@@ -861,9 +864,44 @@ en caliente; y el cierre.
 | `R6.19d` | 2026-11-20 | **Los botones de jornada de la competición**, «‹ Anterior» y «Siguiente ›», sin `outlined`: con el formato del botón gris de la web. Visto en su web. Con R6.19c, **607 → 614** pruebas de piezas, las nuevas comprobadas que fallan sin el cambio; `typecheck`, `lint` (los 3 avisos de siempre) y `build` en verde; **la pasada entera, 293 de 293** (semilla 698408), y tras quitar la marca de la caja Posición, los 39 de la ficha, Resultados y Plantilla. **No hay que relanzar el servidor**: solo cambia la web |
 | `R6.19e` | 2026-11-22 | **La etiqueta «Federado» / «No federado» de la plantilla**, en la misma rama: el gris secundario del tema (relleno, borde verde y texto) y forma de óvalo, como el óvalo del puesto, «Calculada» y los botones grises. Solo cambia su estilo, en `RosterTab.vue`. **Visto en su web**, en un equipo sincronizado, midiendo sin capturas (salen nombres de menores): las 25 etiquetas, con esos colores en los dos modos. **614** pruebas de piezas, `typecheck`, `lint` (los 3 avisos de siempre) y `build` en verde; los 61 escenarios de la federación y la plantilla, con axe en los dos modos. **No hay que relanzar el servidor** |
 | `R6.19f` | 2026-11-22 | **Los selectores y la jornada de la caja Posición**, en la misma rama. **Los selectores**: el de temporada (`SeasonPicker.vue`, la portada y la ficha) y, pedido después, el de jornada de la competición, con el gris secundario: una regla del tema, la clase `selector-secundario`, que cambia los colores del campo de PrimeVue; la lista que se abre, como estaba. **La jornada**: una pieza nueva, `RoundBox.vue`, el cuadro de la racha suelto (DW-23), con el resultado del equipo en esa jornada sacado de su racha en la clasificación (`roundBoxIn`); sin racha, solo el número. El lector lee «8, derrota». **Salió al verlo**: el cuadro salía sin color, porque la ficha tiene su propio `.box` y en Vue ese estilo alcanza la raíz de una pieza hija; la clase pasó a `round-box`. Y el escenario de la cabecera de la ficha buscaba «de 6 · tras la jornada 5» de una pieza: ahora mira el texto y el cuadro de la jornada. **Visto en su web**, en los dos modos (el Cadete A: «tras la jornada 8» en rojo), midiendo con las transiciones quitadas. **614 → 621** pruebas de piezas, las del tema y de la caja comprobadas que fallan sin el cambio; `typecheck`, `lint` (los 3 avisos de siempre) y `build` en verde; **la pasada entera, 293 de 293** (semilla 3210), con axe en los dos modos. **No hay que relanzar el servidor** |
+| `R6.20` | 2026-11-22 | **La revisión a mano** (LLD-B §10.7 *b*), en `main` y después en `feature/cierre-plantilla`. **El zoom al 200 %, medido por Claude** a 640 × 400 (lo que queda de 1280 × 800), sin capturas porque en el club del desarrollador salen nombres de menores: la portada, la ficha del equipo (Resultados y Plantilla con 25 jugadores), la competición, la ficha del jugador y los diálogos del alta, corregir y la baja; nada se sale por los lados, y el alta, de 619 px de alto, se desplaza por dentro con sus botones siempre a la vista. Sin medir: la caja del resumen de sincronizar, que pediría sincronizar su base. **El teclado en Chrome, del desarrollador**, con una lista por pantalla: todo bien. **En Safari, encontrado por él**: el campo «Nombre y apellidos» del alta ofrecía contactos de la agenda del Mac, porque su Autorrelleno no hace caso de `autocomplete="off"`; el campo pasa a llamarse como un buscador (`player-search`, sin «name»), con su prueba, comprobada que falla sin el cambio; **622** pruebas de piezas y los 62 escenarios del alta y de la ficha del jugador. Sin mirar a mano, como en la R4: los dos modos (los cubre axe) y VoiceOver, aplazado al final del proyecto |
+| `R6.21` | 2026-11-22 | **El cierre.** Las cifras de la rebanada: en el backend, **853 → 1062 tests** (1059 + 3 omitidos, del XML de R6.19), con las mutaciones 43/43 (R6.10), 36/36 (R6.14), 21/21 (R6.17) y 13/13 (R6.19), y el censo en `0`; en la web, **453 → 622 pruebas de piezas** y **170 → 293 escenarios** (los 123 de la rebanada), con axe en los dos modos. `AGENTS.md`, al día. En el plan del backoffice: el mapa de pantallas con la Plantilla y la Ficha del jugador **de ámbar a verde**, sus operaciones como hechas (§4) y la rebanada en el estado (§6). Y lo aprendido (§9). **No hay que relanzar el servidor** |
 
 ---
 
 ## 9. Lo aprendido
 
-*(Al cerrar la rebanada.)*
+- **Los escenarios sin definir esconden fallos de las pantallas.** La ficha del jugador y el buscador del alta se
+  hicieron en R6.12 y R6.13, y sus fallos de accesibilidad (un rojo sin contraste, un campo sin nombre, un texto
+  que no era el que lee el lector) y el foco que a veces no llegaba al año salieron en R6.18, al definir sus
+  escenarios. Cuanto antes se definen, antes se ven.
+- **Cuando el servidor ya no deja escribir un dato, se mueve en vez de reescribirlo.** Los jugadores de una
+  temporada pasada se dan de alta por la API en la en curso, y una sola línea de SQL cambia de qué temporada es su
+  fila (decisión 1 de R6.18): el perfil y la foto siguen saliendo por la aplicación.
+- **Una federación falsa que se porta como la de verdad prueba el camino de verdad.** Publicar la mayoría de los
+  nombres sin tildes, como la RFFM (decisión 3 de R6.18), hizo pasar casi cada sincronización por el diccionario.
+- **Un dato que se corrige no va escrito en el código.** El diccionario de nombres pasó a un fichero que se lee en
+  cada sincronización (R6.19): corregir «ÍÑIGO» fue cambiar una línea, sin recompilar ni relanzar.
+- **Un estilo con ámbito de Vue alcanza la raíz de una pieza hija.** El `.box` de la ficha pintaba el cuadro de la
+  jornada como una caja más (R6.19f); y el `.photo` de la celda de la plantilla dejaba la foto de cada fila en 16 px
+  de ancho y las iniciales sin su círculo, desde R6.11, sin que lo viera nadie hasta que el desarrollador puso la
+  primera foto de verdad (tras R6.21). Las piezas comunes, con nombres de clase propios (`round-box`,
+  `player-photo`); y un escenario que mire una imagen, que mire también su tamaño.
+- **Con la página en segundo plano, el navegador deja paradas las transiciones.** Medir un color justo después de
+  cambiar de modo daba el del modo anterior (R6.18b, R6.19b): se mide quitándolas.
+- **`URLSearchParams` escribe el espacio como `+`**, y el servidor no lo lee como espacio: la búsqueda de perfiles
+  por la API buscaba una sola palabra (R6.18). En una dirección a mano, `encodeURIComponent`.
+- **Safari ofrece la agenda en un campo que cree de nombre**, aunque lleve `autocomplete="off"` (R6.20): un campo
+  que busca se llama como un buscador.
+- **Lo que vale para todo no se rotula; se marca la excepción.** La etiqueta «Federación» de arriba no decía nada en
+  una web que es toda de la Federación; lo que sí dice algo es «Calculada» (`DW-25`, R6.19c).
+- **Un color con nombre en el tema hace baratos los cambios de aspecto.** Con `secundario`, cada «como el botón
+  gris» (el óvalo, «Federado», los selectores) fue una regla y no un color copiado (R6.19b a R6.19f).
+
+**Queda abierto, con dueño:** **VoiceOver**, al final del proyecto, y Safari y los dos modos sin mirar a mano,
+como en la R4; **comprobar en Safari** que el alta ya no ofrece la agenda (R6.20); **leer el acta** (`D-57`); quitar
+la letra V, E o D del último partido, que el desarrollador se lo está pensando; con la FCF, saber jornada a jornada
+qué clasificación es oficial (`DW-25`), que pediría un dato del servidor; la caja del resumen de sincronizar al
+200 %, sin medir; **para la v2**, rellenar el año de varios sincronizados a la vez; y **para la R16**, comprobar que
+el Postgres de Supabase trae `es-ES-x-icu` (`D-124`) y cómo se cambia el diccionario de nombres en el servidor
+desplegado (enmienda a `D-123`). `npm run e2e` tarda ya unos 10 min con los 293 escenarios.

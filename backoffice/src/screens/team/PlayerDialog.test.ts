@@ -94,6 +94,16 @@ const press = async (label: string) => fireEvent.click(within(await dialog()).ge
 afterEach(() => vi.unstubAllGlobals())
 
 describe('abrir el diálogo', () => {
+  // Safari ofrece los contactos de la agenda del Mac en un campo que cree de nombre, aunque lleve autocomplete="off";
+  // en un buscador, no (R6.20). Por eso el campo del nombre dice «search» y no «name», en el alta y al corregir.
+  test('el campo del nombre se llama como un buscador, sin «name»', async () => {
+    fakeServer()
+    openDialog()
+    const box = await searchBox()
+    expect(box.id).toBe('player-search')
+    expect(box.id).not.toMatch(/name/i)
+  })
+
   test('el título dice el equipo y la temporada, y el buscador está vacío y tiene el foco', async () => {
     fakeServer()
     openDialog()
