@@ -48,6 +48,7 @@
 | **DW-11** | Un club por dirección, sin selector de club | §8.2, §12 |
 | **DW-12** | Modo claro y oscuro, aunque los bocetos son solo oscuros | §9.3, §9.4 |
 | **DW-23** | La racha pinta el número de cada jornada sobre el color del resultado; un solo partido, su letra V, E o D | §9.4 |
+| **DW-26** | Lo de una temporada archivada se ve en tono de archivo: otro fondo, también en las tablas, y un sello | §9.9 |
 | **Las pruebas** | | |
 | **DW-13** | Los clubs de los escenarios llevan el prefijo `bo_` | §11.2 |
 | **DW-14** | La federación falsa va detrás del servidor, y eso no es un simulacro | §11.3 |
@@ -656,9 +657,32 @@ nunca «Calculada»: se vio forzándolo a mano, sin grabar.
 
 ---
 
+### DW-26 · Lo de una temporada archivada se ve en tono de archivo: otro fondo, también en las tablas, y un sello
+
+**Qué hay que decidir** (2026-11-23, rebanada 7, decisión 5 del plan). El acta es la primera pantalla que se
+diseña para una temporada archivada, que es de solo lectura. Hasta ahora eso solo lo decía un aviso (🔒) arriba,
+que se lee una vez y se olvida.
+
+| Opción | Veredicto |
+|---|---|
+| (a) Solo el aviso arriba | Descartada: con la pantalla llena de tablas, no se nota que no se puede tocar |
+| (b) Otro fondo solo en la página | Descartada al verla: la tabla de jugadores tapa casi todo el fondo, y no se notaba |
+| **(c) Otro fondo en la página y en las tablas y recuadros, y un sello junto al título** | **Elegida** |
+
+**Decisión: (c), para toda la web**, no solo el acta (el desarrollador, al ver la maqueta). Un tono cálido y apagado,
+de papel viejo, con rayas diagonales muy suaves, en el fondo de la página y en el de las tablas; la cabecera de cada
+tabla un punto más oscura; y el sello «Temporada aaaa-aa · archivada» junto al título. Lo demás, igual que en una
+temporada en curso.
+
+**Lo que se asume a cambio.** Son más valores en el tema: cada nombre de color de fondo tiene cuatro (claro, oscuro,
+y los dos de archivo), y el análisis de contraste tiene que pasar también por una pantalla archivada.
+
+---
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-26]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-01]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-14]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-10]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-17]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-26]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
