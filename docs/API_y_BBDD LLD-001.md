@@ -1473,7 +1473,9 @@ Tres lecturas que no son evidentes en la tabla:
   que proteger, porque nunca corrige lo que el club escribió.
 - **Los refuerzos de la plantilla** ([D-128], punto 4; la operación 89): los de otros equipos del club que han
   jugado con este, **ya contados** —sus actas, las jugadas, las de sin minutos y el último partido—, como el
-  resto de las agregaciones (§3.4). Solo lectura; lista vacía si no hay.
+  resto de las agregaciones (§3.4). Solo lectura; lista vacía si no hay. **Servida en la R7.9**: refuerzo es
+  quien tiene una convocatoria de este equipo en la temporada sin estar en su plantilla; el orden, por el
+  último partido y el nombre; el 404, `TEAM_NOT_FOUND` o `TEAM_NOT_REGISTERED`.
 - **Dos tablas** ([D-119]): la fila de la temporada (`Player`) y el perfil que dura (`PlayerProfile`).
   Las rutas y los `playerId` no cambian: todo lo que apunta a un jugador (ausencias, convocatorias,
   tarjetas, goles) sigue apuntando a la fila, que cuenta para el equipo con que se hizo. `PlayerResponse`

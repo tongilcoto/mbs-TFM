@@ -14,6 +14,10 @@ public protocol AppearanceRepository: Sendable {
     /// pone el caso de uso, que sabe la fecha de cada partido.
     func list(playerID: PlayerID) async throws -> [Appearance]
 
+    /// **Las de un equipo en una temporada** (R7.9, los refuerzos): las que llevan
+    /// ese equipo, de los partidos de esa temporada (`D-28`). Sin orden.
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Appearance]
+
     /// La de un jugador en un partido, si la hay: la unicidad de §3.5.
     func find(playerID: PlayerID, matchID: MatchID) async throws -> Appearance?
 

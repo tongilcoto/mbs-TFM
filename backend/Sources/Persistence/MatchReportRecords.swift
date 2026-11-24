@@ -379,6 +379,22 @@ public struct FluentAppearanceRepository: AppearanceRepository {
             .map { try $0.toDomain() }
     }
 
+    /// La temporada se alcanza por el partido y su competición (`D-28`): con SQL los
+    /// ids, y luego las filas.
+    public func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Appearance] {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "list", object: AppearanceRecord.schema)
+        }
+        let ids = try await sql.raw("""
+            SELECT a.id FROM \(ident: AppearanceRecord.schema) a
+            JOIN \(ident: MatchRecord.schema) m ON m.id = a.match_id
+            JOIN \(ident: CompetitionRecord.schema) c ON c.id = m.competition_id
+            WHERE a.deleted_at IS NULL AND a.team_id = \(bind: teamID.raw) AND c.season_id = \(bind: seasonID.raw)
+            """).all().map { try $0.decode(column: "id", as: UUID.self) }
+        guard !ids.isEmpty else { return [] }
+        return try await AppearanceRecord.query(on: database).filter(\.$id ~~ ids).all().map { try $0.toDomain() }
+    }
+
     public func find(playerID: PlayerID, matchID: MatchID) async throws -> Appearance? {
         try await AppearanceRecord.query(on: database)
             .filter(\.$player.$id == playerID.raw)

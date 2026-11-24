@@ -402,6 +402,11 @@ struct FakeAppearanceRepository: AppearanceRepository {
     func list(playerID: PlayerID) async throws -> [Appearance] {
         await store.appearances.filter { $0.playerID == playerID }
     }
+    func list(teamID: TeamID, seasonID: SeasonID) async throws -> [Appearance] {
+        let competitions = Set(await store.competitions.filter { $0.seasonID == seasonID }.map(\.id))
+        let matches = Set(await store.matches.filter { competitions.contains($0.competitionID) }.map(\.id))
+        return await store.appearances.filter { $0.teamID == teamID && matches.contains($0.matchID) }
+    }
     func find(playerID: PlayerID, matchID: MatchID) async throws -> Appearance? {
         await store.appearances.first { $0.playerID == playerID && $0.matchID == matchID }
     }
