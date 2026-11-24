@@ -1,4 +1,4 @@
-# Las tarjetas del acta de un partido (plan R7, decisión 5e, y R7.3 P5 y P6; D-45, D-46, D-131, D-136).
+# Las tarjetas del acta de un partido (plan R7, decisión 5e, y R7.3 P5 y P6; D-45, D-46, D-131, D-136, D-137).
 # Las tarjetas que hay antes de cada escenario se apuntan por la API (`createCard`), y las de la Federación, con la
 # ingesta. Los jugadores, al azar.
 #
@@ -13,7 +13,8 @@
 # - «lo obligatorio»: el jugador y la tarjeta; el minuto y el comentario son opcionales (R7.3, P5).
 # - Las tarjetas: «Amarilla», «Roja directa» y «Segunda amarilla» (la doble amarilla: una roja, D-45).
 # - «las tarjetas apuntadas»: las guardadas, leídas por la API (`listCards` del partido).
-# - «una tarjeta de la Federación»: una que cargó la ingesta con el acta.
+# - «una tarjeta de la Federación»: una que cargó la ingesta con el acta, o que apuntó el club y la carga dio por la
+#   misma; lo guarda la tarjeta (D-137). «Una tarjeta que apuntó el club», una que el acta no traía.
 Feature: Las tarjetas del acta
 
   # ── Lo que hay al entrar ──
@@ -134,8 +135,14 @@ Feature: Las tarjetas del acta
     Then las tarjetas apuntadas tienen la tarjeta con ese comentario y con el jugador, el minuto y la tarjeta de la Federación
 
   @ui
-  Scenario: Con el acta cargada no se añaden ni se borran tarjetas
+  Scenario: Con el acta cargada no se añaden tarjetas ni se borran las de la Federación
     Given el equipo tiene un partido con el acta cargada, con una tarjeta
     When abro el acta del partido con el acta cargada
     Then la sección de tarjetas no tiene el botón "+ Añadir tarjeta"
-    And ninguna tarjeta tiene el icono "Borrar"
+    And ninguna tarjeta de la Federación tiene el icono "Borrar"
+
+  @ui
+  Scenario: Con el acta cargada, una tarjeta que apuntó el club tiene el icono «Borrar»
+    Given el equipo tiene un partido con el acta cargada, y una tarjeta que apuntó el club y que el acta no traía
+    When abro el acta del partido con el acta cargada
+    Then la tarjeta que apuntó el club tiene el icono "Borrar"

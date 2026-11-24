@@ -454,8 +454,8 @@ se definen con la web y se ponen en verde en la fase D.)*
 |---|---|---|
 | `acta.feature` | 19 | Entrar desde Resultados, la cabecera, las tres situaciones, «No se ha encontrado el partido» y el navegador de partidos |
 | `acta-convocatoria.feature` | 43 | Los estados de cada jugador, los minutos, los refuerzos, el contador y lo que cambia con el acta cargada |
-| `acta-goles.feature` | 31 | Apuntar, corregir y borrar un gol; lo obligatorio, el desglose, la propia puerta y el penalti; los de la Federación |
-| `acta-tarjetas.feature` | 17 | Apuntar, corregir y borrar una tarjeta; la segunda amarilla; las de la Federación |
+| `acta-goles.feature` | 32 | Apuntar, corregir y borrar un gol; lo obligatorio, el desglose, la propia puerta y el penalti; los de la Federación |
+| `acta-tarjetas.feature` | 18 | Apuntar, corregir y borrar una tarjeta; la segunda amarilla; las de la Federación |
 | `acta-federacion.feature` | 30 | La carga del acta con la ingesta: cuándo se pide, cada jugador, los goles y las tarjetas |
 | Añadidos a `resultados`, `jornada` y `plantilla` | 4 + 2 + 6 | El enlace al acta desde el marcador; la etiqueta del selector de jornada; los refuerzos |
 
@@ -489,6 +489,15 @@ lo cubren las pruebas de piezas y del servidor, y sus escenarios llegan con la r
 | `R7.8` | **Las tarjetas**, en ciclos TDD: sus cinco operaciones |
 | `R7.9` | **Los refuerzos de la plantilla**, en ciclos TDD: los de otros equipos del club que han jugado con este, con su equipo y su participación (decisión 3) |
 | `R7.10` | **El cierre de B1**: tests, mutación, censo |
+
+**Decisiones de `R7.4`** (2026-11-24), una a una con el desarrollador, al cruzar el contrato con `D-125` a `D-136`:
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Qué gol y qué tarjeta trajo el acta** (el servidor no lo sabía, y el gol repetido de `D-133` no se podía borrar con el acta cargada) | Que cada uno lo recuerde, o todo bloqueado con el acta cargada | **Que cada uno lo recuerde** (`D-137`): en los del acta, lo de la federación no se cambia y no se borran; los del club se corrigen y se borran igual. En los escenarios, «ningún gol tiene Borrar» pasa a «ningún gol de la federación», y entra el caso más cercano: el del club sí lo tiene (dos escenarios más, 154 en la rebanada) |
+| **2 · El equipo de cada convocatoria y cada tarjeta** (`D-128`) | Obligatorio en la petición, o deducido de la plantilla si no se manda | **Obligatorio** (nota en `D-128`): en un partido entre dos equipos del club es la única forma de saber cuál es; el servidor comprueba que juegue el partido |
+| **3 · Quién compara la convocatoria con el acta**, para «Cambiado por el club» (`D-134`, punto 4) | El servidor, o `getMatch` devuelve la copia y compara la web | **El servidor** (nota en `D-134`): cada fila dice si ha cambiado, y `getMatch` trae la fecha de la carga y los que el acta traía y ya no tienen fila |
+| **4 · Cómo se piden los refuerzos** de la plantilla (decisión 3) | Una operación nueva que los trae contados, o abrir `listAppearances` a equipo y temporada y que cuente la web | **Una operación nueva**, la 89 (nota en `D-128`): de cada refuerzo, su equipo, sus actas, las jugadas, las de sin minutos y el último partido; cuenta el servidor, como las demás agregaciones |
 
 **B2 · La carga del acta de la federación** (en su propia rama, como la sincronización de la `R6`)
 

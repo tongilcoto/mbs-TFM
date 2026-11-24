@@ -1,4 +1,4 @@
-# Los goles del acta de un partido (plan R7, decisiones 5d y 7, y R7.3 P5 y P6; D-09, D-52, D-131, D-135).
+# Los goles del acta de un partido (plan R7, decisiones 5d y 7, y R7.3 P5 y P6; D-09, D-52, D-131, D-135, D-137).
 # Los goles que hay antes de cada escenario se apuntan por la API (`createGoal`), y los de la Federación, con la
 # ingesta. Los jugadores, al azar.
 #
@@ -14,7 +14,8 @@
 # - «lo obligatorio»: el equipo que marca; todo lo demás es opcional (R7.3, P5).
 # - «el desglose»: tipo de jugada, asistencia, zona, lado del ataque, lado del remate y parte del cuerpo.
 # - «los goles apuntados»: los guardados, leídos por la API (`listGoals` del partido).
-# - «un gol de la Federación»: uno que cargó la ingesta con el acta.
+# - «un gol de la Federación»: uno que cargó la ingesta con el acta, o que apuntó el club y la carga dio por el mismo;
+#   lo guarda el gol (D-137). «Un gol que apuntó el club», uno que el acta no traía.
 # - «la convocatoria de la página»: la plantilla del equipo y los refuerzos apuntados, como en acta-convocatoria.
 Feature: Los goles del acta
 
@@ -207,8 +208,14 @@ Feature: Los goles del acta
     And los goles apuntados tienen el gol con el tipo elegido y con el goleador y el minuto de la Federación
 
   @ui
-  Scenario: Con el acta cargada no se añaden ni se borran goles
+  Scenario: Con el acta cargada no se añaden goles ni se borran los de la Federación
     Given el equipo tiene un partido con el acta cargada, con goles
     When abro el acta del partido con el acta cargada
     Then la sección de goles no tiene el botón "+ Añadir gol"
-    And ningún gol tiene el icono "Borrar"
+    And ningún gol de la Federación tiene el icono "Borrar"
+
+  @ui
+  Scenario: Con el acta cargada, un gol que apuntó el club tiene el icono «Borrar»
+    Given el equipo tiene un partido con el acta cargada, y un gol que apuntó el club y que el acta no traía
+    When abro el acta del partido con el acta cargada
+    Then el gol que apuntó el club tiene el icono "Borrar"

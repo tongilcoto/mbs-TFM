@@ -150,6 +150,7 @@
 | **D-134**              | La convocatoria: sin fila es «no convocado»; «Convocado» y «Convocado sin minutos», un solo estado; el club corrige el acta (enmienda a [D-41] y [D-133]) | §3.2, §3.3, §5.3                   |
 | **D-135**              | El gol: dos lados, pie izquierdo y derecho, cinco tipos de jugada y un comentario; en un penalti, ni fuera del área ni lado del remate | §3.2, §3.3                         |
 | **D-136**              | La tarjeta lleva un comentario; las del rival no se apuntan                                                                    | §3.2                               |
+| **D-137**              | Cada gol y cada tarjeta recuerdan si vinieron del acta (enmienda a [D-133])                                                    | §3.2, §3.3, §5.3                   |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5895,6 +5896,16 @@ es el caso raro el que lo pide.
 
 **Enmienda** a [D-05] (el equipo se alcanza por el jugador) y a [D-52] (a qué equipo pertenece el goleador).
 
+**Precisada en `R7.4`** (2026-11-24): **el equipo es obligatorio** al apuntar una convocatoria o una tarjeta
+(`teamId`), y no se deduce de la plantilla: en un partido entre dos equipos del club, solo así se sabe cuál es. El
+servidor comprueba que ese equipo juegue el partido (422 si no). Lo mandan la web, que es el equipo de la página del
+acta, y la carga del acta.
+
+**Precisada en `R7.4`** (2026-11-24, punto 4): **los refuerzos, con una operación nueva** (la 89), que los trae ya
+contados para un equipo y una temporada: de cada uno, su equipo, en cuántas actas del equipo está, en cuántas jugó y
+en cuántas fue convocado sin minutos, y su último partido. Cuenta el servidor, como el resto de las agregaciones
+(§3.4); la web no pide todas las convocatorias de la temporada para contarlas ella.
+
 ### D-129 · El dorsal del acta se guarda en la convocatoria, no en la plantilla
 
 **Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 2 del plan R7). El plan R6 dejó apuntado que el
@@ -6027,6 +6038,9 @@ y la federación ponen minutos distintos; lo borra el club.
 
 **Enmienda** a [D-125] (el acta en cada pasada, solo lo que la web no ha tocado) y a [D-130] (punto 3).
 
+**Enmendada por [D-137]** (2026-11-24): cada gol y cada tarjeta recuerdan si vinieron del acta, y los del club
+se siguen borrando con el acta cargada.
+
 **Enmendada por [D-134]** (2026-11-23): antes del partido no hay estado `no_convocado` (sin fila lo es); con el
 acta cargada el club puede corregir la convocatoria; y el partido guarda una copia de la convocatoria del acta, lo
 que esta entrada descartaba para cada apunte.
@@ -6073,6 +6087,11 @@ convocatoria, solo en partidos con convocatoria.
 
 **Enmienda** a [D-41] y a [D-133] (punto 4, y la convocatoria cargada).
 
+**Precisada en `R7.4`** (2026-11-24): **compara el servidor**, y la web solo pinta. Con el acta cargada, cada fila
+de la convocatoria dice si ha cambiado respecto a la copia (otro estado, o un jugador que el acta no traía), y
+`getMatch` trae la fecha de la carga y los jugadores que el acta traía y ya no tienen fila. Sin acta cargada, no hay
+nada que comparar. Así la regla está en un solo sitio, también para la app.
+
 ### D-135 · El gol: dos lados, pie izquierdo y derecho, cinco tipos de jugada y un comentario
 
 **Lo que lo obligó a decidirse** (2026-11-22 y 23, rebanada 7, decisión 5 del plan R7). Al ver el formulario del gol
@@ -6117,6 +6136,31 @@ elegir; la R10 cuenta «sin clasificar» mientras tanto.
    obligatorio que la federación pueda no traer.
 
 **Lo que se asume a cambio.** Nada que contar de las tarjetas del rival, como hoy.
+
+### D-137 · Cada gol y cada tarjeta recuerdan si vinieron del acta
+
+**Lo que lo obligó a decidirse** (2026-11-24, rebanada 7, `R7.4`, al cruzar el contrato con las decisiones). Con el
+acta cargada, lo que trae la federación no se cambia ni se borra ([D-135], punto 6; [D-136], punto 4), pero el
+servidor no sabía qué gol o qué tarjeta lo había traído: [D-133] descartó que cada apunte recordara su origen. Y
+[D-133] dice que un gol que el club y la federación apuntan con minutos distintos queda repetido y «lo borra el
+club», cosa que el bloqueo no dejaba.
+
+**Decisión** (el desarrollador, 2026-11-24):
+
+1. **Cada gol y cada tarjeta guardan si vinieron del acta**, puesto por la carga y de solo lectura para la web. Lo
+   que la carga encuentra ya apuntado por el club y lo da por el mismo ([D-133], punto 5) pasa a ser del acta, con
+   su desglose y su comentario.
+2. **En los del acta**, el servidor rechaza cambiar lo que trajo la federación y rechaza borrarlos (422).
+3. **Los que apuntó el club se corrigen y se borran igual**, también con el acta cargada: así se quita el repetido.
+4. **Con el acta cargada no se añaden goles ni tarjetas**, como hasta ahora.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Con el acta cargada, todo bloqueado, sin recordar nada | El gol repetido no se podría borrar nunca |
+
+**Lo que se asume a cambio.** Un campo más en `Goal` y en `Card`, escrito solo por la carga.
+
+**Enmienda** a [D-133] (punto 5, y lo descartado de que cada apunte recuerde su origen).
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -6294,3 +6338,4 @@ elegir; la R10 cuenta «sin clasificar» mientras tanto.
 [D-134]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-135]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-136]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-137]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
