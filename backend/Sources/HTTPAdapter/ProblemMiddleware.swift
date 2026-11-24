@@ -445,6 +445,18 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Gol desconocido", detail: id,
                                base: typeBaseURI, slug: "goal-not-found")
 
+            case .cardNotFound(let id):
+                return Problem(status: .notFound, code: "CARD_NOT_FOUND",
+                               title: "Tarjeta desconocida", detail: id,
+                               base: typeBaseURI, slug: "card-not-found")
+
+            case .cardAlreadyRecorded(let player, let type):
+                // 409, solo con su código (§3.5): amarilla y roja sí conviven.
+                return Problem(status: .conflict, code: "CARD_ALREADY_RECORDED",
+                               title: "Ya tiene esa tarjeta",
+                               detail: "el jugador \(player) ya tiene una tarjeta \(type) en el partido",
+                               base: typeBaseURI, slug: "card-already-recorded")
+
             case .playerAlreadyConvoked(let player, let match):
                 // 409, solo con su código (§3.5): corregir es el `PATCH`.
                 return Problem(status: .conflict, code: "PLAYER_ALREADY_CONVOKED",

@@ -552,3 +552,76 @@ public struct FluentGoalRepository: GoalRepository {
         try await GoalRecord.find(id.raw, on: database)?.delete(on: database)
     }
 }
+
+// ── Las tarjetas (R7.8) ──────────────────────────────────────────────────────
+
+extension CardRecord {
+    func toDomain() throws -> Card {
+        let id = try requireID()
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(table: Self.schema, id: id.uuidString)
+        }
+        guard let type = try stored(type, CardType.self, table: Self.schema, column: "type") else {
+            throw PersistenceError.corruptEnumeration(table: Self.schema, column: "type", value: "")
+        }
+        return Card(
+            id: CardID(raw: id), playerID: PlayerID(raw: $player.id), matchID: MatchID(raw: $match.id),
+            teamID: TeamID(raw: $team.id), type: type, isSecondYellow: isSecondYellow,
+            minute: try minute.map(MatchMinute.init), comment: try EntryComment.make(comment),
+            fromReport: fromReport, createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    fileprivate func apply(_ card: Card) {
+        $player.id = card.playerID.raw
+        $match.id = card.matchID.raw
+        $team.id = card.teamID.raw
+        type = card.type.rawValue
+        isSecondYellow = card.isSecondYellow
+        minute = card.minute?.value
+        comment = card.comment?.value
+        fromReport = card.fromReport
+    }
+}
+
+public struct FluentCardRepository: CardRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func find(_ id: CardID) async throws -> Card? {
+        try await CardRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    /// **Por minuto**, las que no tienen al final, y luego en el orden en que se
+    /// apuntaron; el `id` desempata.
+    public func list(matchID: MatchID, teamID: TeamID?, playerID: PlayerID?) async throws -> [Card] {
+        var query = CardRecord.query(on: database).filter(\.$match.$id == matchID.raw)
+        if let teamID { query = query.filter(\.$team.$id == teamID.raw) }
+        if let playerID { query = query.filter(\.$player.$id == playerID.raw) }
+        return try await query
+            .sort(.sql(unsafeRaw: "minute ASC NULLS LAST"))
+            .sort(\.$createdAt)
+            .sort(\.$id)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(playerID: PlayerID) async throws -> [Card] {
+        try await CardRecord.query(on: database).filter(\.$player.$id == playerID.raw).all().map { try $0.toDomain() }
+    }
+
+    public func save(_ card: Card) async throws {
+        if let existing = try await CardRecord.find(card.id.raw, on: database) {
+            existing.apply(card)
+            try await existing.update(on: database)
+        } else {
+            let record = CardRecord()
+            record.id = card.id.raw
+            record.apply(card)
+            try await record.create(on: database)
+        }
+    }
+
+    public func delete(_ id: CardID) async throws {
+        try await CardRecord.find(id.raw, on: database)?.delete(on: database)
+    }
+}

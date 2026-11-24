@@ -46,4 +46,6 @@ public protocol Repositories: Sendable {
     var appearances: any AppearanceRepository { get }
     /// R7.7: los goles.
     var goals: any GoalRepository { get }
+    /// R7.8: las tarjetas.
+    var cards: any CardRepository { get }
 }

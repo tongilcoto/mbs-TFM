@@ -139,3 +139,9 @@ public struct GoalID: TypedIdentifier {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Una tarjeta (§3.2, R7.8): el `cardId` del catálogo.
+public struct CardID: TypedIdentifier {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}

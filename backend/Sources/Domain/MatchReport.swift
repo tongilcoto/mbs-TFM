@@ -269,6 +269,44 @@ public struct Goal: Identifiable, Equatable, Sendable {
     public var scorerTeamID: TeamID { playType == .enPropiaPuerta ? concedingTeamID : scoringTeamID }
 }
 
+// ── La tarjeta (R7.8) ───────────────────────────────────────────────────────
+
+/// Una tarjeta (§3.2): **una fila es una sanción** (`D-45`), de un jugador del club
+/// (`D-136`), con el equipo con el que jugaba (`D-128`). `playerID`, `matchID` y
+/// `teamID` son identidad (`D-37`).
+public struct Card: Identifiable, Equatable, Sendable {
+    public let id: CardID
+    public let playerID: PlayerID
+    public let matchID: MatchID
+    public let teamID: TeamID
+    public let type: CardType
+    public let isSecondYellow: Bool
+    public let minute: MatchMinute?
+    public let comment: EntryComment?
+    /// La trajo el acta (`D-137`).
+    public let fromReport: Bool
+    public let createdAt: Date
+    public let updatedAt: Date
+
+    public init(id: CardID, playerID: PlayerID, matchID: MatchID, teamID: TeamID, type: CardType,
+                isSecondYellow: Bool = false, minute: MatchMinute? = nil, comment: EntryComment? = nil,
+                fromReport: Bool = false, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.playerID = playerID
+        self.matchID = matchID
+        self.teamID = teamID
+        self.type = type
+        self.isSecondYellow = isSecondYellow
+        self.minute = minute
+        self.comment = comment
+        self.fromReport = fromReport
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    public var shape: CardShape { CardShape(type: type, isSecondYellow: isSecondYellow, minute: minute) }
+}
+
 // ── Lo que se compara en un gol y en una tarjeta ────────────────────────────
 
 /// Lo de un gol que deciden las reglas: quién, cuándo y cómo. El equipo que marca

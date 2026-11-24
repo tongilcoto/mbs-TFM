@@ -202,6 +202,13 @@ struct ContractEnumTests {
         for value in GoalBodyPart.allCases { #expect(value.toContract().toDomain() == value) }
     }
 
+    @Test("CardType → contrato, ← contrato, y el viaje redondo (R7.8)")
+    func cardType() {
+        Self.check(CardType.allCases, { $0.toContract() }, "CardType")
+        Self.check(Components.Schemas.CardType.allCases, { $0.toDomain() }, "CardType (de vuelta)")
+        for value in CardType.allCases { #expect(value.toContract().toDomain() == value) }
+    }
+
     @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
     func teamCategoryBack() {
         Self.check(

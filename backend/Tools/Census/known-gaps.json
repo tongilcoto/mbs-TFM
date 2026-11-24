@@ -3,7 +3,6 @@
     "DATABASE_UNAVAILABLE": "503 de ApplicationError.databaseUnavailable (ProblemMiddleware); provocarlo por HTTP exige Postgres caído a mitad de la petición. Ya en la lista de H-46",
     "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
     "INVALID_LIMIT": "GET /ingestion-runs con un limit fuera de rango (§5.5); ningún test nombra el código. Ya en la lista de H-72",
-    "LOOSE_YELLOW_EXISTS": "traducido en ProblemMiddleware desde R7.5 (MatchReportRules), pero ninguna operación servida lo lanza todavía: llega con las operaciones del acta en R7.8, que lo prueban por HTTP",
     "NOT_EDITABLE_AFTER_SYNC": "traducido en ProblemMiddleware, pero inalcanzable por HTTP hoy: Competition.applying no tiene llamante en producción hasta que el filter incluya updateCompetition",
     "PLAYER_PROFILE_MISSING": "500 de ApplicationError.playerProfileMissing (ProblemMiddleware): una fila sin su perfil; la FK de players.profile_id es RESTRICT y no lo deja pasar, así que provocarlo por HTTP exige romper la base a mano",
     "RUN_NOT_RECORDED": "500 de ApplicationError.runNotRecorded (ProblemMiddleware): la pasada no pudo escribir su fila; provocarlo por HTTP exige romper la escritura a mitad. Ya en la lista de H-46"
@@ -31,6 +30,8 @@
     "AppearanceResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.6)",
     "AppearanceResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.6)",
     "GoalResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
-    "GoalResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)"
+    "GoalResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
+    "CardResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)",
+    "CardResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)"
   }
 }

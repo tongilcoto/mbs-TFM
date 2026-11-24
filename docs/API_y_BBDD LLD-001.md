@@ -1630,6 +1630,9 @@ Tres lecturas que no son evidentes en la tabla:
 - **Desde la hora de comienzo, y sin el acta cargada** ([D-133], [D-137]): con ella, las tarjetas son las del
   acta. **En una del acta (`fromReport`) solo se escribe el comentario, y no se borra**; las que apuntó el
   club se corrigen y se borran siempre.
+- **Servidos en la R7.8.** El 409 es `CARD_ALREADY_RECORDED`, y la segunda amarilla con una amarilla suelta,
+  422 `LOOSE_YELLOW_EXISTS`, los dos mirados antes de escribir. **En el `PATCH`, un `null` es como no mandar
+  el campo**, como en la convocatoria (R7.6). El 404 de la ruta es `CARD_NOT_FOUND`.
 - **El `DELETE` recalcula las pendientes de sanción** ([D-10]): es el primer borrado del contrato con efecto
   visible fuera de su propio recurso.
 - **De `Card` no nace ninguna `Absence`** ([D-10]); las pendientes y el ciclo de acumulación son **modelo de

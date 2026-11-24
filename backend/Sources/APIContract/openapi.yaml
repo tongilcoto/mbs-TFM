@@ -3065,8 +3065,9 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            Ese jugador ya tiene una tarjeta **de ese tipo** en ese partido (§3.5). Amarilla y roja sí
-            conviven; una segunda amarilla no es otra fila amarilla, es la expulsión (D-45).
+            Ese jugador ya tiene una tarjeta **de ese tipo** en ese partido (§3.5, `CARD_ALREADY_RECORDED`).
+            Amarilla y roja sí conviven; una segunda amarilla no es otra fila amarilla, es la expulsión
+            (D-45).
           content:
             application/problem+json:
               schema:
@@ -4542,6 +4543,8 @@ components:
         - ALREADY_LINKED_TO_FEDERATION
         - APPEARANCE_NOT_FOUND
         - BAD_REQUEST
+        - CARD_ALREADY_RECORDED
+        - CARD_NOT_FOUND
         - COMPETITION_IDENTITY_MISMATCH
         - COMPETITION_NOT_FOUND
         - DATABASE_UNAVAILABLE

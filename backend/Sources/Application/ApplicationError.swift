@@ -97,6 +97,13 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// El gol que designa la ruta no existe, o está borrado (R7.7). 404.
     case goalNotFound(id: String)
 
+    /// La tarjeta que designa la ruta no existe, o está borrada (R7.8). 404.
+    case cardNotFound(id: String)
+
+    /// Ese jugador ya tiene una tarjeta **de ese tipo** en ese partido (§3.5, `D-45`).
+    /// 409, solo con su código.
+    case cardAlreadyRecorded(player: String, type: String)
+
     /// Ese jugador ya tiene convocatoria en ese partido (§3.5, R7.6). 409, solo con
     /// su código: corregirla es el `PATCH`.
     case playerAlreadyConvoked(player: String, match: String)

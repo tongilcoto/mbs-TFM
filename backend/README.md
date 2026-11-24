@@ -57,7 +57,9 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `POST /v1/appearances` · `PATCH /v1/appearances/{id}` · `DELETE /v1/appearances/{id}` | Backoffice R7.6: apuntar con el equipo del partido (`D-128`) y el estado según la hora (`D-133`) |
 | `GET /v1/goals?…` · `GET /v1/goals/{id}`                                              | Backoffice R7.7: los goles de un partido, un equipo o un jugador, paginados (`D-47`, `D-49`) |
 | `POST /v1/goals` · `PATCH /v1/goals/{id}` · `DELETE /v1/goals/{id}`                   | Backoffice R7.7: desde la hora y sin el acta cargada; en uno del acta, lo de la federación queda fijo (`D-135`, `D-137`) |
-| Las otras 51 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/cards?matchId=` \| `?playerId=` · `GET /v1/cards/{id}`                       | Backoffice R7.8: las tarjetas de un partido, de un jugador o de los dos (`D-47`) |
+| `POST /v1/cards` · `PATCH /v1/cards/{id}` · `DELETE /v1/cards/{id}`                   | Backoffice R7.8: con el equipo del partido (`D-128`); la segunda amarilla, una roja (`D-45`); en una del acta, solo el comentario (`D-136`) |
+| Las otras 46 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).

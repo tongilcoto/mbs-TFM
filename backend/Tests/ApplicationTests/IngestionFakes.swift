@@ -43,6 +43,9 @@ actor IngestionStore {
     /// R7.7: los goles, y los borrados aparte.
     var goals: [Goal] = []
     var deletedGoals: [Goal] = []
+    /// R7.8: las tarjetas, y las borradas aparte.
+    var cards: [Card] = []
+    var deletedCards: [Card] = []
 
     /// **Cuántas escrituras ha recibido el almacén**, sea cual sea la tabla.
     ///
@@ -99,6 +102,12 @@ actor IngestionStore {
     }
     func seed(reportCopy: MatchReportCopy, for match: MatchID) { reportCopies[match] = reportCopy }
     func save(_ value: Goal) { upsert(&goals, value) { $0.id == value.id } }
+    func save(_ value: Card) { upsert(&cards, value) { $0.id == value.id } }
+    func deleteCard(_ id: CardID) {
+        guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
+        writes += 1
+        deletedCards.append(cards.remove(at: index))
+    }
     func deleteGoal(_ id: GoalID) {
         guard let index = goals.firstIndex(where: { $0.id == id }) else { return }
         writes += 1
@@ -357,6 +366,22 @@ struct FakeGoalRepository: GoalRepository {
     func delete(_ id: GoalID) async throws { await store.deleteGoal(id) }
 }
 
+/// Las tarjetas (R7.8), por minuto como el adaptador. Lo que lo prueba de verdad es
+/// `CardEndpointTests`, contra Postgres.
+struct FakeCardRepository: CardRepository {
+    let store: IngestionStore
+    func find(_ id: CardID) async throws -> Card? { await store.cards.first { $0.id == id } }
+    func list(matchID: MatchID, teamID: TeamID?, playerID: PlayerID?) async throws -> [Card] {
+        await store.cards
+            .filter { $0.matchID == matchID && (teamID == nil || $0.teamID == teamID)
+                && (playerID == nil || $0.playerID == playerID) }
+            .sorted { ($0.minute?.value ?? Int.max) < ($1.minute?.value ?? Int.max) }
+    }
+    func list(playerID: PlayerID) async throws -> [Card] { await store.cards.filter { $0.playerID == playerID } }
+    func save(_ card: Card) async throws { await store.save(card) }
+    func delete(_ id: CardID) async throws { await store.deleteCard(id) }
+}
+
 struct FakeAppearanceRepository: AppearanceRepository {
     let store: IngestionStore
     func find(_ id: AppearanceID) async throws -> Appearance? { await store.appearances.first { $0.id == id } }
@@ -496,6 +521,7 @@ struct FakeRepositories: Repositories {
     var playerProfiles: any PlayerProfileRepository { FakePlayerProfileRepository(store: store) }
     var appearances: any AppearanceRepository { FakeAppearanceRepository(store: store) }
     var goals: any GoalRepository { FakeGoalRepository(store: store) }
+    var cards: any CardRepository { FakeCardRepository(store: store) }
 }
 
 /// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de
