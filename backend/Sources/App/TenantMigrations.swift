@@ -131,6 +131,14 @@ public enum TenantMigrations {
             // publicó la federación. Solo cambia datos: al final, que es su único
             // requisito de orden ([D-90]).
             SpellPublishedNamesInCastilian(names: names),
+            // R7.5: las tres tablas del acta ([D-128] a [D-137]). El orden canónico
+            // de arriba las pone detrás de `Player`, y sus FK —`Player`, `Match`
+            // y `Team`— están ya aplicadas: su sitio es el final ([D-90]).
+            CreateMatchReportTables(),
+            // R7.5: lo que el acta escribe en el partido y en el perfil ([D-126],
+            // [D-133], [D-134]). Aparte de la anterior: altera dos tablas que ya
+            // existen, y una migración que hace dos cosas no se revierte a medias.
+            AddMatchReportColumns(),
         ]
     }
 }

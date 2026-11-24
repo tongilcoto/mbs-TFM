@@ -975,6 +975,18 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
   ([D-24]) borra antes las filas, por la cascada desde la temporada, y luego los perfiles que se quedan sin
   ninguna. Los `CHECK`, cinco: el dorsal y la demarcación de la fila, y el año (1900 a 2100: que no sea
   posterior al año en curso lo dice el dominio), el último dorsal y la última demarcación del perfil.
+- **Las tres tablas del acta nacen juntas** (`CreateMatchReportTables`, la 25ª, R7.5), como las dos de la
+  plantilla: la pantalla del acta y su carga las escriben a la vez ([D-133]). **`CASCADE` desde el partido y
+  desde el jugador** (el purgado de [D-24] se lleva el acta), **sin cascada desde el equipo**, como el
+  partido, y el goleador y el asistente **`SET NULL`**. `Appearance` y `Card` llevan **`team_id`**, el equipo
+  con el que jugó ([D-128]), con su índice en `Appearance` para los refuerzos; `Card` y `Goal`, `comment`
+  (de 1 a 500 caracteres: vacío es nulo) y **`from_report`** ([D-137]), falso por defecto. **20 `CHECK`**: el
+  estado (sin `no_convocado`, [D-134]), el dorsal (1 a 99) y los minutos (1 a 120) de la convocatoria; el
+  tipo, el minuto (0 a 120) y el comentario de la tarjeta; el minuto, los cinco enumerados y el comentario
+  del gol; los cuatro entre columnas que se cuentan abajo, y **el del penalti** ([D-135]): ni `fuera_area` ni
+  `shot_side`. **Y la 26ª, `AddMatchReportColumns`**: en `matches`, `report_loaded_at` y `report_lineup`
+  (`jsonb`, `{"players":[…]}`, como `IngestionRun.skipped`), con un `CHECK` que pide la fecha si hay copia; en
+  `player_profiles`, `federation_player_id` con su índice único parcial ([D-126]).
 - **En `Appearance`, la unicidad *(jugador, partido)* es parcial como la del dorsal** —hay `deleted_at`
   (§3.2)— así que va también por `.sql(raw: "CREATE UNIQUE INDEX uq_appearances ON appearances (player_id,
   match_id) WHERE deleted_at IS NULL")`. Índices por `match_id` (la convocatoria) y por `player_id` (el
@@ -994,9 +1006,10 @@ Se prioriza que **añadir un valor a un enumerado sea una migración uniforme** 
 - **En `Goal`, ninguna unicidad** —es el único caso del modelo— y en cambio **los índices más cargados**:
   `scoring_team_id` y `conceding_team_id` por separado (§3.5, [D-04]), que son los que sirven los dos
   bloques de la pantalla de estadísticas sin *join*; `match_id` para el relato del partido; y
-  `scorer_player_id` para el historial del goleador. Los tres `CHECK` de la fila: `scoring_team_id <>
+  `scorer_player_id` para el historial del goleador. Los `CHECK` de la fila: `scoring_team_id <>
   conceding_team_id` (§4.1), `NOT assisted ⇒ assist_player_id IS NULL` —la tercera invariante entre
-  columnas ([D-52])— y `play_type = 'en_propia_puerta' ⇒ assist_player_id IS NULL`. **La pertenencia del
+  columnas ([D-52])—, `play_type = 'en_propia_puerta' ⇒ NOT assisted AND assist_player_id IS NULL` y, desde
+  [D-135], el del penalti. **La pertenencia del
   goleador a su equipo no se expresa en SQL** —depende de `Match` y de `play_type`— y se queda en el
   dominio, que es donde [D-28] la deja cuando no se puede hacer estructuralmente imposible.
 - **En `CompetitionSanctionBracket`, `.unique(on: "competition_id", "seq")`** —normal, no parcial: no hay

@@ -4559,6 +4559,10 @@ components:
         - INVALID_LIMIT
         - INVALID_UUID
         - INVALID_VALUE
+        - LOCKED_BY_MATCH_REPORT
+        - LOOSE_YELLOW_EXISTS
+        - MATCH_NOT_STARTED
+        - MATCH_REPORT_LOADED
         - MISSING_SCOPE
         - NOT_AN_IMAGE
         - NOT_EDITABLE_AFTER_SYNC
@@ -4566,6 +4570,7 @@ components:
         - OWN_TEAM_NOT_IN_CALENDAR
         - PLAYER_ALREADY_IN_ROSTER
         - PLAYER_NOT_FOUND
+        - PLAYER_NOT_IN_SEASON
         - PLAYER_PROFILE_MISSING
         - REFERENCE_NOT_FOUND
         - ROUND_NOT_FOUND
@@ -4578,8 +4583,10 @@ components:
         - SEASON_NOT_CURRENT
         - SEASON_NOT_FOUND
         - SHIRT_NUMBER_TAKEN
+        - STATUS_CHANGE_NOT_ALLOWED
         - TEAM_ALREADY_REGISTERED
         - TEAM_NOT_FOUND
+        - TEAM_NOT_IN_MATCH
         - TEAM_NOT_LINKED
         - TEAM_NOT_OWN
         - TEAM_NOT_REGISTERED
