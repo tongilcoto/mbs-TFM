@@ -2839,8 +2839,9 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            Ese jugador **ya tiene convocatoria en ese partido** (§3.5). Un jugador hace una sola cosa en
-            un partido; corregir lo apuntado es el `PATCH`, no un segundo `POST`.
+            Ese jugador **ya tiene convocatoria en ese partido** (§3.5, `PLAYER_ALREADY_CONVOKED`). Un
+            jugador hace una sola cosa en un partido; corregir lo apuntado es el `PATCH`, no un segundo
+            `POST`.
           content:
             application/problem+json:
               schema:
@@ -4538,6 +4539,7 @@ components:
         código que emite el servidor está en esta lista.
       enum:
         - ALREADY_LINKED_TO_FEDERATION
+        - APPEARANCE_NOT_FOUND
         - BAD_REQUEST
         - COMPETITION_IDENTITY_MISMATCH
         - COMPETITION_NOT_FOUND
@@ -4561,6 +4563,7 @@ components:
         - INVALID_VALUE
         - LOCKED_BY_MATCH_REPORT
         - LOOSE_YELLOW_EXISTS
+        - MATCH_NOT_FOUND
         - MATCH_NOT_STARTED
         - MATCH_REPORT_LOADED
         - MISSING_SCOPE
@@ -4568,6 +4571,7 @@ components:
         - NOT_EDITABLE_AFTER_SYNC
         - NOT_FOUND
         - OWN_TEAM_NOT_IN_CALENDAR
+        - PLAYER_ALREADY_CONVOKED
         - PLAYER_ALREADY_IN_ROSTER
         - PLAYER_NOT_FOUND
         - PLAYER_NOT_IN_SEASON
@@ -7184,8 +7188,10 @@ components:
         chocaría además con la unicidad *(jugador, partido)*.
 
         **Solo `convocado_sin_minutos` ↔ `jugado`** (D-134), y desde la hora de comienzo. **Pasar de
-        `jugado` a `convocado_sin_minutos` borra los minutos** (R7.3, P4). El `null` explícito borra un
-        valor, según la convención de `PATCH` (§5.2).
+        `jugado` a `convocado_sin_minutos` borra los minutos** (R7.3, P4).
+
+        **Aquí un `null` no borra: es como no mandar el campo** (R7.6). El servidor no distingue los dos
+        (D-65), y no hace falta: los minutos se quitan al dejar «Jugado», y el dorsal lo pone el acta.
       additionalProperties: false
       minProperties: 1
       properties:

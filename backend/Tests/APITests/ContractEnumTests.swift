@@ -174,6 +174,18 @@ struct ContractEnumTests {
         }
     }
 
+    /// El estado de la convocatoria va y viene (R7.6): el filtro de `listAppearances` y
+    /// el cuerpo del alta y la corrección lo traen del cliente, y la respuesta lo devuelve.
+    @Test("AppearanceStatus → contrato, ← contrato, y el viaje redondo (R7.6)")
+    func appearanceStatus() {
+        Self.check(AppearanceStatus.allCases, { $0.toContract() }, "AppearanceStatus")
+        Self.check(
+            Components.Schemas.AppearanceStatus.allCases, { $0.toDomain() }, "AppearanceStatus (de vuelta)")
+        for value in AppearanceStatus.allCases {
+            #expect(value.toContract().toDomain() == value)
+        }
+    }
+
     @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
     func teamCategoryBack() {
         Self.check(

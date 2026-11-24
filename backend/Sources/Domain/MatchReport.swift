@@ -135,6 +135,78 @@ extension Kickoff {
     }
 }
 
+// ── La convocatoria y la copia del acta (R7.6) ──────────────────────────────
+
+/// La convocatoria de un jugador en un partido (§3.2). **Sin fila, «no
+/// convocado»** (`D-134`). `teamID` es el equipo con el que jugó (`D-128`).
+/// `playerID`, `matchID` y `teamID` son identidad (`D-37`).
+public struct Appearance: Identifiable, Equatable, Sendable {
+    public let id: AppearanceID
+    public let playerID: PlayerID
+    public let matchID: MatchID
+    public let teamID: TeamID
+    public let status: AppearanceStatus
+    /// El dorsal del acta (`D-129`).
+    public let shirtNumber: ShirtNumber?
+    /// Solo con `jugado` (`D-42`); nulo es «jugó, no sé cuánto» (`D-14`).
+    public let minutes: MinutesPlayed?
+    public let createdAt: Date
+    public let updatedAt: Date
+
+    public init(id: AppearanceID, playerID: PlayerID, matchID: MatchID, teamID: TeamID,
+                status: AppearanceStatus, shirtNumber: ShirtNumber? = nil, minutes: MinutesPlayed? = nil,
+                createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.playerID = playerID
+        self.matchID = matchID
+        self.teamID = teamID
+        self.status = status
+        self.shirtNumber = shirtNumber
+        self.minutes = minutes
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+/// Un jugador de la convocatoria **tal como la trajo el acta** (`D-134`).
+public struct ReportLineupEntry: Equatable, Sendable {
+    public let playerID: PlayerID
+    public let teamID: TeamID
+    public let status: AppearanceStatus
+
+    public init(playerID: PlayerID, teamID: TeamID, status: AppearanceStatus) {
+        self.playerID = playerID
+        self.teamID = teamID
+        self.status = status
+    }
+}
+
+/// **La copia del acta que guarda el partido** (`D-133`, `D-134`): cuándo se cargó
+/// y la convocatoria tal como llegó, escrita una vez. Con ella, el servidor dice
+/// qué ha cambiado el club (precisado en R7.4); sin acta cargada no hay copia.
+public struct MatchReportCopy: Equatable, Sendable {
+    public let loadedAt: Date
+    public let lineup: [ReportLineupEntry]
+
+    public init(loadedAt: Date, lineup: [ReportLineupEntry]) {
+        self.loadedAt = loadedAt
+        self.lineup = lineup
+    }
+
+    /// Si una fila **no coincide con el acta**: otro estado del que trajo, o un
+    /// jugador que el acta no traía.
+    public func changed(_ row: Appearance) -> Bool {
+        lineup.first { $0.playerID == row.playerID }?.status != row.status
+    }
+
+    /// **Los que el acta traía y ya no tienen fila**: los que ha quitado el club.
+    /// En el orden del acta.
+    public func removed(keeping rows: [Appearance]) -> [ReportLineupEntry] {
+        let present = Set(rows.map(\.playerID))
+        return lineup.filter { !present.contains($0.playerID) }
+    }
+}
+
 // ── Lo que se compara en un gol y en una tarjeta ────────────────────────────
 
 /// Lo de un gol que deciden las reglas: quién, cuándo y cómo. El equipo que marca

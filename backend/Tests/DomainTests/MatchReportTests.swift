@@ -326,3 +326,45 @@ struct MatchReportTests {
         }
     }
 }
+
+/// La convocatoria y la copia del acta (R7.6, `D-134`, punto 4): qué fila ha
+/// cambiado el club y a quién ha quitado. Compara el servidor; la web solo pinta.
+@Suite("MatchReport · D-134 · lo que el club ha cambiado del acta")
+struct MatchReportCopyTests {
+    static let now = Date(timeIntervalSince1970: 1_779_062_400)
+    static let match = MatchID(raw: UUID())
+    static let team = TeamID(raw: UUID())
+
+    static func row(_ player: PlayerID, _ status: AppearanceStatus) -> Appearance {
+        Appearance(id: AppearanceID(raw: UUID()), playerID: player, matchID: match, teamID: team,
+                   status: status, createdAt: now, updatedAt: now)
+    }
+
+    static func copy(_ entries: [(PlayerID, AppearanceStatus)]) -> MatchReportCopy {
+        MatchReportCopy(loadedAt: now, lineup: entries.map {
+            ReportLineupEntry(playerID: $0.0, teamID: team, status: $0.1)
+        })
+    }
+
+    @Test("una fila con el estado que trajo el acta no ha cambiado")
+    func sameStatusIsUnchanged() {
+        let juan = PlayerID(raw: UUID())
+        #expect(!Self.copy([(juan, .jugado)]).changed(Self.row(juan, .jugado)))
+    }
+
+    @Test("con otro estado, o un jugador que el acta no traía, ha cambiado")
+    func otherStatusOrNewPlayerIsChanged() {
+        let (juan, pedro) = (PlayerID(raw: UUID()), PlayerID(raw: UUID()))
+        let copy = Self.copy([(juan, .convocadoSinMinutos)])
+        #expect(copy.changed(Self.row(juan, .jugado)))
+        #expect(copy.changed(Self.row(pedro, .bajaMedica)))
+    }
+
+    @Test("los que el acta traía y ya no tienen fila son los que ha quitado el club")
+    func removedAreTheOnesWithoutRow() {
+        let (juan, pedro, luis) = (PlayerID(raw: UUID()), PlayerID(raw: UUID()), PlayerID(raw: UUID()))
+        let copy = Self.copy([(juan, .jugado), (pedro, .convocadoSinMinutos), (luis, .jugado)])
+        let removed = copy.removed(keeping: [Self.row(juan, .jugado), Self.row(luis, .convocadoSinMinutos)])
+        #expect(removed.map(\.playerID) == [pedro])
+    }
+}

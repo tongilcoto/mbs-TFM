@@ -42,4 +42,6 @@ public protocol Repositories: Sendable {
     var leagueScorers: any LeagueScorerRepository { get }
     var players: any PlayerRepository { get }
     var playerProfiles: any PlayerProfileRepository { get }
+    /// R7.6: la convocatoria del acta.
+    var appearances: any AppearanceRepository { get }
 }

@@ -126,3 +126,10 @@ public struct LeagueScorerID: TypedIdentifier {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// La convocatoria de un jugador en un partido (§3.2, R7.6): el `appearanceId` del
+/// catálogo.
+public struct AppearanceID: TypedIdentifier {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}

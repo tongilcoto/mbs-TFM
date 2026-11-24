@@ -1595,6 +1595,11 @@ Tres lecturas que no son evidentes en la tabla:
   a favor de la coherencia del contrato.
 - **`playerId`, `matchId` y `teamId` no están en el `PATCH`**: son identidad ([D-37]) y cambiarlos chocaría
   con la unicidad.
+- **En este `PATCH` un `null` es como no mandar el campo** (R7.6): el generador no los distingue ([D-65]), y
+  no hace falta, porque los minutos se quitan al dejar `jugado` y el dorsal lo pone el acta.
+- **`GetMatch` y la convocatoria leen el partido «del club»**: uno entre dos rivales no tiene acta
+  ([D-130]) y es el mismo 404 `MATCH_NOT_FOUND` que el que no existe. El 409 es
+  `PLAYER_ALREADY_CONVOKED`, mirado antes de escribir, como el dorsal.
 - **`DELETE` (lógico) es «no convocado»** ([D-134]): es como se anula a un convocado, a una baja o a un
   sancionado.
 - **Los recuentos y el promedio de minutos no salen de aquí**: son **modelo de lectura** (§3.4, §4.5).

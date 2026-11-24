@@ -87,6 +87,17 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// El perfil ya tiene fila en esa temporada (`D-121`). 409, solo con su código.
     case playerAlreadyInRoster(profile: String, season: String)
 
+    /// El partido que designa la ruta o el ámbito no existe, **o no tiene acta**: es
+    /// entre dos rivales (`D-130`, R7.6). 404: el id lo puso quien llama.
+    case matchNotFound(id: String)
+
+    /// La convocatoria que designa la ruta no existe, o está borrada (R7.6). 404.
+    case appearanceNotFound(id: String)
+
+    /// Ese jugador ya tiene convocatoria en ese partido (§3.5, R7.6). 409, solo con
+    /// su código: corregirla es el `PATCH`.
+    case playerAlreadyConvoked(player: String, match: String)
+
     /// **La fuente no publicó etiqueta de temporada y hay que crear una**
     /// (F10, `C-C.8` → **400**).
     ///

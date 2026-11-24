@@ -428,6 +428,25 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "el perfil \(profile) ya tiene fila en la temporada \(season)",
                                base: typeBaseURI, slug: "player-already-in-roster")
 
+            case .matchNotFound(let id):
+                // 404 con su código (R7.6): también el partido entre dos rivales, que
+                // no tiene acta (`D-130`).
+                return Problem(status: .notFound, code: "MATCH_NOT_FOUND",
+                               title: "Partido desconocido", detail: id,
+                               base: typeBaseURI, slug: "match-not-found")
+
+            case .appearanceNotFound(let id):
+                return Problem(status: .notFound, code: "APPEARANCE_NOT_FOUND",
+                               title: "Convocatoria desconocida", detail: id,
+                               base: typeBaseURI, slug: "appearance-not-found")
+
+            case .playerAlreadyConvoked(let player, let match):
+                // 409, solo con su código (§3.5): corregir es el `PATCH`.
+                return Problem(status: .conflict, code: "PLAYER_ALREADY_CONVOKED",
+                               title: "Ya está en la convocatoria",
+                               detail: "el jugador \(player) ya tiene convocatoria en el partido \(match)",
+                               base: typeBaseURI, slug: "player-already-convoked")
+
             case .seasonLabelUnavailable(let federationSeasonID):
                 // **400, y el criterio es el de `unreadableFederationURL`**: el
                 // 422 es para el cuerpo que se decodificó y dice algo que la

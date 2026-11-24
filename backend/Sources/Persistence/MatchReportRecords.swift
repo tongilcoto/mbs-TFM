@@ -1,3 +1,4 @@
+public import Application
 public import Domain
 public import Fluent
 import Foundation
@@ -305,5 +306,136 @@ public struct AddMatchReportColumns: AsyncMigration {
             .deleteField("report_lineup")
             .deleteField("report_loaded_at")
             .update()
+    }
+}
+
+// ── El mapeo y los repositorios (R7.6) ───────────────────────────────────────
+
+/// **La copia del acta, como se guarda** en `matches.report_lineup`: un objeto con
+/// la lista, no la lista a pelo, por lo mismo que `IngestionRunRecord.SkippedRows`.
+struct ReportLineupDocument: Codable, Sendable {
+    struct Entry: Codable, Sendable {
+        let playerId: UUID
+        let teamId: UUID
+        let status: String
+    }
+    let players: [Entry]
+}
+
+extension AppearanceRecord {
+    func toDomain() throws -> Appearance {
+        let id = try requireID()
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(table: Self.schema, id: id.uuidString)
+        }
+        guard let status = AppearanceStatus(rawValue: status) else {
+            throw PersistenceError.corruptEnumeration(table: Self.schema, column: "status", value: status)
+        }
+        return Appearance(
+            id: AppearanceID(raw: id), playerID: PlayerID(raw: $player.id), matchID: MatchID(raw: $match.id),
+            teamID: TeamID(raw: $team.id), status: status,
+            // **Se vuelven a pasar por sus valores**: lo guardado ya los cumplía, y
+            // una fila que no, es la base tocada a mano.
+            shirtNumber: try shirtNumber.map(ShirtNumber.init),
+            minutes: try minutes.map(MinutesPlayed.init),
+            createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    fileprivate func apply(_ appearance: Appearance) {
+        $player.id = appearance.playerID.raw
+        $match.id = appearance.matchID.raw
+        $team.id = appearance.teamID.raw
+        status = appearance.status.rawValue
+        shirtNumber = appearance.shirtNumber?.value
+        minutes = appearance.minutes?.value
+    }
+}
+
+public struct FluentAppearanceRepository: AppearanceRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func find(_ id: AppearanceID) async throws -> Appearance? {
+        try await AppearanceRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    /// **Por dorsal del acta**, los que no tienen al final, y luego en el orden en
+    /// que se apuntaron; el `id` desempata, para que el orden no dependa de la base.
+    public func list(matchID: MatchID, teamID: TeamID?) async throws -> [Appearance] {
+        var query = AppearanceRecord.query(on: database).filter(\.$match.$id == matchID.raw)
+        if let teamID { query = query.filter(\.$team.$id == teamID.raw) }
+        return try await query
+            .sort(.sql(unsafeRaw: "shirt_number ASC NULLS LAST"))
+            .sort(\.$createdAt)
+            .sort(\.$id)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func list(playerID: PlayerID) async throws -> [Appearance] {
+        try await AppearanceRecord.query(on: database)
+            .filter(\.$player.$id == playerID.raw)
+            .all()
+            .map { try $0.toDomain() }
+    }
+
+    public func find(playerID: PlayerID, matchID: MatchID) async throws -> Appearance? {
+        try await AppearanceRecord.query(on: database)
+            .filter(\.$player.$id == playerID.raw)
+            .filter(\.$match.$id == matchID.raw)
+            .first()?
+            .toDomain()
+    }
+
+    public func save(_ appearance: Appearance) async throws {
+        if let existing = try await AppearanceRecord.find(appearance.id.raw, on: database) {
+            existing.apply(appearance)
+            try await existing.update(on: database)
+        } else {
+            let record = AppearanceRecord()
+            record.id = appearance.id.raw
+            record.apply(appearance)
+            try await record.create(on: database)
+        }
+    }
+
+    public func delete(_ id: AppearanceID) async throws {
+        try await AppearanceRecord.find(id.raw, on: database)?.delete(on: database)
+    }
+}
+
+extension FluentMatchRepository {
+    public func find(_ id: MatchID) async throws -> Match? {
+        try await MatchRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    /// Con SQL y no con el modelo: las dos columnas son de la carga del acta, y
+    /// `MatchRecord` no las lleva para que `save` —la ingesta del calendario— no
+    /// pueda pisarlas.
+    public func reportCopies(of ids: [MatchID]) async throws -> [MatchID: MatchReportCopy] {
+        guard !ids.isEmpty else { return [:] }
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "reportCopies", object: MatchRecord.schema)
+        }
+        let rows = try await sql.raw("""
+            SELECT id, report_loaded_at, report_lineup FROM \(ident: MatchRecord.schema)
+            WHERE report_loaded_at IS NOT NULL AND id IN (\(binds: ids.map(\.raw)))
+            """).all()
+        var copies: [MatchID: MatchReportCopy] = [:]
+        for row in rows {
+            let id = try row.decode(column: "id", as: UUID.self)
+            let loadedAt = try row.decode(column: "report_loaded_at", as: Date.self)
+            let document = try row.decode(column: "report_lineup", as: ReportLineupDocument?.self)
+            let lineup = try (document?.players ?? []).map { entry in
+                guard let status = AppearanceStatus(rawValue: entry.status) else {
+                    throw PersistenceError.corruptEnumeration(
+                        table: MatchRecord.schema, column: "report_lineup", value: entry.status)
+                }
+                return ReportLineupEntry(playerID: PlayerID(raw: entry.playerId),
+                                         teamID: TeamID(raw: entry.teamId), status: status)
+            }
+            copies[MatchID(raw: id)] = MatchReportCopy(loadedAt: loadedAt, lineup: lineup)
+        }
+        return copies
     }
 }

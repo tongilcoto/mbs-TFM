@@ -35,6 +35,11 @@ actor IngestionStore {
     var players: [Player] = []
     var deletedPlayers: [Player] = []
     var playerProfiles: [PlayerProfile] = []
+    /// R7.6: la convocatoria (las borradas, aparte, como la plantilla) y la copia
+    /// del acta de cada partido que la tiene (`D-133`).
+    var appearances: [Appearance] = []
+    var deletedAppearances: [Appearance] = []
+    var reportCopies: [MatchID: MatchReportCopy] = [:]
 
     /// **Cuántas escrituras ha recibido el almacén**, sea cual sea la tabla.
     ///
@@ -83,6 +88,13 @@ actor IngestionStore {
     func save(_ value: Match) { upsert(&matches, value) { $0.id == value.id } }
     func save(_ value: Player) { upsert(&players, value) { $0.id == value.id } }
     func save(_ value: PlayerProfile) { upsert(&playerProfiles, value) { $0.id == value.id } }
+    func save(_ value: Appearance) { upsert(&appearances, value) { $0.id == value.id } }
+    func deleteAppearance(_ id: AppearanceID) {
+        guard let index = appearances.firstIndex(where: { $0.id == id }) else { return }
+        writes += 1
+        deletedAppearances.append(appearances.remove(at: index))
+    }
+    func seed(reportCopy: MatchReportCopy, for match: MatchID) { reportCopies[match] = reportCopy }
     func deletePlayer(_ id: PlayerID) {
         guard let index = players.firstIndex(where: { $0.id == id }) else { return }
         writes += 1
@@ -303,6 +315,40 @@ struct FakeMatchRepository: MatchRepository {
         await store.matches.filter { $0.competitionID == competitionID }
     }
     func save(_ match: Match) async throws { await store.save(match) }
+    func find(_ id: MatchID) async throws -> Match? { await store.matches.first { $0.id == id } }
+    func reportCopies(of ids: [MatchID]) async throws -> [MatchID: MatchReportCopy] {
+        await store.reportCopies.filter { ids.contains($0.key) }
+    }
+}
+
+/// La convocatoria (R7.6). En el orden del adaptador: por dorsal, los que no tienen
+/// al final, y luego en el orden en que se apuntaron. Lo que de verdad lo prueba es
+/// `AppearanceRepositoryTests`, contra Postgres.
+struct FakeAppearanceRepository: AppearanceRepository {
+    let store: IngestionStore
+    func find(_ id: AppearanceID) async throws -> Appearance? { await store.appearances.first { $0.id == id } }
+    func list(matchID: MatchID, teamID: TeamID?) async throws -> [Appearance] {
+        await store.appearances
+            .filter { $0.matchID == matchID && (teamID == nil || $0.teamID == teamID) }
+            .enumerated()
+            .sorted { left, right in
+                switch (left.element.shirtNumber?.value, right.element.shirtNumber?.value) {
+                case let (l?, r?) where l != r: return l < r
+                case (.some, nil): return true
+                case (nil, .some): return false
+                default: return left.offset < right.offset
+                }
+            }
+            .map(\.element)
+    }
+    func list(playerID: PlayerID) async throws -> [Appearance] {
+        await store.appearances.filter { $0.playerID == playerID }
+    }
+    func find(playerID: PlayerID, matchID: MatchID) async throws -> Appearance? {
+        await store.appearances.first { $0.playerID == playerID && $0.matchID == matchID }
+    }
+    func save(_ appearance: Appearance) async throws { await store.save(appearance) }
+    func delete(_ id: AppearanceID) async throws { await store.deleteAppearance(id) }
 }
 
 /// `clubs` entró en el protocolo en F0 y hasta F5 no lo usaba nadie: devolvía
@@ -415,6 +461,7 @@ struct FakeRepositories: Repositories {
     }
     var players: any PlayerRepository { FakePlayerRepository(store: store) }
     var playerProfiles: any PlayerProfileRepository { FakePlayerProfileRepository(store: store) }
+    var appearances: any AppearanceRepository { FakeAppearanceRepository(store: store) }
 }
 
 /// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de
