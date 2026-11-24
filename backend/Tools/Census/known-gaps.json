@@ -26,6 +26,8 @@
     "MatchResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
     "MatchResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
     "PlayerResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)",
-    "PlayerResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)"
+    "PlayerResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)",
+    "MatchResponse.reportLoadedAt": "en el catálogo desde R7.4 (D-133), pero el servidor aún no lo rellena: la columna report_loaded_at llega con la migración del acta (R7.5) y la carga (R7.12). Hasta entonces viaja ausente",
+    "PlayerProfileSearchResult.federationPlayerId": "en el catálogo desde R7.4 (D-126), pero el servidor aún no lo rellena: la columna federation_player_id llega con la migración del acta (R7.5) y el casado (R7.12). Hasta entonces viaja ausente"
   }
 }

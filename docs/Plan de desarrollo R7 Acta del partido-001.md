@@ -439,9 +439,22 @@ El club lo cambia a «jugado» si salió. Es un quinto estado de la convocatoria
 
 ## 5. Lo que le falta al servidor
 
-**Hoy no hay nada del acta**: ni las tablas ni el código. Las 16 operaciones están en el catálogo desde F1.
+**Hoy no hay nada del acta**: ni las tablas ni el código. Las 16 operaciones están en el catálogo desde F1, y
+`R7.4` las pone al día y añade la 89, la de los refuerzos (`D-128`). Lo que se programa en la fase B:
 
-*(La tabla, al cerrar las decisiones.)*
+| Qué | Operaciones | Paso |
+|---|---|---|
+| **El partido**: la cabecera del acta, con la fecha de la carga y los que el club ha quitado del acta | `getMatch` | `R7.6` |
+| **La convocatoria**, con el equipo, el dorsal del acta, los estados por la hora de comienzo y la marca de lo cambiado | `listAppearances`, `getAppearance`, `createAppearance`, `updateAppearance`, `deleteAppearance` | `R7.6` |
+| **Los goles**, con los dos lados, los seis tipos, el comentario y lo bloqueado del acta | `listGoals`, `getGoal`, `createGoal`, `updateGoal`, `deleteGoal` | `R7.7` |
+| **Las tarjetas**, con el equipo, el comentario y lo bloqueado del acta | `listCards`, `getCard`, `createCard`, `updateCard`, `deleteCard` | `R7.8` |
+| **Los refuerzos** de la plantilla, ya contados | `listTeamReinforcements` (la 89) | `R7.9` |
+| **Las tres tablas y lo nuevo del partido y del perfil** (la copia del acta, su fecha, el código de la federación) | — | `R7.5` |
+| **La carga del acta** con la ingesta, el adaptador y la federación falsa | — | `R7.11` a `R7.13` |
+
+**Los códigos de error nuevos**, descritos en el catálogo y añadidos a `ProblemCode` cuando el servidor los emita
+(como en la `R6`): `MATCH_NOT_FOUND`, `MATCH_NOT_STARTED`, `MATCH_REPORT_LOADED`, `LOCKED_BY_MATCH_REPORT`,
+`TEAM_NOT_IN_MATCH`, `PLAYER_NOT_IN_SEASON`, `STATUS_CHANGE_NOT_ALLOWED` y `LOOSE_YELLOW_EXISTS`.
 
 ---
 
@@ -520,6 +533,7 @@ lo cubren las pruebas de piezas y del servidor, y sus escenarios llegan con la r
 | **R7.1** | ✅ 2026-11-23 | Las doce decisiones, una a una: lo medido en 91 actas y en las fichas de la RFFM (sin sacar nombres), y la decisión 5 sobre una maqueta en HTML en cinco situaciones, en oscuro, en claro y a 375 px |
 | **R7.2** | ✅ 2026-11-23 | En la bitácora del backend, `D-125` a `D-136`, con las notas de enmienda en `D-41`, `D-119`, `D-120`, `D-125`, `D-130` y `D-133`; en el anexo de la web, `DW-26`, y en el LLD-B, §6.1 (el camino) y §9.9 (la temporada archivada); en el plan del backoffice, el mapa (Acta y Plantilla en ámbar) y la fila 7. Revisado con `git diff --numstat`: ninguna tabla ensanchada |
 | **R7.3** | ✅ 2026-11-24 | La lista de casos, aprobada con sus doce dudas resueltas (P1 a P12, apuntadas en el plan y la bitácora); 152 escenarios nuevos (§6). La pasada en seco de Cucumber los lee todos (445: 152 sin definir y los 293 de antes intactos). Los de la temporada archivada, fuera hasta la rebanada 11 (decisión 5f) |
+| **R7.4** | ✅ 2026-11-24 | **El catálogo, con cuatro decisiones** revisadas una a una (`D-137` y notas en `D-128` y `D-134`). En `openapi.yaml`, las 16 operaciones del acta al día y la 89, la de los refuerzos (8.462 líneas, 89 operaciones en 50 rutas); el LLD del backend, §3.2, §3.3 y §5.1. El servidor compila, sus 1062 tests en verde (3 omitidos) y el censo, con dos huecos nuevos apuntados (`reportLoadedAt` y `federationPlayerId`, que llegan en `R7.5` y `R7.12`). El linter del catálogo (Redocly 1), válido, pasado por el desarrollador |
 
 ---
 
