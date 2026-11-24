@@ -474,10 +474,29 @@ lo cubren las pruebas de piezas y del servidor, y sus escenarios llegan con la r
 | `R7.2` | Los documentos de lo decidido: la bitácora del backend (`D-nn`), el LLD-B y su anexo si hace falta (`DW-nn`), y esta ficha al día |
 | `R7.3` | Los escenarios escritos y revisados, sin definir |
 
-### B · El servidor (`feature/r7-acta-backend-1`)
+### B · El servidor
 
-*(Los pasos, al cerrar las decisiones: la mini-fase del catálogo, las tablas y sus reglas, y las operaciones de
-cada recurso en ciclos TDD, cada una a la tabla del README del backend en su paso; mutación y censo al cerrar.)*
+*(Apuntados el 2026-11-24, al cerrar `R7.3`. Cada operación, a la tabla del README del backend en su paso.)*
+
+**B1 · Lo que apunta el club** (`feature/r7-acta-backend-1`)
+
+| Paso | Qué |
+|---|---|
+| `R7.4` | **La mini-fase del catálogo**, solo documentos: lo que cambia en `openapi.yaml` en las 16 operaciones del acta y sus respuestas: el estado «convocado sin minutos» (`D-134`), el equipo del apunte (`D-128`), el dorsal de solo lectura (`D-129`), los campos del gol (`D-135`) y de la tarjeta (`D-136`), y en `getMatch` el acta cargada con su fecha y su copia de la convocatoria (`D-133`); los errores nuevos (antes de la hora, minutos fuera de 1 a 120, un cambio de estado no permitido, un penalti fuera del área, la segunda amarilla con una amarilla suelta); cómo se piden los refuerzos; el código de la federación en el perfil (`D-126`); y la enmienda al LLD del backend |
+| `R7.5` | **Las tablas y sus reglas**, en ciclos TDD: la migración (convocatoria, goles y tarjetas; en el partido, la copia del acta y su fecha; en el perfil, el código); en el dominio, los cambios de estado, los minutos, el penalti, la segunda amarilla y lo que no se apunta antes de la hora |
+| `R7.6` | **`getMatch` y la convocatoria**, en ciclos TDD: sus cinco operaciones, con los minutos borrados al anular un «Jugado» (`R7.3`, P4) |
+| `R7.7` | **Los goles**, en ciclos TDD: sus cinco operaciones |
+| `R7.8` | **Las tarjetas**, en ciclos TDD: sus cinco operaciones |
+| `R7.9` | **Los refuerzos de la plantilla**, en ciclos TDD: los de otros equipos del club que han jugado con este, con su equipo y su participación (decisión 3) |
+| `R7.10` | **El cierre de B1**: tests, mutación, censo |
+
+**B2 · La carga del acta de la federación** (en su propia rama, como la sincronización de la `R6`)
+
+| Paso | Qué |
+|---|---|
+| `R7.11` | **El adaptador de la RFFM lee el acta**, en ciclos TDD, con una grabación de verdad con los nombres y los códigos cambiados (como en `R6.14`, decisión 2); la traducción de los códigos de gol y de tarjeta (`D-131`) |
+| `R7.12` | **La ingesta**, en ciclos TDD: qué partidos pregunta y cuándo carga (`D-133`); el casado por código o por nombre (`D-126`); el alta del que no está en ninguna plantilla, el refuerzo del de otro equipo, y la plantilla sincronizada si no lo estaba (decisión 10); sin repetir lo que el club ya apuntó |
+| `R7.13` | **La federación falsa** de los escenarios publica el acta de cada uno, con su fallo y su espera; y **el cierre de B2**: tests, mutación, censo |
 
 ### C · La web (otra rama)
 
