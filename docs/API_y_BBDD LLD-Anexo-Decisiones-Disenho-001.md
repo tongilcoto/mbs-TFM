@@ -5911,6 +5911,9 @@ carga del acta lo pone y la web lo puede apuntar o corregir. **La plantilla no s
 **Lo que se asume a cambio.** Un jugador puede tener un dorsal en la plantilla y otro en el acta; la web enseña en
 cada sitio el suyo.
 
+**Precisada en `R7.3`** (P10, 2026-11-23): en la R7 **la web no apunta ni corrige el dorsal** de la convocatoria; lo
+enseña, el del acta o, sin acta, el de la plantilla. El servidor lo admite igual, para cuando haga falta.
+
 ### D-130 · Qué partidos tienen acta y hasta cuándo se lee de la federación: tres situaciones
 
 **Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 8 del plan R7). Con el acta cargada sola
@@ -6001,7 +6004,8 @@ marcador (el próximo partido del club); con **`1`**, firmada y entera (los 5 de
 1. **Cuándo se pregunta**: en cada pasada, por los partidos del club cuya fecha y hora de comienzo han pasado y que no
    tienen el acta cargada; sin hora, el final del día. La pasada del sábado por la noche carga los del sábado.
 2. **Cuándo se carga**: **solo con `acta_cerrada = 1`**. Con `0`, nada, aunque exista la página o el partido esté en
-   juego (`partido_en_juego`); se vuelve a preguntar.
+   juego (`partido_en_juego`); se vuelve a preguntar. **Si la federación falla o tarda, lo mismo**: nada, ni a medias,
+   y el partido no queda marcado (`R7.3`, P8, 2026-11-23).
 3. **Una vez**: el partido queda marcado como cargado, con la fecha, y no se vuelve a leer. Una revisión de la
    federación la corrige el club a mano.
 4. **Antes de la hora de comienzo, la web solo apunta la convocatoria**, con su estado previsto
@@ -6044,7 +6048,11 @@ el jugador sin fila, qué estados se pueden apuntar en cada momento y si lo que 
 3. **Qué pasa a qué**, que valida el servidor (422 si no): antes de la hora de comienzo, se crea con
    `convocado_sin_minutos`, `baja_medica` o `sancionado`, y anular es borrar la fila. Después, además,
    `convocado_sin_minutos` ↔ `jugado`. Cambiar entre `baja_medica`, `sancionado` y los otros dos es anular y volver
-   a apuntar.
+   a apuntar. **Antes de la hora de comienzo, el servidor rechaza también un gol o una tarjeta** (422, con un mensaje
+   que lo dice; `R7.3`, P3): la regla vale para cualquier cliente, no solo para la web. **Pasar de `jugado` a
+   `convocado_sin_minutos` borra los minutos** (`R7.3`, P4): anular es «no jugó», y el estado nuevo no los admite
+   ([D-42]); rechazarlo obligaría a vaciarlos antes. **Los minutos van de 1 a 120** (422 si no; `R7.3`, P9): con 0
+   no ha jugado, y 120 cubre la prórroga; vacío sigue siendo «jugó, no sé cuánto» ([D-14]).
 4. **Con el acta cargada, la convocatoria se corrige igual**: en categorías inferiores el árbitro no apunta todos los
    cambios. La web lo avisa con un recuadro fijo y marca cada fila que no coincide con el acta («Cambiado por el
    club»). **El partido guarda la convocatoria del acta tal como llegó** (una columna en `matches`: cada jugador con
@@ -6082,6 +6090,8 @@ en la maqueta, el desarrollador echó en falta datos que el club quiere apuntar 
    lado del ataque.
 6. **Con el acta cargada**, lo que trae la federación no se cambia: equipo, goleador, minuto, y si fue penalti o en
    propia puerta ([D-131]); el gol no se borra. Lo demás, sí.
+7. **Solo es obligatorio el equipo que marca** (`R7.3`, P5). La regla, del desarrollador: **nada puede ser
+   obligatorio si la federación puede no traerlo**, porque lo que dice la federación no se rechaza.
 
 | Opción | Por qué se descarta |
 |--------|---------------------|
@@ -6103,6 +6113,8 @@ elegir; la R10 cuenta «sin clasificar» mientras tanto.
    siendo una `roja` con `is_second_yellow` ([D-45]).
 3. **Las tarjetas del rival no se apuntan**: no cuentan para nada del club.
 4. **Con el acta cargada**, jugador, minuto y tarjeta no se cambian, y no se borra; el comentario, sí.
+5. **Obligatorios, solo el jugador y la tarjeta**; el minuto y el comentario, no (`R7.3`, P5): como en el gol, nada
+   obligatorio que la federación pueda no traer.
 
 **Lo que se asume a cambio.** Nada que contar de las tarjetas del rival, como hoy.
 

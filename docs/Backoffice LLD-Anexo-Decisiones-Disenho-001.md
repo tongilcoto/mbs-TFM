@@ -677,6 +677,10 @@ temporada en curso.
 **Lo que se asume a cambio.** Son más valores en el tema: cada nombre de color de fondo tiene cuatro (claro, oscuro,
 y los dos de archivo), y el análisis de contraste tiene que pasar también por una pantalla archivada.
 
+**Nota (2026-11-24, `R7.3`).** La web aún no abre las temporadas archivadas, ni escribiendo su dirección (`R6.18`,
+decisión 2), hasta la rebanada 11. Así que el tono se construye y se prueba con pruebas de piezas, y sus escenarios
+llegan con la rebanada 11.
+
 ---
 
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

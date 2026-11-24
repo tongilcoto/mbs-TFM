@@ -74,6 +74,19 @@ Feature: La jornada y la clasificación de una competición
     When elijo una jornada jugada en el selector de jornada
     Then estoy en esa jornada de la competición
 
+  @ui
+  Scenario: Cada opción del selector de jornada dice la fecha, si es en casa o fuera y el rival del equipo de mi club
+    Given en la temporada en curso de mi club juega un equipo en una competición con jornadas jugadas
+    When abro la pantalla de la competición del equipo en la jornada en curso
+    Then cada opción del selector de jornada en la que juega el equipo dice su fecha, en casa o fuera y su rival
+
+  @ui
+  Scenario: La jornada en la que el equipo de mi club descansa lo dice en el selector, y se puede elegir
+    Given en la temporada en curso de mi club juega un equipo que descansa en una jornada de su competición
+    When abro la pantalla de la competición del equipo en la jornada en curso
+    Then la opción de la jornada de descanso del selector de jornada dice que el equipo descansa
+    And la opción de la jornada de descanso del selector de jornada no está bloqueada
+
   @e2e
   Scenario: Recargar la pantalla de la competición deja en la misma jornada
     Given estoy en la pantalla de la competición del equipo de mi club que ha jugado, en una jornada jugada

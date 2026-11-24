@@ -55,6 +55,26 @@ Feature: Los resultados de un equipo
     When pulso el icono "Ver la jornada y la clasificación" de un partido jugado
     Then estoy en la jornada de ese partido, en la pantalla de su competición
 
+  # ── El enlace al acta (plan R7, §3) ──
+
+  @ui
+  Scenario Outline: En un partido <cuál>, <lo que hay> es el enlace a su acta
+    Given estoy en la ficha del equipo de mi club que ha jugado
+    When miro en la tabla de resultados un partido <cuál>
+    Then <lo que hay> del partido es un enlace al acta de ese partido
+
+    Examples:
+      | cuál                 | lo que hay       |
+      | jugado               | el marcador      |
+      | por jugar con hora   | la hora          |
+      | por jugar sin hora   | el «por fijar»   |
+
+  @ui
+  Scenario: La jornada en la que el equipo descansa no tiene enlace al acta
+    Given en la temporada en curso de mi club juega un equipo que descansa en una jornada de su competición
+    When abro la ficha del equipo que descansa
+    Then la fila de la jornada de descanso no tiene enlace a ningún acta
+
   # ── Sin partidos ──
 
   @ui

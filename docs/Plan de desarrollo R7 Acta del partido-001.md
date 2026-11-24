@@ -44,6 +44,8 @@ aquí, y las ausencias (R8) se cruzan con la convocatoria.
 | **En la plantilla, la sección de refuerzos**: los jugadores de otros equipos del club que han jugado con este, con su equipo y su participación, de solo lectura | §4 · decisión 3 |
 | **Apuntar, corregir y borrar** una convocatoria, un gol o una tarjeta | §3 · decisiones 5 a 7 |
 | **El acta de la federación, cargada sola** con la ingesta: la convocatoria con su dorsal, los goles y las tarjetas; el club completa lo demás | §4 · decisiones 1 y 9 a 12 |
+| **El tono de archivo** (`DW-26`) también en la ficha del equipo (Resultados y Plantilla) y en la del jugador, cuando la temporada está archivada; preparado y probado con pruebas de piezas, se verá cuando la web abra las archivadas (rebanada 11) | §4 · decisión 5f (`R7.3`, P12) |
+| **El selector de jornada de la competición**, con la fecha, en casa o fuera y el rival en cada opción | §3 |
 | En el servidor, **las 16 operaciones del acta** (`getMatch` y el CRUD de convocatorias, goles y tarjetas) y sus tres tablas | §5 |
 
 **Lo que no trae** (llega después): las cifras que se calculan con el acta (R10), las ausencias (R8) y los tramos
@@ -69,7 +71,16 @@ jugar») con la fecha, la hora y el campo; **un aviso** de en qué situación es
 
 ### El enlace desde Resultados
 
-*(Se escribe al cerrar la decisión 4.)*
+*(Decidido el 2026-11-23, en `R7.3`, pregunta P1.)* En la tabla de la pestaña Resultados, **el marcador de cada
+partido es el enlace a su acta** (el desarrollador). En los por jugar, lo que ocupa su sitio (la hora o «por
+fijar») hace de enlace, porque antes del partido ya se apunta la convocatoria. **En la jornada de descanso, ninguno**:
+no hay acta (decisión 8). El icono «Ver la jornada y la clasificación» sigue igual.
+
+| Opción | Elegida |
+|---|---|
+| Un segundo icono, «Ver el acta», junto al de la jornada | |
+| **El marcador** | **Sí** |
+| Toda la fila | |
 
 ### El selector de jornada, también en la competición
 
@@ -83,6 +94,9 @@ Es trabajo de la web (pasos C), no un renglón del plan de la R4, que está cerr
 ### Los casos que el boceto no enseña
 
 *(Se van apuntando al revisar las decisiones y los escenarios.)*
+
+- **La dirección de un partido entre dos rivales, o de uno que no existe**: la página dice «No se ha encontrado el
+  partido», como la competición (`R7.3`, P2, 2026-11-23).
 
 ---
 
@@ -129,7 +143,7 @@ equipo de la decisión 3; la carga lo pone y la web lo puede apuntar o corregir.
 
 | Opción | Elegida |
 |---|---|
-| **Solo en la convocatoria** | **Sí** (el desarrollador, 2026-11-22) |
+| **Solo en la convocatoria** | **Sí** (el desarrollador, 2026-11-22). **En la R7, la web solo lo enseña**: el del acta o, sin acta, el de la plantilla; no se apunta ni se corrige a mano (`R7.3`, P10) |
 | En la convocatoria y, si el jugador no tiene dorsal en la plantilla, rellenarlo | |
 
 **La plantilla no se toca**: su dorsal es el que pone el club; el del acta puede cambiar de un partido a otro, o ser
@@ -148,7 +162,7 @@ los dos equipos se descuadrarían. Los goles no: el equipo que marca sale del pa
 
 **Y una sección de refuerzos en la plantilla** (el desarrollador): **al final de la misma página**, los jugadores de
 otros equipos del club que han jugado con este, **con su equipo y su participación** en las actas. **Solo lectura**:
-se lee de las actas, no se da de alta ni se corrige nada ahí.
+se lee de las actas, no se da de alta ni se corrige nada ahí. **Sin refuerzos, la sección no sale** (`R7.3`, P11).
 
 **Lo que cambia en las reglas del LLD**: «el equipo del jugador disputa el partido» pasa a ser **«el equipo del
 apunte disputa el partido, y el jugador es del club en esa temporada»**; en el gol, el goleador y el asistente,
@@ -185,21 +199,22 @@ no cambia al apuntar**.
 | Una casilla en cada «No convocado» y un botón **«Apuntar»** | Los marcados quedan **«Convocado»** |
 | Columna **«Apuntar como»**: «Baja médica» y «Sancionado», uno encima de otro | Quien lo tiene elegido queda con ese estado; elegirlo marca la casilla y pulsarlo otra vez lo quita |
 | En cada fila apuntada, solo el icono **«Anular»** | Vuelve a «No convocado». Para cambiar un estado, se anula y se vuelve a apuntar |
-| «+ De otro equipo del club» | Apuntar a un refuerzo (decisión 3) |
+| «+ De otro equipo del club» | Apuntar a un refuerzo (decisión 3): un buscador de los jugadores del club en la plantilla de otro equipo esa temporada; el elegido queda «Convocado». **El mismo botón en las tres situaciones** que se pueden cambiar (después de la hora, «Convocado sin minutos»), y no hay otro «+ Añadir jugador»: los del equipo ya están en la lista (`R7.3`, P7) |
 
 **5b · Desde la hora de comienzo, una tabla de qué estado pasa a cuál** (el desarrollador): **nada cambia solo**,
-porque la web no puede saber quién salió. Cada acción, en bloque (casillas y botón) y en cada fila (su icono):
+porque la web no puede saber quién salió. Antes de la hora, el servidor rechaza un «Jugado», un gol o una tarjeta
+(422; `R7.3`, P3). Cada acción, en bloque (casillas y botón) y en cada fila (su icono):
 
 | Estado | Acciones |
 |---|---|
 | **Convocado sin minutos** | **Ha jugado** (→ Jugado) · **Anular** (→ No convocado) |
 | **No convocado** | **Apuntar**, con «Apuntar como» si es baja médica o sanción |
 | **Baja médica** · **Sancionado** | **Anular** (→ No convocado) |
-| **Jugado** | **Anular** (→ Convocado sin minutos) |
+| **Jugado** | **Anular** (→ Convocado sin minutos; el servidor borra los minutos, `R7.3`, P4) |
 
 **«Convocado» y «Convocado sin minutos» son el mismo estado guardado** (`convocado_sin_minutos`, `D-132`): antes del
 partido se rotula «Convocado» (azul) y desde la hora de comienzo, «Convocado sin minutos» (ámbar). **Los minutos, solo
-en «Jugado»**, opcionales: vacío es «jugó, no sé cuánto» (`D-14`).
+en «Jugado»**, opcionales: vacío es «jugó, no sé cuánto» (`D-14`); **de 1 a 120** (`R7.3`, P9).
 
 **5c · Con el acta cargada, la convocatoria se puede corregir** (el desarrollador, 2026-11-23): en categorías
 inferiores el árbitro no siempre apunta todos los cambios. La misma tabla de la 5b, y dos avisos **que no molestan
@@ -224,6 +239,13 @@ modelo del LLD:
 | Parte del cuerpo | **Pie izquierdo · Pie derecho · Cabeza · Otro** |
 | **Comentarios** | Texto libre, nuevo: lo que no cabe en lo de arriba. En la tabla de goles, una columna que se corta y se lee entera al pasar el ratón |
 
+**La lista del goleador, del asistente y del jugador de la tarjeta: todos los de la convocatoria de la página** (la
+plantilla y los refuerzos apuntados), en su orden, sin separar a los convocados (`R7.3`, P6): es poco importante,
+porque luego la federación lo marca bien (el desarrollador).
+
+**Obligatorio, solo el equipo que marca**; en la tarjeta, el jugador y la tarjeta (`R7.3`, P5): **nada obligatorio
+que la federación pueda no traer**, porque lo que dice no se rechaza (el desarrollador).
+
 **Con el acta cargada**, lo que trae la federación queda fijo: equipo, goleador, propia puerta, minuto y si fue
 penalti; el gol no se añade ni se borra. **El club completa la categorización fina**: el tipo (sin «Penalti» si la
 federación dice que no lo fue: «La Federación solo dice que no fue penalti: elige cuál de los otros»), asistencia,
@@ -236,6 +258,10 @@ Con el acta cargada, jugador, minuto y tarjeta quedan fijos; solo se escribe el 
 
 **5f · La temporada archivada, solo lectura y en tono de archivo** (`DW-26`, para toda la web): sin casillas, iconos
 ni botones; el fondo de la página y de las tablas, cálido y apagado con rayas suaves, y un sello junto al título.
+Hoy la web no abre las temporadas archivadas, ni escribiendo su dirección (`R6.18`, decisión 2): se recuperan desde
+Temporadas en la rebanada 11. Así que en esta rebanada el aspecto de archivo y el solo lectura se construyen y se
+prueban con pruebas de piezas y en el servidor (`SEASON_ARCHIVED`), como hizo la `R6`, y sus escenarios llegan con la
+rebanada 11 (`R7.3`).
 
 **5g · El navegador entre partidos**, como el de la jornada y clasificación, con la jornada, la fecha, 🏠 o ✈️ y el
 rival en cada opción (§3).
@@ -367,7 +393,8 @@ el de la semana que viene trae **`acta_cerrada = 0`**, sin hora, sin marcador y 
 1. En cada pasada, la ingesta pregunta por **los partidos del club cuya fecha y hora de comienzo han pasado** y que no
    tienen el acta cargada; sin hora, cuenta el final del día.
 2. **Solo carga si `acta_cerrada = 1`** (el acta firmada). Con `0`, aunque la página exista o el partido esté en juego,
-   nada; se vuelve a preguntar en la pasada siguiente.
+   nada; se vuelve a preguntar en la pasada siguiente. **Si la federación falla o tarda, igual**: nada, ni a medias
+   (`R7.3`, P8).
 3. **Una vez cargada, el partido queda marcado** («acta cargada», con la fecha) y no se vuelve a leer. Una revisión
    de la federación la corrige el club a mano.
 
@@ -420,7 +447,20 @@ El club lo cambia a «jugado» si salió. Es un quinto estado de la convocatoria
 
 ## 6. Los escenarios
 
-*(Se escriben y revisan con el desarrollador en `R7.3`, con la* skill *de escenarios.)*
+*(Escritos en `R7.3`, con la* skill *de escenarios, sobre la lista de casos que aprobó el desarrollador. Sus pasos
+se definen con la web y se ponen en verde en la fase D.)*
+
+| Fichero | Escenarios | Qué cubre |
+|---|---|---|
+| `acta.feature` | 19 | Entrar desde Resultados, la cabecera, las tres situaciones, «No se ha encontrado el partido» y el navegador de partidos |
+| `acta-convocatoria.feature` | 43 | Los estados de cada jugador, los minutos, los refuerzos, el contador y lo que cambia con el acta cargada |
+| `acta-goles.feature` | 31 | Apuntar, corregir y borrar un gol; lo obligatorio, el desglose, la propia puerta y el penalti; los de la Federación |
+| `acta-tarjetas.feature` | 17 | Apuntar, corregir y borrar una tarjeta; la segunda amarilla; las de la Federación |
+| `acta-federacion.feature` | 30 | La carga del acta con la ingesta: cuándo se pide, cada jugador, los goles y las tarjetas |
+| Añadidos a `resultados`, `jornada` y `plantilla` | 4 + 2 + 6 | El enlace al acta desde el marcador; la etiqueta del selector de jornada; los refuerzos |
+
+**Lo que no tiene escenario en esta rebanada:** la temporada archivada (decisión 5f), porque la web aún no la abre;
+lo cubren las pruebas de piezas y del servidor, y sus escenarios llegan con la rebanada 11.
 
 ---
 
@@ -451,6 +491,7 @@ cada recurso en ciclos TDD, cada una a la tabla del README del backend en su pas
 |---|---|---|
 | **R7.1** | ✅ 2026-11-23 | Las doce decisiones, una a una: lo medido en 91 actas y en las fichas de la RFFM (sin sacar nombres), y la decisión 5 sobre una maqueta en HTML en cinco situaciones, en oscuro, en claro y a 375 px |
 | **R7.2** | ✅ 2026-11-23 | En la bitácora del backend, `D-125` a `D-136`, con las notas de enmienda en `D-41`, `D-119`, `D-120`, `D-125`, `D-130` y `D-133`; en el anexo de la web, `DW-26`, y en el LLD-B, §6.1 (el camino) y §9.9 (la temporada archivada); en el plan del backoffice, el mapa (Acta y Plantilla en ámbar) y la fila 7. Revisado con `git diff --numstat`: ninguna tabla ensanchada |
+| **R7.3** | ✅ 2026-11-24 | La lista de casos, aprobada con sus doce dudas resueltas (P1 a P12, apuntadas en el plan y la bitácora); 152 escenarios nuevos (§6). La pasada en seco de Cucumber los lee todos (445: 152 sin definir y los 293 de antes intactos). Los de la temporada archivada, fuera hasta la rebanada 11 (decisión 5f) |
 
 ---
 
