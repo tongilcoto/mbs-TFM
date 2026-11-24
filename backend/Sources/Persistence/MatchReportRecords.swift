@@ -439,3 +439,116 @@ extension FluentMatchRepository {
         return copies
     }
 }
+
+// ── Los goles (R7.7) ─────────────────────────────────────────────────────────
+
+/// Un enumerado guardado, vuelto a leer: uno que no es del catálogo es la base
+/// tocada a mano.
+func stored<E: RawRepresentable>(_ raw: String?, _ type: E.Type, table: String, column: String) throws -> E?
+    where E.RawValue == String
+{
+    guard let raw else { return nil }
+    guard let value = E(rawValue: raw) else {
+        throw PersistenceError.corruptEnumeration(table: table, column: column, value: raw)
+    }
+    return value
+}
+
+extension GoalRecord {
+    func toDomain() throws -> Goal {
+        let id = try requireID()
+        guard let createdAt, let updatedAt else {
+            throw PersistenceError.missingTimestamp(table: Self.schema, id: id.uuidString)
+        }
+        let table = Self.schema
+        return Goal(
+            id: GoalID(raw: id), matchID: MatchID(raw: $match.id), scoringTeamID: TeamID(raw: $scoringTeam.id),
+            concedingTeamID: TeamID(raw: $concedingTeam.id), scorer: $scorer.id.map(PlayerID.init(raw:)),
+            assist: $assistant.id.map(PlayerID.init(raw:)), assisted: assisted,
+            minute: try minute.map(MatchMinute.init),
+            zone: try stored(zone, GoalZone.self, table: table, column: "zone"),
+            attackSide: try stored(attackSide, GoalSide.self, table: table, column: "attack_side"),
+            shotSide: try stored(shotSide, GoalSide.self, table: table, column: "shot_side"),
+            bodyPart: try stored(bodyPart, GoalBodyPart.self, table: table, column: "body_part"),
+            playType: try stored(playType, GoalPlayType.self, table: table, column: "play_type"),
+            comment: try EntryComment.make(comment), fromReport: fromReport,
+            createdAt: createdAt, updatedAt: updatedAt)
+    }
+
+    fileprivate func apply(_ goal: Goal) {
+        $match.id = goal.matchID.raw
+        $scoringTeam.id = goal.scoringTeamID.raw
+        $concedingTeam.id = goal.concedingTeamID.raw
+        $scorer.id = goal.scorer?.raw
+        $assistant.id = goal.assist?.raw
+        assisted = goal.assisted
+        minute = goal.minute?.value
+        zone = goal.zone?.rawValue
+        attackSide = goal.attackSide?.rawValue
+        shotSide = goal.shotSide?.rawValue
+        bodyPart = goal.bodyPart?.rawValue
+        playType = goal.playType?.rawValue
+        comment = goal.comment?.value
+        fromReport = goal.fromReport
+    }
+}
+
+public struct FluentGoalRepository: GoalRepository {
+    private let database: any Database
+    public init(database: any Database) { self.database = database }
+
+    public func find(_ id: GoalID) async throws -> Goal? {
+        try await GoalRecord.find(id.raw, on: database)?.toDomain()
+    }
+
+    /// **Con SQL**: el orden sin partido es por la fecha del partido, y la temporada
+    /// se alcanza por la competición (`D-28`); los dos piden juntar tablas. Se sacan
+    /// los ids de la página en su orden, y luego las filas.
+    public func list(_ filter: GoalFilter, page: Int, perPage: Int) async throws -> (goals: [Goal], total: Int) {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "list", object: GoalRecord.schema)
+        }
+        var conditions: [SQLQueryString] = ["g.deleted_at IS NULL"]
+        if let id = filter.matchID { conditions.append("g.match_id = \(bind: id.raw)") }
+        if let id = filter.scoringTeamID { conditions.append("g.scoring_team_id = \(bind: id.raw)") }
+        if let id = filter.concedingTeamID { conditions.append("g.conceding_team_id = \(bind: id.raw)") }
+        if let id = filter.scorer { conditions.append("g.scorer_player_id = \(bind: id.raw)") }
+        if let id = filter.assist { conditions.append("g.assist_player_id = \(bind: id.raw)") }
+        if let id = filter.seasonID { conditions.append("c.season_id = \(bind: id.raw)") }
+        if let type = filter.playType { conditions.append("g.play_type = \(bind: type.rawValue)") }
+        let whereClause = conditions.joined(separator: " AND ")
+        let from: SQLQueryString = """
+            FROM \(ident: GoalRecord.schema) g
+            JOIN \(ident: MatchRecord.schema) m ON m.id = g.match_id
+            JOIN \(ident: CompetitionRecord.schema) c ON c.id = m.competition_id
+            WHERE \(whereClause)
+            """
+        let order: SQLQueryString = filter.matchID != nil
+            ? "g.minute ASC NULLS LAST, g.created_at, g.id"
+            : "m.match_date DESC, g.minute ASC NULLS LAST, g.id"
+        let total = try await sql.raw("SELECT count(*)::int AS n \(from)").first(decoding: [String: Int].self)?["n"] ?? 0
+        let ids = try await sql.raw("""
+            SELECT g.id \(from) ORDER BY \(order) LIMIT \(bind: perPage) OFFSET \(bind: (page - 1) * perPage)
+            """).all().map { try $0.decode(column: "id", as: UUID.self) }
+        guard !ids.isEmpty else { return ([], total) }
+        let byID = Dictionary(uniqueKeysWithValues: try await GoalRecord.query(on: database)
+            .filter(\.$id ~~ ids).all().map { (try $0.requireID(), $0) })
+        return (try ids.compactMap { try byID[$0]?.toDomain() }, total)
+    }
+
+    public func save(_ goal: Goal) async throws {
+        if let existing = try await GoalRecord.find(goal.id.raw, on: database) {
+            existing.apply(goal)
+            try await existing.update(on: database)
+        } else {
+            let record = GoalRecord()
+            record.id = goal.id.raw
+            record.apply(goal)
+            try await record.create(on: database)
+        }
+    }
+
+    public func delete(_ id: GoalID) async throws {
+        try await GoalRecord.find(id.raw, on: database)?.delete(on: database)
+    }
+}

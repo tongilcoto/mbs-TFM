@@ -133,3 +133,9 @@ public struct AppearanceID: TypedIdentifier {
     public let raw: UUID
     public init(raw: UUID) { self.raw = raw }
 }
+
+/// Un gol (§3.2, R7.7): el `goalId` del catálogo.
+public struct GoalID: TypedIdentifier {
+    public let raw: UUID
+    public init(raw: UUID) { self.raw = raw }
+}

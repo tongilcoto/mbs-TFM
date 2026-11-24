@@ -110,4 +110,5 @@ struct FluentRepositories: Repositories {
         FluentPlayerProfileRepository(database: database)
     }
     var appearances: any AppearanceRepository { FluentAppearanceRepository(database: database) }
+    var goals: any GoalRepository { FluentGoalRepository(database: database) }
 }

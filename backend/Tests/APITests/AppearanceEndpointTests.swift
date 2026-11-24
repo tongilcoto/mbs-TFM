@@ -42,7 +42,7 @@ struct AppearanceEndpointTests {
     }
 
     static func withSeededClub(
-        _ body: @escaping @Sendable (Application, Seeded) async throws -> Void
+        slug: String = slug, _ body: @escaping @Sendable (Application, Seeded) async throws -> Void
     ) async throws {
         try await TestEnvironment.withApp(clock: FixedClock(instant: now)) { app in
             try await TestEnvironment.dropClubs([slug], schemaPrefix: prefix, on: app)
@@ -123,7 +123,7 @@ struct AppearanceEndpointTests {
     // ── Peticiones ──────────────────────────────────────────────────────────
 
     static func send(
-        _ app: Application, _ method: HTTPMethod, _ path: String, json: String? = nil,
+        _ app: Application, _ method: HTTPMethod, _ path: String, json: String? = nil, slug: String = slug,
         _ check: @escaping @Sendable (TestingHTTPResponse) async throws -> Void
     ) async throws {
         try await app.testing().test(

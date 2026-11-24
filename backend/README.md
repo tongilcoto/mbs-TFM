@@ -55,7 +55,9 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `GET /v1/matches/{id}`                                                                | Backoffice R7.6: la cabecera del acta, con la fecha de la carga y los que el club ha quitado (`D-134`) |
 | `GET /v1/appearances?matchId=` \| `?playerId=` · `GET /v1/appearances/{id}`           | Backoffice R7.6: la convocatoria; sin fila, «no convocado» (`D-134`) |
 | `POST /v1/appearances` · `PATCH /v1/appearances/{id}` · `DELETE /v1/appearances/{id}` | Backoffice R7.6: apuntar con el equipo del partido (`D-128`) y el estado según la hora (`D-133`) |
-| Las otras 56 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/goals?…` · `GET /v1/goals/{id}`                                              | Backoffice R7.7: los goles de un partido, un equipo o un jugador, paginados (`D-47`, `D-49`) |
+| `POST /v1/goals` · `PATCH /v1/goals/{id}` · `DELETE /v1/goals/{id}`                   | Backoffice R7.7: desde la hora y sin el acta cargada; en uno del acta, lo de la federación queda fijo (`D-135`, `D-137`) |
+| Las otras 51 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).

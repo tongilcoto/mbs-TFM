@@ -186,6 +186,22 @@ struct ContractEnumTests {
         }
     }
 
+    /// Los cuatro del gol van y vienen (R7.7): el cuerpo del alta y la corrección los
+    /// traen, el filtro trae el tipo, y la respuesta los devuelve.
+    @Test("GoalZone, GoalSide, GoalBodyPart y GoalPlayType, de ida, de vuelta y el viaje redondo (R7.7)")
+    func goalEnumerations() {
+        Self.check(GoalZone.allCases, { $0.toContract() }, "GoalZone")
+        Self.check(Components.Schemas.GoalZone.allCases, { $0.toDomain() }, "GoalZone (de vuelta)")
+        Self.check(GoalSide.allCases, { $0.toContract() }, "GoalSide")
+        Self.check(Components.Schemas.GoalSide.allCases, { $0.toDomain() }, "GoalSide (de vuelta)")
+        Self.check(GoalBodyPart.allCases, { $0.toContract() }, "GoalBodyPart")
+        Self.check(Components.Schemas.GoalBodyPart.allCases, { $0.toDomain() }, "GoalBodyPart (de vuelta)")
+        Self.check(GoalPlayType.allCases, { $0.toContract() }, "GoalPlayType")
+        Self.check(Components.Schemas.GoalPlayType.allCases, { $0.toDomain() }, "GoalPlayType (de vuelta)")
+        for value in GoalPlayType.allCases { #expect(value.toContract().toDomain() == value) }
+        for value in GoalBodyPart.allCases { #expect(value.toContract().toDomain() == value) }
+    }
+
     @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
     func teamCategoryBack() {
         Self.check(

@@ -207,6 +207,68 @@ public struct MatchReportCopy: Equatable, Sendable {
     }
 }
 
+// ── El gol (R7.7) ───────────────────────────────────────────────────────────
+
+/// Un gol (§3.2), **denormalizado a propósito**: los dos equipos, copiados del
+/// partido (`D-04`, `D-54`). Solo es obligatorio el equipo que marca (`D-135`).
+/// `matchID` y `scoringTeamID` son identidad (`D-37`).
+public struct Goal: Identifiable, Equatable, Sendable {
+    public let id: GoalID
+    public let matchID: MatchID
+    public let scoringTeamID: TeamID
+    public let concedingTeamID: TeamID
+    /// Nulo en los goles del rival (`D-09`). En propia puerta, el que la mete (`D-52`).
+    public let scorer: PlayerID?
+    public let assist: PlayerID?
+    public let assisted: Bool
+    public let minute: MatchMinute?
+    public let zone: GoalZone?
+    public let attackSide: GoalSide?
+    public let shotSide: GoalSide?
+    public let bodyPart: GoalBodyPart?
+    /// Nulo es «sin clasificar» (`D-131`).
+    public let playType: GoalPlayType?
+    public let comment: EntryComment?
+    /// Lo trajo el acta (`D-137`).
+    public let fromReport: Bool
+    public let createdAt: Date
+    public let updatedAt: Date
+
+    public init(id: GoalID, matchID: MatchID, scoringTeamID: TeamID, concedingTeamID: TeamID,
+                scorer: PlayerID? = nil, assist: PlayerID? = nil, assisted: Bool = false,
+                minute: MatchMinute? = nil, zone: GoalZone? = nil, attackSide: GoalSide? = nil,
+                shotSide: GoalSide? = nil, bodyPart: GoalBodyPart? = nil, playType: GoalPlayType? = nil,
+                comment: EntryComment? = nil, fromReport: Bool = false, createdAt: Date, updatedAt: Date) {
+        self.id = id
+        self.matchID = matchID
+        self.scoringTeamID = scoringTeamID
+        self.concedingTeamID = concedingTeamID
+        self.scorer = scorer
+        self.assist = assist
+        self.assisted = assisted
+        self.minute = minute
+        self.zone = zone
+        self.attackSide = attackSide
+        self.shotSide = shotSide
+        self.bodyPart = bodyPart
+        self.playType = playType
+        self.comment = comment
+        self.fromReport = fromReport
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    /// Lo que deciden las reglas de la forma del gol.
+    public var shape: GoalShape {
+        GoalShape(scorer: scorer, assist: assist, assisted: assisted, minute: minute, zone: zone,
+                  shotSide: shotSide, playType: playType)
+    }
+
+    /// **El equipo del club del que tiene que ser el goleador** (`D-52`): el que marca
+    /// en un gol normal, el que encaja en uno en propia puerta.
+    public var scorerTeamID: TeamID { playType == .enPropiaPuerta ? concedingTeamID : scoringTeamID }
+}
+
 // ── Lo que se compara en un gol y en una tarjeta ────────────────────────────
 
 /// Lo de un gol que deciden las reglas: quién, cuándo y cómo. El equipo que marca

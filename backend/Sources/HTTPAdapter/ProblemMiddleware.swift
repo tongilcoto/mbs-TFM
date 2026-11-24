@@ -440,6 +440,11 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Convocatoria desconocida", detail: id,
                                base: typeBaseURI, slug: "appearance-not-found")
 
+            case .goalNotFound(let id):
+                return Problem(status: .notFound, code: "GOAL_NOT_FOUND",
+                               title: "Gol desconocido", detail: id,
+                               base: typeBaseURI, slug: "goal-not-found")
+
             case .playerAlreadyConvoked(let player, let match):
                 // 409, solo con su código (§3.5): corregir es el `PATCH`.
                 return Problem(status: .conflict, code: "PLAYER_ALREADY_CONVOKED",

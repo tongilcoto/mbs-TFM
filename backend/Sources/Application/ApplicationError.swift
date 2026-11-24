@@ -94,6 +94,9 @@ public enum ApplicationError: Error, Equatable, Sendable {
     /// La convocatoria que designa la ruta no existe, o está borrada (R7.6). 404.
     case appearanceNotFound(id: String)
 
+    /// El gol que designa la ruta no existe, o está borrado (R7.7). 404.
+    case goalNotFound(id: String)
+
     /// Ese jugador ya tiene convocatoria en ese partido (§3.5, R7.6). 409, solo con
     /// su código: corregirla es el `PATCH`.
     case playerAlreadyConvoked(player: String, match: String)

@@ -1709,6 +1709,10 @@ Tres lecturas que no son evidentes en la tabla:
   (`fromReport`) no se cambian el goleador, el minuto, ni si fue penalti o en propia puerta, y no se
   borra**; el club elige el tipo del gol normal, que llega sin él ([D-131]). Los que apuntó el club se
   corrigen y se borran siempre: así se quita el gol repetido de [D-133].
+- **Servidos en la R7.7.** El goleador de un gol del rival va vacío, y uno del club en ese lado es un **422
+  `INVALID_VALUE`** en `scorerPlayerId`; lo mismo el asistente. **En el `PATCH`, un `null` es como no mandar
+  el campo**, como en la convocatoria (R7.6). El 404 de la ruta es `GOAL_NOT_FOUND`; el del ámbito,
+  `MATCH_NOT_FOUND`, `TEAM_NOT_FOUND` o `PLAYER_NOT_FOUND`.
 - **Los desgloses agregados no salen de aquí**: son **modelo de lectura** (`GoalBreakdown`, §3.4, §4.5).
 - **Toda la escritura exige rol elevado** (§7.3); el `GET` es accesible a cualquier rol autenticado.
 

@@ -3418,8 +3418,9 @@ paths:
             - antes de la **hora de comienzo** (`MATCH_NOT_STARTED`, D-133, punto 4), o con el **acta
               cargada** (`MATCH_REPORT_LOADED`, D-137);
             - el **goleador o el asistente no son del club en esa temporada** (`PLAYER_NOT_IN_SEASON`,
-              D-128); o hay goleador **del lado que no es del club**: en un gol normal, el que marca tiene
-              que ser propio; en un `en_propia_puerta`, el que encaja (D-52);
+              D-128); o hay goleador **del lado que no es del club** (`INVALID_VALUE` en `scorerPlayerId`, o
+              en `assistPlayerId`): en un gol normal, el que marca tiene que ser propio; en un
+              `en_propia_puerta`, el que encaja (D-52);
             - el asistente coincide con el goleador, hay asistencia en un **gol en propia puerta** (D-52), o
               `assistPlayerId` con `assisted = false` — invariante entre campos, hermana de D-42 y D-45;
             - en un **penalti**, la zona `fuera_area` o un `shotSide` (D-135, punto 5);
@@ -4555,6 +4556,7 @@ components:
         - FEDERATION_TEAM_ID_TAKEN
         - FEDERATION_UNEXPECTED_STATUS
         - FEDERATION_UNREACHABLE
+        - GOAL_NOT_FOUND
         - IMAGE_TOO_LARGE
         - INGESTION_FAILED
         - INTERNAL

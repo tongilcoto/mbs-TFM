@@ -40,6 +40,9 @@ actor IngestionStore {
     var appearances: [Appearance] = []
     var deletedAppearances: [Appearance] = []
     var reportCopies: [MatchID: MatchReportCopy] = [:]
+    /// R7.7: los goles, y los borrados aparte.
+    var goals: [Goal] = []
+    var deletedGoals: [Goal] = []
 
     /// **Cuántas escrituras ha recibido el almacén**, sea cual sea la tabla.
     ///
@@ -95,6 +98,12 @@ actor IngestionStore {
         deletedAppearances.append(appearances.remove(at: index))
     }
     func seed(reportCopy: MatchReportCopy, for match: MatchID) { reportCopies[match] = reportCopy }
+    func save(_ value: Goal) { upsert(&goals, value) { $0.id == value.id } }
+    func deleteGoal(_ id: GoalID) {
+        guard let index = goals.firstIndex(where: { $0.id == id }) else { return }
+        writes += 1
+        deletedGoals.append(goals.remove(at: index))
+    }
     func deletePlayer(_ id: PlayerID) {
         guard let index = players.firstIndex(where: { $0.id == id }) else { return }
         writes += 1
@@ -324,6 +333,30 @@ struct FakeMatchRepository: MatchRepository {
 /// La convocatoria (R7.6). En el orden del adaptador: por dorsal, los que no tienen
 /// al final, y luego en el orden en que se apuntaron. Lo que de verdad lo prueba es
 /// `AppearanceRepositoryTests`, contra Postgres.
+/// Los goles (R7.7). Filtra como el adaptador y ordena por minuto con el partido en
+/// el ámbito; sin él, en el orden en que se guardaron. Lo que prueba el orden de
+/// verdad es `GoalRepositoryTests`, contra Postgres.
+struct FakeGoalRepository: GoalRepository {
+    let store: IngestionStore
+    func find(_ id: GoalID) async throws -> Goal? { await store.goals.first { $0.id == id } }
+    func list(_ filter: GoalFilter, page: Int, perPage: Int) async throws -> (goals: [Goal], total: Int) {
+        let rows = await store.goals.filter { goal in
+            (filter.matchID == nil || goal.matchID == filter.matchID)
+                && (filter.scoringTeamID == nil || goal.scoringTeamID == filter.scoringTeamID)
+                && (filter.concedingTeamID == nil || goal.concedingTeamID == filter.concedingTeamID)
+                && (filter.scorer == nil || goal.scorer == filter.scorer)
+                && (filter.assist == nil || goal.assist == filter.assist)
+                && (filter.playType == nil || goal.playType == filter.playType)
+        }
+        let ordered = filter.matchID == nil ? rows : rows.sorted {
+            ($0.minute?.value ?? Int.max) < ($1.minute?.value ?? Int.max)
+        }
+        return (Array(ordered.dropFirst((page - 1) * perPage).prefix(perPage)), rows.count)
+    }
+    func save(_ goal: Goal) async throws { await store.save(goal) }
+    func delete(_ id: GoalID) async throws { await store.deleteGoal(id) }
+}
+
 struct FakeAppearanceRepository: AppearanceRepository {
     let store: IngestionStore
     func find(_ id: AppearanceID) async throws -> Appearance? { await store.appearances.first { $0.id == id } }
@@ -462,6 +495,7 @@ struct FakeRepositories: Repositories {
     var players: any PlayerRepository { FakePlayerRepository(store: store) }
     var playerProfiles: any PlayerProfileRepository { FakePlayerProfileRepository(store: store) }
     var appearances: any AppearanceRepository { FakeAppearanceRepository(store: store) }
+    var goals: any GoalRepository { FakeGoalRepository(store: store) }
 }
 
 /// **Ordena igual que el adaptador Fluent**, y por lo mismo que su hermano de
