@@ -174,6 +174,41 @@ struct ContractEnumTests {
         }
     }
 
+    /// El estado de la convocatoria va y viene (R7.6): el filtro de `listAppearances` y
+    /// el cuerpo del alta y la corrección lo traen del cliente, y la respuesta lo devuelve.
+    @Test("AppearanceStatus → contrato, ← contrato, y el viaje redondo (R7.6)")
+    func appearanceStatus() {
+        Self.check(AppearanceStatus.allCases, { $0.toContract() }, "AppearanceStatus")
+        Self.check(
+            Components.Schemas.AppearanceStatus.allCases, { $0.toDomain() }, "AppearanceStatus (de vuelta)")
+        for value in AppearanceStatus.allCases {
+            #expect(value.toContract().toDomain() == value)
+        }
+    }
+
+    /// Los cuatro del gol van y vienen (R7.7): el cuerpo del alta y la corrección los
+    /// traen, el filtro trae el tipo, y la respuesta los devuelve.
+    @Test("GoalZone, GoalSide, GoalBodyPart y GoalPlayType, de ida, de vuelta y el viaje redondo (R7.7)")
+    func goalEnumerations() {
+        Self.check(GoalZone.allCases, { $0.toContract() }, "GoalZone")
+        Self.check(Components.Schemas.GoalZone.allCases, { $0.toDomain() }, "GoalZone (de vuelta)")
+        Self.check(GoalSide.allCases, { $0.toContract() }, "GoalSide")
+        Self.check(Components.Schemas.GoalSide.allCases, { $0.toDomain() }, "GoalSide (de vuelta)")
+        Self.check(GoalBodyPart.allCases, { $0.toContract() }, "GoalBodyPart")
+        Self.check(Components.Schemas.GoalBodyPart.allCases, { $0.toDomain() }, "GoalBodyPart (de vuelta)")
+        Self.check(GoalPlayType.allCases, { $0.toContract() }, "GoalPlayType")
+        Self.check(Components.Schemas.GoalPlayType.allCases, { $0.toDomain() }, "GoalPlayType (de vuelta)")
+        for value in GoalPlayType.allCases { #expect(value.toContract().toDomain() == value) }
+        for value in GoalBodyPart.allCases { #expect(value.toContract().toDomain() == value) }
+    }
+
+    @Test("CardType → contrato, ← contrato, y el viaje redondo (R7.8)")
+    func cardType() {
+        Self.check(CardType.allCases, { $0.toContract() }, "CardType")
+        Self.check(Components.Schemas.CardType.allCases, { $0.toDomain() }, "CardType (de vuelta)")
+        for value in CardType.allCases { #expect(value.toContract().toDomain() == value) }
+    }
+
     @Test("TeamCategory ← contrato, y el viaje redondo (R1.7)")
     func teamCategoryBack() {
         Self.check(

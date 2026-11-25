@@ -54,6 +54,23 @@ filter:
     - deletePlayerPhoto       # R6.9 — quitar la foto de la fila y del perfil; el fichero, si ya no lo usa nadie
     - getPlayerPhotoFile      # R6.9 — el fichero, si el enlace firmado vale (D-117); solo con la carpeta del disco
     - syncTeamRoster          # R6.14 — sincronizar la plantilla con la federación: solo añade, solo en la en curso (D-120)
+    - getMatch                # R7.6 — la cabecera del acta: el partido, la fecha de la carga y los que el club ha quitado (D-134)
+    - listAppearances         # R7.6 — la convocatoria de un partido o el historial de un jugador; sin fila, «no convocado» (D-134)
+    - getAppearance           # R7.6 — una convocatoria, con si ha cambiado respecto al acta
+    - createAppearance        # R7.6 — apuntar a un jugador, con el equipo con el que juega (D-128) y su estado según la hora (D-133)
+    - updateAppearance        # R7.6 — corregir el estado, el dorsal o los minutos; dejar «Jugado» borra los minutos
+    - deleteAppearance        # R7.6 — anular: «no convocado» (D-134), borrado lógico
+    - listGoals               # R7.7 — los goles de un partido, un equipo o un jugador, paginados (D-47, D-49)
+    - getGoal                 # R7.7 — un gol, con su desglose
+    - createGoal              # R7.7 — apuntar un gol: desde la hora y sin el acta cargada (D-133, D-137); el que encaja lo pone el servidor (D-54)
+    - updateGoal              # R7.7 — completar o corregir; en uno del acta, lo de la federación queda fijo (D-135)
+    - deleteGoal              # R7.7 — borrar un gol del club; uno del acta no se borra (D-137)
+    - listCards               # R7.8 — las tarjetas de un partido, de un jugador o de los dos (D-47)
+    - getCard                 # R7.8 — una tarjeta
+    - createCard              # R7.8 — apuntar una tarjeta con el equipo del partido (D-128); la segunda amarilla, una roja (D-45)
+    - updateCard              # R7.8 — corregir; en una del acta, solo el comentario (D-136)
+    - deleteCard              # R7.8 — borrar una tarjeta del club; una del acta no se borra (D-137)
+    - listTeamReinforcements  # R7.9 — los refuerzos de la plantilla, ya contados: la operación 89 (D-128)
 
   # D-109: las listas cerradas que llevan nombres en el catálogo (`x-enum-names`), se usen ya o no. El generador
   # solo fabrica los tipos de las operaciones de arriba, y `EnumNamesTool` escribe el nombre de cada valor como

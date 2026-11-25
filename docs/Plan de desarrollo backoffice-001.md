@@ -153,12 +153,12 @@ flowchart TB
         direction TB
         R["<b>Resultados</b> · R4<br/>/temporadas/:temporada/equipos/:id/resultados<br/><i>boceto 2</i>"]
         E["<b>Estadísticas</b> · R10<br/>…/equipos/:id/estadisticas<br/><i>boceto 4</i>"]
-        PL["<b>Plantilla</b> · R6, R8, R10<br/>…/equipos/:id/plantilla<br/>R6: lista · R8: disponibilidad · R10: cifras<br/><i>boceto 5</i>"]
+        PL["<b>Plantilla</b> · R6, R7, R8, R10<br/>…/equipos/:id/plantilla<br/>R6: lista · R7: refuerzos · R8: disponibilidad · R10: cifras<br/><i>boceto 5</i>"]
         AX["<b>Menú ⋮ del equipo</b> · R13<br/>corregir, borrar, liberar, reclamar"]
     end
 
     J["<b>Jornada + clasificación</b> · R4<br/>/temporadas/:temporada/competiciones/:id<br/>?jornada=22<br/><i>boceto 3</i>"]
-    ACTA["<b>Acta del partido</b> · R7<br/>/partidos/:id"]
+    ACTA["<b>Acta del partido</b> · R7<br/>/temporadas/:temporada/partidos/:id"]
     JUG["<b>Ficha del jugador</b> · R6, R8, R10<br/>/temporadas/:temporada/jugadores/:id<br/>R6: datos y foto · R8: ausencias · R10: cifras"]
 
     subgraph GESTION["Gestión"]
@@ -199,8 +199,9 @@ flowchart TB
     classDef enCurso fill:#6b4a12,stroke:#f0b54a,color:#fff
     classDef pendiente fill:#2b3446,stroke:#8a94a8,color:#fff
     classDef hueco fill:#2b3446,stroke:#f0b54a,color:#fff,stroke-dasharray:5 5
-    class mEq,NF,P,A,F,R,J,PL,JUG hecha
-    class mTem,mCom,mRiv,mIng,mClub,mPer,E,AX,ACTA,GT,GCo,GR,GI,GC,GP pendiente
+    class mEq,NF,P,A,F,R,J,JUG hecha
+    class ACTA,PL enCurso
+    class mTem,mCom,mRiv,mIng,mClub,mPer,E,AX,GT,GCo,GR,GI,GC,GP pendiente
 ```
 
 Colores: **verde** = hecha · **ámbar** = en curso · **gris** = pendiente · **borde discontinuo** = sale en un
@@ -228,7 +229,7 @@ boceto pero el LLD-B no le da camino. **Flecha discontinua** = navegación aún 
 | **4** · Resultados | Ficha del equipo: cabecera (con el estado de la ingesta y relanzarla) y pestaña Resultados · Jornada + clasificación · Portada: el enlace a la ficha, y relanzar la ingesta, un icono en la celda de cada competición (`DW-19`) | `getTeamRegistration` — el equipo en la temporada de la ficha (`D-102`; en el catálogo desde R1.4 de la rebanada 1) · `listRounds` · `getRound` · `listMatches` ⚠️ — que cada lado del partido lleve su fila de la clasificación de esa jornada (`D-112`) · `getStanding` · `triggerIngestion` ● — adelantada de la 14 (Plan R4, decisión 7) · y en `TeamRef` ⚠️, el nombre del club + letra (`D-111`) |
 | **5** · Portada del boceto | Portada: posición, racha, último resultado y próximo partido | `listSeasonRegistrations` ● ⚠️ y `getTeamRegistration` ● ⚠️ — cada competición del equipo trae su resumen (`D-113`, Plan R5, decisión 1) |
 | **6** · Plantilla | Plantilla: lista y gestión, sin cifras, y «Sincronizar con la Federación» · Ficha del jugador: datos y foto | `listPlayers` ● · `getPlayer` ● · `createPlayer` ● · `updatePlayer` ● — el perfil del jugador que dura entre temporadas, el dorsal y la demarcación opcionales y si está federado (`D-118` a `D-120`) · `deletePlayer` ● · `uploadPlayerPhoto` ● · `deletePlayerPhoto` ● · `getPlayerPhotoFile` ● — la foto en una carpeta del disco, saneada y con enlace firmado (`D-115` a `D-117`) · `searchPlayerProfiles` ● — buscar perfiles de jugador por nombre, para el alta (`D-120`) · `syncTeamRoster` ● — sincronizar la plantilla con la federación, si la publica (`D-120`), con el diccionario de nombres en un fichero (`D-123`) |
-| **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
+| **7** · Acta del partido | Acta · Resultados: enlace de cada partido a su acta · Plantilla: los refuerzos de otros equipos del club, de solo lectura (Plan R7, decisión 3) | `getMatch` · `listAppearances` · `getAppearance` · `createAppearance` · `updateAppearance` · `deleteAppearance` · `listGoals` · `getGoal` · `createGoal` · `updateGoal` · `deleteGoal` · `listCards` · `getCard` · `createCard` · `updateCard` · `deleteCard` |
 | **8** · Ausencias | Ficha del jugador: lesiones y sanciones · Plantilla: disponible / no disponible | `listAbsences` · `getAbsence` · `createAbsence` · `updateAbsence` · `deleteAbsence` |
 | **9** · Competiciones | Gestión: Competiciones — corregir la competición y fijar sus tramos de sanción | `getCompetition` · `updateCompetition` · `deleteCompetition` · `getSanctionBrackets` · `replaceSanctionBrackets` |
 | **10** · Estadísticas | Pestaña Estadísticas · Plantilla: cifras de cada jugador · Ficha del jugador: sus cifras | `listLeagueScorers` · 🆕 rendimiento del equipo total/local/visitante · 🆕 desglose de goles marcados y recibidos · 🆕 estadísticas de jugador · 🆕 amarillas pendientes de sanción |

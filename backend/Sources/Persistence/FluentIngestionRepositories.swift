@@ -130,7 +130,7 @@ public struct FluentRoundRepository: RoundRepository {
 }
 
 public struct FluentMatchRepository: MatchRepository {
-    private let database: any Database
+    let database: any Database
     public init(database: any Database) { self.database = database }
 
     public func list(competitionID: CompetitionID) async throws -> [Match] {

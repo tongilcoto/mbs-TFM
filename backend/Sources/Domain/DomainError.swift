@@ -36,6 +36,38 @@ public enum DomainError: Error, Equatable, Sendable {
     /// hoy. **422**, como la archivada.
     case seasonNotCurrent(label: String)
 
+    /// El equipo de un apunte del acta **no es propio o no juega ese partido**
+    /// (`D-128`): las cifras de un equipo se cuentan por el equipo del apunte.
+    /// **422** con `TEAM_NOT_IN_MATCH`: el equipo llega en el cuerpo.
+    case teamNotInMatch(team: String)
+
+    /// El jugador de un apunte del acta **no es del club en la temporada del
+    /// partido** (`D-128`). **422** con `PLAYER_NOT_IN_SEASON`.
+    case playerNotInSeason(player: String)
+
+    /// Algo que solo se apunta **desde la hora de comienzo**: «Jugado», un gol o una
+    /// tarjeta (`D-133`, punto 4). **422** con `MATCH_NOT_STARTED`.
+    case matchNotStarted
+
+    /// Un gol o una tarjeta nuevos **con el acta ya cargada**: son los que trajo
+    /// (`D-137`). **422** con `MATCH_REPORT_LOADED`.
+    case matchReportLoaded
+
+    /// Cambiar o borrar **lo que trajo el acta** en un gol o una tarjeta (`D-135`,
+    /// punto 6; `D-136`, punto 4; `D-137`). Lleva el campo, o `id` al borrar.
+    /// **422** con `LOCKED_BY_MATCH_REPORT`.
+    case lockedByMatchReport(field: String)
+
+    /// Un cambio de estado de la convocatoria que no es «Convocado sin minutos» ↔
+    /// «Jugado» (`D-134`, punto 3): lo demás es borrar y volver a apuntar. **422**
+    /// con `STATUS_CHANGE_NOT_ALLOWED`.
+    case statusChangeNotAllowed(from: String, to: String)
+
+    /// Una segunda amarilla con una **amarilla suelta** del jugador en el partido,
+    /// que quedaría dentro de la expulsión y no acumula (`D-45`, `D-10`): hay que
+    /// borrarla antes. **422** con `LOOSE_YELLOW_EXISTS`.
+    case looseYellowExists
+
     /// El campo dejó de ser editable porque la entidad ya se sincronizó (`D-22`).
     ///
     /// **No es lo mismo que `invalidValue`, y por eso es un caso aparte**: el

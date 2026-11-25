@@ -1,7 +1,6 @@
 {
   "problemCodes": {
     "DATABASE_UNAVAILABLE": "503 de ApplicationError.databaseUnavailable (ProblemMiddleware); provocarlo por HTTP exige Postgres caído a mitad de la petición. Ya en la lista de H-46",
-    "EMPTY_PATCH": "PATCH /club con {} (minProperties: 1, que el generador ignora, D-65); ningún test nombra el código. Ya en la lista de H-46",
     "EMPTY_SELECTION": "POST /ingestion-runs con una lista de competiciones vacía (D-88); ningún test nombra el código. Ya en la lista de H-46",
     "INVALID_LIMIT": "GET /ingestion-runs con un limit fuera de rango (§5.5); ningún test nombra el código. Ya en la lista de H-72",
     "NOT_EDITABLE_AFTER_SYNC": "traducido en ProblemMiddleware, pero inalcanzable por HTTP hoy: Competition.applying no tiene llamante en producción hasta que el filter incluya updateCompetition",
@@ -26,6 +25,13 @@
     "MatchResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
     "MatchResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R4.8)",
     "PlayerResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)",
-    "PlayerResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)"
+    "PlayerResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R6.6)",
+    "PlayerProfileSearchResult.federationPlayerId": "en el catálogo desde R7.4 (D-126), pero el servidor aún no lo rellena: la columna federation_player_id llega con la migración del acta (R7.5) y el casado (R7.12). Hasta entonces viaja ausente",
+    "AppearanceResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.6)",
+    "AppearanceResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.6)",
+    "GoalResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
+    "GoalResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
+    "CardResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)",
+    "CardResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)"
   }
 }

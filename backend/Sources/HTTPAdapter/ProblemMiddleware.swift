@@ -132,6 +132,52 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                detail: "la plantilla solo se sincroniza en la temporada en curso, no en \(label)",
                                base: typeBaseURI, slug: "season-not-current")
 
+            // ── El acta del partido (R7.5): todos **422**, reglas que el cuerpo no
+            // cumple en este momento; el partido, el equipo y el jugador llegan en
+            // el cuerpo, no en la ruta (`D-37`).
+
+            case .teamNotInMatch(let team):
+                return Problem(status: .unprocessableEntity, code: "TEAM_NOT_IN_MATCH",
+                               title: "El equipo no juega este partido",
+                               detail: "el equipo \(team) no es del club o no juega este partido",
+                               base: typeBaseURI, slug: "team-not-in-match")
+
+            case .playerNotInSeason(let player):
+                return Problem(status: .unprocessableEntity, code: "PLAYER_NOT_IN_SEASON",
+                               title: "El jugador no es de esta temporada",
+                               detail: "el jugador \(player) no está en el club en la temporada del partido",
+                               base: typeBaseURI, slug: "player-not-in-season")
+
+            case .matchNotStarted:
+                return Problem(status: .unprocessableEntity, code: "MATCH_NOT_STARTED",
+                               title: "El partido no ha empezado",
+                               detail: "antes de la hora de comienzo solo se apunta la convocatoria, sin «Jugado»",
+                               base: typeBaseURI, slug: "match-not-started")
+
+            case .matchReportLoaded:
+                return Problem(status: .unprocessableEntity, code: "MATCH_REPORT_LOADED",
+                               title: "El acta ya está cargada",
+                               detail: "con el acta de la federación cargada no se añaden goles ni tarjetas",
+                               base: typeBaseURI, slug: "match-report-loaded")
+
+            case .lockedByMatchReport(let field):
+                return Problem(status: .unprocessableEntity, code: "LOCKED_BY_MATCH_REPORT",
+                               title: "Lo trajo el acta",
+                               detail: "\(field): lo trajo el acta de la federación y no se cambia ni se borra",
+                               base: typeBaseURI, slug: "locked-by-match-report")
+
+            case .statusChangeNotAllowed(let from, let to):
+                return Problem(status: .unprocessableEntity, code: "STATUS_CHANGE_NOT_ALLOWED",
+                               title: "Ese cambio de estado no vale",
+                               detail: "de \(from) a \(to) no se cambia: se borra y se vuelve a apuntar",
+                               base: typeBaseURI, slug: "status-change-not-allowed")
+
+            case .looseYellowExists:
+                return Problem(status: .unprocessableEntity, code: "LOOSE_YELLOW_EXISTS",
+                               title: "Hay una amarilla suelta",
+                               detail: "el jugador ya tiene una amarilla en el partido: bórrala antes de apuntar la segunda",
+                               base: typeBaseURI, slug: "loose-yellow-exists")
+
             case .notEditableAfterSync(let field):
                 // **409 y no 422** (§5.4, D-22): el valor puede ser
                 // perfectamente válido — lo que no lo es, es el *momento*. La
@@ -381,6 +427,42 @@ public struct ProblemMiddleware: AsyncMiddleware {
                                title: "Ya está en una plantilla",
                                detail: "el perfil \(profile) ya tiene fila en la temporada \(season)",
                                base: typeBaseURI, slug: "player-already-in-roster")
+
+            case .matchNotFound(let id):
+                // 404 con su código (R7.6): también el partido entre dos rivales, que
+                // no tiene acta (`D-130`).
+                return Problem(status: .notFound, code: "MATCH_NOT_FOUND",
+                               title: "Partido desconocido", detail: id,
+                               base: typeBaseURI, slug: "match-not-found")
+
+            case .appearanceNotFound(let id):
+                return Problem(status: .notFound, code: "APPEARANCE_NOT_FOUND",
+                               title: "Convocatoria desconocida", detail: id,
+                               base: typeBaseURI, slug: "appearance-not-found")
+
+            case .goalNotFound(let id):
+                return Problem(status: .notFound, code: "GOAL_NOT_FOUND",
+                               title: "Gol desconocido", detail: id,
+                               base: typeBaseURI, slug: "goal-not-found")
+
+            case .cardNotFound(let id):
+                return Problem(status: .notFound, code: "CARD_NOT_FOUND",
+                               title: "Tarjeta desconocida", detail: id,
+                               base: typeBaseURI, slug: "card-not-found")
+
+            case .cardAlreadyRecorded(let player, let type):
+                // 409, solo con su código (§3.5): amarilla y roja sí conviven.
+                return Problem(status: .conflict, code: "CARD_ALREADY_RECORDED",
+                               title: "Ya tiene esa tarjeta",
+                               detail: "el jugador \(player) ya tiene una tarjeta \(type) en el partido",
+                               base: typeBaseURI, slug: "card-already-recorded")
+
+            case .playerAlreadyConvoked(let player, let match):
+                // 409, solo con su código (§3.5): corregir es el `PATCH`.
+                return Problem(status: .conflict, code: "PLAYER_ALREADY_CONVOKED",
+                               title: "Ya está en la convocatoria",
+                               detail: "el jugador \(player) ya tiene convocatoria en el partido \(match)",
+                               base: typeBaseURI, slug: "player-already-convoked")
 
             case .seasonLabelUnavailable(let federationSeasonID):
                 // **400, y el criterio es el de `unreadableFederationURL`**: el

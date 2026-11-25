@@ -1663,6 +1663,50 @@ paths:
                 $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
+  /teams/{teamId}/registrations/{seasonId}/reinforcements:
+    parameters:
+      - $ref: '#/components/parameters/TeamId'
+      - $ref: '#/components/parameters/SeasonId'
+
+    get:
+      tags: [Players]
+      operationId: listTeamReinforcements
+      summary: Lista los refuerzos del equipo en la temporada, con su participación
+      description: |
+        **La sección de refuerzos de la pestaña Plantilla** (D-128, punto 4; la operación 89, de R7.4).
+        Los jugadores de **otros equipos del club** que han jugado con este, leídos de sus actas: los que
+        tienen una convocatoria de este equipo en esa temporada sin estar en su plantilla. **Solo lectura**:
+        no se dan de alta ni se corrigen aquí.
+
+        **Ya contados, como el resto de las agregaciones** (§3.4): de cada refuerzo, su equipo, en cuántas
+        actas del equipo está, en cuántas jugó y en cuántas fue convocado sin minutos, y el último partido.
+        La web no pide todas las convocatorias de la temporada para contarlas ella.
+
+        **Lista vacía si no hay refuerzos**, y no es un error: la web no enseña la sección (R7.3, P11).
+
+        **Sin paginación** (§5.3): son pocos. **Orden por el último partido**, del más reciente al más
+        antiguo, y el nombre como desempate.
+      responses:
+        '200':
+          description: Refuerzos del equipo en la temporada.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReinforcementResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: |
+            El equipo no existe en este club (`TEAM_NOT_FOUND`), o no está inscrito en esa temporada
+            (`TEAM_NOT_REGISTERED`). Un equipo inscrito sin refuerzos devuelve 200 vacío.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default: { $ref: '#/components/responses/DefaultProblem' }
+
   /rounds:
     get:
       tags: [Rounds]
@@ -1839,14 +1883,22 @@ paths:
     get:
       tags: [Matches]
       operationId: getMatch
-      summary: Obtiene un partido
+      summary: Obtiene un partido, con lo que pide su acta
+      description: |
+        **La cabecera del acta** (R7). Además del partido, trae **los jugadores que el acta de la federación
+        traía y ya no tienen convocatoria** (D-134, punto 4, precisado en R7.4): los que el club ha quitado.
+        La web los pinta como «No convocado · Cambiado por el club» sin comparar nada: compara el servidor.
+        Sin el acta cargada, la lista va vacía.
+
+        **Un partido entre dos rivales no tiene acta** (D-130): 404 `MATCH_NOT_FOUND`, como el que no existe.
+        La jornada de descanso no es un partido, así que no tiene `matchId`.
       responses:
         '200':
           description: Partido.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MatchResponse'
+                $ref: '#/components/schemas/MatchDetailResponse'
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/DefaultProblem' }
@@ -2668,12 +2720,16 @@ paths:
         **Ámbito obligatorio: `matchId` o `playerId`** → **400** si falta. Son las dos pantallas que
         existen: la convocatoria del partido y el historial del jugador.
 
-        **Lo que no está no dice nada** (D-41): la respuesta trae **solo las filas registradas**, no una por
-        jugador de la plantilla. Un partido sin convocatoria devuelve 200 vacío, y eso es *no registrado*,
-        no "no fue convocado nadie". El cliente cruza con `GET /players?teamId=&seasonId=` por `playerId`,
-        el mismo cruce que ya hace con las ausencias activas (D-38).
+        **Sin fila, «no convocado»** (D-134, que enmienda D-41): la respuesta trae **solo las filas
+        apuntadas**, y el jugador de la plantilla que no tiene fila no fue convocado. El cliente cruza con
+        `GET /players?teamId=&seasonId=` por `playerId`, el mismo cruce que ya hace con las ausencias
+        activas (D-38).
 
-        La temporada y el equipo se alcanzan por el jugador (D-05, D-28).
+        **El equipo es el del apunte, no el de la plantilla** (D-128): un refuerzo de otro equipo del club
+        sale en la convocatoria del equipo con el que jugó. La temporada se alcanza por el partido (D-28).
+
+        **Con el acta cargada, cada fila dice si ha cambiado respecto a ella** (`changedFromReport`, D-134):
+        compara el servidor. Los que el acta traía y ya no tienen fila, en `getMatch`.
 
         **Sin paginación** (§5.3): las dos puertas traen techo —una convocatoria son ~18 filas, la
         temporada de un jugador ~30 partidos—. **Orden fijo**: por dorsal ascendente con `matchId` (es como
@@ -2703,8 +2759,8 @@ paths:
           in: query
           required: false
           description: |
-            Acota a un equipo **propio**. Solo tiene sentido junto a `matchId`, y solo hace falta en el
-            derbi entre dos equipos del club; en el resto de partidos es redundante.
+            Acota al **equipo del apunte** (D-128), que es propio. Solo tiene sentido junto a `matchId`, y
+            solo hace falta en el derbi entre dos equipos del club; en el resto de partidos es redundante.
           schema:
             type: string
             format: uuid
@@ -2747,13 +2803,22 @@ paths:
       operationId: createAppearance
       summary: Registra la convocatoria de un jugador en un partido
       description: |
-        Da de alta **una fila**: un jugador, un partido, un estado. La convocatoria entera se registra
-        repitiendo la llamada por cada jugador (D-44) — no hay alta masiva, y el porqué está en esa
-        decisión.
+        Da de alta **una fila**: un jugador, un partido, el equipo con el que juega y un estado. La
+        convocatoria entera se registra repitiendo la llamada por cada jugador (D-44) — no hay alta masiva,
+        y el porqué está en esa decisión. **«No convocado» no se apunta**: es no tener fila (D-134).
 
-        **`minutes` solo se admite con `status = jugado`** (D-42) → **422** en cualquier otro caso. Un
-        jugador que no fue convocado no jugó cero minutos: no jugó, y la distinción importa porque el
-        promedio de minutos se calcula sobre los partidos jugados.
+        **Qué estado se puede apuntar depende de la hora de comienzo** (D-133, punto 4; D-134, punto 3):
+        antes, `convocado_sin_minutos`, `baja_medica` o `sancionado`; desde la hora de comienzo, también
+        `jugado`. Sin hora, cuenta el final del día.
+
+        **`minutes` solo se admite con `status = jugado`** (D-42), y de 1 a 120 (D-134). Un jugador que no
+        jugó no jugó cero minutos: no jugó, y el promedio se calcula sobre los partidos jugados.
+
+        **Con el acta cargada se apunta igual** (D-134, punto 4): el árbitro de base no apunta todos los
+        cambios. La fila nueva sale como `changedFromReport`.
+
+        La temporada **pasada** se sigue completando (D-130, punto 4); solo la **archivada** es de solo
+        lectura.
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -2774,17 +2839,24 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            Ese jugador **ya tiene convocatoria en ese partido** (§3.5). Un jugador hace una sola cosa en
-            un partido; corregir lo apuntado es el `PATCH`, no un segundo `POST`.
+            Ese jugador **ya tiene convocatoria en ese partido** (§3.5, `PLAYER_ALREADY_CONVOKED`). Un
+            jugador hace una sola cosa en un partido; corregir lo apuntado es el `PATCH`, no un segundo
+            `POST`.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Regla de negocio (§5.4): el jugador **no existe** o está borrado; el partido no existe; la
-            temporada está **archivada**; **el equipo del jugador no disputa ese partido** —ni como local
-            ni como visitante—; o llegó `minutes` con un `status` distinto de `jugado` (D-42).
+            Regla de negocio (§5.4):
+
+            - el jugador, el partido o el equipo **no existen** en el club (`REFERENCE_NOT_FOUND`);
+            - la temporada está **archivada** (`SEASON_ARCHIVED`);
+            - **el equipo del apunte no es propio o no disputa ese partido** (`TEAM_NOT_IN_MATCH`, D-128);
+            - **el jugador no es del club en esa temporada** (`PLAYER_NOT_IN_SEASON`, D-128);
+            - `jugado` **antes de la hora de comienzo** (`MATCH_NOT_STARTED`, D-133);
+            - `minutes` con un `status` distinto de `jugado` (D-42), o fuera de 1 a 120 (D-134); o el dorsal
+              fuera de 1 a 99 (`INVALID_VALUE`, con el campo).
 
             **No es 404** aunque incluya "no existe": jugador y partido llegan en el **cuerpo**, no en la
             ruta (mismo criterio que el `teamId` del alta de jugador, D-37).
@@ -2826,9 +2898,15 @@ paths:
         Misma línea que `Player` (D-37) y `Absence` (D-40), y aquí además cambiarlos chocaría de frente con
         la unicidad *(jugador, partido)*.
 
-        **Bajar de `jugado` a cualquier otro estado exige soltar los minutos** (D-42): o se manda
-        `minutes: null` en la misma llamada, o la operación devuelve **422**. El `null` explícito es la
-        convención de `PATCH` del contrato (§5.2).
+        **Qué cambios de estado valen** (D-134, punto 3; 422 `STATUS_CHANGE_NOT_ALLOWED` si no): solo
+        `convocado_sin_minutos` ↔ `jugado`, y solo desde la hora de comienzo. Pasar entre `baja_medica`,
+        `sancionado` y los otros dos es borrar la fila y volver a apuntarla.
+
+        **Pasar de `jugado` a `convocado_sin_minutos` borra los minutos** (R7.3, P4): el estado nuevo no los
+        admite (D-42), y anular es «no jugó». No hace falta mandar `minutes: null`.
+
+        **Con el acta cargada se corrige igual** (D-134): la respuesta dice si la fila ha quedado distinta
+        del acta (`changedFromReport`).
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -2850,8 +2928,9 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: |
-            El cambio dejaría `minutes` con un `status` distinto de `jugado` (D-42) — típicamente, bajar el
-            estado sin soltar los minutos en la misma llamada.
+            Regla de negocio (§5.4): la temporada está **archivada** (`SEASON_ARCHIVED`); un cambio de estado
+            que no vale (`STATUS_CHANGE_NOT_ALLOWED`, D-134); o `minutes` con un `status` distinto de
+            `jugado` (D-42), o fuera de 1 a 120, o el dorsal fuera de 1 a 99 (`INVALID_VALUE`, con el campo).
           content:
             application/problem+json:
               schema:
@@ -2867,10 +2946,11 @@ paths:
         mismo motivo: sirve a la auditoría, no al cliente. Nada cuelga de una convocatoria, así que no hay
         guarda de dependientes que plantearse.
 
-        **Borrar no es lo mismo que marcar `no_convocado`** (D-41), y el backoffice tendrá los dos gestos
-        cerca. `no_convocado` es un **hecho registrado** —estuvo disponible y el entrenador no lo llamó— y
-        cuenta en la estadística; borrar deja la fila **sin registrar**, que es lo correcto cuando la
-        convocatoria se apuntó por error o en el partido equivocado.
+        **Borrar es «no convocado»** (D-134, que enmienda D-41): es como se anula a un convocado, a una baja
+        médica o a un sancionado. Con el acta cargada se borra igual; si el acta lo traía, `getMatch` lo
+        devuelve entre los que el club ha quitado.
+
+        **La temporada archivada no deja borrar** (422 `SEASON_ARCHIVED`).
 
         Requiere **rol elevado** (§7.3).
       responses:
@@ -2879,6 +2959,12 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: 'La temporada está **archivada** (`SEASON_ARCHIVED`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────────────── Cards (§5.1) ───────────────────────────────
@@ -2951,10 +3037,14 @@ paths:
       operationId: createCard
       summary: Registra una tarjeta
       description: |
-        Da de alta **una sanción**. La expulsión por doble amarilla es **una sola llamada** con
-        `type = roja` e `isSecondYellow = true` (D-45).
+        Da de alta **una sanción** de un jugador del club. La expulsión por doble amarilla es **una sola
+        llamada** con `type = roja` e `isSecondYellow = true` (D-45). **Las del rival no se apuntan**
+        (D-136): no hay plantilla de rivales.
 
         **No exige que exista la convocatoria** del jugador en ese partido (D-46).
+
+        **Desde la hora de comienzo, y mientras el acta no esté cargada** (D-133, D-137): con ella cargada
+        las tarjetas son las de la federación, y no se añaden.
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -2975,17 +3065,26 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409':
           description: |
-            Ese jugador ya tiene una tarjeta **de ese tipo** en ese partido (§3.5). Amarilla y roja sí
-            conviven; una segunda amarilla no es otra fila amarilla, es la expulsión (D-45).
+            Ese jugador ya tiene una tarjeta **de ese tipo** en ese partido (§3.5, `CARD_ALREADY_RECORDED`).
+            Amarilla y roja sí conviven; una segunda amarilla no es otra fila amarilla, es la expulsión
+            (D-45).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            Regla de negocio (§5.4): jugador o partido inexistentes; temporada archivada; el equipo del
-            jugador no disputa el partido; `isSecondYellow` sin `roja`; o `isSecondYellow` con una amarilla
-            suelta ya registrada, que queda absorbida por la expulsión (D-45).
+            Regla de negocio (§5.4):
+
+            - jugador, partido o equipo inexistentes (`REFERENCE_NOT_FOUND`); temporada archivada
+              (`SEASON_ARCHIVED`);
+            - el equipo de la tarjeta no es propio o no disputa el partido (`TEAM_NOT_IN_MATCH`), o el
+              jugador no es del club en esa temporada (`PLAYER_NOT_IN_SEASON`, D-128);
+            - antes de la **hora de comienzo** (`MATCH_NOT_STARTED`, D-133, punto 4), o con el **acta
+              cargada** (`MATCH_REPORT_LOADED`, D-137);
+            - `isSecondYellow` sin `roja`, o con una amarilla suelta ya registrada, que queda absorbida por
+              la expulsión (`LOOSE_YELLOW_EXISTS`, D-45);
+            - un valor fuera de su regla (`INVALID_VALUE`, con el campo).
 
             **No es 404**: jugador y partido llegan en el cuerpo, no en la ruta (D-37).
           content:
@@ -3018,11 +3117,14 @@ paths:
       operationId: updateCard
       summary: Corrige una tarjeta
       description: |
-        Actualización **parcial**. Corrige el minuto o reclasifica la sanción.
+        Actualización **parcial**. Corrige el minuto, reclasifica la sanción o escribe el comentario.
 
-        **Sin `playerId` ni `matchId`**: son identidad (D-37).
+        **Sin `playerId`, `matchId` ni `teamId`**: son identidad (D-37).
 
         **`type` e `isSecondYellow` viajan juntos cuando cambian**, o 422 (D-45; mismo criterio que D-42).
+
+        **En una tarjeta del acta** (`fromReport`, D-137) solo se escribe el comentario: el tipo, la
+        segunda amarilla y el minuto son de la federación (D-136, punto 4) → 422 `LOCKED_BY_MATCH_REPORT`.
 
         Requiere **rol elevado** (§7.3).
       requestBody:
@@ -3049,7 +3151,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '422':
-          description: 'El cambio dejaría `isSecondYellow = true` con `type = amarilla` (D-45).'
+          description: |
+            El cambio dejaría `isSecondYellow = true` con `type = amarilla` (D-45); cambia lo que trajo la
+            federación en una tarjeta del acta (`LOCKED_BY_MATCH_REPORT`, D-137); la temporada está
+            archivada (`SEASON_ARCHIVED`); o un valor fuera de su regla (`INVALID_VALUE`, con el campo).
           content:
             application/problem+json:
               schema:
@@ -3066,6 +3171,9 @@ paths:
         **Efecto no obvio**: borrar una amarilla **recalcula las pendientes de sanción**, porque el
         recuento es agregación en vivo, no un contador almacenado (D-10).
 
+        **Una tarjeta del acta no se borra** (`fromReport`, D-137); las que apuntó el club, sí, también con
+        el acta cargada.
+
         Requiere **rol elevado** (§7.3).
       responses:
         '204':
@@ -3073,6 +3181,14 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            Es una tarjeta del acta (`LOCKED_BY_MATCH_REPORT`, D-137), o la temporada está archivada
+            (`SEASON_ARCHIVED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ─────────────────────────── LeagueScorers (§5.1) ───────────────────────────
@@ -3263,11 +3379,14 @@ paths:
         **Se envía quién marca; el servidor deriva quién encaja** (D-54), así la denormalización de D-04
         no puede quedar incoherente.
 
-        **El gol en propia puerta guarda a su autor** (D-52), y con él la invariante se invierte: el
-        `scorerPlayerId` pertenece al equipo que **encaja**. Queda registrado pero **no le suma**.
+        **El gol en propia puerta guarda a su autor** (D-52): el `scorerPlayerId` es del equipo que
+        **encaja**. Queda registrado pero **no le suma**.
 
-        **Todo el desglose es opcional** (D-04): un gol con `matchId` y `scoringTeamId` es una fila
-        válida.
+        **Solo es obligatorio el equipo que marca** (D-135, punto 7): nada obligatorio que la federación
+        pueda no traer. Un gol con `matchId` y `scoringTeamId` es una fila válida.
+
+        **Desde la hora de comienzo, y mientras el acta no esté cargada** (D-133, D-137): con ella
+        cargada, los goles son los de la federación, y no se añaden.
 
         **No se valida contra el marcador** (D-53): el resultado es de la federación y estos goles son
         entrada manual y parcial. Que no cuadren es lo normal, no un error.
@@ -3293,17 +3412,20 @@ paths:
           description: |
             Regla de negocio (§5.4):
 
-            - el **partido no existe**, o su temporada está **archivada**;
-            - `scoringTeamId` **no es uno de los dos equipos** del partido;
-            - **ninguno de los dos equipos es propio** — el detalle manual solo existe donde juega el club
-              (§3.7);
-            - el **goleador no pertenece al equipo que le corresponde** según D-52: el que marca en un gol
-              normal, el que **encaja** en un `en_propia_puerta`;
-            - el **asistente no pertenece al equipo que marca**, o coincide con el goleador — nadie se
-              asiste a sí mismo;
-            - hay asistencia en un **gol en propia puerta**, que no la admite (D-52);
-            - `assistPlayerId` con `assisted = false` — tercera invariante entre campos del contrato,
-              hermana de D-42 y D-45.
+            - el **partido o un jugador no existen** (`REFERENCE_NOT_FOUND`), o su temporada está
+              **archivada** (`SEASON_ARCHIVED`);
+            - `scoringTeamId` **no es uno de los dos equipos** del partido, o **ninguno de los dos es
+              propio** — el detalle manual solo existe donde juega el club (`TEAM_NOT_IN_MATCH`, §3.7);
+            - antes de la **hora de comienzo** (`MATCH_NOT_STARTED`, D-133, punto 4), o con el **acta
+              cargada** (`MATCH_REPORT_LOADED`, D-137);
+            - el **goleador o el asistente no son del club en esa temporada** (`PLAYER_NOT_IN_SEASON`,
+              D-128); o hay goleador **del lado que no es del club** (`INVALID_VALUE` en `scorerPlayerId`, o
+              en `assistPlayerId`): en un gol normal, el que marca tiene que ser propio; en un
+              `en_propia_puerta`, el que encaja (D-52);
+            - el asistente coincide con el goleador, hay asistencia en un **gol en propia puerta** (D-52), o
+              `assistPlayerId` con `assisted = false` — invariante entre campos, hermana de D-42 y D-45;
+            - en un **penalti**, la zona `fuera_area` o un `shotSide` (D-135, punto 5);
+            - un valor fuera de su regla (`INVALID_VALUE`, con el campo).
 
             **No es 404** aunque incluya "no existe": partido, equipos y jugadores llegan en el **cuerpo**,
             no en la ruta (D-37).
@@ -3338,8 +3460,13 @@ paths:
       summary: Corrige un gol o completa su desglose
       description: |
         Actualización **parcial**. Es, más que en ningún otro recurso, **la operación normal**: el caso de
-        uso real es apuntar el gol en caliente con lo mínimo y volver luego a rellenar zona, lado y parte
-        del cuerpo viendo el vídeo. Los seis campos de desglose son editables.
+        uso real es apuntar el gol en caliente con lo mínimo y volver luego a rellenar zona, lados y parte
+        del cuerpo viendo el vídeo. El desglose y el comentario son editables.
+
+        **En un gol del acta** (`fromReport`, D-137) no se cambia lo que trajo la federación (D-135, punto
+        6): el goleador, el minuto, y si fue penalti o en propia puerta → 422 `LOCKED_BY_MATCH_REPORT`. Un
+        gol normal de la federación llega sin tipo (D-131) y el club lo elige, entre los que no son
+        `penalti` ni `en_propia_puerta`.
 
         **No incluye `matchId` ni `scoringTeamId`**, y por tanto tampoco el `concedingTeamId` derivado de
         él: son la identidad del gol (D-37). Un gol apuntado en el partido equivocado, o atribuido al
@@ -3371,9 +3498,10 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422':
           description: |
-            Las mismas reglas del alta que siguen aplicando tras el cambio: pertenencia del goleador según
-            `playType` (D-52), pertenencia del asistente, asistencia en gol en propia, y `assistPlayerId`
-            con `assisted = false`.
+            Las mismas reglas del alta que siguen aplicando tras el cambio: el goleador y el asistente, del
+            club y del lado que toca según `playType` (D-52, D-128); asistencia en gol en propia;
+            `assistPlayerId` con `assisted = false`; el penalti sin `fuera_area` ni `shotSide` (D-135). Y
+            en un gol del acta, cambiar lo que trajo la federación (`LOCKED_BY_MATCH_REPORT`, D-137).
           content:
             application/problem+json:
               schema:
@@ -3392,6 +3520,9 @@ paths:
         detalle de cómo se llegó a él. Es la contrapartida natural de D-53 — si los goles no tienen que
         cuadrar con el resultado, borrar uno tampoco lo descuadra.
 
+        **Un gol del acta no se borra** (`fromReport`, D-137); los que apuntó el club, sí, también con el
+        acta cargada: así se quita el gol repetido de D-133.
+
         Requiere **rol elevado** (§7.3).
       responses:
         '204':
@@ -3399,6 +3530,14 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: |
+            Es un gol del acta (`LOCKED_BY_MATCH_REPORT`, D-137), o la temporada está archivada
+            (`SEASON_ARCHIVED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default: { $ref: '#/components/responses/DefaultProblem' }
 
   # ────────────────────────── SanctionBrackets (§5.1) ──────────────────────────
@@ -4402,7 +4541,10 @@ components:
         código que emite el servidor está en esta lista.
       enum:
         - ALREADY_LINKED_TO_FEDERATION
+        - APPEARANCE_NOT_FOUND
         - BAD_REQUEST
+        - CARD_ALREADY_RECORDED
+        - CARD_NOT_FOUND
         - COMPETITION_IDENTITY_MISMATCH
         - COMPETITION_NOT_FOUND
         - DATABASE_UNAVAILABLE
@@ -4417,19 +4559,27 @@ components:
         - FEDERATION_TEAM_ID_TAKEN
         - FEDERATION_UNEXPECTED_STATUS
         - FEDERATION_UNREACHABLE
+        - GOAL_NOT_FOUND
         - IMAGE_TOO_LARGE
         - INGESTION_FAILED
         - INTERNAL
         - INVALID_LIMIT
         - INVALID_UUID
         - INVALID_VALUE
+        - LOCKED_BY_MATCH_REPORT
+        - LOOSE_YELLOW_EXISTS
+        - MATCH_NOT_FOUND
+        - MATCH_NOT_STARTED
+        - MATCH_REPORT_LOADED
         - MISSING_SCOPE
         - NOT_AN_IMAGE
         - NOT_EDITABLE_AFTER_SYNC
         - NOT_FOUND
         - OWN_TEAM_NOT_IN_CALENDAR
+        - PLAYER_ALREADY_CONVOKED
         - PLAYER_ALREADY_IN_ROSTER
         - PLAYER_NOT_FOUND
+        - PLAYER_NOT_IN_SEASON
         - PLAYER_PROFILE_MISSING
         - REFERENCE_NOT_FOUND
         - ROUND_NOT_FOUND
@@ -4442,8 +4592,10 @@ components:
         - SEASON_NOT_CURRENT
         - SEASON_NOT_FOUND
         - SHIRT_NUMBER_TAKEN
+        - STATUS_CHANGE_NOT_ALLOWED
         - TEAM_ALREADY_REGISTERED
         - TEAM_NOT_FOUND
+        - TEAM_NOT_IN_MATCH
         - TEAM_NOT_LINKED
         - TEAM_NOT_OWN
         - TEAM_NOT_REGISTERED
@@ -4849,24 +5001,27 @@ components:
     AppearanceStatus:
       type: string
       description: |
-        Qué hizo el jugador en ese partido. Los cuatro valores son los cuatro recuentos de la pantalla de
-        estadísticas (JUGADOS / BAJA MÉDICA / SANCIÓN / NO CONVOCADO), y esa es exactamente la razón de que
-        sean cuatro: **el enumerado es la leyenda de la pantalla**, no una taxonomía de disponibilidad.
+        Qué hizo el jugador en ese partido (D-132 y D-134, que enmiendan D-41).
 
-        **`no_convocado` es un hecho, no la ausencia de dato** (D-41): significa que estuvo disponible y el
-        entrenador no lo llamó —decisión técnica—. Que **no haya fila** es cosa distinta: significa que
-        nadie apuntó la convocatoria de ese partido.
+        - **`convocado_sin_minutos`**: estuvo en la convocatoria y no consta que jugara. La web lo rotula
+          «Convocado» antes de la hora de comienzo y «Convocado sin minutos» después (D-134, punto 2): es un
+          solo valor. Es lo que pone la carga del acta al suplente sin cambio (D-132).
+        - **`jugado`**: jugó; solo desde la hora de comienzo, y el único que admite minutos (D-42).
+        - **`baja_medica`** y **`sancionado`**: no pudo ir.
+
+        **«No convocado» no es un valor: es no tener fila** (D-134, punto 1). Con el acta cargada sola, las
+        jornadas jugadas tienen siempre convocatoria, y antes del partido nadie apunta a quien no va.
 
         **Se solapa a propósito con `AbsenceType`** en dos valores (`baja_medica` ~ `lesion`/`enfermedad`,
         `sancionado` ~ `sancion`) y no se deriva de él. Una `Absence` es un **periodo** y este campo es un
         **hecho por partido**: el periodo dice por qué no estaba, la fila dice qué pasó ese domingo. Ni
         una alimenta a la otra — las dos las escribe el administrador (D-41).
-      enum: [jugado, baja_medica, sancionado, no_convocado]
+      enum: [convocado_sin_minutos, jugado, baja_medica, sancionado]
       x-enum-names:
+        convocado_sin_minutos: Convocado sin minutos
         jugado: Jugado
         baja_medica: Baja médica
         sancionado: Sancionado
-        no_convocado: No convocado
 
     CardType:
       type: string
@@ -4896,7 +5051,9 @@ components:
 
     GoalSide:
       type: string
-      description: Lado del campo desde el que llega el gol.
+      description: |
+        Un lado del campo, para los dos lados del gol (D-135): **por dónde viene la jugada**
+        (`attackSide`) y **desde dónde se remata** (`shotSide`), no por dónde entra el balón.
       enum: [derecha, izquierda, centro]
       x-enum-names:
         derecha: Derecha
@@ -4909,9 +5066,10 @@ components:
         Parte del cuerpo con la que se marca. **`otro` es el cajón declarado** — mismo criterio que
         `AbsenceType.otro`: si un caso se repite lo bastante como para querer contarlo aparte, la salida es
         **un valor nuevo** en el enumerado, no un texto libre que nadie podría agregar.
-      enum: [pie, cabeza, otro]
+      enum: [pie_izquierdo, pie_derecho, cabeza, otro]
       x-enum-names:
-        pie: Pie
+        pie_izquierdo: Pie izquierdo
+        pie_derecho: Pie derecho
         cabeza: Cabeza
         otro: Otra
 
@@ -4922,13 +5080,19 @@ components:
         el `scorerPlayerId` pertenece al equipo que **encaja**, no al que marca, no se admite asistencia, y
         el gol **no suma** en el conteo del goleador aunque quede registrado a su nombre.
 
-        Es también el motivo de que este campo no sea un simple rótulo estadístico como `zone` o `side`:
-        cambiarlo cambia qué es válido en el resto de la fila.
-      enum: [juego_abierto, penalti, falta, en_propia_puerta]
+        **`penalti`** también: la zona no puede ser `fuera_area` y no hay `shotSide` (D-135, punto 5).
+        Cambiar el tipo cambia qué es válido en el resto de la fila.
+
+        **Seis tipos** (D-135, punto 3): la **falta directa** va a gol sin tocar nadie más; **tras una
+        falta** y **tras un córner** son jugadas que nacen de ellos. **Nulo es «sin clasificar»**: así
+        llega el gol normal de la federación, que no distingue jugada de falta (D-131).
+      enum: [juego_abierto, falta_directa, tras_falta, tras_corner, penalti, en_propia_puerta]
       x-enum-names:
-        juego_abierto: Jugada
+        juego_abierto: De jugada
+        falta_directa: Falta directa
+        tras_falta: Tras una falta
+        tras_corner: Tras un córner
         penalti: Penalti
-        falta: Falta
         en_propia_puerta: En propia puerta
 
     FederationCode:
@@ -6130,6 +6294,15 @@ components:
           allOf:
             - $ref: '#/components/schemas/MatchTeam'
           readOnly: true
+        reportLoadedAt:
+          type: [string, 'null']
+          format: date-time
+          readOnly: true
+          description: |
+            **Cuándo cargó la ingesta el acta de la federación** (D-133, punto 3): una vez, cuando la
+            federación la cerró, y no se vuelve a leer. `null` mientras no se ha cargado. Con ella cargada,
+            no se añaden goles ni tarjetas, y lo que trajo la federación no se cambia (D-135, D-136, D-137).
+          examples: ['2025-05-18T22:30:00Z']
         createdAt:
           type: string
           format: date-time
@@ -6138,6 +6311,41 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    MatchDetailResponse:
+      description: |
+        **El partido como lo pide su acta** (`getMatch`, R7): el `MatchResponse` y los jugadores que el acta
+        traía y ya no tienen convocatoria. Va aparte para que la lista de partidos no pague esa consulta.
+      allOf:
+        - $ref: '#/components/schemas/MatchResponse'
+        - type: object
+          required: [removedFromReport]
+          properties:
+            removedFromReport:
+              type: array
+              readOnly: true
+              description: |
+                **Los que el acta traía y el club ha quitado** (D-134, punto 4): sin fila de convocatoria
+                ya, cada uno con el equipo y el estado con que lo trajo el acta. La web los pinta como «No
+                convocado · Cambiado por el club». **Vacía sin el acta cargada.**
+              items:
+                $ref: '#/components/schemas/ReportLineupEntry'
+
+    ReportLineupEntry:
+      type: object
+      description: 'Un jugador de la convocatoria tal como la trajo el acta (D-134).'
+      required: [playerId, teamId, status]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/AppearanceStatus'
 
     # Sin DTOs de escritura (D-21). Plantilla de recurso ingerido de `Round` + colección grande:
     # ámbito obligatorio, paginación y proyecciones embebidas.
@@ -6564,6 +6772,14 @@ components:
           format: uri
           readOnly: true
           description: La última foto, con un enlace firmado como `PlayerResponse.photoUrl` (D-117).
+        federationPlayerId:
+          type: [string, 'null']
+          readOnly: true
+          description: |
+            **El código del jugador en la federación** (D-126), si se le ha guardado: lo pone la carga del acta
+            o la sincronización de la plantilla al casarlo por el nombre. **Opcional y único en el club** entre
+            los que lo tienen. La web no lo enseña; sirve para casar las actas por el código.
+          examples: ['10483926']
         lastRoster:
           description: |
             **Su última plantilla**: la fila no borrada más reciente, con su equipo y su temporada. `null` si
@@ -6594,6 +6810,67 @@ components:
           type: string
           readOnly: true
           examples: ['2024/25']
+
+    ReinforcementResponse:
+      type: object
+      description: |
+        **Un refuerzo** de la plantilla (D-128, punto 4): un jugador de otro equipo del club que ha jugado
+        con este en la temporada, con su participación contada en las actas.
+      required: [playerId, fullName, team, reportCount, playedCount, convokedWithoutMinutesCount, lastMatch]
+      properties:
+        playerId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: 'Su fila en la plantilla de **su** equipo: la puerta a su ficha.'
+        fullName:
+          type: string
+          readOnly: true
+          examples: ['GARCÍA LÓPEZ, JUAN']
+        team:
+          allOf:
+            - $ref: '#/components/schemas/TeamRef'
+          readOnly: true
+          description: 'El equipo de su plantilla, no este.'
+        reportCount:
+          type: integer
+          minimum: 1
+          readOnly: true
+          description: 'En cuántas convocatorias de este equipo está, en la temporada.'
+        playedCount:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: 'En cuántas de ellas, `jugado`.'
+        convokedWithoutMinutesCount:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            En cuántas, `convocado_sin_minutos`. Las bajas médicas y las sanciones no se cuentan aparte:
+            son la diferencia con `reportCount`.
+        lastMatch:
+          allOf:
+            - $ref: '#/components/schemas/ReinforcementLastMatch'
+          readOnly: true
+
+    ReinforcementLastMatch:
+      type: object
+      description: 'El último partido del refuerzo con este equipo: la puerta a su acta.'
+      required: [matchId, roundNumber, matchDate]
+      properties:
+        matchId:
+          type: string
+          format: uuid
+          readOnly: true
+        roundNumber:
+          type: integer
+          minimum: 1
+          readOnly: true
+        matchDate:
+          type: string
+          format: date
+          readOnly: true
 
     RosterSyncResponse:
       type: object
@@ -6856,37 +7133,54 @@ components:
     CreateAppearanceRequest:
       type: object
       description: |
-        Alta de **una** convocatoria: un jugador, un partido, un estado. La lista entera se registra
-        repitiendo la llamada (D-44).
+        Alta de **una** convocatoria: un jugador, un partido, el equipo con el que juega y un estado. La
+        lista entera se registra repitiendo la llamada (D-44).
 
-        `playerId` y `matchId` son la **identidad** de la fila y no reaparecen en el `PATCH` (D-37).
+        `playerId` y `matchId` son la **identidad** de la fila y no reaparecen en el `PATCH` (D-37); el
+        equipo, tampoco.
       additionalProperties: false
-      required: [playerId, matchId, status]
+      required: [playerId, matchId, teamId, status]
       properties:
         playerId:
           type: string
           format: uuid
           description: |
-            Jugador convocado. **Su equipo tiene que disputar el partido** —como local o como visitante— o
-            la operación devuelve 422. Es la única validación cruzada del alta, y hace falta: sin ella se
-            podría apuntar a un juvenil en el partido del cadete y la estadística de los dos equipos
-            quedaría contaminada.
+            Jugador convocado. **Tiene que ser del club en la temporada del partido** (D-128), en la
+            plantilla de cualquier equipo: un refuerzo de otro equipo se apunta igual, con el `teamId` del
+            partido.
         matchId:
           type: string
           format: uuid
           description: |
             Partido. **La temporada y la competición se alcanzan por aquí**, no por columnas propias
-            (D-28), igual que el equipo se alcanza por `playerId` (D-05).
+            (D-28).
+        teamId:
+          type: string
+          format: uuid
+          description: |
+            **Equipo con el que juega**, obligatorio (D-128, precisado en R7.4): uno de los dos del partido,
+            y propio, o 422 `TEAM_NOT_IN_MATCH`. No se deduce de la plantilla: en un partido entre dos
+            equipos del club, solo así se sabe cuál es. Las cifras de un equipo se cuentan por aquí, no por
+            la plantilla del jugador.
         status:
           $ref: '#/components/schemas/AppearanceStatus'
+        shirtNumber:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 99
+          description: |
+            **Dorsal en este partido** (D-129), opcional: lo pone la carga del acta. No toca el de la
+            plantilla; un jugador puede tener uno en cada sitio.
+          examples: [7]
         minutes:
           type: [integer, 'null']
-          minimum: 0
+          minimum: 1
           maximum: 120
           description: |
             Minutos jugados. **Opcional siempre y solo válido con `status = jugado`** (D-14, D-42): un club
             pequeño no sostiene la disciplina de cronometrar cada cambio, así que exigirlo dejaría el campo
-            vacío o inventado. `null` con `jugado` significa "jugó, no sé cuánto" — que es distinto de cero.
+            vacío o inventado. `null` con `jugado` significa "jugó, no sé cuánto". **Desde 1** (D-134): con
+            cero no ha jugado.
 
             El tope de 120 cubre la prórroga; no se acota por modalidad porque la duración del partido
             depende de la categoría (§3.6) y meter esa tabla aquí sería validar reglamento en el borde.
@@ -6898,16 +7192,23 @@ components:
         Corrección parcial. **No incluye `playerId` ni `matchId`**: son identidad (§3.5), y cambiarlos
         chocaría además con la unicidad *(jugador, partido)*.
 
-        **Bajar de `jugado` a otro estado exige mandar `minutes: null` en la misma llamada** (D-42), o la
-        operación devuelve 422. El `null` explícito borra el valor, según la convención de `PATCH` (§5.2).
+        **Solo `convocado_sin_minutos` ↔ `jugado`** (D-134), y desde la hora de comienzo. **Pasar de
+        `jugado` a `convocado_sin_minutos` borra los minutos** (R7.3, P4).
+
+        **Aquí un `null` no borra: es como no mandar el campo** (R7.6). El servidor no distingue los dos
+        (D-65), y no hace falta: los minutos se quitan al dejar «Jugado», y el dorsal lo pone el acta.
       additionalProperties: false
       minProperties: 1
       properties:
         status:
           $ref: '#/components/schemas/AppearanceStatus'
+        shirtNumber:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 99
         minutes:
           type: [integer, 'null']
-          minimum: 0
+          minimum: 1
           maximum: 120
 
     AppearanceResponse:
@@ -6921,7 +7222,7 @@ components:
         cruza por id. Es el criterio de D-32 (*embeber lo que varía dentro de la página*) aplicado a una
         entidad que se lee por sus dos lados, así que embeber cualquiera de los dos sobraría en la mitad de
         las pantallas.
-      required: [id, playerId, matchId, status, createdAt, updatedAt]
+      required: [id, playerId, matchId, teamId, status, shirtNumber, changedFromReport, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -6931,14 +7232,33 @@ components:
           type: string
           format: uuid
           readOnly: true
-          description: 'Equipo y temporada se alcanzan por aquí (D-05, D-28).'
         matchId:
           type: string
           format: uuid
           readOnly: true
-          description: 'Jornada y competición se alcanzan por aquí (D-28).'
+          description: 'Jornada, competición y temporada se alcanzan por aquí (D-28).'
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: |
+            **Equipo con el que jugó** (D-128). Casi siempre el de su plantilla; distinto en un refuerzo.
         status:
           $ref: '#/components/schemas/AppearanceStatus'
+        shirtNumber:
+          type: [integer, 'null']
+          readOnly: true
+          description: |
+            **Dorsal en este partido** (D-129), el que puso la carga del acta. `null` si no lo hay: la web
+            enseña entonces el de la plantilla.
+          examples: [7]
+        changedFromReport:
+          type: boolean
+          readOnly: true
+          description: |
+            **Con el acta cargada, si esta fila no coincide con ella** (D-134, punto 4, precisado en R7.4):
+            otro estado del que trajo el acta, o un jugador que el acta no traía. La web pinta «Cambiado por
+            el club» sin comparar nada. **`false` sin el acta cargada**: no hay con qué comparar.
         minutes:
           type: [integer, 'null']
           description: |
@@ -6964,20 +7284,27 @@ components:
         Alta de **una sanción**. La expulsión por doble amarilla es **esta misma llamada** con
         `type = roja` e `isSecondYellow = true` (D-45), no dos amarillas y una roja.
 
-        `playerId` y `matchId` son la **identidad** de la fila y no reaparecen en el `PATCH` (D-37).
+        `playerId`, `matchId` y `teamId` son la **identidad** de la fila y no reaparecen en el `PATCH`
+        (D-37). Obligatorios, solo el jugador, el partido, el equipo y la tarjeta (D-136, punto 5).
       additionalProperties: false
-      required: [playerId, matchId, type]
+      required: [playerId, matchId, teamId, type]
       properties:
         playerId:
           type: string
           format: uuid
           description: |
-            Jugador sancionado. **Su equipo tiene que disputar el partido** o 422. **No se comprueba que
-            tenga convocatoria** (D-46).
+            Jugador sancionado, **del club en la temporada del partido** (D-128) o 422. **No se comprueba
+            que tenga convocatoria** (D-46).
         matchId:
           type: string
           format: uuid
           description: 'Partido. La competición —y sus tramos de sanción— se alcanzan por aquí (D-10, D-28).'
+        teamId:
+          type: string
+          format: uuid
+          description: |
+            **Equipo con el que jugaba**, obligatorio (D-128, precisado en R7.4): uno de los dos del partido,
+            y propio. La sanción cuenta para este equipo, no para el de la plantilla del jugador.
         type:
           $ref: '#/components/schemas/CardType'
         isSecondYellow:
@@ -6995,6 +7322,8 @@ components:
           maximum: 120
           description: 'Opcional (D-14). Nulo es "no se apuntó"; la tarjeta cuenta igual.'
           examples: [67]
+        comment:
+          $ref: '#/components/schemas/EntryComment'
 
     UpdateCardRequest:
       type: object
@@ -7013,6 +7342,8 @@ components:
           type: [integer, 'null']
           minimum: 0
           maximum: 120
+        comment:
+          $ref: '#/components/schemas/EntryComment'
 
     CardResponse:
       type: object
@@ -7020,7 +7351,7 @@ components:
         Una tarjeta = una sanción (D-45). **No embebe jugador ni partido** (D-32).
 
         No lleva las amarillas pendientes ni el ciclo de acumulación: son agregación (§3.4, D-10).
-      required: [id, playerId, matchId, type, isSecondYellow, createdAt, updatedAt]
+      required: [id, playerId, matchId, teamId, type, isSecondYellow, comment, fromReport, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -7030,12 +7361,16 @@ components:
           type: string
           format: uuid
           readOnly: true
-          description: 'Equipo y temporada se alcanzan por aquí (D-05, D-28).'
         matchId:
           type: string
           format: uuid
           readOnly: true
-          description: 'Jornada, competición y tramos de sanción se alcanzan por aquí (D-28).'
+          description: 'Jornada, competición, temporada y tramos de sanción se alcanzan por aquí (D-28).'
+        teamId:
+          type: string
+          format: uuid
+          readOnly: true
+          description: '**Equipo con el que jugaba** (D-128): la sanción cuenta para este.'
         type:
           $ref: '#/components/schemas/CardType'
         isSecondYellow:
@@ -7047,6 +7382,12 @@ components:
           type: [integer, 'null']
           description: 'Nulo es "no se apuntó", no "minuto cero" (D-14).'
           examples: [67]
+        comment:
+          type: [string, 'null']
+          readOnly: true
+          description: 'El motivo, lo que dijo el árbitro (D-136). `null` si no se escribió.'
+        fromReport:
+          $ref: '#/components/schemas/FromReport'
         createdAt:
           type: string
           format: date-time
@@ -7055,6 +7396,24 @@ components:
           type: string
           format: date-time
           readOnly: true
+
+    EntryComment:
+      type: [string, 'null']
+      maxLength: 500
+      description: |
+        **Comentario libre y opcional** de un gol o una tarjeta (D-135, D-136): lo que no cabe en lo
+        catalogado. Se recorta por los dos lados, y vacío se guarda como `null`. `null` en un `PATCH` lo
+        borra (§5.2). Hasta 500 caracteres; la web lo corta en la tabla y lo enseña entero al pasar el
+        ratón.
+      examples: ['Tras robo en el centro del campo']
+
+    FromReport:
+      type: boolean
+      readOnly: true
+      description: |
+        **Si lo trajo el acta de la federación** (D-137): lo pone la carga, y también a lo que el club ya
+        había apuntado y la carga dio por lo mismo (D-133, punto 5). En lo que trajo el acta, lo de la
+        federación no se cambia y no se borra; lo que apuntó el club se corrige y se borra siempre.
 
     # ────────────────────────── LeagueScorer (§5.2) ──────────────────────────
     LeagueScorerResponse:
@@ -7136,8 +7495,8 @@ components:
     CreateGoalRequest:
       type: object
       description: |
-        Alta de un gol. **Solo tres campos obligatorios** —partido, equipo que marca y si hubo asistencia—
-        y todo el desglose opcional (D-04): un gol apuntado en caliente, sin detalle, es una fila válida.
+        Alta de un gol. **Solo dos campos obligatorios** —partido y equipo que marca— y todo lo demás
+        opcional (D-04, D-135 punto 7): un gol apuntado en caliente, sin detalle, es una fila válida.
 
         **`concedingTeamId` no está aquí** (D-54): lo deriva el servidor del `Match`. Es la mitad de la
         denormalización de D-04 que el cliente no puede escribir y, por tanto, no puede contradecir.
@@ -7166,15 +7525,15 @@ components:
             Jugador que marca. **Anulable, y lo será siempre en los goles del rival**: no hay plantilla de
             rivales y no la va a haber (D-09).
 
-            **A qué equipo debe pertenecer depende de `playType`** (D-52): al que marca en un gol normal,
-            al que **encaja** en un `en_propia_puerta`. Es la única invariante del contrato en la que un
-            enumerado decide contra qué se valida una FK.
+            **Es del club en la temporada del partido** (D-128), en la plantilla de cualquier equipo: un
+            refuerzo marca igual. **De qué lado depende de `playType`** (D-52): el equipo que marca tiene
+            que ser propio en un gol normal; el que **encaja**, en un `en_propia_puerta`.
         assistPlayerId:
           type: [string, 'null']
           format: uuid
           description: |
-            Jugador que asiste. Debe pertenecer al **equipo que marca** y no puede coincidir con el
-            goleador. **Exige `assisted = true`** (tercera invariante entre campos del contrato, hermana de
+            Jugador que asiste, **del club en la temporada del partido** (D-128), con el equipo que marca
+            propio, y no puede coincidir con el goleador. **Exige `assisted = true`** (tercera invariante entre campos del contrato, hermana de
             D-42 y D-45) y **no se admite en un gol en propia puerta** (D-52).
         assisted:
           type: boolean
@@ -7197,12 +7556,16 @@ components:
           examples: [67]
         zone:
           $ref: '#/components/schemas/GoalZone'
-        side:
+        attackSide:
+          $ref: '#/components/schemas/GoalSide'
+        shotSide:
           $ref: '#/components/schemas/GoalSide'
         bodyPart:
           $ref: '#/components/schemas/GoalBodyPart'
         playType:
           $ref: '#/components/schemas/GoalPlayType'
+        comment:
+          $ref: '#/components/schemas/EntryComment'
 
     UpdateGoalRequest:
       type: object
@@ -7233,12 +7596,16 @@ components:
           maximum: 120
         zone:
           $ref: '#/components/schemas/GoalZone'
-        side:
+        attackSide:
+          $ref: '#/components/schemas/GoalSide'
+        shotSide:
           $ref: '#/components/schemas/GoalSide'
         bodyPart:
           $ref: '#/components/schemas/GoalBodyPart'
         playType:
           $ref: '#/components/schemas/GoalPlayType'
+        comment:
+          $ref: '#/components/schemas/EntryComment'
 
     GoalResponse:
       type: object
@@ -7251,7 +7618,7 @@ components:
 
         **La suma de goles de un partido no tiene por qué ser su marcador** (D-53). El resultado es de la
         federación; esto es el detalle manual y parcial de cómo se llegó a él.
-      required: [id, matchId, scoringTeamId, concedingTeamId, assisted, createdAt, updatedAt]
+      required: [id, matchId, scoringTeamId, concedingTeamId, assisted, comment, fromReport, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -7298,12 +7665,20 @@ components:
           examples: [67]
         zone:
           $ref: '#/components/schemas/GoalZone'
-        side:
+        attackSide:
+          $ref: '#/components/schemas/GoalSide'
+        shotSide:
           $ref: '#/components/schemas/GoalSide'
         bodyPart:
           $ref: '#/components/schemas/GoalBodyPart'
         playType:
           $ref: '#/components/schemas/GoalPlayType'
+        comment:
+          type: [string, 'null']
+          readOnly: true
+          description: 'Lo que no cabe en lo catalogado (D-135). `null` si no se escribió.'
+        fromReport:
+          $ref: '#/components/schemas/FromReport'
         createdAt:
           type: string
           format: date-time

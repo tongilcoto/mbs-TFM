@@ -530,11 +530,11 @@ la competición arriba.
 | `/temporadas/:temporada/equipos/:id/estadisticas` | Pestaña Estadísticas | Borrador; la forma del camino, decidida en la rebanada 4 (§6.5) |
 | `/equipos/:id/federacion` | **Sincronizar con la Federación** (el enganche): dos pasos, la dirección y el equipo, en el mismo camino | Decidido en la rebanada 3 |
 | `/temporadas/:temporada/competiciones/:id` | **Jornada y clasificación** de una competición (boceto 3). La jornada va detrás de `?` (`?jornada=22`): es lo que se mira de la competición, no otra pantalla | Decidido en la rebanada 4 |
-| `/partidos/:id` | El acta del partido: goles, tarjetas, minutos | Borrador |
+| `/temporadas/:temporada/partidos/:id` | **Acta del partido**: la convocatoria, los goles y las tarjetas. Si la temporada del camino no es la del partido, «no se ha encontrado» | Decidido en la rebanada 7 (plan R7, decisión 4) |
 | `/temporadas/:temporada/jugadores/:id` | **Ficha del jugador**: sus datos, su foto y, desde la fila de la plantilla o desde aquí, corregir y dar de baja. `:id` es el jugador en esa temporada (su fila de la plantilla, `D-05`); si la temporada del camino no casa, «no se ha encontrado». `/jugadores/:id`, con el código del jugador que dura entre temporadas (`D-119`), queda para una versión siguiente, con la pantalla de todas sus temporadas | Decidido en la rebanada 6 (plan R6, decisión 6) |
 | `/temporadas`, `/rivales`, `/personal`, `/ingesta`, `/club` | Las secciones de gestión | Borrador |
 
-**Solo están decididas las tres primeras, la del enganche, las de la rebanada 4 y la ficha del jugador** (el alta de equipo, con la rebanada 2; el enganche, con la 3; la pestaña Resultados y la de jornada y clasificación, con la 4; la ficha del jugador, con la 6). El resto es un borrador: cada camino se confirma, o se cambia,
+**Solo están decididas las tres primeras, la del enganche, las de la rebanada 4, la ficha del jugador y el acta** (el alta de equipo, con la rebanada 2; el enganche, con la 3; la pestaña Resultados y la de jornada y clasificación, con la 4; la ficha del jugador, con la 6; el acta, con la 7). El resto es un borrador: cada camino se confirma, o se cambia,
 al escribir la ficha de su pantalla (en el plan de desarrollo).
 
 #### 6.2 Los caminos, en español
@@ -800,6 +800,20 @@ vigila una prueba de Vitest que ejecuta el formateo con el navegador en otra zon
 avisos, títulos y mensajes de error. «El enganche» sigue siendo el nombre en los documentos y en el código
 (`D-67`), que no lee el usuario.
 
+#### 9.9 Lo de una temporada archivada se ve en tono de archivo
+
+*(Añadido el 2026-11-23, con la [rebanada 7](./Plan%20de%20desarrollo%20R7%20Acta%20del%20partido-001.md).)*
+Toda pantalla de una temporada archivada, que es de solo lectura, **cambia el fondo** para que se note sin leer
+nada [DW-26]:
+
+- **Un tono cálido y apagado, de papel viejo**, con **rayas diagonales muy suaves**. Va en el fondo de la página
+  **y en el de las tablas y recuadros**, que son casi toda la pantalla; la cabecera de cada tabla, un punto más
+  oscura.
+- **Un sello junto al título**: «Temporada 2025-26 · archivada».
+- **No cambian** la forma de las tablas, las letras ni los colores con significado (victoria, aviso, los estados):
+  se lee igual que una temporada en curso, con el contraste AA en los dos modos (§9.4).
+- Son **otros valores de los mismos nombres de color** (§9.2), uno por modo (§9.3): no hay colores escritos a mano.
+
 ### 10. La accesibilidad en concreto
 
 El ADR (decisión 6) fijó el objetivo —**WCAG 2.2, nivel AA**— y dos comprobaciones automáticas: el revisor
@@ -1053,3 +1067,4 @@ Recogido de §4.5 y §11.3, para que el plan lo reparta:
 [DW-23]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-24]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
 [DW-25]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md
+[DW-26]: ./Backoffice%20LLD-Anexo-Decisiones-Disenho-001.md

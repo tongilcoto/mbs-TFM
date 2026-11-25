@@ -114,6 +114,51 @@ Feature: La plantilla de un equipo
     When pulso el nombre de un jugador de la plantilla
     Then estoy en la ficha de ese jugador, en la temporada en curso
 
+  # ── Los refuerzos (plan R7, decisión 3) ──
+  # «un refuerzo»: un jugador de la plantilla de otro equipo de mi club que ha jugado con este equipo, según lo
+  # apuntado en sus actas; se apunta por la API (`createAppearance`).
+
+  @ui
+  Scenario: La sección de refuerzos tiene a cada jugador de otro equipo que ha jugado con este, con su equipo
+    Given un jugador de otro equipo de mi club ha jugado con el equipo en la temporada en curso
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    Then la sección de refuerzos tiene al jugador del otro equipo
+    And la fila del refuerzo tiene el nombre de su equipo
+
+  @ui
+  Scenario: La participación de un refuerzo cuenta sus actas, las jugadas y las que fue sin minutos
+    Given un jugador de otro equipo de mi club está en varias actas del equipo, en unas «Jugado» y en otras «Convocado sin minutos»
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    Then la fila del refuerzo dice en cuántas actas del equipo está
+    And la fila del refuerzo dice en cuántas jugó y en cuántas fue convocado sin minutos
+
+  @ui
+  Scenario: Un refuerzo dice el último partido que jugó con el equipo
+    Given un jugador de otro equipo de mi club está en varias actas del equipo
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    Then la fila del refuerzo dice la jornada y la fecha del último de esos partidos
+
+  @e2e
+  Scenario: El nombre de un refuerzo lleva a su ficha, en su equipo
+    Given un jugador de otro equipo de mi club ha jugado con el equipo en la temporada en curso
+    And estoy en la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    When pulso el nombre del refuerzo
+    Then estoy en la ficha de ese jugador, en la temporada en curso
+
+  @e2e
+  Scenario: El último partido de un refuerzo lleva a su acta
+    Given un jugador de otro equipo de mi club ha jugado con el equipo en la temporada en curso
+    And estoy en la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    When pulso el último partido del refuerzo
+    Then estoy en el acta de ese partido
+
+  @ui
+  Scenario: Sin refuerzos, la plantilla no tiene la sección de refuerzos
+    Given un equipo de mi club tiene jugadores en la plantilla de la temporada en curso
+    And ningún jugador de otro equipo de mi club ha jugado con el equipo
+    When abro la pestaña Plantilla de la ficha del equipo, en la temporada en curso
+    Then la pestaña Plantilla no tiene la sección de refuerzos
+
   # ── Sin jugadores ──
 
   @ui

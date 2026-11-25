@@ -138,6 +138,19 @@
 | **D-122**              | El perfil guarda el último dorsal, la última demarcación y la última foto, como ayuda: se copian al guardar una fila           | §3.2, §5.2, §5.6                   |
 | **D-123**              | La sincronización pone las tildes y las eñes que quita la RFFM, con un diccionario de nombres y apellidos en castellano | §5.2                               |
 | **D-124**              | Los nombres se ordenan en español, y lo hace la base                                                                             | §5.2                               |
+| **D-125**              | El acta de la federación la carga la ingesta, sola, para los partidos del club: solo añade lo que la web no ha tocado (enmienda a [D-57]) | §3.7, §5.6                         |
+| **D-126**              | El perfil guarda el código del jugador en la federación, opcional, y casar es del conector: con las dos listas, sin leer la base (enmienda a [D-119] y [D-120]) | §3.2, §3.7, §5.6                   |
+| **D-127**              | La carga del acta completa la plantilla: la sincroniza si nadie lo hizo, y da de alta a quien juega sin estar (enmienda a [D-120]) | §3.7, §5.6                         |
+| **D-128**              | Cada apunte del acta guarda el equipo con el que jugó; el jugador, una plantilla por temporada (enmienda a [D-05] y [D-52]) | §3.2, §5.3                         |
+| **D-129**              | El dorsal del acta se guarda en la convocatoria, no en la plantilla                                                              | §3.2, §5.3                         |
+| **D-130**              | El acta: sin página para rivales y descansos; la federación se lee hasta que el acta está cerrada y cargada; el club completa siempre | §3.3, §3.7, §5.3                   |
+| **D-131**              | Los códigos del acta de la RFFM, a nuestros tipos: el gol normal, sin tipo; la doble amarilla, una roja                          | §3.3, §3.7                         |
+| **D-132**              | Los minutos del acta no se calculan; un quinto estado de la convocatoria, «Convocado sin minutos» (enmienda a [D-41])            | §3.2, §3.3, §5.3                   |
+| **D-133**              | El acta se carga una vez, cuando la federación la cierra; antes del partido, solo la convocatoria (enmienda a [D-125] y [D-130]) | §3.7, §5.3, §5.6                   |
+| **D-134**              | La convocatoria: sin fila es «no convocado»; «Convocado» y «Convocado sin minutos», un solo estado; el club corrige el acta (enmienda a [D-41] y [D-133]) | §3.2, §3.3, §5.3                   |
+| **D-135**              | El gol: dos lados, pie izquierdo y derecho, cinco tipos de jugada y un comentario; en un penalti, ni fuera del área ni lado del remate | §3.2, §3.3                         |
+| **D-136**              | La tarjeta lleva un comentario; las del rival no se apuntan                                                                    | §3.2                               |
+| **D-137**              | Cada gol y cada tarjeta recuerdan si vinieron del acta (enmienda a [D-133])                                                    | §3.2, §3.3, §5.3                   |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -1049,6 +1062,9 @@ Un lesionado de baja larga genera **una** `Absence` y **tantas** `Appearance` co
 Derivar lo segundo cruzando fechas se descarta por lo mismo que [D-15] y [D-10]: metería un **segundo
 escritor** en una tabla de dominio manual, y encima uno que se equivocaría —una baja puede empezar el sábado
 por la tarde y un partido aplazado no se juega el día que dice el calendario—.
+
+**Enmendada por [D-132]** (2026-11-22, un quinto estado) **y por [D-134]** (2026-11-23): sin fila es «no convocado»,
+porque el acta se carga sola y deja de haber jornadas sin apuntar; el valor `no_convocado` desaparece.
 
 ---
 
@@ -5474,7 +5490,8 @@ competición**; su nombre y su nacimiento son datos de una persona que sigue de 
 8. **El purgado de una temporada ([D-24], rebanada 11) borra también los perfiles que se queden sin ninguna fila**
    en ninguna temporada: si no, el nombre y el año de nacimiento de un menor seguirían en la base.
 9. **El código del jugador en la federación** (`codjugador` del acta, [Anexo RFFM §F.10]) **es informativo**: nunca
-   sirve para que el sistema funcione, tampoco para casar jugadores.
+   sirve para que el sistema funcione, tampoco para casar jugadores. **Enmendado por [D-126]** (2026-11-22): el
+   perfil lo guarda, opcional, y el conector casa primero por él.
 
 **Lo que se asume a cambio.**
 
@@ -5509,7 +5526,8 @@ delegados, para la rebanada 15. **La RFFM no deja leer la página desde otra web
 4. **Casa con los perfiles del club ([D-119]) por el nombre exacto, sin contar tildes**, ya como «NOMBRE
    APELLIDOS»: con uno, ese; con ninguno, perfil nuevo; con varios, perfil nuevo, y lo dice. Nunca por parecido: unir
    a dos chavales distintos es peor que un duplicado, que se une después. El código de la federación no sirve para
-   casar: es informativo ([D-119], punto 9). **«El mismo nombre»**: igual en mayúsculas, con un espacio entre palabras
+   casar: es informativo ([D-119], punto 9). **Enmendado por [D-126]** (2026-11-22): casa el conector, primero por
+   el código y, si no hay, por el nombre con estas mismas reglas. **«El mismo nombre»**: igual en mayúsculas, con un espacio entre palabras
    y sin tildes ni diéresis; **la eñe cuenta como letra distinta** (enmienda del 2026-11-15). El buscador del alta sí
    encuentra «Muñoz» al escribir «munoz»: ayuda a encontrar, no compara.
 5. **Cada fila de la plantilla dice si está federado**: **«Federado»** si la última sincronización lo listó, **«No
@@ -5736,6 +5754,414 @@ consultar, no un orden malo en silencio.
 
 **Enmienda** a [D-118] (el orden de la plantilla). Se hace en `R6.17`.
 
+### D-125 · El acta de la federación la carga la ingesta, sola, para los partidos del club: solo añade lo que la web no ha tocado
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 1 del plan R7). [D-57] dejó el acta solo para el
+estado del partido, con dos bloqueos para leer el resto. Medido en las **91 actas** de los partidos jugados de los
+equipos del desarrollador (recuentos, sin nombres):
+
+- **Los códigos ya se han visto.** Gol: `100` normal (503), `101` penalti (16), `102` en propia puerta (5), que sale
+  en la lista del equipo del que lo marca; leído así, el marcador cuadra en 90 de 91. Tarjeta: `100` amarilla (199),
+  `101` roja (12); la doble amarilla son dos `100`, la segunda con `segunda_amarilla = "1"` (5, siempre con la
+  primera): en el modelo, una roja con `is_second_yellow` ([D-45]).
+- **Casar por el nombre, como la plantilla** ([D-120]): 391 de 432 jugadores (90 %) casan con la plantilla de su
+  equipo (3 equipos con plantilla, 24 actas).
+- Trae el dorsal de todos (432/432), titular o suplente, los cambios con su minuto (49) y el minuto de cada gol. No
+  trae asistencia, zona, lado, parte del cuerpo ni la falta directa.
+
+**Decisión** (el desarrollador, 2026-11-22): **automática**. La carga la hace **la ingesta**, para los partidos
+en los que juega un equipo propio, y **solo escribe lo que la web no ha modificado**, como la plantilla. Si al
+diseñarla no se ve clara, la alternativa aceptada para empezar es **cargarla la primera vez que se abre el acta**
+en la web. **Lo que lee la federación va en su adaptador** (como `fetchTeamRoster`): pedir el acta y traducirla;
+**escribir, en un caso de uso** de la aplicación, como `SyncTeamRoster`. Casar a los jugadores, en el conector
+([D-126]).
+
+**Por revisar en las decisiones siguientes del plan R7:** el código del jugador en la federación (hoy no se
+guarda, [D-119] punto 9); qué pasa con el jugador que no casa y con el acta que llega antes que la plantilla; cómo
+se sabe qué ha tocado la web; y si se calculan los minutos.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Todo a mano | El club teclearía lo que la federación ya publica |
+| Un botón «Cargar desde la Federación», como la plantilla | El desarrollador lo quiere sin que nadie tenga que pulsar |
+
+**Lo que se asume a cambio.** Una petición más por partido del club, no por partido del grupo ([D-57]), y un
+segundo escritor en `Goal`, `Card` y `Appearance`: la frontera pasa a ser por fila, la que la web no ha tocado.
+
+**Enmienda** a [D-57] (el acta, solo para el estado).
+
+**Enmendada por [D-133]** (2026-11-22): el acta se carga una vez, cuando la federación la cierra, y en la
+convocatoria manda el acta; las tarjetas y los goles del club se respetan.
+
+### D-126 · El perfil guarda el código del jugador en la federación, opcional, y casar es del conector
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 9 del plan R7). Con el acta cargada sola
+([D-125]), casar mal deja un gol o una tarjeta a nombre de otro chaval. Medido, sin nombres, comparando la ficha de
+equipo de la RFFM con las actas de los equipos del desarrollador:
+
+- **El código es el mismo en la ficha y en el acta**: en las 631 coincidencias de código coincide también el nombre.
+- **Dura entre temporadas**: de los 42 jugadores de las actas de 2025/26, 36 siguen hoy en alguna ficha del club con
+  el mismo código.
+- **Por el código casan 631 de 665** apariciones de esta temporada (95 %); los 34 restantes son 7 jugadores de un
+  equipo que no están en ninguna ficha enganchada del club (bajas, o de un equipo del club sin enganchar). **Por el
+  nombre, 391 de 432** (90 %); de los 41 que no, 7 sí tienen su código en la ficha: el club corrigió el nombre.
+- La ficha solo enseña la temporada en curso: las actas de temporadas pasadas solo casan por un código ya guardado,
+  o por el nombre.
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **El código de la federación existe en nuestra base, opcional, en el perfil del jugador** ([D-119]), porque es de
+   la persona y dura entre temporadas. No se repite dentro de un club. La web no lo enseña.
+2. **Casar es responsabilidad del conector** de cada federación: cada una sabe qué es lo mejor que publica. La RFFM
+   casa **primero por su código** y, si no lo hay, **por el nombre exacto** con las reglas de [D-120] (punto 4); una
+   federación sin código, solo por el nombre.
+3. **El conector no lee la base.** La aplicación le pasa nuestra lista (identificador, nombre y código si lo hay); el
+   conector devuelve las parejas («el suyo con este código → nuestro jugador») y los que no ha casado. **Todo se
+   escribe con nuestro identificador**, en el caso de uso, y al casar por el nombre a uno sin código se le guarda el
+   suyo para la próxima vez.
+4. **La sincronización de la plantilla usa el mismo casado**: las reglas del nombre se mudan de la aplicación al
+   conector, escritas una vez. Los perfiles que ya hay cogen su código en la próxima sincronización, sin tocar datos
+   a mano.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| No guardarlo y casar por el nombre | 1 de cada 10 no casa, y cada nombre corregido por el club rompe el casado |
+| Guardarlo en la fila de cada temporada | El código es de la persona: habría que copiarlo cada año |
+| Que case la aplicación, igual para todas las federaciones | Tendría que saber qué publica cada una |
+| Que el conector lea nuestros jugadores de la base | Tendría dos trabajos, y probarlo pediría base además de la federación falsa |
+
+**Lo que se asume a cambio.** El conector deja de ser solo un traductor: también aplica una regla nuestra, la de
+cuándo el jugador de la federación y el nuestro son la misma persona.
+
+**Enmienda** a [D-119] (punto 9, el código informativo) y a [D-120] (punto 4, dónde se casa).
+
+### D-127 · La carga del acta completa la plantilla: la sincroniza si nadie lo hizo, y da de alta a quien juega sin estar
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 10 del plan R7). Con el acta cargada sola
+([D-125]) y casada por el código ([D-126]), medido en las 37 actas de esta temporada de los equipos del
+desarrollador: en 27 están todos en la ficha de su equipo; en 10, no, **7 jugadores** que la federación pone en el
+acta sin listarlos en la ficha (un fallo suyo, comprobado por el desarrollador). Y de los 9 equipos del club, solo 3
+tenían plantilla en el sistema.
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **El club tiene hasta el primer partido de liga para sincronizar la plantilla** con el botón ([D-120]). Si no lo
+   ha hecho, **la ingesta la sincroniza con la primera acta**: la misma sincronización, que solo añade.
+2. **El jugador del acta que no está en ninguna plantilla del club esa temporada se da de alta** en la del equipo
+   del acta, como la sincronización: si juega, tiene los papeles en regla. Con su perfil si casa, o uno nuevo, sin
+   año.
+3. **El que el club dio de baja en ese equipo, también**: si ha jugado, no está de baja. Al revés que la
+   sincronización, que respeta la baja ([D-120], punto 3).
+4. **El que está en la plantilla de otro equipo del club no se da de alta aquí**: sus cifras no pueden mezclarse
+   con las del otro equipo: cada apunte guarda el equipo con el que jugó ([D-128]).
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Que el acta espere a que el club sincronice | En 6 de los 9 equipos no cargaría |
+| Saltarse lo del jugador que no casa | No llegaría nunca |
+| Dejarlo pendiente hasta que el club lo dé de alta | La federación ya dice que puede jugar |
+| Respetar la baja del club | Si ha jugado, la baja está mal |
+
+**Lo que se asume a cambio.** La ingesta escribe en la plantilla, que era solo del club y del botón, y puede deshacer
+una baja.
+
+**Enmienda** a [D-120] (punto 2, la sincronización solo con el botón; punto 3, la baja que se respeta).
+
+### D-128 · Cada apunte del acta guarda el equipo con el que jugó; el jugador sigue con una plantilla por temporada
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 3 del plan R7). Un equipo puede llevar a un
+partido a un jugador de otro equipo del club, de una categoría o división inferior (plan del backoffice, nota bajo
+§4). `Appearance` y `Card` no guardan el equipo: sale de la fila del jugador ([D-05], [D-28]), así que ese partido
+contaría para el equipo de su plantilla y **las cifras de los dos equipos se descuadrarían** (lo vio el
+desarrollador). `Goal` no tiene el problema: el equipo que marca sale del partido ([D-04], [D-54]).
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **`Appearance` y `Card` guardan el equipo con el que jugó** el jugador, uno de los dos del partido. Las cifras de
+   un equipo se cuentan por ese equipo, no por la plantilla del jugador.
+2. **El jugador sigue con una sola plantilla por temporada** ([D-121]).
+3. **Las reglas cambian**: «el equipo del jugador disputa el partido» pasa a ser «**el equipo del apunte disputa el
+   partido, y el jugador es del club en esa temporada**». En `Goal`, el goleador y el asistente, del club y de esa
+   temporada, en vez de «del equipo que marca» ([D-52]; en propia puerta, del que encaja, como antes).
+4. **La plantilla enseña sus refuerzos, de solo lectura**: al final de la página, los jugadores de otros equipos del
+   club que han jugado con este, con su equipo y su participación, leídos de las actas.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Que cuente para el equipo de su plantilla | Descuadra las cifras de los dos equipos |
+| Varias plantillas por jugador, una principal y las demás de refuerzo | Deshace [D-121] y cambia el dorsal, la sincronización, la baja y la ficha del jugador; los refuerzos se sacan de las actas sin una segunda plantilla |
+
+**Lo que se asume a cambio.** El equipo de un apunte se guarda aunque casi siempre coincide con el de la plantilla:
+es el caso raro el que lo pide.
+
+**Enmienda** a [D-05] (el equipo se alcanza por el jugador) y a [D-52] (a qué equipo pertenece el goleador).
+
+**Precisada en `R7.4`** (2026-11-24): **el equipo es obligatorio** al apuntar una convocatoria o una tarjeta
+(`teamId`), y no se deduce de la plantilla: en un partido entre dos equipos del club, solo así se sabe cuál es. El
+servidor comprueba que ese equipo juegue el partido (422 si no). Lo mandan la web, que es el equipo de la página del
+acta, y la carga del acta.
+
+**Precisada en `R7.4`** (2026-11-24, punto 4): **los refuerzos, con una operación nueva** (la 89), que los trae ya
+contados para un equipo y una temporada: de cada uno, su equipo, en cuántas actas del equipo está, en cuántas jugó y
+en cuántas fue convocado sin minutos, y su último partido. Cuenta el servidor, como el resto de las agregaciones
+(§3.4); la web no pide todas las convocatorias de la temporada para contarlas ella.
+
+### D-129 · El dorsal del acta se guarda en la convocatoria, no en la plantilla
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 2 del plan R7). El plan R6 dejó apuntado que el
+dorsal del acta lo manda la federación y va con el partido, no con la plantilla. El acta de la RFFM lo trae para
+todos los jugadores (432 de 432 en las actas medidas, [D-125]).
+
+**Decisión** (el desarrollador, 2026-11-22). **`Appearance` gana el dorsal, opcional** (1 a 99, como [D-118]): la
+carga del acta lo pone y la web lo puede apuntar o corregir. **La plantilla no se toca.**
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Rellenar también el dorsal de la plantilla si no lo tiene | El del acta puede cambiar de un partido a otro o ser el de un refuerzo ([D-128]), y chocaría con el dorsal que no se repite en el equipo ([D-118]) |
+
+**Lo que se asume a cambio.** Un jugador puede tener un dorsal en la plantilla y otro en el acta; la web enseña en
+cada sitio el suyo.
+
+**Precisada en `R7.3`** (P10, 2026-11-23): en la R7 **la web no apunta ni corrige el dorsal** de la convocatoria; lo
+enseña, el del acta o, sin acta, el de la plantilla. El servidor lo admite igual, para cuando haga falta.
+
+### D-130 · Qué partidos tienen acta y hasta cuándo se lee de la federación: tres situaciones
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 8 del plan R7). Con el acta cargada sola
+([D-125]) había que decir de qué partidos y hasta cuándo, y qué puede apuntar el club en cada momento.
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **Partidos entre dos rivales y jornadas de descanso: sin acta.** La web no los enlaza ni tiene página para ellos,
+   y el servidor no acepta apuntes suyos (lo que no es del club no se detalla, §3.7).
+2. **Partido jugado con el acta de la federación cerrada y cargada entera: la ingesta ya no la lee**, porque no va a
+   cambiar. **El club la sigue completando** en la web: el desglose y lo que la federación no publica.
+3. **Todos los demás, haya empezado o no** (por jugar, en juego, aplazado, suspendido): **la ingesta trae todo** lo
+   que publique la federación, en cada pasada, y el club apunta todo.
+4. **La temporada pasada**, como la situación 2. **La archivada, solo lectura**, como todo lo archivado.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Por estados: antes del partido solo la convocatoria; goles y tarjetas, solo jugado | La federación los trae cuando los tiene, y el club también puede apuntarlos |
+| El acta cerrada, de solo lectura para todos | El club no podría apuntar el desglose, que es para lo que existe la web |
+
+**Lo que se asume a cambio.** Cada pasada de la ingesta pide el acta de todos los partidos del club que no están
+cerrados y cargados, también los que faltan por jugar; si la federación no publica nada antes del partido, la
+petición no trae nada. Si cuesta demasiado, se acota al diseñar la carga.
+
+**Enmendada por [D-133]** (2026-11-22): la ingesta no trae «en cada pasada, lo que haya»; carga el acta una vez,
+cuando la federación la cierra. Y antes de la hora de comienzo, la web solo apunta la convocatoria.
+
+### D-131 · Los códigos del acta de la RFFM, a nuestros tipos: el gol normal, sin tipo
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 7 del plan R7). [D-57] no podía cargar el acta
+sin conocer los códigos; [D-125] los midió en 91 actas. Falta decir qué se guarda con cada uno.
+
+**Decisión** (el desarrollador, 2026-11-22, el punto 1):
+
+1. **Gol `100` («normal»): sin tipo de jugada** (`play_type` nulo). Puede ser de jugada o de falta, y la RFFM no lo
+   distingue; **el club lo ve vacío y lo elige** en el acta.
+2. Gol `101`: `penalti`. Gol `102`: `en_propia_puerta`, que la RFFM pone en la lista del equipo del que lo marca, así
+   que en nuestro modelo marca el otro equipo ([D-52]).
+3. Tarjeta `100`: `amarilla`. Tarjeta `101`: `roja`. **La doble amarilla** (dos `100`, la segunda con
+   `segunda_amarilla = "1"`): **una** `roja` con `is_second_yellow` ([D-45]), y la primera amarilla no se guarda
+   aparte, porque las que causan una roja no acumulan ([D-10]).
+4. **Un código que no sea ninguno de estos** no se adivina: ese apunte no se carga y la pasada lo cuenta.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| El gol normal, como «de jugada» | Parecería un dato seguro sin serlo |
+
+**Lo que se asume a cambio.** Casi todos los goles llegan sin tipo (503 de 524 en lo medido) hasta que el club lo
+apunta: la R10 contará «sin clasificar» mientras tanto.
+
+### D-132 · Los minutos del acta no se calculan; un quinto estado de la convocatoria, «Convocado sin minutos»
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 12 del plan R7). Para cargar la convocatoria del
+acta ([D-125]) hay que decir quién jugó y cuánto. Medido en las 91 actas: **81 sin ningún cambio** apuntado (49 en
+total), cuando en fútbol base siempre los hay; de 11 a 14 titulares; y el campo `participacion`, marcado sin regla
+(594 titulares con «1» y 463 con «0»; actas con todos a «1», con todos a «0» y mezcladas).
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **Los minutos no se calculan** con los cambios: saldrían números falsos. Siguen siendo del club y opcionales;
+   nulo es «jugó, no sé cuánto» ([D-14]). La carga del acta no los escribe.
+2. **«Jugado»: los titulares y los que entran en un cambio.** `participacion` no se lee.
+3. **Los demás suplentes, en un estado nuevo, `convocado_sin_minutos`**, rotulado **«Convocado sin minutos»**: estuvo
+   en el acta y no consta que jugara. El club lo cambia a «jugado» si salió. **Quinto valor de
+   `Appearance.status`** (enmienda a [D-41]): `jugado, convocado_sin_minutos, baja_medica, sancionado, no_convocado`.
+   Como `no_convocado`, **no admite minutos** ([D-42]).
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Todos los del acta, «jugado» | El suplente que no salió contaría como jugado |
+| Los demás suplentes, sin convocatoria | Desaparecerían del acta suplentes que la federación sí lista |
+
+**Lo que se asume a cambio.** Como casi no hay cambios apuntados, casi todos los suplentes llegan como «Convocado
+sin minutos» hasta que el club los revisa; la R10 los contará aparte de los que jugaron.
+
+**Enmienda** a [D-41] (los cuatro estados de la convocatoria).
+
+### D-133 · El acta se carga una vez, cuando la federación la cierra; en la convocatoria manda el acta
+
+**Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 11 del plan R7). [D-130] hacía leer el acta en
+cada pasada hasta cerrarla, y con eso había que saber qué apuntes había tocado el club. El desarrollador lo
+simplificó: **el acta es un único acto en el tiempo**, la federación no la publica por partes y las revisiones son
+muy escasas. Medido: la página del acta existe antes del partido, con **`acta_cerrada = 0`** y sin jugadores ni
+marcador (el próximo partido del club); con **`1`**, firmada y entera (los 5 del fin de semana y las 91 de [D-125]).
+
+**Decisión** (el desarrollador, 2026-11-22):
+
+1. **Cuándo se pregunta**: en cada pasada, por los partidos del club cuya fecha y hora de comienzo han pasado y que no
+   tienen el acta cargada; sin hora, el final del día. La pasada del sábado por la noche carga los del sábado.
+2. **Cuándo se carga**: **solo con `acta_cerrada = 1`**. Con `0`, nada, aunque exista la página o el partido esté en
+   juego (`partido_en_juego`); se vuelve a preguntar. **Si la federación falla o tarda, lo mismo**: nada, ni a medias,
+   y el partido no queda marcado (`R7.3`, P8, 2026-11-23).
+3. **Una vez**: el partido queda marcado como cargado, con la fecha, y no se vuelve a leer. Una revisión de la
+   federación la corrige el club a mano.
+4. **Antes de la hora de comienzo, la web solo apunta la convocatoria**, con su estado previsto
+   (`convocado_sin_minutos`, [D-132]; `no_convocado`, `baja_medica`, `sancionado`; `jugado`, no). Servirá más adelante
+   para la mensajería con jugadores y padres. Goles y tarjetas, desde la hora de comienzo.
+5. **En la carga, en la convocatoria manda el acta**: la de antes del partido era una previsión. A quien trae, le pone
+   su estado y su dorsal (los minutos del club no se tocan), o lo crea; a quien no trae, lo deja. **Tarjetas y goles
+   del club se respetan**: si ya está el mismo (tarjeta: jugador y tipo; gol: equipo, goleador y minuto), no se crea
+   otro.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Leerla en cada pasada hasta cerrarla, y que cada apunte recuerde si vino de la federación y si el club lo cambió | La federación no la publica por partes: con una sola carga basta la marca del partido |
+| Cargarla en cuanto la página existe | Existe antes del partido, vacía |
+| Que en la convocatoria gane lo del club | Antes del partido es una previsión; el acta es lo que pasó |
+
+**Lo que se asume a cambio.** Una revisión de la federación no llega sola. Y un gol puede quedar repetido si el club
+y la federación ponen minutos distintos; lo borra el club.
+
+**Enmienda** a [D-125] (el acta en cada pasada, solo lo que la web no ha tocado) y a [D-130] (punto 3).
+
+**Enmendada por [D-137]** (2026-11-24): cada gol y cada tarjeta recuerdan si vinieron del acta, y los del club
+se siguen borrando con el acta cargada.
+
+**Enmendada por [D-134]** (2026-11-23): antes del partido no hay estado `no_convocado` (sin fila lo es); con el
+acta cargada el club puede corregir la convocatoria; y el partido guarda una copia de la convocatoria del acta, lo
+que esta entrada descartaba para cada apunte.
+
+### D-134 · La convocatoria: sin fila es «no convocado»; «Convocado» y «Convocado sin minutos», un solo estado
+
+**Lo que lo obligó a decidirse** (2026-11-22 y 23, rebanada 7, decisión 5 del plan R7, sobre una maqueta). La
+pantalla del acta enseña la plantilla entera, cada jugador con su estado, y apunta en bloque. Había que decir qué es
+el jugador sin fila, qué estados se pueden apuntar en cada momento y si lo que trae el acta se puede corregir.
+
+**Decisión** (el desarrollador):
+
+1. **Sin fila, «no convocado».** [D-41] separaba «sin apuntar» de «no convocado» para que un club que se salta
+   jornadas no acumulara «no convocado» sin decidirlo. Con el acta cargada sola ([D-125]), **las jornadas jugadas
+   tienen siempre convocatoria**, y antes del partido nadie apunta a quien no va. **El valor `no_convocado`
+   desaparece** de `Appearance.status`: quedan `convocado_sin_minutos, jugado, baja_medica, sancionado`.
+2. **«Convocado» y «Convocado sin minutos» son el mismo valor**, `convocado_sin_minutos` ([D-132]): la web lo rotula
+   «Convocado» antes de la hora de comienzo y «Convocado sin minutos» después.
+3. **Qué pasa a qué**, que valida el servidor (422 si no): antes de la hora de comienzo, se crea con
+   `convocado_sin_minutos`, `baja_medica` o `sancionado`, y anular es borrar la fila. Después, además,
+   `convocado_sin_minutos` ↔ `jugado`. Cambiar entre `baja_medica`, `sancionado` y los otros dos es anular y volver
+   a apuntar. **Antes de la hora de comienzo, el servidor rechaza también un gol o una tarjeta** (422, con un mensaje
+   que lo dice; `R7.3`, P3): la regla vale para cualquier cliente, no solo para la web. **Pasar de `jugado` a
+   `convocado_sin_minutos` borra los minutos** (`R7.3`, P4): anular es «no jugó», y el estado nuevo no los admite
+   ([D-42]); rechazarlo obligaría a vaciarlos antes. **Los minutos van de 1 a 120** (422 si no; `R7.3`, P9): con 0
+   no ha jugado, y 120 cubre la prórroga; vacío sigue siendo «jugó, no sé cuánto» ([D-14]).
+4. **Con el acta cargada, la convocatoria se corrige igual**: en categorías inferiores el árbitro no apunta todos los
+   cambios. La web lo avisa con un recuadro fijo y marca cada fila que no coincide con el acta («Cambiado por el
+   club»). **El partido guarda la convocatoria del acta tal como llegó** (una columna en `matches`: cada jugador con
+   el estado que trajo), escrita una vez, en la carga; la respuesta del acta dice, en cada fila y en cada jugador
+   que el acta traía y ya no tiene fila, si coincide con ella.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Seguir con [D-41]: sin fila es «sin apuntar» | Obliga a apuntar uno a uno a los que no van; con el acta cargada sola, no hay jornadas sin apuntar |
+| Una ventana de confirmación a cada cambio en un acta cargada | El club la vería toda la temporada |
+| Bloquear la convocatoria del acta | El acta de base no siempre trae los cambios |
+| Que cada convocatoria guarde el estado que trajo el acta | Anular a uno del acta borraría su fila, y con ella la marca |
+| Sin marca, solo el aviso | No se vería qué se cambió |
+
+**Lo que se asume a cambio.** «No convocado» deja de distinguirse de «nadie lo apuntó» en un partido sin acta (los
+de federaciones que no la publican, o los amistosos). La R10 cuenta los no convocados como la plantilla menos la
+convocatoria, solo en partidos con convocatoria.
+
+**Enmienda** a [D-41] y a [D-133] (punto 4, y la convocatoria cargada).
+
+**Precisada en `R7.4`** (2026-11-24): **compara el servidor**, y la web solo pinta. Con el acta cargada, cada fila
+de la convocatoria dice si ha cambiado respecto a la copia (otro estado, o un jugador que el acta no traía), y
+`getMatch` trae la fecha de la carga y los jugadores que el acta traía y ya no tienen fila. Sin acta cargada, no hay
+nada que comparar. Así la regla está en un solo sitio, también para la app.
+
+### D-135 · El gol: dos lados, pie izquierdo y derecho, cinco tipos de jugada y un comentario
+
+**Lo que lo obligó a decidirse** (2026-11-22 y 23, rebanada 7, decisión 5 del plan R7). Al ver el formulario del gol
+en la maqueta, el desarrollador echó en falta datos que el club quiere apuntar y que el LLD §3.3 no tenía.
+
+**Decisión** (el desarrollador):
+
+1. **Dos lados** en vez de `side`: `attack_side` (por dónde viene la jugada) y `shot_side` (desde dónde se remata,
+   no por dónde entra el balón), los dos `izquierda, centro, derecha`.
+2. **`body_part`: `pie_izquierdo, pie_derecho, cabeza, otro`** (antes, `pie`).
+3. **`play_type`: `juego_abierto, falta_directa, tras_falta, tras_corner, penalti, en_propia_puerta`**. La falta
+   directa va a gol sin tocar nadie más; «tras una falta» y «tras un córner» son jugadas que nacen de ellos.
+4. **Un comentario**, `comment`, texto libre y opcional: lo que no cabe en lo catalogado.
+5. **En un penalti**: la zona no puede ser `fuera_area` y no hay `shot_side`; el servidor lo rechaza (422). Sí hay
+   lado del ataque.
+6. **Con el acta cargada**, lo que trae la federación no se cambia: equipo, goleador, minuto, y si fue penalti o en
+   propia puerta ([D-131]); el gol no se borra. Lo demás, sí.
+7. **Solo es obligatorio el equipo que marca** (`R7.3`, P5). La regla, del desarrollador: **nada puede ser
+   obligatorio si la federación puede no traerlo**, porque lo que dice la federación no se rechaza.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| La falta directa como zona, o como un dato aparte | Es una forma de jugada, como el penalti |
+| Un solo lado | El ataque por la izquierda puede acabar en un remate desde el centro |
+
+**Lo que se asume a cambio.** El gol normal de la RFFM llega sin tipo ([D-131]) y ahora con más tipos entre los que
+elegir; la R10 cuenta «sin clasificar» mientras tanto.
+
+### D-136 · La tarjeta lleva un comentario; las del rival no se apuntan
+
+**Lo que lo obligó a decidirse** (2026-11-23, rebanada 7, decisión 5 del plan R7).
+
+**Decisión** (el desarrollador):
+
+1. **`Card.comment`**, texto libre y opcional: el motivo, lo que dijo el árbitro.
+2. **La doble amarilla se rotula «Segunda amarilla»**, con dos cartulinas amarillas de icono, y no «roja por doble
+   amarilla»: ya se sabe que es roja, y así no se confunde con amarilla y luego roja directa. En el modelo sigue
+   siendo una `roja` con `is_second_yellow` ([D-45]).
+3. **Las tarjetas del rival no se apuntan**: no cuentan para nada del club.
+4. **Con el acta cargada**, jugador, minuto y tarjeta no se cambian, y no se borra; el comentario, sí.
+5. **Obligatorios, solo el jugador y la tarjeta**; el minuto y el comentario, no (`R7.3`, P5): como en el gol, nada
+   obligatorio que la federación pueda no traer.
+
+**Lo que se asume a cambio.** Nada que contar de las tarjetas del rival, como hoy.
+
+### D-137 · Cada gol y cada tarjeta recuerdan si vinieron del acta
+
+**Lo que lo obligó a decidirse** (2026-11-24, rebanada 7, `R7.4`, al cruzar el contrato con las decisiones). Con el
+acta cargada, lo que trae la federación no se cambia ni se borra ([D-135], punto 6; [D-136], punto 4), pero el
+servidor no sabía qué gol o qué tarjeta lo había traído: [D-133] descartó que cada apunte recordara su origen. Y
+[D-133] dice que un gol que el club y la federación apuntan con minutos distintos queda repetido y «lo borra el
+club», cosa que el bloqueo no dejaba.
+
+**Decisión** (el desarrollador, 2026-11-24):
+
+1. **Cada gol y cada tarjeta guardan si vinieron del acta**, puesto por la carga y de solo lectura para la web. Lo
+   que la carga encuentra ya apuntado por el club y lo da por el mismo ([D-133], punto 5) pasa a ser del acta, con
+   su desglose y su comentario.
+2. **En los del acta**, el servidor rechaza cambiar lo que trajo la federación y rechaza borrarlos (422).
+3. **Los que apuntó el club se corrigen y se borran igual**, también con el acta cargada: así se quita el repetido.
+4. **Con el acta cargada no se añaden goles ni tarjetas**, como hasta ahora.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| Con el acta cargada, todo bloqueado, sin recordar nada | El gol repetido no se podría borrar nunca |
+
+**Lo que se asume a cambio.** Un campo más en `Goal` y en `Card`, escrito solo por la carga.
+
+**Enmienda** a [D-133] (punto 5, y lo descartado de que cada apunte recuerde su origen).
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -5900,3 +6326,16 @@ consultar, no un orden malo en silencio.
 [Anexo FCF §C.13]: ./API_y_BBDD%20LLD-Anexo-Federacion-Catalunya-FCF.md
 [D-123]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-124]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-125]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-126]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-127]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-128]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-129]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-130]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-131]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-132]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-133]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-134]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-135]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-136]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-137]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

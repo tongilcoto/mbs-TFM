@@ -123,6 +123,15 @@ public protocol MatchRepository: Sendable {
     func list(teamID: TeamID) async throws -> [Match]
 
     func save(_ match: Match) async throws
+
+    /// Un partido por su id (R7.6, la cabecera del acta).
+    func find(_ id: MatchID) async throws -> Match?
+
+    /// **La copia del acta** de cada partido que la tiene (`D-133`, `D-134`): la
+    /// fecha de la carga y la convocatoria tal como llegó. Los que no la tienen no
+    /// salen. La escribe la carga del acta (R7.12); **`save` no la toca**, así que la
+    /// ingesta del calendario no la pisa.
+    func reportCopies(of ids: [MatchID]) async throws -> [MatchID: MatchReportCopy]
 }
 
 /// Puerto de salida de `IngestionRun` (§4.3): **el registro de las pasadas**.

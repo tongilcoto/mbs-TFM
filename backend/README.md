@@ -27,7 +27,7 @@ secciones de *este* fichero van siempre como enlace, para no confundirlas con la
 ## 0. Qué hay montado
 
 Entregadas **F0 a F8** y **F10**, más F6-bis, F6-ter, F9-bis, F10-bis y F10-ter; **F9 aplazada sin código**
-(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y la foto: su almacén, su saneado y sus tres operaciones; la parte del servidor, cerrada (mutación 43/43). Y la sincronización de la plantilla con la RFFM (R6.14, mutación 36/36). **1024 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
+(`D-95`). Y el **backoffice**, empezado: rebanadas 1 a 5 cerradas ([portada](../docs/Plan%20de%20desarrollo%20R1%20Portada%20base-001.md), [alta de equipo](../docs/Plan%20de%20desarrollo%20R2%20Alta%20de%20equipo-001.md), [enganche](../docs/Plan%20de%20desarrollo%20R3%20Enganche-001.md), [resultados](../docs/Plan%20de%20desarrollo%20R4%20Resultados-001.md) y [portada del boceto](../docs/Plan%20de%20desarrollo%20R5%20Portada%20del%20boceto-001.md)), y la mini-fase `R5.12`, el descanso con cualquier código negativo en la RFFM. La rebanada 6 ([plantilla](../docs/Plan%20de%20desarrollo%20R6%20Plantilla-001.md)), empezada: las cinco operaciones de datos de jugadores, el buscador de perfiles, y la foto: su almacén, su saneado y sus tres operaciones; la parte del servidor, cerrada (mutación 43/43). Y la sincronización de la plantilla con la RFFM (R6.14, mutación 36/36). La rebanada 7 ([acta del partido](../docs/Plan%20de%20desarrollo%20R7%20Acta%20del%20partido-001.md)), con su primera parte del servidor cerrada (B1): las tablas del acta, `getMatch`, la convocatoria, los goles, las tarjetas y los refuerzos (mutación 37/37); la carga del acta, en otra rama. **1204 tests.** Qué trajo cada fase: [Plan §4](../docs/Plan%20de%20desarrollo%20backend%20pre%20backoffice-001.md). La
 [auditoría 002](./Plan%20de%20auditor%C3%ADa-002.md) está **cerrada** (2026-10-04). Para conectar una
 federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-001.md).
 
@@ -52,7 +52,15 @@ federación nueva: [la guía de alta](../docs/API_y_BBDD%20Guia-Alta-Federacion-
 | `PUT /v1/players/{id}/photo` · `DELETE /v1/players/{id}/photo`                        | Backoffice R6.9 |
 | `GET /v1/player-photos/{fichero}?expires=&signature=`                                 | Backoffice R6.9: la foto, por su enlace firmado (`D-117`) |
 | `POST /v1/teams/{id}/registrations/{seasonId}/roster-sync`                            | Backoffice R6.14: sincronizar la plantilla con la federación, solo en la temporada en curso (`D-120`) |
-| Las otras 61 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
+| `GET /v1/matches/{id}`                                                                | Backoffice R7.6: la cabecera del acta, con la fecha de la carga y los que el club ha quitado (`D-134`) |
+| `GET /v1/appearances?matchId=` \| `?playerId=` · `GET /v1/appearances/{id}`           | Backoffice R7.6: la convocatoria; sin fila, «no convocado» (`D-134`) |
+| `POST /v1/appearances` · `PATCH /v1/appearances/{id}` · `DELETE /v1/appearances/{id}` | Backoffice R7.6: apuntar con el equipo del partido (`D-128`) y el estado según la hora (`D-133`) |
+| `GET /v1/goals?…` · `GET /v1/goals/{id}`                                              | Backoffice R7.7: los goles de un partido, un equipo o un jugador, paginados (`D-47`, `D-49`) |
+| `POST /v1/goals` · `PATCH /v1/goals/{id}` · `DELETE /v1/goals/{id}`                   | Backoffice R7.7: desde la hora y sin el acta cargada; en uno del acta, lo de la federación queda fijo (`D-135`, `D-137`) |
+| `GET /v1/cards?matchId=` \| `?playerId=` · `GET /v1/cards/{id}`                       | Backoffice R7.8: las tarjetas de un partido, de un jugador o de los dos (`D-47`) |
+| `POST /v1/cards` · `PATCH /v1/cards/{id}` · `DELETE /v1/cards/{id}`                   | Backoffice R7.8: con el equipo del partido (`D-128`); la segunda amarilla, una roja (`D-45`); en una del acta, solo el comentario (`D-136`) |
+| `GET /v1/teams/{id}/registrations/{seasonId}/reinforcements`                          | Backoffice R7.9: los refuerzos de la plantilla, ya contados (`D-128`, la operación 89) |
+| Las otras 45 del *spec*                                                               | ⛔ no generadas — [§7](#7-el-spec) |
 
 **La tabla solo recoge lo que se puede llamar por HTTP, no todo lo que está hecho.** De F1 a F5 no se añadió
 ningún endpoint, y era lo previsto: la ingesta se lanza con un comando (`ingest`), no desde la API (§2.3-b).
@@ -1101,7 +1109,7 @@ ingesta falló») y una línea en `ULTIMO_FALLO`, las dos con el motivo:
 
 ## 7. El *spec*
 
-`Sources/APIContract/openapi.yaml` — **8.018 líneas, 88 operaciones en 49 rutas y las 21 entidades de §3.2**, más el perfil del jugador (`D-119`).
+`Sources/APIContract/openapi.yaml` — **8.462 líneas, 89 operaciones en 50 rutas y las 21 entidades de §3.2**, más el perfil del jugador (`D-119`) y los refuerzos de la plantilla (`D-128`, la 89).
 Es la **fuente de verdad** (`D-25`): de él se generan los tipos y el `APIProtocol` (`D-65`).
 
 ```sh
