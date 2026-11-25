@@ -5836,6 +5836,14 @@ cuándo el jugador de la federación y el nuestro son la misma persona.
 
 **Enmienda** a [D-119] (punto 9, el código informativo) y a [D-120] (punto 4, dónde se casa).
 
+**Precisada al construirla** (2026-11-25, `R7.12`): **un perfil nuestro que ya tiene otro código no casa por el
+nombre** con un jugador publicado que trae el suyo: son dos personas que se llaman igual, y juntarlas pondría los
+goles de uno a nombre del otro. Sin código publicado, el nombre basta, como antes. Las reglas están en
+`FederationPlayerMatching` (por código y luego por nombre, para la RFFM; solo por nombre, para la federación sin
+código), y el conector elige la suya. La aplicación le pasa los nombres ya vueltos y con las tildes del castellano
+([D-123]), porque el diccionario es suyo; el conector solo compara. Corregir el nombre de un jugador no le borra el
+código.
+
 ### D-127 · La carga del acta completa la plantilla: la sincroniza si nadie lo hizo, y da de alta a quien juega sin estar
 
 **Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 10 del plan R7). Con el acta cargada sola

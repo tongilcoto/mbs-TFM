@@ -61,13 +61,17 @@ public struct PlayerProfile: Identifiable, Equatable, Sendable {
     public let lastShirtNumber: ShirtNumber?
     public let lastPosition: PlayerPosition?
     public let lastPhotoKey: String?
+    /// **Su código en la federación** (`D-126`), opcional: es de la persona y dura
+    /// entre temporadas. Lo guardan la sincronización y la carga del acta al casar;
+    /// la web no lo enseña. Con él se casa primero.
+    public let federationPlayerID: String?
     public let createdAt: Date
     public let updatedAt: Date
 
     public init(
         id: PlayerProfileID, fullName: PlayerName, birthYear: BirthYear?,
         lastShirtNumber: ShirtNumber? = nil, lastPosition: PlayerPosition? = nil,
-        lastPhotoKey: String? = nil, createdAt: Date, updatedAt: Date
+        lastPhotoKey: String? = nil, federationPlayerID: String? = nil, createdAt: Date, updatedAt: Date
     ) {
         self.id = id
         self.fullName = fullName
@@ -75,8 +79,17 @@ public struct PlayerProfile: Identifiable, Equatable, Sendable {
         self.lastShirtNumber = lastShirtNumber
         self.lastPosition = lastPosition
         self.lastPhotoKey = lastPhotoKey
+        self.federationPlayerID = federationPlayerID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// El perfil, con su código de la federación (`D-126`).
+    public func withFederationPlayerID(_ code: String?) -> PlayerProfile {
+        PlayerProfile(
+            id: id, fullName: fullName, birthYear: birthYear, lastShirtNumber: lastShirtNumber,
+            lastPosition: lastPosition, lastPhotoKey: lastPhotoKey, federationPlayerID: code,
+            createdAt: createdAt, updatedAt: updatedAt)
     }
 
     /// El perfil, con el dorsal, la demarcación y la foto de una fila que se
@@ -86,7 +99,8 @@ public struct PlayerProfile: Identifiable, Equatable, Sendable {
         PlayerProfile(
             id: id, fullName: fullName, birthYear: birthYear,
             lastShirtNumber: row.shirtNumber, lastPosition: row.position,
-            lastPhotoKey: row.photoKey, createdAt: createdAt, updatedAt: updatedAt)
+            lastPhotoKey: row.photoKey, federationPlayerID: federationPlayerID,
+            createdAt: createdAt, updatedAt: updatedAt)
     }
 }
 

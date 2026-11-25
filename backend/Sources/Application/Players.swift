@@ -283,8 +283,9 @@ public struct UpdatePlayer: Sendable {
         try await players.save(corrected)
         // El nombre y el año, del perfil: cambian en todas sus temporadas (`D-119`).
         // Y lo de la fila, al perfil, lo vacío también (`D-122`).
+        // El código de la federación es de la persona, no de la ficha (`D-126`): se queda.
         try await profiles.save(PlayerProfile(
-            id: profile.id, fullName: name, birthYear: year,
+            id: profile.id, fullName: name, birthYear: year, federationPlayerID: profile.federationPlayerID,
             createdAt: profile.createdAt, updatedAt: profile.updatedAt
         ).remembering(corrected))
 

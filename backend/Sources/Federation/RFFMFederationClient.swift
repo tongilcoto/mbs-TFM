@@ -5,6 +5,10 @@ public import struct Application.FederationStanding
 public import struct Application.FederationScorerTable
 public import struct Application.FederationTeamRoster
 public import struct Application.FederationMatchReport
+public import struct Application.FederationMatchQuery
+public import struct Application.FederationMatchCandidate
+public import enum Application.FederationPlayerMatch
+import enum Application.FederationPlayerMatching
 import enum Domain.DomainError
 
 /// El adaptador de la RFFM: implementa el puerto `FederationClient` (§4.3).
@@ -93,6 +97,15 @@ public struct RFFMFederationClient: FederationClient {
     public func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport {
         let page = try await transport.get(endpoints.matchReport(federationMatchID: federationMatchID))
         return try RFFMMatchReportParser.parse(page)
+    }
+
+    /// **La RFFM casa primero por su código** (`D-126`): es el mismo en la ficha y en el acta, y dura entre
+    /// temporadas (medido en R7.1: en las 631 coincidencias de código, coincide también el nombre). Si no casa,
+    /// por el nombre.
+    public func matchPlayers(
+        _ published: [FederationMatchQuery], against ours: [FederationMatchCandidate]
+    ) -> [FederationPlayerMatch] {
+        FederationPlayerMatching.byCodeThenName(published, against: ours)
     }
 
     /// La **inversa**: la coordenada que hay dentro de la URL pegada (F10, [D-97]).

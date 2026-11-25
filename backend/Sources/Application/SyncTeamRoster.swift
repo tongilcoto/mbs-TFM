@@ -9,11 +9,16 @@ public import Foundation
 /// según cómo está en el club:
 ///
 /// - **No lo tiene**: perfil nuevo, sin año (la federación no lo da), y su fila.
-/// - **Casa con un perfil** por «el mismo nombre» (`PlayerName.sameNameKey`): solo la
+/// - **Casa con un perfil**, por su código en la federación o, si no, por «el mismo
+///   nombre» (`PlayerName.sameNameKey`); casar es del conector (`D-126`): solo la
 ///   fila, con el dorsal, la demarcación y la foto que guarda el perfil (`D-122`); el
 ///   dorsal, solo si está libre. Salvo que ya esté en la plantilla, que el club lo
 ///   diera de baja de ella, o que esté en otro equipo de la temporada (`D-121`).
-/// - **Casa con varios**: perfil nuevo, y el resumen lo nombra para revisarlo.
+/// - **Casa con varios** por el nombre: perfil nuevo, y el resumen lo nombra para
+///   revisarlo.
+///
+/// **El código de la federación se queda en el perfil** (`D-126`): al de quien casó por
+/// el nombre sin tenerlo, y al perfil nuevo.
 /// - **Su nombre no vale**: no se añade, y el resumen lo da como lo escribe la
 ///   federación.
 ///
@@ -67,7 +72,7 @@ public struct SyncTeamRoster: Sendable {
         // 3 · Todo lo que se escribe, en una.
         let ids = self.ids
         var summary = try await unitOfWork.withRepositories(actor: actor) { r in
-            try await Self.apply(published, plan: plan, now: now, ids: ids, names: dictionary, in: r)
+            try await Self.apply(published, plan: plan, now: now, ids: ids, names: dictionary, client: client, in: r)
         }
         // Cómo estaba el diccionario: el resumen lo dice, porque nunca para la sincronización (decisión 2 de R6.19).
         summary.namesDictionary = .init(found: read != nil, skippedLines: dictionary.problems)
@@ -118,7 +123,8 @@ public struct SyncTeamRoster: Sendable {
     // ── 3 · Lo que se escribe ──────────────────────────────────────────────────
 
     static func apply(_ published: FederationTeamRoster, plan: Plan, now: Date, ids: any UUIDProvider,
-                      names: CastilianNames, in r: any Repositories) async throws -> RosterSyncSummary {
+                      names: CastilianNames, client: any FederationClient,
+                      in r: any Repositories) async throws -> RosterSyncSummary {
         let (team, season) = (plan.team, plan.season)
         var roster = try await r.players.list(teamID: team.id, seasonID: season.id)
         let deleted = try await r.players.deletedProfileIDs(teamID: team.id, seasonID: season.id)
@@ -132,9 +138,27 @@ public struct SyncTeamRoster: Sendable {
                 summary.invalidName.append(publishedPlayer.publishedName)
                 continue
             }
-            let matches = profiles.filter { $0.fullName.sameNameKey == name.sameNameKey }
+            // Uno a uno y contra los perfiles de **ahora**: el que esta misma sincronización acaba de crear
+            // también cuenta, como cuando se casaba aquí.
+            let code = publishedPlayer.federationPlayerID
+            let match = client.matchPlayers(
+                [FederationMatchQuery(federationPlayerID: code, name: name)],
+                against: profiles.map(FederationMatchCandidate.init))[0]
+            let matchedID: PlayerProfileID?
+            var ambiguous = false
+            switch match {
+            case .byCode(let id), .byName(let id): matchedID = id
+            case .ambiguousName: matchedID = nil; ambiguous = true
+            case .none: matchedID = nil
+            }
 
-            if matches.count == 1, let profile = matches.first {
+            if let matchedID, var profile = profiles.first(where: { $0.id == matchedID }) {
+                // Casado por el nombre a uno sin código: se le guarda el suyo para la próxima vez (`D-126`).
+                if profile.federationPlayerID == nil, let code {
+                    profile = profile.withFederationPlayerID(code)
+                    try await r.playerProfiles.save(profile)
+                    profiles = profiles.map { $0.id == profile.id ? profile : $0 }
+                }
                 if let row = roster.first(where: { $0.profileID == profile.id }) {
                     summary.alreadyInRoster += 1
                     listed.insert(row.id)
@@ -167,7 +191,7 @@ public struct SyncTeamRoster: Sendable {
 
             // Ninguno, o varios: perfil nuevo, sin año.
             let profile = PlayerProfile(id: PlayerProfileID(raw: ids.next()), fullName: name, birthYear: nil,
-                                        createdAt: now, updatedAt: now)
+                                        federationPlayerID: code, createdAt: now, updatedAt: now)
             try await r.playerProfiles.save(profile)
             profiles.append(profile)
             let row = Player(id: PlayerID(raw: ids.next()), profileID: profile.id, teamID: team.id,
@@ -177,7 +201,7 @@ public struct SyncTeamRoster: Sendable {
             listed.insert(row.id)
             summary.added += 1
             summary.withoutBirthYear += 1
-            if matches.count > 1 { summary.duplicateName.append(.init(player: row, profile: profile)) }
+            if ambiguous { summary.duplicateName.append(.init(player: row, profile: profile)) }
         }
 
         // Federado o no, cada fila de la plantilla; la última vez listado, solo las listadas.
