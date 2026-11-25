@@ -1,0 +1,302 @@
+{
+  "title": "R7.10 · el cierre de B1: las reglas, las tablas y las lecturas del acta",
+  "filter": "AppearanceEndpointTests|AppearanceRepositoryTests|AppearanceUseCaseTests|CardEndpointTests|CardUseCaseTests|GoalEndpointTests|GoalRepositoryTests|GoalUseCaseTests|MatchReportCopyTests|MatchReportSchemaTests|MatchReportTests|ReinforcementEndpointTests|ReinforcementUseCaseTests",
+  "mutations": [
+    {
+      "id": "K1-sin-hora",
+      "description": "sin hora, el partido empieza al empezar su día, no al acabarlo",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "return MadridDay.of(instant) > date",
+      "replace": "return MadridDay.of(instant) >= date",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "K2-con-hora",
+      "description": "con hora, empieza un instante después de su hora",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "return instant >= madrid.date(from: start)!",
+      "replace": "return instant > madrid.date(from: start)!",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "V1-minutos-cero",
+      "description": "cero minutos jugados valen",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard (1...120).contains(value) else {\n            throw DomainError.invalidValue(field: \"minutes\"",
+      "replace": "guard (0...120).contains(value) else {\n            throw DomainError.invalidValue(field: \"minutes\"",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "V2-minuto-121",
+      "description": "el minuto 121 vale",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard (0...120).contains(value) else {\n            throw DomainError.invalidValue(field: \"minute\"",
+      "replace": "guard (0...121).contains(value) else {\n            throw DomainError.invalidValue(field: \"minute\"",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "V3-comentario-largo",
+      "description": "un comentario de 501 caracteres vale",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard trimmed.count <= maximumLength else {",
+      "replace": "guard trimmed.count <= maximumLength + 1 else {",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "T1-equipo-rival",
+      "description": "el equipo del apunte puede ser el rival",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard isOwn, team == match.home || team == match.away else {",
+      "replace": "guard team == match.home || team == match.away else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "T2-otra-temporada",
+      "description": "el jugador puede ser de otra temporada",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard season == matchSeason else {",
+      "replace": "guard true else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "S1-jugado-antes",
+      "description": "«Jugado» se apunta antes de la hora",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard status != .jugado || started else { throw DomainError.matchNotStarted }",
+      "replace": "guard true else { throw DomainError.matchNotStarted }",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "S2-cualquier-cambio",
+      "description": "se cambia de baja médica a sancionado",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard switchable.contains(old), switchable.contains(new) else {",
+      "replace": "guard switchable.contains(old) || true else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "S3-minutos-sin-jugar",
+      "description": "los minutos valen sin «Jugado»",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard minutes == nil || status == .jugado else {",
+      "replace": "guard true else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "S4-minutos-se-quedan",
+      "description": "dejar «Jugado» no borra los minutos",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "status == .jugado ? minutes : nil",
+      "replace": "minutes",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "E1-acta-cargada",
+      "description": "con el acta cargada se añaden goles y tarjetas",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard !reportLoaded else { throw DomainError.matchReportLoaded }",
+      "replace": "guard true else { throw DomainError.matchReportLoaded }",
+      "filter": "MatchReportTests|MatchReportCopyTests|GoalUseCaseTests|GoalEndpointTests|CardUseCaseTests|CardEndpointTests"
+    },
+    {
+      "id": "E2-borrar-del-acta",
+      "description": "lo que trajo el acta se borra",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard !fromReport else { throw DomainError.lockedByMatchReport(field: \"id\") }",
+      "replace": "guard true else { throw DomainError.lockedByMatchReport(field: \"id\") }",
+      "filter": "MatchReportTests|MatchReportCopyTests|GoalUseCaseTests|GoalEndpointTests|CardUseCaseTests|CardEndpointTests"
+    },
+    {
+      "id": "G1-penalti-fuera",
+      "description": "un penalti se tira fuera del área",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard goal.zone != .fueraArea else {",
+      "replace": "guard true else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "G2-propia-con-asistencia",
+      "description": "un gol en propia puerta tiene asistencia",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "if goal.playType == .enPropiaPuerta, goal.assisted || goal.assist != nil {",
+      "replace": "if false {",
+      "filter": "MatchReportTests|MatchReportCopyTests"
+    },
+    {
+      "id": "G3-goleador-del-acta",
+      "description": "en un gol del acta se cambia el goleador",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard new.scorer == old.scorer else { throw DomainError.lockedByMatchReport(field: \"scorerPlayerId\") }",
+      "replace": "guard true else { throw DomainError.lockedByMatchReport(field: \"scorerPlayerId\") }",
+      "filter": "MatchReportTests|MatchReportCopyTests|GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "G4-se-vuelve-penalti",
+      "description": "un gol normal del acta se vuelve penalti",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard wasSet == isSet, !wasSet || new.playType == old.playType else {",
+      "replace": "guard !wasSet || new.playType == old.playType else {",
+      "filter": "MatchReportTests|MatchReportCopyTests|GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "C1-amarilla-suelta",
+      "description": "la segunda amarilla convive con una amarilla suelta",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard !looseYellow else { throw DomainError.looseYellowExists }",
+      "replace": "guard true else { throw DomainError.looseYellowExists }",
+      "filter": "MatchReportTests|MatchReportCopyTests|CardUseCaseTests|CardEndpointTests"
+    },
+    {
+      "id": "C2-minuto-del-acta",
+      "description": "en una tarjeta del acta se cambia el minuto",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "guard new.minute == old.minute else { throw DomainError.lockedByMatchReport(field: \"minute\") }\n    }\n}",
+      "replace": "guard true else { throw DomainError.lockedByMatchReport(field: \"minute\") }\n    }\n}",
+      "filter": "MatchReportTests|MatchReportCopyTests|CardUseCaseTests|CardEndpointTests"
+    },
+    {
+      "id": "R1-cambiado",
+      "description": "una fila con el estado del acta sale como cambiada",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "lineup.first { $0.playerID == row.playerID }?.status != row.status",
+      "replace": "lineup.first { $0.playerID == row.playerID }?.status == row.status",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "R2-quitados",
+      "description": "los quitados son los que siguen en la convocatoria",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "return lineup.filter { !present.contains($0.playerID) }",
+      "replace": "return lineup.filter { present.contains($0.playerID) }",
+      "filter": "MatchReportTests|MatchReportCopyTests|AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "O1-propia-goleador",
+      "description": "en propia puerta, el goleador es del que marca",
+      "file": "Sources/Domain/MatchReport.swift",
+      "find": "public var scorerTeamID: TeamID { playType == .enPropiaPuerta ? concedingTeamID : scoringTeamID }",
+      "replace": "public var scorerTeamID: TeamID { scoringTeamID }",
+      "filter": "GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "A1-repetido",
+      "description": "se convoca dos veces al mismo jugador",
+      "file": "Sources/Application/Appearances.swift",
+      "find": "guard try await r.appearances.find(playerID: player.id, matchID: command.matchID) == nil else {",
+      "replace": "guard true else {",
+      "filter": "AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "A2-entre-rivales",
+      "description": "un partido entre rivales tiene acta",
+      "file": "Sources/Application/Appearances.swift",
+      "find": "guard isOwn else { throw ApplicationError.matchNotFound(id: \"\\(id)\") }",
+      "replace": "guard true else { throw ApplicationError.matchNotFound(id: \"\\(id)\") }",
+      "filter": "AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "A3-archivada",
+      "description": "se apunta en una temporada archivada",
+      "file": "Sources/Application/Appearances.swift",
+      "find": "        try RosterRules.requireNotArchived(context.season)\n        try MatchReportRules.requireTeam(",
+      "replace": "        try MatchReportRules.requireTeam(",
+      "filter": "AppearanceUseCaseTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "G5-goleador-rival",
+      "description": "un gol del rival lleva goleador del club",
+      "file": "Sources/Application/Goals.swift",
+      "find": "guard context.ownTeams.contains(goal.scorerTeamID) else {",
+      "replace": "guard true else {",
+      "filter": "GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "G6-encaja",
+      "description": "el que encaja es siempre el visitante",
+      "file": "Sources/Application/Goals.swift",
+      "find": "concedingTeamID: scoringTeamID == match.homeTeamID ? match.awayTeamID : match.homeTeamID,",
+      "replace": "concedingTeamID: match.awayTeamID,",
+      "filter": "GoalUseCaseTests|GoalEndpointTests"
+    },
+    {
+      "id": "C3-tipo-repetido",
+      "description": "dos amarillas al mismo jugador en un partido",
+      "file": "Sources/Application/Cards.swift",
+      "find": "guard !others.contains(where: { $0.type == card.type }) else {",
+      "replace": "guard true else {",
+      "filter": "CardUseCaseTests|CardEndpointTests"
+    },
+    {
+      "id": "F1-refuerzo-propio",
+      "description": "los de la plantilla también son refuerzos",
+      "file": "Sources/Application/ListTeamReinforcements.swift",
+      "find": "guard let player = try await players.find(playerID), player.teamID != teamID else { continue }",
+      "replace": "guard let player = try await players.find(playerID) else { continue }",
+      "filter": "ReinforcementUseCaseTests|ReinforcementEndpointTests"
+    },
+    {
+      "id": "F2-jugadas",
+      "description": "las jugadas cuentan las que no jugó",
+      "file": "Sources/Application/ListTeamReinforcements.swift",
+      "find": "playedCount: own.filter { $0.status == .jugado }.count,",
+      "replace": "playedCount: own.filter { $0.status != .jugado }.count,",
+      "filter": "ReinforcementUseCaseTests|ReinforcementEndpointTests"
+    },
+    {
+      "id": "P1-orden-dorsal",
+      "description": "la convocatoria va por dorsal de mayor a menor",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": ".sort(.sql(unsafeRaw: \"shirt_number ASC NULLS LAST\"))",
+      "replace": ".sort(.sql(unsafeRaw: \"shirt_number DESC NULLS LAST\"))",
+      "filter": "AppearanceRepositoryTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "P2-orden-minuto",
+      "description": "los goles de un partido van de mayor a menor minuto",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "? \"g.minute ASC NULLS LAST, g.created_at, g.id\"",
+      "replace": "? \"g.minute DESC NULLS LAST, g.created_at, g.id\"",
+      "filter": "GoalRepositoryTests|GoalEndpointTests"
+    },
+    {
+      "id": "P3-copias-sin-acta",
+      "description": "sale copia del acta de partidos sin cargar",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "WHERE report_loaded_at IS NOT NULL AND id IN",
+      "replace": "WHERE id IN",
+      "filter": "AppearanceRepositoryTests|AppearanceEndpointTests"
+    },
+    {
+      "id": "P4-temporada",
+      "description": "el filtro por temporada no filtra",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "if let id = filter.seasonID { conditions.append(\"c.season_id = \\(bind: id.raw)\") }",
+      "replace": "if let id = filter.seasonID { _ = id }",
+      "filter": "GoalRepositoryTests"
+    },
+    {
+      "id": "M1-check-minutos",
+      "description": "la base acepta minutos sin «Jugado»",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "expression: \"minutes IS NULL OR status = 'jugado'\")",
+      "replace": "expression: \"true\")",
+      "filter": "MatchReportSchemaTests"
+    },
+    {
+      "id": "M2-check-penalti",
+      "description": "la base acepta un penalti fuera del área",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "\"play_type IS DISTINCT FROM 'penalti' OR (zone IS DISTINCT FROM 'fuera_area' AND shot_side IS NULL)\"",
+      "replace": "\"true\"",
+      "filter": "MatchReportSchemaTests"
+    },
+    {
+      "id": "M3-unica-convocatoria",
+      "description": "la base acepta dos convocatorias del mismo jugador",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "table: AppearanceRecord.schema, name: \"uq_appearances\",\n            columns: [\"player_id\", \"match_id\"], where: \"deleted_at IS NULL\")",
+      "replace": "table: AppearanceRecord.schema, name: \"uq_appearances\",\n            columns: [\"player_id\", \"match_id\", \"id\"], where: \"deleted_at IS NULL\")",
+      "filter": "MatchReportSchemaTests"
+    }
+  ]
+}
