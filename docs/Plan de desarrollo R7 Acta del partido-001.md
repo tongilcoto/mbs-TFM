@@ -520,6 +520,18 @@ lo cubren las pruebas de piezas y del servidor, y sus escenarios llegan con la r
 | `R7.12` | **La ingesta**, en ciclos TDD: qué partidos pregunta y cuándo carga (`D-133`); el casado por código o por nombre (`D-126`); el alta del que no está en ninguna plantilla, el refuerzo del de otro equipo, y la plantilla sincronizada si no lo estaba (decisión 10); sin repetir lo que el club ya apuntó |
 | `R7.13` | **La federación falsa** de los escenarios publica el acta de cada uno, con su fallo y su espera; y **el cierre de B2**: tests, mutación, censo |
 
+**Decisiones de `R7.12`** (2026-11-25), una a una con el desarrollador, al diseñar la carga (`D-138`):
+
+| Qué | Opciones | Elegida |
+|---|---|---|
+| **1 · Dónde va la carga en la pasada, y qué pasa si falla un acta** | Una cuarta pasada con su fila, o sumada a la del calendario; que un acta fallida hunda la competición o no | **Una cuarta pasada, «las actas», con su fila** en `ingestion_runs` (tipo nuevo, con migración). Cada acta en su transacción: la que falla no se carga, se cuenta y se reintenta en la pasada siguiente; **no hace fallida la competición** |
+| **2 · Qué temporadas** | Solo la en curso; la en curso y la pasada si se pide; siempre las dos | **La en curso siempre; la pasada, solo si se pide su temporada** (`POST /ingestion-runs` con `seasonId`), como el resto de la pasada. La archivada, nunca. Sin plantillas en la pasada: sus jugadores entran por el alta del acta (`D-127`), casados por el código si lo tienen |
+| **3 · Qué apunta la pasada** | Contadores y motivos como las otras pasadas, o solo los motivos | **Como las otras**: cuatro contadores (actas cargadas, sin cerrar, fallidas; jugadores dados de alta por el acta) y tres motivos de omitido (código desconocido, nombre que no se lee, acta que no se pudo leer), con el código del acta. **Cambia el contrato**: el tipo `kind` nuevo, los contadores y los motivos; primero el catálogo, como en `R7.4` |
+| **4 · El jugador con un nombre que no se lee** | Casar por el código o dejarlo fuera; o no cargar el acta | **Por el código, si casa**; si no, sin alta ni convocatoria, sin su tarjeta, y su gol sin goleador; apuntado como omitido. Medido: ninguno en 1631 apariciones del club en 95 actas |
+| **5 · Lo del rival** | — (confirmar lo decidido) | **Sus jugadores y sus tarjetas, nada** (`D-136`); **sus goles, sin goleador** (`D-09`); en propia puerta, el de un rival es gol del club sin goleador, y el de uno del club, gol del rival a su nombre (`D-52`). Los goles de cada lado cuadran con el marcador |
+| **6 · El partido entre dos equipos del club** (2 de 95) | — | **Los dos lados, como del club**: cada convocatoria y tarjeta con su equipo (`D-128`); **el gol en propia puerta, a nombre del que lo mete**, del equipo que encaja, sin contarle como goleador (`D-52`); y si falta, la sincronización de los dos |
+| **7 · Que el acta sea de ese partido** | — | **Sus dos códigos de equipo, los de nuestro local y visitante**; si no, no se carga, cuenta como fallida y se reintenta, como el calendario con el nombre de la competición |
+
 ### C · La web (otra rama)
 
 ### D · Los escenarios en verde y el cierre
