@@ -291,6 +291,7 @@ resuelto** con los volcados: cuatro en §F.12, y los dos grandes —acta y golea
   demuestra que existen —tres tipos de gol y dos de tarjeta (§F.10)— pero el acta observada no los ejercita.
   **Hace falta capturar un acta con penalti, gol en propia puerta y tarjeta roja**; es lo que decide si el
   desglose de `Goal` y el tipo de `Card` pueden llegar de la fuente o siguen siendo entrada manual.
+  **Resuelto** (R7.1 y R7.11, [D-131]): ver el final de §F.10.
 - **Si `goles_penalti[]` es la tanda de penaltis** —lo sugiere su vecindad con `hay_penaltis`,
   `penaltis_casa` y `penaltis_fuera`— o los penaltis convertidos en juego. Llega vacía en la muestra.
 - **El `buildId` de la ruta de datos de Next.js** (§F.10): confirmado que cambia entre despliegues. Falta
@@ -529,6 +530,29 @@ enumerado más `segunda_amarilla` como campo aparte, igual que en el modelo.
 > sensible de toda la fuente y condiciona cualquier decisión sobre ingerirlo (§8, RGPD).
 
 **Coste:** una petición **por partido** — ~240 por grupo y temporada.
+
+### Medido al construir el adaptador (R7.11, 2026-11-25) **[C]**
+
+Sobre las **96 actas cerradas** de los equipos del club, una sin cerrar y un código que no existe:
+
+- **La ruta que se usa es la página**, `GET /acta-partido/{codacta}`, con el bloque `__NEXT_DATA__` como el
+  calendario (§F.7). **Responde igual con el código solo** que con `temporada`, `competicion` y `grupo` detrás. La
+  ruta `_next/data/{buildId}/…` de arriba no se usa: el `buildId` cambia con cada despliegue.
+- **Los códigos que faltaban** ([D-131]): gol `100` normal, `101` penalti, `102` en propia puerta; tarjeta `100`
+  amarilla y `101` roja. **El gol en propia puerta va en la lista del equipo del jugador que lo marca y suma al
+  otro**: leído así, el marcador cuadra en las 3 actas que tienen uno. **La doble amarilla** son dos `100` del mismo
+  jugador, la segunda con `segunda_amarilla = "1"` (7 actas).
+- **Los cambios** (`sustituciones_equipo_*`) traen `codjugador_entra`, `codjugador_sale`, `entradorsal`,
+  `saledorsal`, sus nombres y el `minuto`. Solo vienen en las actas de una de las competiciones medidas, de 7 a 12 por
+  partido; en las demás, ninguno.
+- **El acta sin cerrar existe**: `acta_cerrada = "0"`, con los dos equipos pero sin marcador ni jugadores.
+- **A un código que no existe, `200` y un acta con todo vacío**, `acta_cerrada = "0"` y **sin códigos de equipo**:
+  no llega `null`, como en la ficha o el calendario. El adaptador lo lee como `coordinateNotFound`.
+- **Un 0-3 sin ningún gol** (1 de 96), con los dos equipos completos y todos de titulares: un resultado de los
+  despachos. El marcador no cuadra con los goles, y no tiene por qué ([D-53]).
+- `goles_penalti` y `otras_tarjetas` llegan **vacías en las 96**.
+
+Grabaciones, con los datos personales cambiados: `backend/Tests/FederationTests/Fixtures/RFFM-acta-*.html`.
 
 ---
 

@@ -252,6 +252,24 @@ public protocol FederationClient: Sendable {
     /// venga no puede nacer sin decir cómo lee su plantilla, o que no la publica
     /// (`providesTeamRoster`).
     func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster
+
+    /// **El acta de un partido** (`D-125`, R7.11): en la RFFM, la página del acta, con el código del partido en la
+    /// federación (`Match.federationMatchID`, el `codacta` del calendario).
+    ///
+    /// # Qué devuelve y qué no
+    ///
+    /// El acta **ya en nuestros tipos**: el adaptador traduce los códigos de gol y de tarjeta de su federación
+    /// (`D-131`), da la vuelta al gol en propia puerta para que sume al equipo que lo recibe, y deja la doble amarilla
+    /// en una sola roja. Lo que no entiende no lo adivina: va a `skipped`. **No casa a nadie ni escribe nada**: eso
+    /// es de la carga (`R7.12`).
+    ///
+    /// **Un acta sin cerrar es una respuesta**, no un error (`isClosed` falso): la página existe antes del partido,
+    /// y si se carga o no lo decide quien llama (`D-133`). `FederationError.coordinateNotFound` si el código no
+    /// designa ningún acta.
+    ///
+    /// **Sin implementación por defecto**, como las de arriba: el adaptador que venga tiene que decir cómo lee el
+    /// acta de su federación.
+    func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport
 }
 
 /// La plantilla de un equipo, como la publica su federación ([D-120]).

@@ -12,4 +12,9 @@ extension FederationClient {
     public func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster {
         throw FederationError.coordinateNotFound(detail: "doble sin plantilla: \(federationTeamID)")
     }
+
+    /// Lo mismo con el acta del partido (`D-125`, R7.11).
+    public func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport {
+        throw FederationError.coordinateNotFound(detail: "doble sin acta: \(federationMatchID)")
+    }
 }

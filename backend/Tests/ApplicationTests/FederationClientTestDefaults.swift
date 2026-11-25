@@ -14,4 +14,10 @@ extension FederationClient {
         Issue.record("este doble no prepara la plantilla publicada: \(federationTeamID)")
         throw FederationError.coordinateNotFound(detail: "doble sin plantilla")
     }
+
+    /// Lo mismo con el acta del partido (`D-125`, R7.11).
+    func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport {
+        Issue.record("este doble no prepara el acta: \(federationMatchID)")
+        throw FederationError.coordinateNotFound(detail: "doble sin acta")
+    }
 }
