@@ -317,7 +317,13 @@ extension Domain.IngestionRun {
                 standingRowsUpdated: standingRowsUpdated,
                 leagueScorersCreated: leagueScorersCreated,
                 leagueScorersUpdated: leagueScorersUpdated,
-                leagueScorersRetired: leagueScorersRetired),
+                leagueScorersRetired: leagueScorersRetired,
+                // Los de la pasada de actas (R7.12, D-138): a cero hasta que la fila los guarde, en la
+                // migración de la carga. Ninguna pasada de hoy carga actas, así que el cero es verdad.
+                matchReportsLoaded: 0,
+                matchReportsNotClosed: 0,
+                matchReportsFailed: 0,
+                matchReportPlayersAdded: 0),
             skipped: skipped.map {
                 .init(reason: $0.reason.toContract(), detail: $0.detail)
             })

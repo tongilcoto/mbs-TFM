@@ -332,8 +332,14 @@ opcional (§3.5).
 - **IngestionRun.outcome:** `succeeded, failed` ([D-85]). **Dos y no tres**: no hay `partial` porque la
   pasada es atómica ([D-83]) — o se escribió entera o no se escribió nada. Que haya filas descartadas **no**
   la hace parcial: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo.
+- **IngestionRun.kind:** `calendar, standings, scorers, match_reports`: una fila por clase de pasada y competición
+  en cada disparo. **`match_reports`**, la carga de las actas de los partidos del club ([D-138]), con sus cuatro
+  contadores (actas cargadas, sin cerrar y fallidas, y jugadores dados de alta por el acta); un acta que falla no
+  hace fallida su pasada.
 - **IngestionSkip.reason:** `ambiguousOpponentClub, ambiguousTeam, ambiguousMatch, unresolvedTeam,
-  missingMatchDate, unsluggableClubName, duplicateClubName`. **No es columna**: viaja dentro del documento
+  missingMatchDate, unsluggableClubName, duplicateClubName, unknownStandingTeam, unidentifiedScorer,
+  unidentifiedTeam`, y los tres de la pasada de actas ([D-138]): `unknownMatchReportCode`,
+  `unreadableReportPlayerName` y `unreadableMatchReport`. **No es columna**: viaja dentro del documento
   `IngestionRun.skipped`, así que no lleva `CHECK` — lo hace cumplir el tipo al serializar. Es el catálogo de
   por qué una fila se queda fuera de una pasada, y cada valor tiene su decisión detrás ([D-79], [D-75],
   [D-82]).
@@ -348,7 +354,7 @@ opcional (§3.5).
 Calculadas por consulta o vistas materializadas:
 - **Estado de la sincronización de una competición** — `ingestionHealth`, `previousIngestionHealth` y
   `lastIngestionAt`, derivados de **la última fila de cada clase** de `ingestion_runs` de esa competición, con la
-  peor de las tres, y de la hora de la última pasada del club que acabó, que decide si una pasada pedida sigue
+  peor de las cuatro, y de la hora de la última pasada del club que acabó, que decide si una pasada pedida sigue
   en marcha ([D-89] y su enmienda). **No es tabla ni columna**: materializarlo
   en `competitions` metería un segundo escritor que sincronizar en cada pasada ([D-18]). `last_synced_at` sí
   es columna, pero **no sirve para esto**: una pasada fallida hace `rollback` sin tocarla ([D-83]), así que

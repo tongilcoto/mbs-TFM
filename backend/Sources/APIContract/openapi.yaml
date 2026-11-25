@@ -8219,8 +8219,8 @@ components:
             pasada**: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo
             (D-83).
 
-            **Diez de los once motivos son filas que no se escribieron; `unidentified_team` es una fila que
-            sí se escribió, pero coja** (F9-bis). Por eso la lista **se lee por el motivo de cada línea y no
+            **Trece de los catorce motivos son filas que no se escribieron; `unidentified_team` es una fila
+            que sí se escribió, pero coja** (F9-bis). Por eso la lista **se lee por el motivo de cada línea y no
             se cuenta**: su longitud no es *"cuántas filas faltan"*.
           items:
             $ref: '#/components/schemas/IngestionSkip'
@@ -8233,17 +8233,23 @@ components:
         disparo** y sin esto serían indistinguibles — misma competición, misma hora, y los contadores del
         otro a cero, que se lee como *"no hizo nada"* en vez de como *"esos no van con esto"*.
 
-        Es además lo que le dice al cliente **qué contadores mirar** de los trece que trae `counters`.
+        Es además lo que le dice al cliente **qué contadores mirar** de los diecisiete que trae `counters`.
 
         **F8 añade `scorers`**, y con ella una competición deja **tres** filas por disparo. Cae del lado
         **nulo** de `roundId`, igual que el calendario y por el mismo motivo: `LeagueScorer` es estado
         vigente único, no *snapshot* por jornada (§3.2), así que su endpoint devuelve la competición
         entera en una petición.
-      enum: [calendar, standings, scorers]
+
+        **R7.12 añade `match_reports`** (D-138): la carga de las actas de los partidos del club de esa
+        competición, con **cuatro** filas por disparo. También del lado **nulo** de `roundId`: carga las
+        actas que tocan, de cualquier jornada. **Un acta que falla no hace fallida la pasada**: se cuenta en
+        `matchReportsFailed`, se señala en `skipped` y se vuelve a pedir en el disparo siguiente (D-133).
+      enum: [calendar, standings, scorers, match_reports]
       x-enum-names:
         calendar: Calendario
         standings: Clasificación
         scorers: Goleadores
+        match_reports: Actas
 
     IngestionHealth:
       type: string
@@ -8256,7 +8262,7 @@ components:
         reimplementarían por separado la web, iOS y Android, y se desincronizarían el día que el tope
         cambie.
 
-        **«La última pasada» es la última fila de cada clase** (`calendar`, `standings`, `scorers`), ordenadas
+        **«La última pasada» es la última fila de cada clase** (`calendar`, `standings`, `scorers`, `match_reports`), ordenadas
         por `startedAt`, **y la competición toma la peor** (D-89, enmienda). Un disparo deja varias filas, y
         si solo contara el calendario, una competición con los goleadores rotos saldría al día. La clase que
         la federación no publica no tiene filas y no cuenta.
@@ -8318,7 +8324,8 @@ components:
         [opponentClubsCreated, opponentClubsUpdated, teamsCreated, teamsUpdated,
          roundsCreated, roundsUpdated, matchesCreated, matchesUpdated,
          standingRowsCreated, standingRowsUpdated,
-         leagueScorersCreated, leagueScorersUpdated, leagueScorersRetired]
+         leagueScorersCreated, leagueScorersUpdated, leagueScorersRetired,
+         matchReportsLoaded, matchReportsNotClosed, matchReportsFailed, matchReportPlayersAdded]
       properties:
         opponentClubsCreated: { type: integer, minimum: 0, readOnly: true }
         opponentClubsUpdated: { type: integer, minimum: 0, readOnly: true }
@@ -8357,8 +8364,38 @@ components:
             **Y es el número que hay que mirar cuando algo va mal**: una pasada que retire 200 de 218 no
             ha limpiado nada — ha vaciado el ranking. Sin contador, eso se ve en la pantalla y no en la
             tabla, que es justo lo que D-85 existe para evitar.
+        matchReportsLoaded:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Actas **cargadas** por esta pasada (R7.12, D-138): las que la federación tenía cerradas y se
+            escribieron enteras. Cada una deja su partido marcado y no se vuelve a pedir (D-133).
+        matchReportsNotClosed:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Actas **todavía sin cerrar**: el partido ya empezó pero la federación no ha firmado el acta. No
+            es un fallo; se vuelven a pedir en el disparo siguiente (D-133, punto 2).
+        matchReportsFailed:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Actas que **no se pudieron cargar**: la federación falló o tardó, o lo que trajo no se lee o no
+            es de ese partido (D-138, puntos 1 y 7). No se escribe nada de ellas y se vuelven a pedir; cada
+            una va también en `skipped`, con su `codacta`.
+        matchReportPlayersAdded:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: |
+            Jugadores **dados de alta en una plantilla** por la carga del acta: los de la sincronización que
+            hace cuando el equipo no la tenía (D-127, punto 1) y los del acta que no estaban en ninguna
+            plantilla del club (D-127, puntos 2 y 3).
 
-      # **Los trece viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es
+      # **Los diecisiete viajan siempre, y los que no aplican van a cero.** Quien dice cuáles importan es
       # `kind`, no la ausencia del campo: un contador ausente y uno a cero se leen igual desde el
       # cliente, y "esos no van con esto" no es lo mismo que "no hizo nada".
 
@@ -8399,14 +8436,24 @@ components:
         aguanta 217 de 218, mientras que una clasificación a la que le falte una fila tiene un hueco en
         una numeración que este mismo *spec* declara imposible.
 
-        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los once que
-        no describe una fila ausente**: el equipo *sí* se escribe, pero sin el código que la fuente no
+        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los catorce
+        que no describe una fila ausente**: el equipo *sí* se escribe, pero sin el código que la fuente no
         publicó. Es lo que ensancha el significado de la lista, de *"lo que no escribí"* a *"lo que dejé
         señalado"* — y el motivo es justo lo que distingue un caso del otro, así que hay que leerlo y no
         contar líneas. Es hermano de `unidentified_scorer`: los dos significan *"la fuente cambió de
         forma"*. Tampoco tira la pasada —un equipo sin código sigue teniendo sus partidos— y **se cura
         solo** en cuanto la fuente vuelva a publicar el código: el paso 2 lo reencuentra por nombre y
         D-76 rellena el hueco.
+
+        Los tres últimos son de la pasada de **actas** (R7.12, D-138), y en los tres `detail` lleva el
+        `codacta`. `unknown_match_report_code` es un gol o una tarjeta con un código que no es ninguno de los
+        medidos: no se adivina y no se carga (D-131, punto 4); el resto del acta, sí.
+        `unreadable_report_player_name` es un jugador del club con un nombre que no se lee y un código que no
+        casa con nadie: no se le da de alta, y su tarjeta no se carga (D-138, punto 4). Y
+        `unreadable_match_report` es un acta que no se cargó entera —la federación falló o tardó, lo que
+        trajo no se lee, o sus equipos no son los del partido (D-138, puntos 1 y 7)—: es el único de los
+        tres que se cuenta también en `matchReportsFailed`, y se cura solo cuando el disparo siguiente la
+        carga.
       enum:
         - ambiguous_opponent_club
         - ambiguous_team
@@ -8418,6 +8465,9 @@ components:
         - unknown_standing_team
         - unidentified_scorer
         - unidentified_team
+        - unknown_match_report_code
+        - unreadable_report_player_name
+        - unreadable_match_report
       x-enum-names:
         ambiguous_opponent_club: Hay más de un club rival que encaja
         ambiguous_team: Hay más de un equipo que encaja
@@ -8429,6 +8479,9 @@ components:
         unknown_standing_team: Equipo de la clasificación sin reconocer
         unidentified_scorer: Goleador sin código de la federación
         unidentified_team: Equipo sin código de la federación
+        unknown_match_report_code: Gol o tarjeta del acta con un código desconocido
+        unreadable_report_player_name: Jugador del acta con un nombre que no se lee
+        unreadable_match_report: Acta que no se pudo cargar
 
     TriggerIngestionRequest:
       type: object

@@ -32,6 +32,10 @@
     "GoalResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
     "GoalResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.7)",
     "CardResponse.createdAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)",
-    "CardResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)"
+    "CardResponse.updatedAt": "obligatorio en el spec, así que el decodificador generado exige que esté (H-72); lo pone la base al guardar (@Timestamp), no el dominio, así que no hay valor que afirmar (R7.8)",
+    "IngestionCounters.matchReportsLoaded": "en el catálogo desde R7.12 (D-138), pero la fila de la pasada aún no lo guarda: llega con la migración de la carga del acta. Hasta entonces viaja a cero, que es verdad porque ninguna pasada carga actas",
+    "IngestionCounters.matchReportsNotClosed": "en el catálogo desde R7.12 (D-138), pero la fila de la pasada aún no lo guarda: llega con la migración de la carga del acta. Hasta entonces viaja a cero, que es verdad porque ninguna pasada carga actas",
+    "IngestionCounters.matchReportsFailed": "en el catálogo desde R7.12 (D-138), pero la fila de la pasada aún no lo guarda: llega con la migración de la carga del acta. Hasta entonces viaja a cero, que es verdad porque ninguna pasada carga actas",
+    "IngestionCounters.matchReportPlayersAdded": "en el catálogo desde R7.12 (D-138), pero la fila de la pasada aún no lo guarda: llega con la migración de la carga del acta. Hasta entonces viaja a cero, que es verdad porque ninguna pasada carga actas"
   }
 }
