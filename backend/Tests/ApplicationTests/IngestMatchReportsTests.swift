@@ -19,6 +19,17 @@ struct IngestMatchReportsTests {
     final class ReportClient: FederationClient, @unchecked Sendable {
         var reports: [String: Result<FederationMatchReport, any Error>] = [:]
         private(set) var asked: [String] = []
+        /// La ficha de cada equipo, por su código (`D-127`, punto 1), y qué fichas le pidieron.
+        var rosters: [String: FederationTeamRoster] = [:]
+        private(set) var askedRosters: [String] = []
+
+        func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster {
+            askedRosters.append(federationTeamID)
+            guard let roster = rosters[federationTeamID] else {
+                throw FederationError.coordinateNotFound(detail: "sin ficha: \(federationTeamID)")
+            }
+            return roster
+        }
 
         func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport {
             asked.append(federationMatchID)
@@ -60,10 +71,10 @@ struct IngestMatchReportsTests {
         return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))!
     }
 
-    static func seed(archived: Bool = false) async throws -> Fixture {
+    static func seed(archived: Bool = false, label: String = "2026/27") async throws -> Fixture {
         let store = IngestionStore()
         let season = try Season(
-            id: SeasonID(raw: UUID()), label: try SeasonLabel("2026/27"), federationSeasonID: "22",
+            id: SeasonID(raw: UUID()), label: try SeasonLabel(label), federationSeasonID: "22",
             archivedAt: archived ? now : nil, createdAt: now, updatedAt: now)
         let competition = try Competition(
             id: CompetitionID(raw: UUID()), seasonID: season.id, modality: .futbol11, gender: .masculino,
@@ -122,10 +133,13 @@ struct IngestMatchReportsTests {
             homeScore: closed ? 1 : nil, awayScore: closed ? 0 : nil, players: [], goals: [], cards: [], skipped: [])
     }
 
+    /// El diccionario de nombres de estas pruebas (`D-123`).
+    static let names = CastilianNames(text: "GARCÍA\nLÓPEZ\nMUÑOZ\nPÉREZ")
+
     static func useCase(_ f: Fixture, _ client: ReportClient) -> IngestMatchReports {
         IngestMatchReports(
             unitOfWork: FakeUnitOfWork(store: f.store), federation: client,
-            clock: FixedClock(instant: now), ids: SequentialUUIDProvider())
+            clock: FixedClock(instant: now), ids: SequentialUUIDProvider(), names: FixedNameDictionary(names))
     }
 
     static let actor = ActorContext(clubSlug: try! Slug("celtic"), isSystem: true)
