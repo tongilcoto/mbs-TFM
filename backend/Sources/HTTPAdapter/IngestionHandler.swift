@@ -318,12 +318,10 @@ extension Domain.IngestionRun {
                 leagueScorersCreated: leagueScorersCreated,
                 leagueScorersUpdated: leagueScorersUpdated,
                 leagueScorersRetired: leagueScorersRetired,
-                // Los de la pasada de actas (R7.12, D-138): a cero hasta que la fila los guarde, en la
-                // migración de la carga. Ninguna pasada de hoy carga actas, así que el cero es verdad.
-                matchReportsLoaded: 0,
-                matchReportsNotClosed: 0,
-                matchReportsFailed: 0,
-                matchReportPlayersAdded: 0),
+                matchReportsLoaded: matchReportsLoaded,
+                matchReportsNotClosed: matchReportsNotClosed,
+                matchReportsFailed: matchReportsFailed,
+                matchReportPlayersAdded: matchReportPlayersAdded),
             skipped: skipped.map {
                 .init(reason: $0.reason.toContract(), detail: $0.detail)
             })
@@ -339,6 +337,7 @@ extension Domain.IngestionKind {
         case .calendar: .calendar
         case .standings: .standings
         case .scorers: .scorers
+        case .matchReports: .match_reports
         }
     }
 }
@@ -380,6 +379,9 @@ extension Domain.IngestionSkip.Reason {
         case .unknownStandingTeam: .unknown_standing_team
         case .unidentifiedScorer: .unidentified_scorer
         case .unidentifiedTeam: .unidentified_team
+        case .unknownMatchReportCode: .unknown_match_report_code
+        case .unreadableReportPlayerName: .unreadable_report_player_name
+        case .unreadableMatchReport: .unreadable_match_report
         }
     }
 }

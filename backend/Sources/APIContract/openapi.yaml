@@ -8219,7 +8219,7 @@ components:
             pasada**: un partido sin fecha es un dato que la fuente no ha publicado todavía, no un fallo
             (D-83).
 
-            **Trece de los catorce motivos son filas que no se escribieron; `unidentified_team` es una fila
+            **Doce de los trece motivos son filas que no se escribieron; `unidentified_team` es una fila
             que sí se escribió, pero coja** (F9-bis). Por eso la lista **se lee por el motivo de cada línea y no
             se cuenta**: su longitud no es *"cuántas filas faltan"*.
           items:
@@ -8436,7 +8436,7 @@ components:
         aguanta 217 de 218, mientras que una clasificación a la que le falte una fila tiene un hueco en
         una numeración que este mismo *spec* declara imposible.
 
-        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los catorce
+        `unidentified_team` es de la pasada del **calendario** (F9-bis) y es **el único de los trece
         que no describe una fila ausente**: el equipo *sí* se escribe, pero sin el código que la fuente no
         publicó. Es lo que ensancha el significado de la lista, de *"lo que no escribí"* a *"lo que dejé
         señalado"* — y el motivo es justo lo que distingue un caso del otro, así que hay que leerlo y no

@@ -535,6 +535,10 @@ extension IngestionRunRecord {
         self.leagueScorersCreated = run.leagueScorersCreated
         self.leagueScorersUpdated = run.leagueScorersUpdated
         self.leagueScorersRetired = run.leagueScorersRetired
+        self.matchReportsLoaded = run.matchReportsLoaded
+        self.matchReportsNotClosed = run.matchReportsNotClosed
+        self.matchReportsFailed = run.matchReportsFailed
+        self.matchReportPlayersAdded = run.matchReportPlayersAdded
         self.skipped = .init(rows: run.skipped)
     }
 }
@@ -564,6 +568,10 @@ extension IngestionRunRecord {
         run.leagueScorersCreated = leagueScorersCreated
         run.leagueScorersUpdated = leagueScorersUpdated
         run.leagueScorersRetired = leagueScorersRetired
+        run.matchReportsLoaded = matchReportsLoaded
+        run.matchReportsNotClosed = matchReportsNotClosed
+        run.matchReportsFailed = matchReportsFailed
+        run.matchReportPlayersAdded = matchReportPlayersAdded
         run.opponentClubsCreated = opponentClubsCreated
         run.opponentClubsUpdated = opponentClubsUpdated
         run.teamsCreated = teamsCreated

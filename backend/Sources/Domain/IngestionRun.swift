@@ -153,6 +153,15 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
     public var leagueScorersUpdated: Int = 0
     public var leagueScorersRetired: Int = 0
 
+    /// **Los de la pasada de actas** (R7.12, D-138): las actas cargadas, las que
+    /// la federación aún no ha cerrado, las que no se pudieron cargar —que se
+    /// reintentan solas, D-133— y los jugadores que la carga dio de alta en una
+    /// plantilla (D-127).
+    public var matchReportsLoaded: Int = 0
+    public var matchReportsNotClosed: Int = 0
+    public var matchReportsFailed: Int = 0
+    public var matchReportPlayersAdded: Int = 0
+
     /// Lo que la pasada **dejó señalado**, y por qué. Vacío es el caso normal.
     ///
     /// **Diez de los once motivos son filas que no se escribieron; el once
@@ -218,13 +227,13 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
             throw DomainError.invalidValue(
                 field: "roundID", reason: "una pasada de clasificación es de una jornada"
             )
-        case (.calendar, _?), (.scorers, _?):
+        case (.calendar, _?), (.scorers, _?), (.matchReports, _?):
             throw DomainError.invalidValue(
                 field: "roundID",
                 reason: "solo la pasada de clasificación es de una jornada; "
                     + "las demás son de la competición entera"
             )
-        case (.calendar, nil), (.scorers, nil), (.standings, _?):
+        case (.calendar, nil), (.scorers, nil), (.matchReports, nil), (.standings, _?):
             break
         }
 
@@ -370,6 +379,10 @@ public struct IngestionRun: Identifiable, Equatable, Sendable {
         leagueScorersCreated = other.leagueScorersCreated
         leagueScorersUpdated = other.leagueScorersUpdated
         leagueScorersRetired = other.leagueScorersRetired
+        matchReportsLoaded = other.matchReportsLoaded
+        matchReportsNotClosed = other.matchReportsNotClosed
+        matchReportsFailed = other.matchReportsFailed
+        matchReportPlayersAdded = other.matchReportPlayersAdded
         skipped = other.skipped
     }
 }
@@ -425,6 +438,11 @@ public enum IngestionKind: String, CaseIterable, Equatable, Sendable {
     /// jornada — `LeagueScorer` es estado vigente único, no *snapshot* (§3.2),
     /// así que esta pasada cae del lado **nulo** de `roundID`.
     case scorers
+    /// La de R7.12: las actas de los partidos del club de la competición
+    /// (D-138), de cualquier jornada, así que también sin `roundID`. **Su
+    /// migración es `AddMatchReportsToIngestionRun`**: el caso nuevo no llega
+    /// solo al `CHECK` de un club vivo (ver arriba).
+    case matchReports = "match_reports"
 }
 
 /// Cómo acabó la pasada (§3.3), **o que todavía no ha acabado**.
@@ -573,5 +591,18 @@ public struct IngestionSkip: Equatable, Sendable, Codable {
         /// (`D-76`): no sobrescribe, pero completa lo que falta. Igual que los diez
         /// anteriores, la pasada siguiente lo resuelve y deja de reportarlo.
         case unidentifiedTeam
+
+        /// **R7.12, la pasada de actas** (D-138): un gol o una tarjeta del acta
+        /// con un código que no es ninguno de los medidos. No se adivina ni se
+        /// carga (D-131, punto 4); el resto del acta, sí.
+        case unknownMatchReportCode
+        /// Un jugador del club en el acta con un nombre que no se lee y un código
+        /// que no casa con nadie: no se le da de alta (D-138, punto 4).
+        case unreadableReportPlayerName
+        /// Un acta que no se cargó entera: la federación falló, lo que trajo no
+        /// se lee, o no es de ese partido (D-138, puntos 1 y 7). Se cuenta también
+        /// en `matchReportsFailed`, y se cura sola cuando la pasada siguiente la
+        /// carga.
+        case unreadableMatchReport
     }
 }

@@ -108,9 +108,12 @@ struct ContractEnumTests {
     /// once"*; contados el 2026-09-24 sobre `IngestionRun.swift` y sobre el
     /// `enum` del contrato, son **diez** en los dos lados. El recuento estaba mal
     /// escrito, no el código.
-    @Test("IngestionSkipReason → contrato, los diez (C-E.9)")
+    ///
+    /// **Trece con la pasada de actas** (R7.12, D-138): código desconocido, nombre
+    /// que no se lee y acta que no se pudo cargar.
+    @Test("IngestionSkipReason → contrato, los trece (C-E.9, D-138)")
     func ingestionSkipReason() {
-        #expect(IngestionSkip.Reason.allCases.count == 10)
+        #expect(IngestionSkip.Reason.allCases.count == 13)
         Self.check(
             IngestionSkip.Reason.allCases, { $0.toContract() }, "IngestionSkipReason")
     }
