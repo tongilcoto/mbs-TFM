@@ -319,7 +319,7 @@ struct MatchReportSchemaTests {
 
     @Test("purgar el partido se lleva su acta (D-24)")
     func deletingTheMatchCascades() async throws {
-        try await Self.withFixture("cascade") { f in
+        try await Self.withFixture("reportcascade") { f in
             try await f.appearance()
             try await f.card()
             try await f.goal()

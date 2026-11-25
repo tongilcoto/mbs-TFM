@@ -213,7 +213,7 @@ struct PlayerSchemaTests {
     /// subárbol, y deja el perfil: lo borra el purgado si se queda sin filas.
     @Test("borrar la temporada se lleva sus filas, y deja el perfil (D-24, D-119)")
     func seasonDeletionCascadesToRows() async throws {
-        try await Self.withFixture("cascade") { f in
+        try await Self.withFixture("playercascade") { f in
             let juan = try await f.profile()
             try await f.row(profile: juan, team: f.cadeteA, season: f.anterior)
             try await f.tenant.raw.raw("""
