@@ -115,7 +115,8 @@ public struct IngestCommand: AsyncCommand {
         tenantSlugs: [String]? = nil,
         federationClients: any FederationClientProvider,
         clock: any Clock = SystemClock(),
-        ids: any UUIDProvider = SystemUUIDProvider()
+        ids: any UUIDProvider = SystemUUIDProvider(),
+        names: any NameDictionarySource = NamesDictionaryConfig.fromEnvironment()
     ) async throws -> [TenantIngestion] {
         let tenants = try await Self.tenants(on: app, slugs: tenantSlugs)
 
@@ -123,7 +124,8 @@ public struct IngestCommand: AsyncCommand {
             unitOfWork: app.tenantUnitOfWork,
             federationClients: federationClients,
             clock: clock,
-            ids: ids)
+            ids: ids,
+            names: names)
 
         var outcomes: [TenantIngestion] = []
         for slug in tenants {

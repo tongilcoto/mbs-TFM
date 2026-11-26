@@ -148,7 +148,7 @@ extension APIHandler {
             seasonID: nil, competitionIDs: [result.competitionID], minInterval: nil)
         let useCase = IngestClubCalendars(
             unitOfWork: unitOfWork, federationClients: federationClients,
-            clock: clock, ids: ids)
+            clock: clock, ids: ids, names: names)
         await background.enqueue {
             await self.runAccepted(
                 useCase, scope: scope, actor: actor, planned: [result.competitionID])

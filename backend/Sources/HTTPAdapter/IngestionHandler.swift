@@ -122,7 +122,7 @@ extension APIHandler {
 
         let useCase = IngestClubCalendars(
             unitOfWork: unitOfWork, federationClients: federationClients,
-            clock: clock, ids: ids)
+            clock: clock, ids: ids, names: names)
 
         // **Sin `do/catch`** (`A-14`·H-63): los 404 de la competición y de la
         // temporada y el 501 del club sin adaptador los traduce el middleware.

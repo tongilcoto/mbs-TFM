@@ -778,4 +778,26 @@ struct IngestClubCalendarsTests {
         _ = try await useCase.accept(scope: IngestionScope(), actor: Self.actor)
         #expect(await store.ingestionRuns.count == 2)
     }
+
+    /// R7.12 (D-138): **la cuarta pasada, la de actas**, detrás de las otras tres, con su propia fila. Sin partidos
+    /// del club que pedir, la fila sale igual, con todo a cero: la pasada miró y no había nada.
+    @Test("cada competición deja también su pasada de actas, la cuarta (D-138)")
+    func matchReportsPassRunsToo() async throws {
+        let store = IngestionStore()
+        await store.seed(club: try Self.club())
+        let current = try Self.season("2025/26", federationSeasonID: "21")
+        let liga = try Self.competition(seasonID: current.id)
+        await store.seed(seasons: [current], competitions: [liga])
+
+        let report = try await Self.useCase(
+            store: store, federation: SpyFederationClient(returning: Self.calendar)
+        ).execute(scope: IngestionScope(), actor: Self.actor)
+
+        #expect(report.entries.count == 1)
+        let runs = await store.ingestionRuns.filter { $0.competitionID == liga.id }
+        let reports = try #require(runs.first { $0.kind == .matchReports })
+        #expect(reports.outcome == .succeeded)
+        #expect(reports.matchReportsLoaded == 0 && reports.matchReportsNotClosed == 0 && reports.matchReportsFailed == 0)
+        #expect(runs.last?.kind == .matchReports, "la última de las cuatro")
+    }
 }

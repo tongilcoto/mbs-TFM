@@ -6225,6 +6225,26 @@ la competición cuenta como fallida ([D-86]).
 **Lo que se asume a cambio.** Una migración y un cambio de contrato (el tipo de pasada, cuatro contadores y tres
 motivos); y una petición más por partido del club hasta que su acta se cierra.
 
+**Precisada al construirla** (2026-11-25, `R7.12`), lo que las decisiones no decían y hubo que fijar:
+
+- **Si la ficha del equipo no llega**, el acta se carga igual —sus jugadores entran por el alta del acta— y la
+  plantilla queda sin sincronizar: se intenta con la siguiente acta de ese equipo ([D-127], punto 1). La ficha se pide
+  fuera de la transacción, una vez por equipo y pasada.
+- **«El mismo gol» del club** es el del mismo equipo, goleador y minuto ([D-133], punto 5). Al pasar a ser del acta
+  ([D-137]) conserva su desglose y su comentario; el tipo, el de la federación si dice penalti o propia puerta, y si
+  no, el del club.
+- **«La misma tarjeta» del club** es la del mismo jugador y tipo; al pasar a ser del acta conserva su comentario, y el
+  minuto y si es por doble amarilla son los del acta ([D-136], punto 4). **Si el club apuntó suelta la primera
+  amarilla de una doble y el acta trae la roja por doble amarilla, la fila del club pasa a ser esa roja**: la primera
+  amarilla no es una sanción aparte ([D-45], [D-131] punto 3), y dejar las dos sería lo que `LOOSE_YELLOW_EXISTS` no
+  deja escribir a la web.
+- **La convocatoria que el club apuntó con otro equipo** para el mismo jugador se rehace con el del acta: el equipo es
+  identidad ([D-37]).
+- **La pasada de actas corre en cada recorrido**, también en el que lanza el enganche de un equipo: al enganchar uno
+  a mitad de temporada, sus actas ya cerradas se cargan en esa misma pasada.
+- **La copia del acta y la marca se escriben al final**, en la misma transacción: si algo del acta falla, no queda ni
+  la marca, y se vuelve a pedir.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
