@@ -244,6 +244,29 @@ struct IngestMatchReportsLoadTests {
 
     // ── La convocatoria (D-132, D-133) ───────────────────────────────────────
 
+    /// `D-37`: el equipo es identidad de la fila de la convocatoria. Si el club lo apuntó con el otro equipo del club
+    /// y el acta lo trae con este, la fila se rehace: una sola, con el equipo del acta.
+    @Test("el que el club apuntó con el otro equipo del partido: su fila se rehace con el equipo del acta")
+    func appearanceWithTheOtherOwnTeamIsRebuilt() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        try await Self.markSynced(f, f.cadeteB)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1", home: f.cadeteA, away: f.cadeteB)
+        let clubRow = Appearance(
+            id: AppearanceID(raw: UUID()), playerID: try #require(juan.row?.id), matchID: match.id,
+            teamID: f.cadeteB.id, status: .jugado, createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(clubRow)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([Self.player(.home, "11", "GARCÍA, JUAN")], home: "821", away: "822"))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let rows = await Self.appearances(f).filter { $0.playerID == juan.row?.id }
+        #expect(rows.count == 1)
+        #expect(rows.first?.teamID == f.cadeteA.id && rows.first?.id != clubRow.id)
+    }
+
     /// `D-132`, punto 2: jugó el titular y el que entra en un cambio; los demás suplentes, «Convocado sin minutos».
     @Test("titular y el que entra, «Jugado»; el suplente que no entra, «Convocado sin minutos»; con el dorsal del acta")
     func lineupStatuses() async throws {
@@ -396,6 +419,27 @@ struct IngestMatchReportsLoadTests {
 
     /// Con otro minuto no es el mismo: se queda repetido y lo borra el club, que puede porque no es del acta
     /// (`D-133`, lo que se asume; `D-137`, punto 3).
+    /// `D-131`: el acta solo dice si es penalti o en propia puerta. Si no dice nada, el tipo que puso el club se queda.
+    @Test("el gol que ya apuntó el club, sin tipo en el acta, conserva el tipo del club")
+    func clubGoalKeepsItsPlayType() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1")
+        let club = Goal(id: GoalID(raw: UUID()), matchID: match.id, scoringTeamID: f.cadeteA.id,
+                        concedingTeamID: f.rival.id, scorer: juan.row?.id, minute: try MatchMinute(40),
+                        playType: .trasCorner, createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(club)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([Self.player(.home, "11", "GARCÍA, JUAN")],
+                                                   goals: [Self.goal(.home, "11", minute: 40)]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let kept = try #require(await f.store.goals.first { $0.id == club.id })
+        #expect(kept.fromReport && kept.playType == .trasCorner)
+    }
+
     @Test("con otro minuto, el del club se queda como del club, y el del acta entra aparte")
     func otherMinuteIsAnotherGoal() async throws {
         let f = try await T.seed()

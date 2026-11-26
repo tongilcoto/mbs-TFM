@@ -89,6 +89,17 @@ struct RFFMMatchReportParserTests {
         }
     }
 
+    /// Con un solo equipo no se puede comprobar que el acta es de ese partido (`D-138`, punto 7): tampoco es un acta.
+    @Test("un acta con uno solo de los dos equipos: coordinateNotFound, como la que no existe")
+    func reportWithOneTeamIsNotFound() throws {
+        #expect {
+            try RFFMMatchReportParser.parse(Self.page(homeTeam: ""))
+        } throws: { error in
+            guard case .coordinateNotFound = error as? FederationError else { return false }
+            return true
+        }
+    }
+
     @Test("una página sin acta, o con un acta sin la forma medida: malformedResponse")
     func malformed() throws {
         let noGame = #"<script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{}}}</script>"#
