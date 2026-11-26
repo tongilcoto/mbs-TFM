@@ -101,6 +101,10 @@ actor IngestionStore {
         deletedAppearances.append(appearances.remove(at: index))
     }
     func seed(reportCopy: MatchReportCopy, for match: MatchID) { reportCopies[match] = reportCopy }
+    func saveReportCopy(_ copy: MatchReportCopy, for match: MatchID) {
+        writes += 1
+        reportCopies[match] = copy
+    }
     func save(_ value: Goal) { upsert(&goals, value) { $0.id == value.id } }
     func save(_ value: Card) { upsert(&cards, value) { $0.id == value.id } }
     func deleteCard(_ id: CardID) {
@@ -336,6 +340,9 @@ struct FakeMatchRepository: MatchRepository {
     func find(_ id: MatchID) async throws -> Match? { await store.matches.first { $0.id == id } }
     func reportCopies(of ids: [MatchID]) async throws -> [MatchID: MatchReportCopy] {
         await store.reportCopies.filter { ids.contains($0.key) }
+    }
+    func saveReportCopy(_ copy: MatchReportCopy, for match: MatchID) async throws {
+        await store.saveReportCopy(copy, for: match)
     }
 }
 

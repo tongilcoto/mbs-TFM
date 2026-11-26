@@ -132,6 +132,10 @@ public protocol MatchRepository: Sendable {
     /// salen. La escribe la carga del acta (R7.12); **`save` no la toca**, así que la
     /// ingesta del calendario no la pisa.
     func reportCopies(of ids: [MatchID]) async throws -> [MatchID: MatchReportCopy]
+
+    /// **Escribe la copia del acta** en el partido (R7.12, `D-133` punto 3): con ella queda marcado como cargado, y
+    /// la pasada de actas ya no lo vuelve a pedir. Solo la escribe la carga.
+    func saveReportCopy(_ copy: MatchReportCopy, for match: MatchID) async throws
 }
 
 /// Puerto de salida de `IngestionRun` (§4.3): **el registro de las pasadas**.

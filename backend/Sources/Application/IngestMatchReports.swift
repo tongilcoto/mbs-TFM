@@ -353,6 +353,93 @@ public struct IngestMatchReports: Sendable {
                 loaded.lineup.append(ReportLineupEntry(playerID: row.id, teamID: teamID, status: status))
             }
         }
+
+        try await loadGoals(due, plan: plan, rows: loaded.rows, now: now, in: r)
+        try await loadCards(due, plan: plan, rows: loaded.rows, now: now, in: r)
+
+        // **La copia y la marca, al final y en la misma transacción** (`D-133` punto 3, `D-134`): con ella el partido
+        // queda cargado y no se vuelve a pedir; si algo de arriba falla, no queda ni la marca.
+        try await r.matches.saveReportCopy(MatchReportCopy(loadedAt: now, lineup: loaded.lineup), for: due.match.id)
         return loaded
+    }
+
+    /// El equipo de cada lado del acta, que es el del calendario: el local del acta es el local del partido.
+    private func team(_ side: FederationReportSide, of match: Match) -> TeamID {
+        side == .home ? match.homeTeamID : match.awayTeamID
+    }
+
+    private func other(_ side: FederationReportSide) -> FederationReportSide { side == .home ? .away : .home }
+
+    /// **Los goles** (`D-131`, `D-138` puntos 5 y 6). El lado del gol es el equipo al que suma; el goleador, de los
+    /// nuestros: en uno normal o de penalti, del lado que marca; en propia puerta, del lado que encaja (`D-52`). Del
+    /// rival, sin goleador (`D-09`). **El que ya apuntó el club** —mismo equipo, goleador y minuto— no se repite:
+    /// pasa a ser del acta con su desglose y su comentario, y con lo que dice la federación (`D-133`, `D-137`).
+    private func loadGoals(
+        _ due: Due, plan: Plan, rows: [Loaded.Key: (player: PlayerID, team: TeamID)], now: Date,
+        in r: any Repositories
+    ) async throws {
+        let match = due.match
+        var clubGoals = try await r.goals.list(GoalFilter(matchID: match.id), page: 1, perPage: 1000).goals
+            .filter { !$0.fromReport }
+        for published in due.report.goals {
+            let scoringTeam = team(published.side, of: match)
+            let scorerSide = published.playType == .enPropiaPuerta ? other(published.side) : published.side
+            let scorer = rows[Loaded.Key(side: scorerSide, code: published.federationPlayerID)]?.player
+            let minute = published.minute.flatMap { try? MatchMinute($0) }
+
+            if let index = clubGoals.firstIndex(where: {
+                $0.scoringTeamID == scoringTeam && $0.scorer == scorer && $0.minute == minute
+            }) {
+                let club = clubGoals.remove(at: index)
+                try await r.goals.save(Goal(
+                    id: club.id, matchID: club.matchID, scoringTeamID: club.scoringTeamID,
+                    concedingTeamID: club.concedingTeamID, scorer: scorer, assist: club.assist,
+                    assisted: club.assisted, minute: minute, zone: club.zone, attackSide: club.attackSide,
+                    shotSide: club.shotSide, bodyPart: club.bodyPart,
+                    // Lo que dice la federación (penalti o propia puerta) manda; si no dice, el del club (`D-131`).
+                    playType: published.playType ?? club.playType,
+                    comment: club.comment, fromReport: true, createdAt: club.createdAt, updatedAt: now))
+                continue
+            }
+            try await r.goals.save(Goal(
+                id: GoalID(raw: ids.next()), matchID: match.id, scoringTeamID: scoringTeam,
+                concedingTeamID: scoringTeam == match.homeTeamID ? match.awayTeamID : match.homeTeamID,
+                scorer: scorer, minute: minute, playType: published.playType, fromReport: true,
+                createdAt: now, updatedAt: now))
+        }
+    }
+
+    /// **Las tarjetas**, solo las del club (`D-136`), cada una con el equipo con el que jugaba (`D-128`). La de un
+    /// jugador que no se cargó, no (es de un jugador, `D-138` punto 4). **La que ya apuntó el club** —mismo jugador y
+    /// tipo— no se repite: pasa a ser del acta con su comentario, y con el minuto y la doble amarilla del acta
+    /// (`D-136`, punto 4). Y si el club apuntó suelta la primera amarilla de una doble, **su fila pasa a ser la roja
+    /// del acta**: la primera amarilla no es una sanción aparte (`D-45`, `D-131` punto 3).
+    private func loadCards(
+        _ due: Due, plan: Plan, rows: [Loaded.Key: (player: PlayerID, team: TeamID)], now: Date,
+        in r: any Repositories
+    ) async throws {
+        let match = due.match
+        var clubCards = try await r.cards.list(matchID: match.id, teamID: nil, playerID: nil).filter { !$0.fromReport }
+        for published in due.report.cards {
+            // Sin fila nuestra, no hay tarjeta: la del rival (`D-136`) y la del jugador que no se cargó.
+            guard let row = rows[Loaded.Key(side: published.side, code: published.federationPlayerID)] else { continue }
+            let minute = published.minute.flatMap { try? MatchMinute($0) }
+            let same = clubCards.firstIndex { $0.playerID == row.player && $0.type == published.type }
+                ?? (published.isSecondYellow
+                    ? clubCards.firstIndex { $0.playerID == row.player && $0.type == .amarilla }
+                    : nil)
+            if let index = same {
+                let club = clubCards.remove(at: index)
+                try await r.cards.save(Card(
+                    id: club.id, playerID: club.playerID, matchID: club.matchID, teamID: club.teamID,
+                    type: published.type, isSecondYellow: published.isSecondYellow, minute: minute,
+                    comment: club.comment, fromReport: true, createdAt: club.createdAt, updatedAt: now))
+                continue
+            }
+            try await r.cards.save(Card(
+                id: CardID(raw: ids.next()), playerID: row.player, matchID: match.id, teamID: row.team,
+                type: published.type, isSecondYellow: published.isSecondYellow, minute: minute, fromReport: true,
+                createdAt: now, updatedAt: now))
+        }
     }
 }

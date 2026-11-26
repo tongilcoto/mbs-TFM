@@ -27,12 +27,43 @@ struct IngestMatchReportsLoadTests {
             shirtNumber: shirt, isStarter: starter, cameOn: cameOn)
     }
 
-    static func report(_ players: [FederationReportPlayer], home: String = "821", away: String = "900")
-        -> FederationMatchReport
-    {
+    static func report(
+        _ players: [FederationReportPlayer], goals: [FederationReportGoal] = [], cards: [FederationReportCard] = [],
+        home: String = "821", away: String = "900"
+    ) -> FederationMatchReport {
         FederationMatchReport(
-            isClosed: true, homeTeamFederationID: home, awayTeamFederationID: away, homeScore: 0, awayScore: 0,
-            players: players, goals: [], cards: [], skipped: [])
+            isClosed: true, homeTeamFederationID: home, awayTeamFederationID: away,
+            homeScore: goals.filter { $0.side == .home }.count, awayScore: goals.filter { $0.side == .away }.count,
+            players: players, goals: goals, cards: cards, skipped: [])
+    }
+
+    static func goal(_ side: FederationReportSide, _ code: String, minute: Int? = 10, _ type: GoalPlayType? = nil)
+        -> FederationReportGoal
+    {
+        FederationReportGoal(side: side, federationPlayerID: code, publishedName: "X, Y", minute: minute,
+                             playType: type)
+    }
+
+    static func card(_ side: FederationReportSide, _ code: String, _ type: CardType = .amarilla,
+                     secondYellow: Bool = false, minute: Int? = 30) -> FederationReportCard {
+        FederationReportCard(side: side, federationPlayerID: code, publishedName: "X, Y", minute: minute,
+                             type: type, isSecondYellow: secondYellow)
+    }
+
+    /// Siembra el partido «1» y corre la pasada con el acta que se le dé.
+    static func load(_ f: T.Fixture, report: FederationMatchReport, home: Team? = nil, away: Team? = nil)
+        async throws -> (match: Match, run: IngestionRun?)
+    {
+        let match = try await T.match(f, code: "1", home: home, away: away)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(report)
+        let run = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+        return (match, run)
+    }
+
+    static func rowOf(_ f: T.Fixture, code: String) async -> PlayerID? {
+        let profile = await f.store.playerProfiles.first { $0.federationPlayerID == code }
+        return await f.store.players.first { $0.profileID == profile?.id }?.id
     }
 
     /// Un perfil del club, con su fila en una plantilla si se le pide.
@@ -274,6 +305,257 @@ struct IngestMatchReportsLoadTests {
         let l = try #require(all.first { $0.playerID == luis.row?.id })
         #expect(l.status == .convocadoSinMinutos && l.shirtNumber?.value == 14 && l.minutes == nil)
         #expect(all.first { $0.playerID == pablo.row?.id }?.status == .convocadoSinMinutos, "no lo trae: se deja")
+    }
+
+
+    // ── Los goles (D-131, D-133, D-137, D-138 puntos 5 y 6) ──────────────────
+
+    @Test("los goles del club, con su goleador, su minuto y su tipo; los del rival, sin goleador; todos del acta")
+    func goals() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        let (match, _) = try await Self.load(f, report: Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN"), Self.player(.away, "91", "PÉREZ, ANA")],
+            goals: [Self.goal(.home, "11", minute: 17, .penalti), Self.goal(.home, "11", minute: 40),
+                    Self.goal(.away, "91", minute: 55)]))
+
+        let juan = await Self.rowOf(f, code: "11")
+        let goals = await f.store.goals.sorted { ($0.minute?.value ?? 0) < ($1.minute?.value ?? 0) }
+        #expect(goals.count == 3)
+        #expect(goals.map(\.scoringTeamID) == [f.cadeteA.id, f.cadeteA.id, f.rival.id])
+        #expect(goals.map(\.concedingTeamID) == [f.rival.id, f.rival.id, f.cadeteA.id])
+        #expect(goals.map(\.scorer) == [juan, juan, nil], "del rival, sin goleador (D-09)")
+        #expect(goals.map(\.playType) == [.penalti, nil, nil], "el normal, sin tipo (D-131)")
+        #expect(goals.allSatisfy { $0.fromReport && $0.matchID == match.id })
+    }
+
+    /// `D-138`, punto 5: el gol en propia puerta del rival suma al club, sin goleador; el de uno del club suma al
+    /// rival, a su nombre.
+    @Test("en propia puerta: el del rival, gol del club sin goleador; el del club, gol del rival a su nombre")
+    func ownGoals() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        _ = try await Self.load(f, report: Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN"), Self.player(.away, "91", "PÉREZ, ANA")],
+            goals: [Self.goal(.home, "91", minute: 5, .enPropiaPuerta), Self.goal(.away, "11", minute: 60, .enPropiaPuerta)]))
+
+        let juan = await Self.rowOf(f, code: "11")
+        let goals = await f.store.goals.sorted { ($0.minute?.value ?? 0) < ($1.minute?.value ?? 0) }
+        #expect(goals.map(\.scoringTeamID) == [f.cadeteA.id, f.rival.id])
+        #expect(goals.map(\.scorer) == [nil, juan])
+        #expect(goals.allSatisfy { $0.playType == .enPropiaPuerta })
+    }
+
+    /// `D-138`, punto 6: entre dos equipos del club, el gol en propia puerta va a nombre del que lo mete.
+    @Test("entre dos equipos del club, la propia puerta va a nombre del que la mete, del que encaja")
+    func ownGoalBetweenOwnTeams() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        try await Self.markSynced(f, f.cadeteB)
+
+        _ = try await Self.load(f, report: Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN"), Self.player(.away, "22", "PÉREZ, ANA")],
+            goals: [Self.goal(.home, "22", .enPropiaPuerta), Self.goal(.away, "22", minute: 70)],
+            home: "821", away: "822"), home: f.cadeteA, away: f.cadeteB)
+
+        let ana = await Self.rowOf(f, code: "22")
+        let goals = await f.store.goals.sorted { ($0.minute?.value ?? 0) < ($1.minute?.value ?? 0) }
+        #expect(goals.map(\.scoringTeamID) == [f.cadeteA.id, f.cadeteB.id])
+        #expect(goals.map(\.scorer) == [ana, ana])
+        #expect(goals.first?.scorerTeamID == f.cadeteB.id)
+    }
+
+    /// `D-133`, punto 5, y `D-137`, punto 1: el mismo gol que ya apuntó el club (equipo, goleador y minuto) no se
+    /// repite: pasa a ser del acta, con el desglose y el comentario del club.
+    @Test("el gol que ya apuntó el club no se repite: pasa a ser del acta con su desglose y su comentario")
+    func clubGoalIsKept() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1")
+        let club = Goal(
+            id: GoalID(raw: UUID()), matchID: match.id, scoringTeamID: f.cadeteA.id, concedingTeamID: f.rival.id,
+            scorer: juan.row?.id, minute: try MatchMinute(40), zone: .areaChica, comment: try EntryComment.make("golazo"),
+            createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(club)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN")],
+            goals: [Self.goal(.home, "11", minute: 40), Self.goal(.home, "11", minute: 41)]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let goals = await f.store.goals
+        #expect(goals.count == 2, "el del minuto 40 no se repite; el del 41 es otro")
+        let kept = try #require(goals.first { $0.id == club.id })
+        #expect(kept.fromReport && kept.zone == .areaChica && kept.comment?.value == "golazo")
+        #expect(goals.allSatisfy { $0.fromReport })
+    }
+
+    /// Con otro minuto no es el mismo: se queda repetido y lo borra el club, que puede porque no es del acta
+    /// (`D-133`, lo que se asume; `D-137`, punto 3).
+    @Test("con otro minuto, el del club se queda como del club, y el del acta entra aparte")
+    func otherMinuteIsAnotherGoal() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1")
+        let club = Goal(id: GoalID(raw: UUID()), matchID: match.id, scoringTeamID: f.cadeteA.id,
+                        concedingTeamID: f.rival.id, scorer: juan.row?.id, minute: try MatchMinute(39),
+                        createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(club)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([Self.player(.home, "11", "GARCÍA, JUAN")],
+                                                   goals: [Self.goal(.home, "11", minute: 40)]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let goals = await f.store.goals
+        #expect(goals.count == 2)
+        #expect(goals.first { $0.id == club.id }?.fromReport == false)
+    }
+
+    /// `D-138`, punto 4: el gol del jugador que no se cargó entra sin goleador.
+    @Test("el gol de un jugador que no se pudo cargar entra sin goleador")
+    func goalOfUnreadablePlayer() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        _ = try await Self.load(f, report: Self.report(
+            [Self.player(.home, "11", "GARCIA JUAN")], goals: [Self.goal(.home, "11")]))
+
+        let goal = try #require(await f.store.goals.first)
+        #expect(goal.scoringTeamID == f.cadeteA.id && goal.scorer == nil)
+    }
+
+    // ── Las tarjetas (D-131, D-133, D-136, D-137) ────────────────────────────
+
+    @Test("las tarjetas del club, con su jugador, su equipo, su tipo y su minuto; las del rival, no; todas del acta")
+    func cards() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        _ = try await Self.load(f, report: Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN"), Self.player(.home, "12", "LÓPEZ, LUIS"),
+             Self.player(.away, "91", "PÉREZ, ANA")],
+            cards: [Self.card(.home, "11", minute: 20), Self.card(.home, "12", .roja, secondYellow: true, minute: 70),
+                    Self.card(.away, "91", .roja)]))
+
+        let cards = await f.store.cards.sorted { ($0.minute?.value ?? 0) < ($1.minute?.value ?? 0) }
+        #expect(cards.count == 2, "la del rival no se apunta (D-136)")
+        #expect(cards.map(\.playerID) == [await Self.rowOf(f, code: "11"), await Self.rowOf(f, code: "12")])
+        #expect(cards.map(\.type) == [.amarilla, .roja])
+        #expect(cards.map(\.isSecondYellow) == [false, true])
+        #expect(cards.allSatisfy { $0.teamID == f.cadeteA.id && $0.fromReport })
+    }
+
+    /// La misma tarjeta que ya apuntó el club (jugador y tipo) no se repite: pasa a ser del acta, con su comentario;
+    /// el minuto y si es por doble amarilla, los del acta (`D-136`, punto 4).
+    @Test("la tarjeta que ya apuntó el club no se repite: pasa a ser del acta con su comentario y el minuto del acta")
+    func clubCardIsKept() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1")
+        let club = Card(id: CardID(raw: UUID()), playerID: try #require(juan.row?.id), matchID: match.id,
+                        teamID: f.cadeteA.id, type: .amarilla, minute: try MatchMinute(25),
+                        comment: try EntryComment.make("protestar"), createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(club)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([Self.player(.home, "11", "GARCÍA, JUAN")],
+                                                   cards: [Self.card(.home, "11", minute: 27)]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let cards = await f.store.cards
+        #expect(cards.count == 1)
+        let kept = try #require(cards.first)
+        #expect(kept.id == club.id && kept.fromReport && kept.minute?.value == 27 && kept.comment?.value == "protestar")
+    }
+
+    /// La primera amarilla de una doble no es una sanción aparte (`D-45`, `D-131` punto 3). Si el club la apuntó
+    /// suelta y el acta trae la roja por doble amarilla, su fila se convierte en esa roja: no quedan las dos.
+    @Test("si el club apuntó la primera amarilla y el acta trae la doble, su fila pasa a ser la roja del acta")
+    func clubYellowBecomesTheSecondYellowRed() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        let juan = try await Self.profile(f, "Juan García", code: "11", team: f.cadeteA)
+        let match = try await T.match(f, code: "1")
+        let club = Card(id: CardID(raw: UUID()), playerID: try #require(juan.row?.id), matchID: match.id,
+                        teamID: f.cadeteA.id, type: .amarilla, minute: try MatchMinute(25),
+                        comment: try EntryComment.make("primera"), createdAt: Self.now, updatedAt: Self.now)
+        await f.store.save(club)
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report(
+            [Self.player(.home, "11", "GARCÍA, JUAN")], cards: [Self.card(.home, "11", .roja, secondYellow: true, minute: 70)]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        let cards = await f.store.cards
+        #expect(cards.count == 1)
+        let red = try #require(cards.first)
+        #expect(red.id == club.id && red.type == .roja && red.isSecondYellow && red.minute?.value == 70)
+        #expect(red.fromReport && red.comment?.value == "primera")
+    }
+
+    @Test("la tarjeta de un jugador que no se pudo cargar no se carga")
+    func cardOfUnreadablePlayer() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        _ = try await Self.load(f, report: Self.report([Self.player(.home, "11", "GARCIA JUAN")],
+                                                       cards: [Self.card(.home, "11")]))
+
+        #expect(await f.store.cards.isEmpty)
+    }
+
+    // ── La copia del acta y la marca (D-133 punto 3, D-134) ──────────────────
+
+    @Test("la carga deja en el partido la copia del acta, con la fecha y la convocatoria tal como llegó")
+    func leavesTheCopy() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+
+        let (match, _) = try await Self.load(f, report: Self.report([
+            Self.player(.home, "11", "GARCÍA, JUAN"), Self.player(.home, "12", "LÓPEZ, LUIS", starter: false),
+        ]))
+
+        let copy = try #require(await f.store.reportCopies[match.id])
+        #expect(copy.loadedAt == Self.now)
+        #expect(copy.lineup.map(\.status) == [.jugado, .convocadoSinMinutos])
+        #expect(copy.lineup.map(\.playerID) == [await Self.rowOf(f, code: "11"), await Self.rowOf(f, code: "12")])
+        #expect(copy.lineup.allSatisfy { $0.teamID == f.cadeteA.id })
+    }
+
+    /// `D-133`, punto 3: una vez cargada, el partido queda marcado y no se vuelve a leer.
+    @Test("el acta cargada no se vuelve a pedir en la pasada siguiente")
+    func loadedIsNotAskedAgain() async throws {
+        let f = try await T.seed()
+        try await Self.markSynced(f, f.cadeteA)
+        try await T.match(f, code: "1")
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([Self.player(.home, "11", "GARCÍA, JUAN")]))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+        let second = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        #expect(client.asked == ["1"])
+        #expect(second?.matchReportsLoaded == 0)
+    }
+
+    /// `D-133`, punto 2: si la federación falla o el acta no es de ese partido, nada, ni la marca: se vuelve a pedir.
+    @Test("el acta que falla no deja marca: se vuelve a pedir")
+    func failedLeavesNoMark() async throws {
+        let f = try await T.seed()
+        let match = try await T.match(f, code: "1")
+        let client = T.ReportClient()
+        client.reports["1"] = .success(Self.report([], home: "999"))
+
+        _ = try await T.useCase(f, client).execute(competitionID: f.competition, actor: T.actor)
+
+        #expect(await f.store.reportCopies[match.id] == nil)
     }
 
     // ── La plantilla que nadie sincronizó (D-127, punto 1) ───────────────────

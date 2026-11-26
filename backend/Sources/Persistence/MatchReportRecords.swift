@@ -454,6 +454,22 @@ extension FluentMatchRepository {
         }
         return copies
     }
+
+    /// Con SQL y no con el modelo, por lo mismo que la lectura: `MatchRecord` no lleva las dos columnas.
+    public func saveReportCopy(_ copy: MatchReportCopy, for match: MatchID) async throws {
+        guard let sql = database as? any SQLDatabase else {
+            throw PersistenceError.schemaHelperNeedsSQL(helper: "saveReportCopy", object: MatchRecord.schema)
+        }
+        let document = ReportLineupDocument(players: copy.lineup.map {
+            ReportLineupDocument.Entry(playerId: $0.playerID.raw, teamId: $0.teamID.raw, status: $0.status.rawValue)
+        })
+        let json = String(decoding: try JSONEncoder().encode(document), as: UTF8.self)
+        try await sql.raw("""
+            UPDATE \(ident: MatchRecord.schema)
+            SET report_loaded_at = \(bind: copy.loadedAt), report_lineup = \(bind: json)::jsonb
+            WHERE id = \(bind: match.raw)
+            """).run()
+    }
 }
 
 // ── Los goles (R7.7) ─────────────────────────────────────────────────────────
