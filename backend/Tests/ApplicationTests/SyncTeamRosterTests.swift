@@ -23,13 +23,18 @@ struct SyncTeamRosterTests {
             self.failure = failure
         }
 
+        /// Con el código de cada uno en la federación (`D-126`).
+        init(coded: [(name: String, code: String)]) {
+            published = coded.map { RosterClient.player($0.name, code: $0.code) }
+        }
+
         /// Como lo publica la RFFM: «APELLIDOS, NOMBRE», y vuelto si tiene una coma.
-        static func player(_ published: String) -> FederationRosterPlayer {
+        static func player(_ published: String, code: String? = nil) -> FederationRosterPlayer {
             let halves = published.split(separator: ",")
             let flipped = halves.count == 2
                 ? "\(halves[1].trimmingCharacters(in: .whitespaces)) \(halves[0].trimmingCharacters(in: .whitespaces))"
                 : nil
-            return FederationRosterPlayer(publishedName: published, fullName: flipped)
+            return FederationRosterPlayer(publishedName: published, fullName: flipped, federationPlayerID: code)
         }
 
         func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster {
@@ -112,12 +117,13 @@ struct SyncTeamRosterTests {
     /// Un perfil del club, con lo que guarda como ayuda (`D-122`).
     @discardableResult
     static func profile(_ s: Seeded, _ name: String, year: Int? = 2011, shirt: Int? = nil,
-                        position: PlayerPosition? = nil, photo: String? = nil) async throws -> PlayerProfile {
+                        position: PlayerPosition? = nil, photo: String? = nil,
+                        code: String? = nil) async throws -> PlayerProfile {
         let profile = PlayerProfile(
             id: PlayerProfileID(raw: UUID()), fullName: try PlayerName(name),
             birthYear: try year.map { try BirthYear($0, notAfter: 2026) },
             lastShirtNumber: try shirt.map(ShirtNumber.init), lastPosition: position, lastPhotoKey: photo,
-            createdAt: now, updatedAt: now)
+            federationPlayerID: code, createdAt: now, updatedAt: now)
         await s.store.save(profile)
         return profile
     }
@@ -174,6 +180,55 @@ struct SyncTeamRosterTests {
         #expect(row.federated == true)
         #expect(summary.added == 1 && summary.withoutBirthYear == 0)
         #expect(await s.store.playerProfiles.count == 1, "no crea otro perfil")
+    }
+
+    // ── El código de la federación (D-126, R7.12) ──
+
+    /// El club corrigió el nombre: por el nombre ya no casaría, por el código sí.
+    @Test("casa por el código aunque el club corrigiera el nombre, y no crea otro perfil (D-126)")
+    func matchedByCode() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.profile(s, "Juanito García Pérez", code: "90000001")
+
+        let summary = try await Self.sync(s, RosterClient(coded: [("GARCÍA LÓPEZ, JUAN", "90000001")]))
+
+        #expect(await Self.roster(s).first?.profileID == juan.id)
+        #expect(await s.store.playerProfiles.count == 1, "no crea otro perfil")
+        #expect(summary.added == 1 && summary.duplicateName.isEmpty)
+    }
+
+    @Test("al casar por el nombre a uno sin código, se le guarda el suyo (D-126)")
+    func matchedByNameKeepsTheCode() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.profile(s, "Juan García López")
+
+        _ = try await Self.sync(s, RosterClient(coded: [("GARCÍA LÓPEZ, JUAN", "90000001")]))
+
+        let stored = try #require(await s.store.playerProfiles.first { $0.id == juan.id })
+        #expect(stored.federationPlayerID == "90000001")
+        #expect(stored.fullName == juan.fullName && stored.birthYear == juan.birthYear, "lo demás, igual")
+    }
+
+    @Test("el perfil nuevo nace con su código (D-126)")
+    func newProfileKeepsTheCode() async throws {
+        let s = try await Self.seed()
+
+        _ = try await Self.sync(s, RosterClient(coded: [("GARCÍA LÓPEZ, JUAN", "90000001")]))
+
+        #expect(await Self.profileNamed(s, "JUAN GARCÍA LÓPEZ").first?.federationPlayerID == "90000001")
+    }
+
+    /// Dos chavales que se llaman igual: el perfil con otro código es otro jugador.
+    @Test("el mismo nombre con otro código es otra persona: perfil nuevo, sin tocar el del club (D-126)")
+    func sameNameOtherCode() async throws {
+        let s = try await Self.seed()
+        let juan = try await Self.profile(s, "Juan García", code: "90000002")
+
+        _ = try await Self.sync(s, RosterClient(coded: [("GARCÍA, JUAN", "90000001")]))
+
+        let rows = await Self.roster(s)
+        #expect(rows.count == 1 && rows.first?.profileID != juan.id)
+        #expect(await s.store.playerProfiles.first { $0.id == juan.id }?.federationPlayerID == "90000002")
     }
 
     @Test("si el dorsal de su perfil ya lo tiene otro de la plantilla, llega sin dorsal (D-122)")

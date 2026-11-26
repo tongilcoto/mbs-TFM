@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import Application
+import Domain
 @testable import Federation
 
 /// Nivel 1 (§8.1), **sin red**: la ficha de equipo de la RFFM (`fichaequipo/<código>`), de donde sale la plantilla
@@ -77,6 +78,19 @@ struct RFFMTeamSheetParserTests {
         #expect(roster.players.first?.publishedName == published)
     }
 
+    /// `D-126`: el código de cada jugador, el mismo que en el acta. Con él se casa primero. Vacío, nulo: no se
+    /// inventa.
+    @Test("cada jugador, con su código en la federación; sin código, nulo (D-126)")
+    func readsTheFederationCode() throws {
+        let roster = try RFFMTeamSheetParser.parse(try Self.fixture())
+        #expect(roster.players.first?.federationPlayerID == "90000001")
+        #expect(roster.players.allSatisfy { $0.federationPlayerID != nil })
+
+        let sinCodigo = try RFFMTeamSheetParser.parse(Self.page(
+            team: #"{"codigo_equipo":"821","jugadores_equipo":[{"cod_jugador":" ","nombre":"GIL, LEO"},{"nombre":"GIL, TEO"}]}"#))
+        #expect(sinCodigo.players.map(\.federationPlayerID) == [nil, nil])
+    }
+
     /// Medido en R6.14: hay fichas de equipo sin ningún jugador. No es un error de la página: lo que haga con
     /// eso la sincronización lo decide el caso de uso.
     @Test("una ficha sin jugadores es una plantilla vacía, no un error")
@@ -127,5 +141,23 @@ struct RFFMTeamSheetParserTests {
 
         #expect(transport.requested == ["https://www.rffm.es/fichaequipo/821"])
         #expect(roster.players.count == 24)
+    }
+
+    // ── Quién es quién (D-126) ──
+
+    @Test("el conector de la RFFM casa primero por el código y, si no, por el nombre (D-126)")
+    func clientMatchesByCodeThenName() throws {
+        let client = RFFMFederationClient(transport: RFFMFederationClientTests.SpyTransport(returning: .success("")))
+        let juan = FederationMatchCandidate(
+            profileID: PlayerProfileID(raw: UUID()), fullName: try PlayerName("Juanito Pérez"), federationPlayerID: "1")
+        let ana = FederationMatchCandidate(
+            profileID: PlayerProfileID(raw: UUID()), fullName: try PlayerName("Ana Ruiz"), federationPlayerID: nil)
+
+        let matches = client.matchPlayers([
+            FederationMatchQuery(federationPlayerID: "1", name: try PlayerName("JUAN PÉREZ")),
+            FederationMatchQuery(federationPlayerID: "2", name: try PlayerName("ANA RUIZ")),
+        ], against: [juan, ana])
+
+        #expect(matches == [.byCode(juan.profileID), .byName(ana.profileID)])
     }
 }

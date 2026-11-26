@@ -222,6 +222,7 @@ extension SearchPlayerProfiles.Match {
             lastShirtNumber: profile.lastShirtNumber?.value,
             lastPosition: profile.lastPosition.map { .init(value1: $0.toContract()) },
             lastPhotoUrl: photoURL(profile.lastPhotoKey),
+            federationPlayerId: profile.federationPlayerID,
             lastRoster: lastRoster.map {
                 .init(value1: .init(team: $0.team.toTeamRef(), seasonId: "\($0.season.id)",
                                     seasonLabel: $0.season.label.value))

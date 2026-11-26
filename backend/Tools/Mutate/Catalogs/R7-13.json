@@ -1,0 +1,294 @@
+{
+  "title": "R7.13 · el cierre de B2: la lectura y la carga del acta",
+  "filter": "AppearanceRepositoryTests|FederationPlayerMatchingTests|IngestClubCalendarsTests|IngestMatchReportsLoadTests|IngestMatchReportsTests|MatchReportIngestionTests|RFFMMatchReportParserTests|SyncTeamRosterTests",
+  "mutations": [
+    {
+      "id": "P1-propia-puerta",
+      "description": "el gol en propia puerta suma al equipo de la lista, no al otro",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "side = listSide == .home ? .away : .home",
+      "replace": "side = listSide",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P2-penalti",
+      "description": "el 101 es un gol normal, no un penalti",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "case \"101\": playType = .penalti",
+      "replace": "case \"101\": playType = nil",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P3-cerrada",
+      "description": "toda acta se lee como cerrada",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "isClosed: text(game.actaCerrada) == \"1\"",
+      "replace": "isClosed: true",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P4-primera-amarilla",
+      "description": "la primera amarilla de una doble se queda como amarilla",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "firstYellowDropped.insert(player)\n                continue",
+      "replace": "firstYellowDropped.insert(player)\n                type = .amarilla",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P5-entra",
+      "description": "nadie entra en un cambio",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "cameOn: cameOn.contains(code)",
+      "replace": "cameOn: false",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P6-titular",
+      "description": "todos son titulares",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "isStarter: text(player.titular) == \"1\"",
+      "replace": "isStarter: true",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P7-sin-equipos",
+      "description": "un acta sin equipos no es un código que no existe",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "guard !home.isEmpty, !away.isEmpty else",
+      "replace": "guard !home.isEmpty || !away.isEmpty else",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "P8-vacio",
+      "description": "un minuto vacío es un cero",
+      "file": "Sources/Federation/RFFMMatchReportParser.swift",
+      "find": "guard !cleaned.isEmpty else { return nil }",
+      "replace": "guard !cleaned.isEmpty else { return 0 }",
+      "filter": "RFFMMatchReportParserTests"
+    },
+    {
+      "id": "M1-otro-codigo",
+      "description": "un perfil con otro código casa por el nombre",
+      "file": "Sources/Application/FederationPlayerMatching.swift",
+      "find": "return code == theirs",
+      "replace": "return true",
+      "filter": "FederationPlayerMatchingTests|SyncTeamRosterTests|IngestMatchReportsLoadTests"
+    },
+    {
+      "id": "M2-ambiguo",
+      "description": "con varios del mismo nombre se elige el primero",
+      "file": "Sources/Application/FederationPlayerMatching.swift",
+      "find": "case 1: return .byName(same[0].profileID)",
+      "replace": "case 1...: return .byName(same[0].profileID)",
+      "filter": "FederationPlayerMatchingTests|SyncTeamRosterTests|IngestMatchReportsLoadTests"
+    },
+    {
+      "id": "M3-codigo-primero",
+      "description": "no se casa por el código",
+      "file": "Sources/Application/FederationPlayerMatching.swift",
+      "find": "return .byCode(found.profileID)",
+      "replace": "return byName(query, against: ours)",
+      "filter": "FederationPlayerMatchingTests|SyncTeamRosterTests|IngestMatchReportsLoadTests"
+    },
+    {
+      "id": "L1-archivada",
+      "description": "la temporada archivada también tiene pasada de actas",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "guard season.archivedAt == nil else { return nil }",
+      "replace": "guard season.archivedAt == nil || true else { return nil }",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "L2-plantilla-en-curso",
+      "description": "la plantilla se sincroniza también fuera de la temporada en curso",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "if isCurrent, rows.allSatisfy",
+      "replace": "if isCurrent || true, rows.allSatisfy",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "L3-empezado",
+      "description": "se piden también las actas de los partidos sin empezar",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "\n                    && match.kickoff.hasStarted(on: now)",
+      "replace": "",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "L4-del-club",
+      "description": "se piden también las actas de los partidos entre rivales",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "\n                    && (ownTeams.contains(match.homeTeamID) || ownTeams.contains(match.awayTeamID))",
+      "replace": "",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "L5-ya-cargada",
+      "description": "se vuelve a pedir el acta ya cargada",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "candidates.filter { loaded[$0.id] == nil }",
+      "replace": "candidates.filter { _ in loaded.isEmpty || true }",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "C1-sin-cerrar",
+      "description": "se carga el acta sin cerrar",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "guard report.isClosed else {",
+      "replace": "guard report.isClosed || true else {",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "C2-equipos",
+      "description": "no se mira el equipo visitante del acta",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "guard expected.0 == report.homeTeamFederationID, expected.1 == report.awayTeamFederationID else",
+      "replace": "guard expected.0 == report.homeTeamFederationID else",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D1-rival",
+      "description": "se cargan también los jugadores del rival",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "].filter { plan.ownTeams.contains($0.1) }",
+      "replace": "]",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D2-guarda-codigo",
+      "description": "no se le guarda el código al perfil casado por el nombre",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "if found.federationPlayerID == nil {",
+      "replace": "if found.federationPlayerID == nil && false {",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D3-refuerzo",
+      "description": "el de otro equipo del club se da de alta aquí, no de refuerzo",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "} else if let elsewhere = seasonRows.first {",
+      "replace": "} else if false, let elsewhere = seasonRows.first {",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D4-entra-juega",
+      "description": "el suplente que entra no cuenta como jugado",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "published.isStarter || published.cameOn ? .jugado",
+      "replace": "published.isStarter ? .jugado",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D5-minutos",
+      "description": "se pierden los minutos del club",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "minutes: status == .jugado ? kept?.minutes : nil",
+      "replace": "minutes: nil",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D6-dorsal",
+      "description": "no se guarda el dorsal del acta",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "teamID: teamID, status: status, shirtNumber: shirt,",
+      "replace": "teamID: teamID, status: status, shirtNumber: nil,",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D7-altas",
+      "description": "no se cuentan las altas",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "                    loaded.playersAdded += 1\n",
+      "replace": "",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "D8-otro-equipo",
+      "description": "la fila de la convocatoria con otro equipo no se rehace",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "if let existing, existing.teamID != teamID {",
+      "replace": "if let existing, existing.teamID != teamID, false {",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "G1-goleador-propia",
+      "description": "el goleador de la propia puerta se busca en el lado que marca",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "published.playType == .enPropiaPuerta ? other(published.side) : published.side",
+      "replace": "published.side",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "G2-mismo-minuto",
+      "description": "el gol del club casa aunque sea de otro minuto",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "$0.scoringTeamID == scoringTeam && $0.scorer == scorer && $0.minute == minute",
+      "replace": "$0.scoringTeamID == scoringTeam && $0.scorer == scorer",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "G3-tipo-del-club",
+      "description": "sin tipo en el acta, se pierde el del club",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "playType: published.playType ?? club.playType,",
+      "replace": "playType: published.playType,",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "G4-comentario-gol",
+      "description": "se pierde el comentario del gol del club",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "playType: published.playType ?? club.playType,\n                    comment: club.comment",
+      "replace": "playType: published.playType ?? club.playType,\n                    comment: nil",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "K1-primera-amarilla",
+      "description": "la primera amarilla suelta del club no pasa a ser la roja",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "?? (published.isSecondYellow",
+      "replace": "?? (false",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "K2-misma-tarjeta",
+      "description": "la tarjeta del club se repite",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "clubCards.firstIndex { $0.playerID == row.player && $0.type == published.type }",
+      "replace": "clubCards.firstIndex { $0.playerID == row.player && $0.type == published.type && false }",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "K3-minuto-acta",
+      "description": "la tarjeta del club conserva su minuto",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "type: published.type, isSecondYellow: published.isSecondYellow, minute: minute,\n                    comment: club.comment",
+      "replace": "type: published.type, isSecondYellow: published.isSecondYellow, minute: club.minute,\n                    comment: club.comment",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "S1-marca",
+      "description": "no se guarda la copia ni la marca",
+      "file": "Sources/Application/IngestMatchReports.swift",
+      "find": "try await r.matches.saveReportCopy(MatchReportCopy(loadedAt: now, lineup: loaded.lineup), for: due.match.id)",
+      "replace": "_ = MatchReportCopy(loadedAt: now, lineup: loaded.lineup)",
+      "filter": "IngestMatchReportsTests|IngestMatchReportsLoadTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "S2-sql-fecha",
+      "description": "la base no guarda la fecha de la carga",
+      "file": "Sources/Persistence/MatchReportRecords.swift",
+      "find": "SET report_loaded_at = \\(bind: copy.loadedAt), report_lineup",
+      "replace": "SET report_loaded_at = NULL, report_lineup",
+      "filter": "AppearanceRepositoryTests|MatchReportIngestionTests"
+    },
+    {
+      "id": "W1-enganche",
+      "description": "la ingesta no pasa la de actas",
+      "file": "Sources/Application/IngestClubCalendars.swift",
+      "find": "_ = try await ingestReports.execute(\n                    competitionID: competition.id, actor: actor)",
+      "replace": "_ = ingestReports",
+      "filter": "IngestClubCalendarsTests"
+    }
+  ]
+}

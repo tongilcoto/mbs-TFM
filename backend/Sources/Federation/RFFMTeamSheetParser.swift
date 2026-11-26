@@ -13,7 +13,8 @@ import class Foundation.JSONDecoder
 ///
 /// - Es una **página**, como el calendario: los datos van en el `__NEXT_DATA__`, en
 ///   `props.pageProps.team`. Por cada jugador, **solo su código y su nombre**, como
-///   «APELLIDOS, NOMBRE» en mayúsculas (`jugadores_equipo`).
+///   «APELLIDOS, NOMBRE» en mayúsculas (`jugadores_equipo`). El código es el mismo
+///   que en el acta (`D-126`).
 /// - **No dice de qué temporada es**: es la plantilla de hoy (decisión 1 de R6.14).
 /// - A un **código que no existe**, `200` con `team: null`: como el calendario a una
 ///   coordenada que no existe, es `coordinateNotFound` y no un fallo de forma.
@@ -46,7 +47,10 @@ public enum RFFMTeamSheetParser {
                 detail: "la RFFM no tiene ningún equipo con ese código (ficha con el equipo a null)")
         }
         return FederationTeamRoster(players: team.jugadoresEquipo.map {
-            FederationRosterPlayer(publishedName: $0.nombre, fullName: flipped($0.nombre))
+            FederationRosterPlayer(
+                publishedName: $0.nombre, fullName: flipped($0.nombre),
+                federationPlayerID: $0.codJugador.map { $0.trimmingCharacters(in: .whitespaces) }
+                    .flatMap { $0.isEmpty ? nil : $0 })
         })
     }
 
@@ -77,5 +81,7 @@ public enum RFFMTeamSheetParser {
     }
     private struct Player: Decodable {
         let nombre: String
+        /// El código del jugador (`D-126`). Opcional: si un día no viene, se casa por el nombre.
+        let codJugador: String?
     }
 }

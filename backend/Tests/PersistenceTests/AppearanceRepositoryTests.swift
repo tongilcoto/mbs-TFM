@@ -162,4 +162,25 @@ struct AppearanceRepositoryTests {
             }
         }
     }
+
+    /// La carga del acta escribe la copia (R7.12, `D-133`, `D-134`): la fecha y la convocatoria, en un documento; y
+    /// guardar el partido después no la pisa.
+    @Test("la carga escribe la copia del acta, se lee igual, y guardar el partido no la pisa (R7.12)")
+    func reportCopyIsWritten() async throws {
+        try await Self.withFixture("copywrite") { f in
+            let loadedAt = try Date("2025-10-04T22:00:00Z", strategy: .iso8601)
+            let lineup = [
+                ReportLineupEntry(playerID: f.players[0].id, teamID: f.own.id, status: .jugado),
+                ReportLineupEntry(playerID: f.players[1].id, teamID: f.own.id, status: .convocadoSinMinutos),
+            ]
+            try await f.tenant.scope { r in
+                try await r.matches.saveReportCopy(MatchReportCopy(loadedAt: loadedAt, lineup: lineup), for: f.match.id)
+                try await r.matches.save(try #require(try await r.matches.find(f.match.id)))
+            }
+            let copy = try #require(
+                try await f.tenant.scope { try await $0.matches.reportCopies(of: [f.match.id]) }[f.match.id])
+            #expect(copy.loadedAt == loadedAt)
+            #expect(copy.lineup == lineup)
+        }
+    }
 }

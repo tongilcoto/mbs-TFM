@@ -173,6 +173,16 @@ struct PlayerTests {
         #expect(remembered.birthYear == profile.birthYear, "el año tampoco")
     }
 
+    /// El código de la federación es de la persona (`D-126`): guardar una fila no lo toca.
+    @Test("guardar una fila conserva el código de la federación del perfil (D-126)")
+    func rememberingKeepsTheFederationCode() throws {
+        let profile = try Self.profile().withFederationPlayerID("9000001")
+        let remembered = profile.remembering(Self.row(of: profile, shirt: nil, position: nil, photo: nil))
+
+        #expect(profile.federationPlayerID == "9000001")
+        #expect(remembered.federationPlayerID == "9000001")
+    }
+
     /// «Lo vacío también se copia» (D-122): el perfil no guarda lo de antes si
     /// la fila lo ha quitado.
     @Test("lo vacío también se copia")

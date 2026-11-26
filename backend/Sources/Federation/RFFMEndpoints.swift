@@ -67,6 +67,17 @@ public struct RFFMEndpoints: Sendable, Equatable {
         return "\(baseURL)/fichaequipo/\(code)"
     }
 
+    /// **El acta de un partido** (`D-125`, R7.11), con su código en la federación: el `codacta` del calendario, que
+    /// el partido guarda como `federation_match_id` (`D-31`). Es una página, con los datos en el `__NEXT_DATA__`.
+    ///
+    /// Medido en R7.11: responde igual con el código solo que con `temporada`, `competicion` y `grupo` detrás, como
+    /// la enlaza la RFFM. La ruta en JSON (`_next/data/<versión>/acta-partido/…`, [Anexo RFFM §F.10]) no se usa: la
+    /// versión cambia con cada despliegue de su web.
+    public func matchReport(federationMatchID: String) -> String {
+        let code = federationMatchID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? federationMatchID
+        return "\(baseURL)/acta-partido/\(code)"
+    }
+
     /// La clasificación **tras una jornada** ([Anexo RFFM §F.8], §F.18).
     ///
     /// # Dos parámetros, y ninguno se parece a los del calendario

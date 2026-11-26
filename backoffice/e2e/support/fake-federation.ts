@@ -19,11 +19,25 @@
 // Y la ficha de equipo (`fichaequipo/<código>`, plan R6, R6.15) de cada equipo de una competición inventada, con los
 // jugadores que el escenario le hace publicar (`publishRoster`), o ninguno; también se le puede pedir que falle o
 // que tarde. A un código que no es de ninguna, `team: null`, como la RFFM.
+//
+// Y el acta de cada partido (`acta-partido/<codacta>`, plan R7, R7.13) de una competición inventada: la que el escenario
+// le hace publicar (`publishReport`), y si no, sin cerrar, como la RFFM antes de que se firme; también se le puede
+// pedir que falle o que tarde. A un código que no es de ninguna, un acta sin equipos, como la RFFM.
 import { readdirSync, readFileSync } from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import { config } from './config.ts'
-import { federationDate, standingsAfter, type Competition, type FederationPlayer, type FederationTeam, type Round } from './invented.ts'
+import {
+  federationDate,
+  reportCode,
+  standingsAfter,
+  type Competition,
+  type FederationPlayer,
+  type FederationTeam,
+  type Fixture,
+  type MatchReport,
+  type Round,
+} from './invented.ts'
 
 /** Los calendarios grabados. Son páginas enteras y no llevan dentro la dirección, así que van aquí. */
 const calendars: Record<string, string> = {
@@ -88,7 +102,7 @@ function inventedCalendar(competition: Competition): string {
       codjornada: String(round.number),
       jornada: `${round.number} (${date})`,
       equipos: round.matches.map(({ home, away, time, score, rest }, m) => ({
-        codacta: `${competition.federationGroupId}${round.number - 1}${m}`,
+        codacta: reportCode(competition, round.number, m),
         codigo_equipo_local: home.code,
         equipo_local: home.rawName,
         escudo_equipo_local: '',
@@ -207,6 +221,88 @@ function teamSheet(code: string, found?: { team: FederationTeam; competition: Co
   return `<html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script></body></html>`
 }
 
+/** El partido de una competición inventada con este código de acta, si lo hay. */
+function fixtureOf(competition: Competition, code: string): Fixture | undefined {
+  for (const round of competition.schedule ?? unplayedRounds(competition)) {
+    const index = round.matches.findIndex((_, m) => reportCode(competition, round.number, m) === code)
+    if (index >= 0) return round.matches[index]
+  }
+  return undefined
+}
+
+/**
+ * La página del acta, con la forma de las grabadas (backend/Tests/FederationTests/Fixtures/RFFM-acta-*.html): los datos
+ * en `__NEXT_DATA__`, en `props.pageProps.game`, todo como texto. Solo van los campos que lee el servidor
+ * (RFFMMatchReportParser). Sin partido, sin equipos (el código no existe); sin acta publicada o sin cerrar, sin
+ * jugadores ni marcador.
+ */
+function reportPage(code: string, fixture?: Fixture, report?: MatchReport): string {
+  const closed = Boolean(fixture && report?.closed)
+  const shown: MatchReport = closed ? report! : { closed: false, players: [], goals: [], cards: [] }
+  const players = (side: 'home' | 'away') =>
+    shown.players.filter((p) => p.side === side).map((p) => ({
+      codjugador: p.player.code,
+      nombre_jugador: p.player.published,
+      dorsal: p.shirt === undefined ? '' : String(p.shirt),
+      titular: p.starter ? '1' : '0',
+      suplente: p.starter ? '0' : '1',
+    }))
+  const changes = (side: 'home' | 'away') => {
+    const list = shown.players.filter((p) => p.side === side)
+    const starters = list.filter((p) => p.starter)
+    return list.filter((p) => !p.starter && p.cameOn).map((p, i) => ({
+      minuto: '',
+      codjugador_entra: p.player.code,
+      nombre_jugador_entra: p.player.published,
+      codjugador_sale: starters[i % Math.max(starters.length, 1)]?.player.code ?? '',
+    }))
+  }
+  const goalCodes = { normal: '100', penalti: '101', propia: '102' } as const
+  const goals = (side: 'home' | 'away') =>
+    shown.goals.filter((g) => g.side === side).map((g) => ({
+      codjugador: g.player.code,
+      nombre_jugador: g.player.published,
+      minuto: g.minute === undefined ? '' : String(g.minute),
+      tipo_gol: goalCodes[g.type ?? 'normal'],
+    }))
+  const cards = (side: 'home' | 'away') =>
+    shown.cards.filter((c) => c.side === side).map((c) => ({
+      codigo_tipo_amonestacion: c.type === 'roja' ? '101' : '100',
+      codjugador: c.player.code,
+      segunda_amarilla: c.secondYellow ? '1' : '0',
+      minuto: c.minute === undefined ? '' : String(c.minute),
+      nombre_jugador: c.player.published,
+    }))
+  // El marcador, el del calendario; si no lo tiene, el de los goles del acta (el de propia puerta suma al otro).
+  const counted = (side: 'home' | 'away') =>
+    (report?.goals ?? []).filter((g) => (g.type === 'propia' ? g.side !== side : g.side === side)).length
+  const score = (side: 'home' | 'away') => (closed ? String(fixture!.score?.[side] ?? counted(side)) : '')
+  const game = {
+    estado: '1',
+    sesion_ok: '1',
+    codacta: code,
+    acta_cerrada: closed ? '1' : '0',
+    codigo_equipo_local: fixture?.home.code ?? '',
+    equipo_local: fixture?.home.rawName ?? '',
+    codigo_equipo_visitante: fixture?.away.code ?? '',
+    equipo_visitante: fixture?.away.rawName ?? '',
+    goles_local: score('home'),
+    goles_visitante: score('away'),
+    jugadores_equipo_local: players('home'),
+    jugadores_equipo_visitante: players('away'),
+    goles_equipo_local: goals('home'),
+    goles_equipo_visitante: goals('away'),
+    tarjetas_equipo_local: cards('home'),
+    tarjetas_equipo_visitante: cards('away'),
+    sustituciones_equipo_local: changes('home'),
+    sustituciones_equipo_visitante: changes('away'),
+    goles_penalti: [],
+    otras_tarjetas: [],
+  }
+  const data = { props: { pageProps: { game } }, page: '/acta-partido/[...codacta]', query: { codacta: [code] } }
+  return `<html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script></body></html>`
+}
+
 // Una respuesta retenida: la federación tarda hasta que el escenario la suelta. `skip`, cuántas peticiones del
 // calendario deja pasar antes de retener una: el enganche lo lee una vez y la primera ingesta otra, así que
 // retener la ingesta sin retener el enganche es dejar pasar una.
@@ -260,6 +356,21 @@ export interface FakeFederation {
   /** Cuando la ficha retenida ya se ha pedido. */
   heldRosterArrived(competition: Competition): Promise<void>
   /**
+   * Desde ahora el acta de este código (`reportCode`) es esta. Sin llamarla, el acta de un partido de una competición
+   * inventada sale sin cerrar.
+   */
+  publishReport(code: string, report: MatchReport): void
+  /** Desde ahora el acta de este código contesta 500, como la RFFM cuando falla. */
+  failReport(code: string): void
+  /** Desde ahora el acta de este código vuelve a contestar bien. */
+  answerReport(code: string): void
+  /** La próxima petición del acta de este código no sale hasta `releaseAll`. */
+  holdReport(code: string): void
+  /** Cuando el acta retenida ya se ha pedido. */
+  heldReportArrived(code: string): Promise<void>
+  /** Cuántas veces le han pedido el acta de este código. */
+  reportRequests(code: string): number
+  /**
    * Suelta todo lo retenido. Lo inventado no se olvida: la pasada que se suelta todavía pide sus goleadores,
    * y cada escenario inventa códigos nuevos, así que no se pisan.
    */
@@ -290,7 +401,11 @@ export async function startFakeFederation(port = config.federationPort): Promise
   // Las fichas de equipo: los jugadores de cada equipo del club, y las que fallan, por su código.
   const rosters = new Map<string, FederationPlayer[]>()
   const failingRosters = new Set<string>()
-  // Las retenidas: los calendarios por su grupo, y las fichas por `fichaequipo/<código>`.
+  // Las actas, por su código: las publicadas y las que fallan.
+  const reports = new Map<string, MatchReport>()
+  const failingReports = new Set<string>()
+  // Las retenidas: los calendarios por su grupo, las fichas por `fichaequipo/<código>` y las actas por
+  // `acta-partido/<código>`.
   const holds = new Map<string, Hold>()
   // Las retenidas que ya se pidieron y esperan a que las suelten.
   const waiting: Hold[] = []
@@ -347,6 +462,24 @@ export async function startFakeFederation(port = config.federationPort): Promise
       return send(teamSheet(code, found), 'text/html; charset=utf-8')
     }
 
+    const acta = /^\/acta-partido\/([^/]+)$/.exec(url.pathname)
+    if (acta) {
+      const code = decodeURIComponent(acta[1]!)
+      if (failingReports.has(code)) {
+        response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+        return response.end('Error interno')
+      }
+      const hold = holds.get(`acta-partido/${code}`)
+      if (hold) {
+        holds.delete(`acta-partido/${code}`)
+        waiting.push(hold)
+        hold.markArrived()
+        await hold.gate
+      }
+      const fixture = [...invented.values()].map((c) => fixtureOf(c, code)).find((f) => f !== undefined)
+      return send(reportPage(code, fixture, reports.get(code)), 'text/html; charset=utf-8')
+    }
+
     if (url.pathname === '/competicion/calendario') {
       const q = url.searchParams
       const coordinate = [q.get('temporada'), q.get('tipojuego'), q.get('competicion'), q.get('grupo')].join('|')
@@ -386,6 +519,12 @@ export async function startFakeFederation(port = config.federationPort): Promise
     answerRoster: (competition) => void failingRosters.delete(ownCode(competition)),
     holdRoster: (competition) => void holds.set(`fichaequipo/${ownCode(competition)}`, newHold()),
     heldRosterArrived: (competition) => holds.get(`fichaequipo/${ownCode(competition)}`)?.arrived ?? Promise.resolve(),
+    publishReport: (code, report) => void reports.set(code, structuredClone(report)),
+    failReport: (code) => void failingReports.add(code),
+    answerReport: (code) => void failingReports.delete(code),
+    holdReport: (code) => void holds.set(`acta-partido/${code}`, newHold()),
+    heldReportArrived: (code) => holds.get(`acta-partido/${code}`)?.arrived ?? Promise.resolve(),
+    reportRequests: (code) => requests.filter((address) => address.split('?')[0] === `/acta-partido/${code}`).length,
     releaseAll: () => {
       for (const hold of [...holds.values(), ...waiting.splice(0)]) hold.release()
       holds.clear()

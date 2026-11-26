@@ -23,17 +23,23 @@ public struct IngestClubCalendars: Sendable {
     private let federationClients: any FederationClientProvider
     private let clock: any Clock
     private let ids: any UUIDProvider
+    /// El diccionario de nombres (`D-123`), para los perfiles que crea la pasada de actas (R7.12). Por defecto,
+    /// ninguno: los nombres quedan como los publica la federación, ya vueltos. Los llamantes de producción pasan el
+    /// del fichero.
+    private let names: any NameDictionarySource
 
     public init(
         unitOfWork: any TenantUnitOfWork,
         federationClients: any FederationClientProvider,
         clock: any Clock,
-        ids: any UUIDProvider
+        ids: any UUIDProvider,
+        names: any NameDictionarySource = FixedNameDictionary(nil)
     ) {
         self.unitOfWork = unitOfWork
         self.federationClients = federationClients
         self.clock = clock
         self.ids = ids
+        self.names = names
     }
 
     public func execute(
@@ -94,6 +100,10 @@ public struct IngestClubCalendars: Sendable {
         // criterio: primero lo que crea filas de las que cuelga el resto.
         let ingestScorers = IngestScorers(
             unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids)
+        // **Y las actas, la cuarta** (R7.12, D-138): detrás de todo, porque carga las de los partidos que el
+        // calendario acaba de escribir, y su convocatoria cuelga de ellos.
+        let ingestReports = IngestMatchReports(
+            unitOfWork: unitOfWork, federation: client, clock: clock, ids: ids, names: names)
 
         var report = ClubIngestionReport(
             clubSlug: actor.clubSlug, federation: plan.federation)
@@ -135,6 +145,11 @@ public struct IngestClubCalendars: Sendable {
                 // cuenta como fallida. `nil` no es fallo — es que esta federación
                 // no los publica (`D-48`), y entonces no hay pasada que registrar.
                 _ = try await ingestScorers.execute(
+                    competitionID: competition.id, actor: actor)
+
+                // **La de actas, igual**, pero un acta que falla no la hace fallar: se cuenta en su fila y se
+                // vuelve a pedir (D-138, punto 1). Solo falla si no puede hacer su trabajo (la base, el registro).
+                _ = try await ingestReports.execute(
                     competitionID: competition.id, actor: actor)
 
                 report.entries.append(

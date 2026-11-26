@@ -12,4 +12,16 @@ extension FederationClient {
     public func fetchTeamRoster(federationTeamID: String) async throws -> FederationTeamRoster {
         throw FederationError.coordinateNotFound(detail: "doble sin plantilla: \(federationTeamID)")
     }
+
+    /// Casar como la RFFM (`D-126`): los dobles no lo reescriben, y así casan de verdad.
+    public func matchPlayers(
+        _ published: [FederationMatchQuery], against ours: [FederationMatchCandidate]
+    ) -> [FederationPlayerMatch] {
+        FederationPlayerMatching.byCodeThenName(published, against: ours)
+    }
+
+    /// Lo mismo con el acta del partido (`D-125`, R7.11).
+    public func fetchMatchReport(federationMatchID: String) async throws -> FederationMatchReport {
+        throw FederationError.coordinateNotFound(detail: "doble sin acta: \(federationMatchID)")
+    }
 }

@@ -122,7 +122,7 @@ extension APIHandler {
 
         let useCase = IngestClubCalendars(
             unitOfWork: unitOfWork, federationClients: federationClients,
-            clock: clock, ids: ids)
+            clock: clock, ids: ids, names: names)
 
         // **Sin `do/catch`** (`A-14`·H-63): los 404 de la competición y de la
         // temporada y el 501 del club sin adaptador los traduce el middleware.
@@ -317,7 +317,11 @@ extension Domain.IngestionRun {
                 standingRowsUpdated: standingRowsUpdated,
                 leagueScorersCreated: leagueScorersCreated,
                 leagueScorersUpdated: leagueScorersUpdated,
-                leagueScorersRetired: leagueScorersRetired),
+                leagueScorersRetired: leagueScorersRetired,
+                matchReportsLoaded: matchReportsLoaded,
+                matchReportsNotClosed: matchReportsNotClosed,
+                matchReportsFailed: matchReportsFailed,
+                matchReportPlayersAdded: matchReportPlayersAdded),
             skipped: skipped.map {
                 .init(reason: $0.reason.toContract(), detail: $0.detail)
             })
@@ -333,6 +337,7 @@ extension Domain.IngestionKind {
         case .calendar: .calendar
         case .standings: .standings
         case .scorers: .scorers
+        case .matchReports: .match_reports
         }
     }
 }
@@ -374,6 +379,9 @@ extension Domain.IngestionSkip.Reason {
         case .unknownStandingTeam: .unknown_standing_team
         case .unidentifiedScorer: .unidentified_scorer
         case .unidentifiedTeam: .unidentified_team
+        case .unknownMatchReportCode: .unknown_match_report_code
+        case .unreadableReportPlayerName: .unreadable_report_player_name
+        case .unreadableMatchReport: .unreadable_match_report
         }
     }
 }

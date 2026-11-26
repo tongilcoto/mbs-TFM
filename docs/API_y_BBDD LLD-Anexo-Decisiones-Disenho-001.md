@@ -151,6 +151,7 @@
 | **D-135**              | El gol: dos lados, pie izquierdo y derecho, cinco tipos de jugada y un comentario; en un penalti, ni fuera del área ni lado del remate | §3.2, §3.3                         |
 | **D-136**              | La tarjeta lleva un comentario; las del rival no se apuntan                                                                    | §3.2                               |
 | **D-137**              | Cada gol y cada tarjeta recuerdan si vinieron del acta (enmienda a [D-133])                                                    | §3.2, §3.3, §5.3                   |
+| **D-138**              | La carga del acta, una cuarta pasada por competición, con su fila; un acta que falla no hunde la competición; la temporada pasada, solo si se pide; con sus contadores y omitidos | §3.7, §5.6                         |
 | **Autorización**       |                                                                                                                               |                                    |
 | **D-59**               | La autorización vive en el tenant, y el rol no viaja en el JWT                                                                | §3.2, §6.1, §7.1, §7.2             |
 | **D-60**               | Los puestos no se enumeran, se parametrizan: el ámbito filtra la identidad de `Team`                                          | §3.2, §3.3, §7.3                   |
@@ -5835,6 +5836,14 @@ cuándo el jugador de la federación y el nuestro son la misma persona.
 
 **Enmienda** a [D-119] (punto 9, el código informativo) y a [D-120] (punto 4, dónde se casa).
 
+**Precisada al construirla** (2026-11-25, `R7.12`): **un perfil nuestro que ya tiene otro código no casa por el
+nombre** con un jugador publicado que trae el suyo: son dos personas que se llaman igual, y juntarlas pondría los
+goles de uno a nombre del otro. Sin código publicado, el nombre basta, como antes. Las reglas están en
+`FederationPlayerMatching` (por código y luego por nombre, para la RFFM; solo por nombre, para la federación sin
+código), y el conector elige la suya. La aplicación le pasa los nombres ya vueltos y con las tildes del castellano
+([D-123]), porque el diccionario es suyo; el conector solo compara. Corregir el nombre de un jugador no le borra el
+código.
+
 ### D-127 · La carga del acta completa la plantilla: la sincroniza si nadie lo hizo, y da de alta a quien juega sin estar
 
 **Lo que lo obligó a decidirse** (2026-11-22, rebanada 7, decisión 10 del plan R7). Con el acta cargada sola
@@ -6162,6 +6171,80 @@ club», cosa que el bloqueo no dejaba.
 
 **Enmienda** a [D-133] (punto 5, y lo descartado de que cada apunte recuerde su origen).
 
+### D-138 · La carga del acta en la pasada: una cuarta pasada por competición, con su fila
+
+**Lo que lo obligó a decidirse** (2026-11-25, rebanada 7, `R7.12`, al diseñar la carga, siete puntos revisados uno a
+uno). [D-125] y [D-133] dicen
+qué carga la ingesta y cuándo, pero no dónde va en el recorrido ni qué pasa si un acta falla. Hoy cada competición
+hace tres pasadas —calendario, clasificación y goleadores—, cada una con su fila en `ingestion_runs`, y si una falla
+la competición cuenta como fallida ([D-86]).
+
+**Decisión** (el desarrollador, 2026-11-25):
+
+1. **Una cuarta pasada por competición, «las actas»**, después de los goleadores, con **su propia fila** en
+   `ingestion_runs` (un tipo nuevo, con su migración). **Cada acta se escribe en su propia transacción**: la que falla
+   (la federación tarda o trae algo que no se lee) no se carga, se cuenta, y **no hace fallida la competición**; se
+   vuelve a pedir en la pasada siguiente, sin marca ([D-133], punto 2).
+
+2. **Qué temporadas: la en curso siempre; la pasada, solo cuando se pide su temporada** (`POST /ingestion-runs` con
+   su `seasonId`), como el resto de la pasada. La archivada, nunca: es de solo lectura. La pasada no tiene plantillas
+   ni se puede sincronizar (la ficha es la de hoy, decisión 1 de R6.14), así que sus jugadores entran por el alta del
+   acta ([D-127], punto 2), casados por el código si su perfil lo tiene.
+3. **Lo que apunta la pasada, como las otras tres**: cuatro contadores nuevos —actas cargadas, actas aún sin cerrar,
+   actas que fallaron y jugadores dados de alta por el acta (los de la sincronización que hace la carga, [D-127] punto
+   1, y los que no estaban en ninguna plantilla, punto 2)— y tres motivos nuevos de omitido —un gol o una tarjeta con
+   un código desconocido ([D-131], punto 4), un jugador con un nombre que no se lee y un acta que no se pudo leer—,
+   los tres con el código del acta. Cambia el contrato: el tipo de pasada nuevo, los contadores y los motivos.
+4. **El jugador del acta con un nombre que no se lee** (sin coma, con dos, o que el dominio no acepta): si su código
+   casa con un perfil, se usa ese perfil; si no, **no se da de alta** —un perfil necesita un nombre válido—, se queda
+   sin convocatoria, su tarjeta no se carga (es de un jugador) y su gol se carga sin goleador. Se apunta como omitido,
+   con el código del acta. Medido (2026-11-25): **ninguno** en las 1631 apariciones de jugadores del club en 95 actas.
+5. **Lo del rival**: sus jugadores, nada (ni convocatoria ni alta); sus goles, sin goleador ([D-09]); sus tarjetas,
+   nada ([D-136]). El gol en propia puerta de un jugador del rival es un gol del club sin goleador; el de un jugador
+   del club, un gol del rival a nombre de nuestro jugador, que no le cuenta ([D-52]). Así los goles cargados de cada
+   lado son el marcador del acta. Medido en 95 actas: 338 goles del club y 206 del rival, 124 tarjetas del club y 111
+   del rival, y 5 en propia puerta (3 de jugadores del club, 2 del rival).
+6. **El partido entre dos equipos del club** (2 de 95 actas): **se cargan los dos lados**, cada uno como del club,
+   con los jugadores casados contra todos los del club y cada convocatoria y cada tarjeta con el equipo con el que
+   jugó ([D-128]). **El gol en propia puerta va a nombre del jugador que lo mete**, del equipo que encaja ([D-52]), y
+   no le cuenta como goleador: aquí no es un rival, así que no se queda sin nombre como en el punto 5. Si un equipo
+   no tenía la plantilla sincronizada, se sincronizan los dos ([D-127], punto 1).
+7. **Antes de cargar, el acta tiene que ser de ese partido**: sus dos códigos de equipo, los de nuestro local y
+   nuestro visitante. Si no lo son, no se carga, se cuenta entre las que fallaron y se vuelve a pedir, como la pasada
+   del calendario, que compara el nombre de la competición antes de escribir.
+
+| Opción | Por qué se descarta |
+|--------|---------------------|
+| No cargar esa acta hasta que se arregle | Sería la única acta cerrada que no se carga entera, y nadie lo vería fuera de los omitidos |
+| Solo los omitidos, sin contadores nuevos | Se vería lo que falló, pero no cuántas actas se cargaron |
+| Sin fila propia, sumada a la del calendario | Mezcla dos cosas en una fila, y luego no se ve qué falló |
+| Que un acta que falla haga fallida la competición | El calendario y la clasificación ya se escribieron bien; el acta se reintenta sola |
+| Solo la temporada en curso | La pasada se quedaría sin actas, y el club puede completarla ([D-130]) |
+| Siempre las dos | Preguntaría cada noche por una temporada que ya no cambia |
+
+**Lo que se asume a cambio.** Una migración y un cambio de contrato (el tipo de pasada, cuatro contadores y tres
+motivos); y una petición más por partido del club hasta que su acta se cierra.
+
+**Precisada al construirla** (2026-11-25, `R7.12`), lo que las decisiones no decían y hubo que fijar:
+
+- **Si la ficha del equipo no llega**, el acta se carga igual —sus jugadores entran por el alta del acta— y la
+  plantilla queda sin sincronizar: se intenta con la siguiente acta de ese equipo ([D-127], punto 1). La ficha se pide
+  fuera de la transacción, una vez por equipo y pasada.
+- **«El mismo gol» del club** es el del mismo equipo, goleador y minuto ([D-133], punto 5). Al pasar a ser del acta
+  ([D-137]) conserva su desglose y su comentario; el tipo, el de la federación si dice penalti o propia puerta, y si
+  no, el del club.
+- **«La misma tarjeta» del club** es la del mismo jugador y tipo; al pasar a ser del acta conserva su comentario, y el
+  minuto y si es por doble amarilla son los del acta ([D-136], punto 4). **Si el club apuntó suelta la primera
+  amarilla de una doble y el acta trae la roja por doble amarilla, la fila del club pasa a ser esa roja**: la primera
+  amarilla no es una sanción aparte ([D-45], [D-131] punto 3), y dejar las dos sería lo que `LOOSE_YELLOW_EXISTS` no
+  deja escribir a la web.
+- **La convocatoria que el club apuntó con otro equipo** para el mismo jugador se rehace con el del acta: el equipo es
+  identidad ([D-37]).
+- **La pasada de actas corre en cada recorrido**, también en el que lanza el enganche de un equipo: al enganchar uno
+  a mitad de temporada, sus actas ya cerradas se cargan en esa misma pasada.
+- **La copia del acta y la marca se escriben al final**, en la misma transacción: si algo del acta falla, no queda ni
+  la marca, y se vuelve a pedir.
+
 [D-01]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-02]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-03]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
@@ -6339,3 +6422,4 @@ club», cosa que el bloqueo no dejaba.
 [D-135]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-136]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
 [D-137]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md
+[D-138]: ./API_y_BBDD%20LLD-Anexo-Decisiones-Disenho-001.md

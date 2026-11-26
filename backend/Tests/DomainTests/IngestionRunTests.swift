@@ -258,6 +258,37 @@ struct IngestionRunTests {
         #expect(closed.standingRowsUpdated == 16)
     }
 
+    // ── R7.12 · la pasada de actas (D-138) ───────────────────────────────────
+
+    /// La cuarta clase: las actas de los partidos del club, de cualquier jornada.
+    /// Cae del lado **nulo** de `roundID`, como el calendario y los goleadores.
+    @Test("la pasada de actas no lleva jornada, y con una no se construye (D-138)")
+    func matchReportsRunHasNoRound() throws {
+        #expect(try Self.run(kind: .matchReports).roundID == nil)
+        #expect(throws: DomainError.self) {
+            try Self.run(kind: .matchReports, roundID: RoundID(raw: UUID()))
+        }
+    }
+
+    /// Los cuatro contadores de la pasada de actas, con valores distintos: una
+    /// permutación en `carryCounters` se vería.
+    @Test("cerrar conserva los cuatro contadores de la pasada de actas (D-138)")
+    func closingCarriesTheMatchReportCounters() throws {
+        var run = try Self.run(kind: .matchReports, finished: nil, outcome: .accepted)
+        run.matchReportsLoaded = 5
+        run.matchReportsNotClosed = 3
+        run.matchReportsFailed = 2
+        run.matchReportPlayersAdded = 7
+
+        let closed = try run.closed(as: .succeeded, at: Date(timeIntervalSince1970: 90))
+
+        #expect(closed.kind == .matchReports)
+        #expect(closed.matchReportsLoaded == 5)
+        #expect(closed.matchReportsNotClosed == 3)
+        #expect(closed.matchReportsFailed == 2)
+        #expect(closed.matchReportPlayersAdded == 7)
+    }
+
     /// El par que el esquema ata con un `CHECK` y el tipo ata aquí: **una pasada
     /// que falló y no dice por qué no se puede depurar**, que es justo lo único
     /// para lo que existe la tabla.

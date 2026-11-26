@@ -45,6 +45,12 @@ public final class IngestionRunRecord: Model, @unchecked Sendable {
     @Field(key: "league_scorers_updated") public var leagueScorersUpdated: Int
     @Field(key: "league_scorers_retired") public var leagueScorersRetired: Int
 
+    /// Los cuatro de la pasada de actas (R7.12, D-138). Ver `AddMatchReportsToIngestionRun`.
+    @Field(key: "match_reports_loaded") public var matchReportsLoaded: Int
+    @Field(key: "match_reports_not_closed") public var matchReportsNotClosed: Int
+    @Field(key: "match_reports_failed") public var matchReportsFailed: Int
+    @Field(key: "match_report_players_added") public var matchReportPlayersAdded: Int
+
     /// Documento, no tabla hija.
     ///
     /// **Va envuelto en un `struct` y no como `[IngestionSkip]` a pelo**, y lo
@@ -355,5 +361,46 @@ public struct DropFinishedAtIngestionRunIndex: AsyncMigration {
         try await database.index(
             table: IngestionRunRecord.schema, name: "idx_ingestion_runs_competition",
             columns: ["competition_id", "finished_at"])
+    }
+}
+
+/// **Lo que la pasada de actas le añade al registro de pasadas** (R7.12, D-138):
+/// sus cuatro contadores y el `CHECK` de `kind` **rehecho**, como avisaban
+/// `AddScorersToIngestionRun` y el propio enumerado. El caso nuevo
+/// (`match_reports`) no llega solo a un club vivo: su `CHECK` es el texto que
+/// dejó F8, con tres casos (`D-90`).
+///
+/// `chk_ingestion_runs_round` no se toca: dice «solo la clasificación lleva
+/// jornada», y la pasada de actas no la lleva.
+public struct AddMatchReportsToIngestionRun: AsyncMigration {
+    public init() {}
+
+    public func prepare(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            // El `DEFAULT` es el *backfill* y es exacto, como en F7 y F8: ninguna
+            // fila de antes cargó actas.
+            .field("match_reports_loaded", .int, .required, .sql(.default(0)))
+            .field("match_reports_not_closed", .int, .required, .sql(.default(0)))
+            .field("match_reports_failed", .int, .required, .sql(.default(0)))
+            .field("match_report_players_added", .int, .required, .sql(.default(0)))
+            .update()
+
+        try await database.replaceCheckConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_kind",
+            expression: "kind IN (\(IngestionKind.sqlValueList))")
+    }
+
+    public func revert(on database: any Database) async throws {
+        try await database.schema(IngestionRunRecord.schema)
+            .deleteField("match_reports_loaded")
+            .deleteField("match_reports_not_closed")
+            .deleteField("match_reports_failed")
+            .deleteField("match_report_players_added")
+            .update()
+
+        // Derivado del enumerado de hoy, no tecleado: ver `AddScorersToIngestionRun`.
+        try await database.replaceCheckConstraint(
+            table: IngestionRunRecord.schema, name: "chk_ingestion_runs_kind",
+            expression: "kind IN (\(IngestionKind.sqlValueList))")
     }
 }

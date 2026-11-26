@@ -444,6 +444,33 @@ extension PlayerEndpointTests {
         }
     }
 
+    /// El código de la federación del perfil (`D-126`): el buscador lo trae, y corregir el nombre del jugador no
+    /// lo borra, aunque el perfil se rehaga con el nombre nuevo.
+    @Test("el buscador trae el código de la federación, y corregir el nombre no lo borra (D-126)")
+    func federationCodeSurvivesAnEdit() async throws {
+        try await Self.withSeededClub { app, s in
+            let juan = try await Self.create(app, Self.newPlayerJSON(s, team: s.cadeteB, name: "Juan García"))
+            try await FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+                .withRepositories(actor: ActorContext(clubSlug: try Slug(Self.slug))) { r in
+                    let id = PlayerProfileID(raw: try #require(UUID(uuidString: juan.profileId)))
+                    let profile = try #require(try await r.playerProfiles.find(id))
+                    try await r.playerProfiles.save(profile.withFederationPlayerID("9000001"))
+                }
+            try await Self.send(app, .PUT, "/v1/players/\(juan.id)", json: #"{"fullName": "Juan García Pérez", "birthYear": 2011}"#) {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+            }
+            try await Self.send(app, .GET,
+                                "/v1/player-profiles?q=juan%20gar&teamId=\(s.cadeteA)&seasonId=\(s.vigente)") {
+                (r: TestingHTTPResponse) async throws in
+                #expect(r.status == .ok)
+                let p = try #require(try Self.profiles(r).first)
+                #expect(p.fullName == "JUAN GARCÍA PÉREZ")
+                #expect(p.federationPlayerId == "9000001")
+            }
+        }
+    }
+
     @Test("con menos de tres letras, 400; con un equipo que no existe, 404 (D-120)")
     func searchingErrors() async throws {
         try await Self.withSeededClub { app, s in

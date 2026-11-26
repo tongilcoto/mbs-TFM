@@ -24,6 +24,8 @@ public final class PlayerProfileRecord: Model, @unchecked Sendable {
     @OptionalField(key: "last_shirt_number") public var lastShirtNumber: Int?
     @OptionalField(key: "last_position") public var lastPosition: String?
     @OptionalField(key: "last_photo_key") public var lastPhotoKey: String?
+    /// El código del jugador en la federación ([D-126], migración 26ª).
+    @OptionalField(key: "federation_player_id") public var federationPlayerID: String?
 
     @Timestamp(key: "created_at", on: .create) public var createdAt: Date?
     @Timestamp(key: "updated_at", on: .update) public var updatedAt: Date?
@@ -179,7 +181,8 @@ extension PlayerProfileRecord {
             lastPosition: try lastPosition.map {
                 try position($0, column: "last_position")
             },
-            lastPhotoKey: lastPhotoKey, createdAt: createdAt, updatedAt: updatedAt)
+            lastPhotoKey: lastPhotoKey, federationPlayerID: federationPlayerID,
+            createdAt: createdAt, updatedAt: updatedAt)
     }
 
     fileprivate func apply(_ profile: PlayerProfile) {
@@ -188,6 +191,7 @@ extension PlayerProfileRecord {
         lastShirtNumber = profile.lastShirtNumber?.value
         lastPosition = profile.lastPosition?.rawValue
         lastPhotoKey = profile.lastPhotoKey
+        federationPlayerID = profile.federationPlayerID
     }
 }
 

@@ -101,7 +101,7 @@ struct GoalRepositoryTests {
 
     @Test("un gol vuelve como se guardó, con todo lleno y con todo vacío")
     func roundTrip() async throws {
-        try await Self.withFixture("roundtrip") { f in
+        try await Self.withFixture("goalroundtrip") { f in
             let full = Goal(
                 id: GoalID(raw: UUID()), matchID: f.early.id, scoringTeamID: f.own, concedingTeamID: f.rival,
                 scorer: f.juan, assist: f.pedro, assisted: true, minute: try MatchMinute(33), zone: .areaChica,
@@ -133,7 +133,7 @@ struct GoalRepositoryTests {
 
     @Test("con el partido, por minuto y los que no tienen al final; sin él, del más reciente al más antiguo")
     func ordering() async throws {
-        try await Self.withFixture("order") { f in
+        try await Self.withFixture("goalorder") { f in
             let noMinute = try Self.goal(f, f.early, scorer: f.juan)
             let at80 = try Self.goal(f, f.early, minute: 80, scorer: f.juan)
             let at5 = try Self.goal(f, f.early, minute: 5, scorer: f.juan)
@@ -177,7 +177,7 @@ struct GoalRepositoryTests {
 
     @Test("borrado, el gol deja de verse y sigue en la tabla (D-36)")
     func deleteIsLogical() async throws {
-        try await Self.withFixture("delete") { f in
+        try await Self.withFixture("goaldelete") { f in
             let goal = try Self.goal(f, f.early)
             try await f.tenant.scope { r in
                 try await r.goals.save(goal)

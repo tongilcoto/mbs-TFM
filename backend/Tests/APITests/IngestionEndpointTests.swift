@@ -505,7 +505,7 @@ struct IngestionEndpointTests {
     /// —una pasada de calendario no escribe goleadores—: lo que está bajo prueba
     /// es **el mapeo**, no la pasada. La pasada tiene sus propios tests en los
     /// niveles 2 y 3.
-    @Test("los trece contadores llegan cada uno a su campo (F7, F8, A-7/H-46)")
+    @Test("los diecisiete contadores llegan cada uno a su campo (F7, F8, R7.12, A-7/H-46)")
     func everyCounterReachesItsOwnField() async throws {
         try await Self.withSeededClub { app, _, competitionID, _ in
             let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
@@ -529,6 +529,10 @@ struct IngestionEndpointTests {
                 run.leagueScorersCreated = 11
                 run.leagueScorersUpdated = 12
                 run.leagueScorersRetired = 13
+                run.matchReportsLoaded = 14
+                run.matchReportsNotClosed = 15
+                run.matchReportsFailed = 16
+                run.matchReportPlayersAdded = 17
                 try await repositories.ingestionRuns.record(run)
             }
 
@@ -555,6 +559,48 @@ struct IngestionEndpointTests {
                 // goleadores se retiran (`D-94`), y es el número que hay que
                 // poder mirar cuando una pasada vacía la tabla.
                 #expect(counters.leagueScorersRetired == 13)
+                // Los cuatro de la pasada de actas (R7.12, D-138).
+                #expect(counters.matchReportsLoaded == 14)
+                #expect(counters.matchReportsNotClosed == 15)
+                #expect(counters.matchReportsFailed == 16)
+                #expect(counters.matchReportPlayersAdded == 17)
+            }
+        }
+    }
+
+    /// La pasada de actas se guarda en la base (el `CHECK` de `kind` la admite) y se lee con su clase y sus
+    /// tres motivos de omitido, cada uno a su valor del contrato (R7.12, D-138).
+    @Test("la pasada de actas se guarda y se lee, con sus tres motivos de omitido (D-138)")
+    func aMatchReportsPassIsReadable() async throws {
+        try await Self.withSeededClub { app, _, competitionID, _ in
+            let unitOfWork = FluentTenantUnitOfWork(controlDatabase: app.db(.control))
+            let actor = ActorContext(clubSlug: try Slug(Self.slug))
+
+            try await unitOfWork.withRepositories(actor: actor) { repositories in
+                var run = try IngestionRun(
+                    id: IngestionRunID(raw: UUID()), competitionID: competitionID,
+                    kind: .matchReports, startedAt: Self.now, finishedAt: Self.now,
+                    outcome: .succeeded)
+                run.skipped = [
+                    IngestionSkip(reason: .unknownMatchReportCode, detail: "5589189: gol con el código 103"),
+                    IngestionSkip(reason: .unreadableReportPlayerName, detail: "5589189: GARCÍA LÓPEZ JUAN"),
+                    IngestionSkip(reason: .unreadableMatchReport, detail: "5670205: la federación no responde"),
+                ]
+                try await repositories.ingestionRuns.record(run)
+            }
+
+            try await app.testing().test(
+                .GET, "/v1/ingestion-runs?competitionId=\(competitionID)",
+                beforeRequest: { request async throws in Self.header(&request) }
+            ) { response async throws in
+                #expect(response.status == .ok)
+                let run = try #require(try Self.decodeRuns(response).first)
+                #expect(run.kind == .match_reports)
+                #expect(run.roundId == nil)
+                #expect(run.skipped.map(\.reason) == [
+                    .unknown_match_report_code, .unreadable_report_player_name, .unreadable_match_report,
+                ])
+                #expect(run.skipped.map(\.detail).first == "5589189: gol con el código 103")
             }
         }
     }

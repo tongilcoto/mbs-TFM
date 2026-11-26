@@ -139,6 +139,10 @@ public enum TenantMigrations {
             // [D-133], [D-134]). Aparte de la anterior: altera dos tablas que ya
             // existen, y una migración que hace dos cosas no se revierte a medias.
             AddMatchReportColumns(),
+            // R7.12: los cuatro contadores de la pasada de actas y el `CHECK` de
+            // `kind` rehecho con `match_reports` ([D-138]). Al final: altera una
+            // tabla ya aplicada ([D-90]).
+            AddMatchReportsToIngestionRun(),
         ]
     }
 }

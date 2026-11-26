@@ -206,6 +206,58 @@ struct MigrationIntegrityTests {
         }
     }
 
+    /// **El cuarto caso, `match_reports` (R7.12, D-138), y el aviso que el test de
+    /// arriba dejaba escrito.** Aquel corta en `AddStandingsToIngestionRun`, así que
+    /// el segundo lote ejecuta `AddScorersToIngestionRun`, que rehace el `CHECK` con
+    /// el enumerado de **hoy**: con el caso nuevo pasaría aunque nadie escribiera su
+    /// migración. Por eso éste corta en la última que lo rehízo y falsifica el
+    /// `CHECK` que dejó en un club vivo, con los tres casos de entonces.
+    @Test("el CHECK de `kind` de un club vivo con tres casos admite las actas tras migrar (D-138, D-90)")
+    func theKindCheckAdmitsMatchReports() async throws {
+        try await Self.withApp { app in
+            let schema = "\(Self.prefix)kindcheckactas"
+            let sql = app.db(.control) as! any SQLDatabase
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+            try await sql.raw("CREATE SCHEMA \(ident: schema)").run()
+
+            let all = TenantMigrations.all()
+            let lastKindRebuild = try #require(
+                all.lastIndex { $0.name.hasSuffix("AddScorersToIngestionRun") },
+                "AddScorersToIngestionRun ya no está en la lista: el corte no significa nada")
+            try await MigrateTenantsCommand.migrate(
+                schema: schema, migrations: Array(all.prefix(lastKindRebuild + 1)), on: app)
+
+            // El `CHECK` tal y como lo dejó F8 en un club vivo: los tres casos.
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                DROP CONSTRAINT \(ident: "chk_ingestion_runs_kind")
+                """).run()
+            try await sql.raw("""
+                ALTER TABLE \(ident: schema).\(ident: "ingestion_runs")
+                ADD CONSTRAINT \(ident: "chk_ingestion_runs_kind")
+                CHECK (kind IN ('calendar', 'standings', 'scorers'))
+                """).run()
+            let before = try #require(
+                try await Self.check("chk_ingestion_runs_kind", of: schema, on: app),
+                "el primer lote no llegó a crear el CHECK")
+            #expect(!before.contains("'match_reports'"), "el montaje no reprodujo el CHECK viejo: \(before)")
+
+            try await MigrateTenantsCommand.migrate(schema: schema, on: app)
+            #expect(try await Self.batches(of: schema, on: app) == 2,
+                    "el schema no se migró en dos lotes: no reproduce a un club vivo")
+
+            let check = try #require(
+                try await Self.check("chk_ingestion_runs_kind", of: schema, on: app),
+                "no existe chk_ingestion_runs_kind")
+            for kind in IngestionKind.allCases {
+                #expect(check.contains("'\(kind.rawValue)'"),
+                        "el CHECK del schema no admite `\(kind.rawValue)`: \(check). Hace falta una migración que lo rehaga (D-90).")
+            }
+
+            try await sql.raw("DROP SCHEMA IF EXISTS \(ident: schema) CASCADE").run()
+        }
+    }
+
     /// La definición de un `CHECK` tal y como está **en la base**, que es el
     /// único sitio donde este defecto se puede ver.
     ///
@@ -334,14 +386,17 @@ struct MigrationIntegrityTests {
     /// **26 con el acta** (R7.5): sus tres tablas, y lo que escribe en el partido
     /// y en el perfil.
     ///
+    /// **27 con la pasada de actas** (R7.12, [D-138]): sus contadores y el `CHECK`
+    /// de `kind` rehecho.
+    ///
     /// **La segunda mitad es la que de verdad puede morder**: Fluent indexa por
     /// **nombre** ([D-90]), así que dos migraciones homónimas serían una sola
     /// aplicada y la otra saltada **en silencio** — sin error y sin nada que lo
     /// diga, que es la misma forma de fallar de H-31.
-    @Test("las migraciones por tenant son 26, y ningún nombre se repite (C-D.7, D-90)")
+    @Test("las migraciones por tenant son 27, y ningún nombre se repite (C-D.7, D-90)")
     func theTenantMigrationListIsAnchored() throws {
         let nombres = TenantMigrations.all().map(\.name)
-        #expect(nombres.count == 26,
+        #expect(nombres.count == 27,
                 "cambió el número de migraciones: \(nombres.joined(separator: " · "))")
         #expect(Set(nombres).count == nombres.count,
                 "hay nombres repetidos: Fluent aplicaría una y saltaría la otra en silencio")
