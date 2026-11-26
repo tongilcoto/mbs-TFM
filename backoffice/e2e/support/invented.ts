@@ -437,6 +437,54 @@ export interface FederationPlayer {
   published: string
 }
 
+// ── El acta de un partido (plan R7, R7.13) ──────────────────────────────────────────────────────────────────────
+
+/** El código del acta de un partido de una competición inventada: el `codacta` que publica su calendario. */
+export function reportCode(competition: Competition, roundNumber: number, matchIndex: number): string {
+  return `${competition.federationGroupId}${roundNumber - 1}${matchIndex}`
+}
+
+/** Un jugador en el acta: el lado de su equipo, su dorsal, si es titular y, si no lo es, si entra en un cambio. */
+export interface ReportPlayer {
+  side: 'home' | 'away'
+  player: FederationPlayer
+  shirt?: number
+  starter: boolean
+  /** Solo para un suplente: entra en un cambio. */
+  cameOn?: boolean
+}
+
+/**
+ * Un gol en el acta, **en la lista del equipo del jugador**, como la RFFM: el de propia puerta va en la lista del que
+ * lo mete y suma al otro equipo. Sin `type`, un gol normal. Sin `minute`, el acta no lo dice.
+ */
+export interface ReportGoal {
+  side: 'home' | 'away'
+  player: FederationPlayer
+  minute?: number
+  type?: 'normal' | 'penalti' | 'propia'
+}
+
+/**
+ * Una tarjeta en el acta, en la lista del equipo del jugador. La doble amarilla, como la RFFM: dos amarillas del mismo
+ * jugador, la segunda con `secondYellow`; el servidor la lee como una roja.
+ */
+export interface ReportCard {
+  side: 'home' | 'away'
+  player: FederationPlayer
+  minute?: number
+  type: 'amarilla' | 'roja'
+  secondYellow?: boolean
+}
+
+/** El acta que publica la federación de un partido. Sin cerrar, la RFFM no publica jugadores ni marcador. */
+export interface MatchReport {
+  closed: boolean
+  players: ReportPlayer[]
+  goals: ReportGoal[]
+  cards: ReportCard[]
+}
+
 /** Una persona inventada, en mayúsculas como la publica la RFFM. */
 export interface InventedPerson {
   given: string

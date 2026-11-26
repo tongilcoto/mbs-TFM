@@ -134,7 +134,7 @@ export function addTeamWithoutCompetition(club: ScenarioClub, random: Random, se
 
 interface IngestionRun {
   id: string
-  kind: 'calendar' | 'standings' | 'scorers'
+  kind: 'calendar' | 'standings' | 'scorers' | 'match_reports'
   outcome: 'accepted' | 'succeeded' | 'failed'
   startedAt: string
 }
@@ -143,9 +143,10 @@ const runsOf = (club: ScenarioClub, competitionId: string) =>
   expectApi<IngestionRun[]>(club, 'GET', `/ingestion-runs?competitionId=${competitionId}`, undefined, 200)
 
 /**
- * Que la ingesta de la competición ha acabado: nada en marcha y, desde su último calendario, la pasada de goleadores,
- * que es la última, o una fallida, tras la que no sigue (backend, `IngestClubCalendars`). Sin lo segundo, entre una
- * pasada y la siguiente la ingesta parecía acabada sin estarlo, y faltaban las últimas tablas (plan R4, R4.3).
+ * Que la ingesta de la competición ha acabado: nada en marcha y, desde su último calendario, la pasada de actas, que
+ * es la última (plan R7, R7.13), o una fallida, tras la que no sigue (backend, `IngestClubCalendars`). Sin lo
+ * segundo, entre una pasada y la siguiente la ingesta parecía acabada sin estarlo, y faltaban las últimas tablas (plan
+ * R4, R4.3).
  */
 function finished(runs: IngestionRun[]): boolean {
   if (runs.some((r) => r.outcome === 'accepted')) return false
@@ -153,7 +154,7 @@ function finished(runs: IngestionRun[]): boolean {
   const lastCalendar = calendars[calendars.length - 1]
   if (!lastCalendar) return false
   const since = runs.filter((r) => r.startedAt >= lastCalendar)
-  return since.some((r) => r.kind === 'scorers' || r.outcome === 'failed')
+  return since.some((r) => r.kind === 'match_reports' || r.outcome === 'failed')
 }
 
 /** Espera a que acabe la ingesta de la competición (`finished`). */
@@ -314,12 +315,12 @@ export async function settleIngestions(club: ScenarioClub, competitionIds: strin
   }
 }
 
-/** Que acabe una pasada que no estaba entre las `known`: la de goleadores, que es la última, o una fallida. */
+/** Que acabe una pasada que no estaba entre las `known`: la de actas, que es la última, o una fallida. */
 async function newIngestionFinished(club: ScenarioClub, competitionId: string, known: Set<string>, timeoutMs: number) {
   const until = Date.now() + timeoutMs
   for (;;) {
     const fresh = (await runsOf(club, competitionId)).filter((r) => !known.has(r.id))
-    if (fresh.some((r) => r.outcome !== 'accepted' && (r.kind === 'scorers' || r.outcome === 'failed'))) return
+    if (fresh.some((r) => r.outcome !== 'accepted' && (r.kind === 'match_reports' || r.outcome === 'failed'))) return
     if (Date.now() > until) throw new Error(`La ingesta de la competición ${competitionId} no acabó en ${timeoutMs} ms`)
     await new Promise((resolve) => setTimeout(resolve, 100))
   }

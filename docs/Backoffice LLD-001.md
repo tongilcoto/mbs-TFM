@@ -967,6 +967,11 @@ navegador → web → Run serve → tfm_test
   competición inventada se le puede pedir que falle (los goleadores llegan a `null`, como cuando la RFFM no
   los encuentra) o que tarde (retiene su calendario hasta que acaba el escenario): así se llega a «Con fallos»
   y a «En marcha» con pasadas de verdad.
+- **Y el acta de cada partido** de una competición inventada (desde R7.13): la que el escenario le hace
+  publicar, con sus jugadores, goles y tarjetas; si no publica ninguna, el acta sale sin cerrar, como la de la
+  RFFM antes de firmarse. También se le puede pedir que falle o que tarde, y dice cuántas veces se la han pedido.
+  Como la ingesta pasa ahora las actas detrás de los goleadores, los escenarios dan la ingesta por acabada
+  cuando llega la pasada de actas.
 
 **De dónde sale cada dato, por orden de preferencia** (la *skill* de escenarios del desarrollador, principio 9):
 
